@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/importer-rpgm" },
+    { "path": "./packages/renderer" },
     { "path": "./apps/desktop" }
   ]
 }

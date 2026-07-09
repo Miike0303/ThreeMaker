@@ -43,7 +43,7 @@ export function parseTilesets(json: unknown): RpgmTileset[] {
     }
     const sheetNames = {} as Record<TileSheetId, string>;
     SHEET_NAME_ORDER.forEach((sheet, index) => {
-      sheetNames[sheet] = tilesetNames[index];
+      sheetNames[sheet] = tilesetNames[index] ?? '';
     });
 
     tilesets.push({

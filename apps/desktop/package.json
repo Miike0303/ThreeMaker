@@ -10,6 +10,9 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@threemaker/core": "workspace:*",
+    "@threemaker/importer-rpgm": "workspace:*",
+    "@threemaker/renderer": "workspace:*",
     "stats-gl": "4.2.2",
     "three": "0.184.0"
   },

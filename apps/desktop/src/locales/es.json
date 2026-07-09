@@ -1,0 +1,9 @@
+{
+  "name": "Español",
+  "strings": {
+    "app.title": "ThreeMaker",
+    "map.loading": "Cargando mapa…",
+    "map.fixtureNotFound": "No se encontró el fixture — ver fixtures/README.md",
+    "locale.selectorLabel": "Idioma"
+  }
+}

@@ -16,6 +16,43 @@
         width: 100vw;
         height: 100vh;
         display: block;
+        position: relative;
+      }
+      .locale-selector {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        color: #e6e6f0;
+        background: rgba(20, 20, 32, 0.7);
+        padding: 6px 10px;
+        border-radius: 6px;
+        backdrop-filter: blur(4px);
+      }
+      .locale-selector select {
+        font: inherit;
+        color: inherit;
+        background: #24243a;
+        border: 1px solid #3c3c5a;
+        border-radius: 4px;
+        padding: 2px 6px;
+      }
+      .status-message {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, sans-serif;
+        font-size: 18px;
+        color: #e6e6f0;
+        text-align: center;
+        padding: 0 24px;
       }
     </style>
   </head>
