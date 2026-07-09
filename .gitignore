@@ -28,3 +28,6 @@ apps/desktop/src-tauri/gen/
 # Test / coverage
 coverage/
 *.tsbuildinfo
+
+# Third-party test fixtures (copyrighted game data, never committed)
+fixtures/

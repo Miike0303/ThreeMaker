@@ -1,4 +1,8 @@
 {
   "files": [],
-  "references": [{ "path": "./packages/core" }, { "path": "./apps/desktop" }]
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/importer-rpgm" },
+    { "path": "./apps/desktop" }
+  ]
 }
