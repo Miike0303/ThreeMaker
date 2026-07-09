@@ -2,7 +2,7 @@
 
 An open-source 2.5D (HD-2D) narrative game engine built on [Three.js](https://threejs.org/), with map/tileset importing from RPG Maker MV/MZ projects.
 
-**Status: early development (Phase 1 of 6).** See `PLAN_DEV_1.MD` for the roadmap and `ARQUIT_2.MD` for the architecture (currently in Spanish).
+**Status: early development (Phase 1 of 6).** Roadmap: foundations → HD-2D render slice → narrative & events → visual editor → public API + MCP server → full gameplay systems → distribution.
 
 ## Goals
 

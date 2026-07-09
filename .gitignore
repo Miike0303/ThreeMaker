@@ -31,3 +31,6 @@ coverage/
 
 # Third-party test fixtures (copyrighted game data, never committed)
 fixtures/
+
+# Private planning documents, never committed
+planes/
