@@ -23,6 +23,9 @@ importers:
       '@threemaker/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@threemaker/gameplay':
+        specifier: workspace:*
+        version: link:../../packages/gameplay
       '@threemaker/importer-rpgm':
         specifier: workspace:*
         version: link:../../packages/importer-rpgm
@@ -53,6 +56,19 @@ importers:
         version: 8.1.4
 
   packages/core:
+    devDependencies:
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(vite@8.1.4)
+
+  packages/gameplay:
+    dependencies:
+      '@threemaker/importer-rpgm':
+        specifier: workspace:*
+        version: link:../importer-rpgm
     devDependencies:
       typescript:
         specifier: 7.0.2

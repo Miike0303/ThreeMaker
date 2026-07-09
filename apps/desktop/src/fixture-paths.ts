@@ -15,3 +15,8 @@ export function fixtureJsonUrl(fixturesDir: string, fileName: string): string {
 export function fixtureImageUrl(fixturesDir: string, sheetName: string): string {
   return `/@fs/${fixturesDir}/img/tilesets/${sheetName}.png`;
 }
+
+/** Same as `fixtureImageUrl`, but for a character sheet PNG under `img/characters/`. */
+export function fixtureCharacterUrl(fixturesDir: string, sheetName: string): string {
+  return `/@fs/${fixturesDir}/img/characters/${sheetName}.png`;
+}

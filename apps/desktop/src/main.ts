@@ -1,19 +1,32 @@
 import { GameLoop } from '@threemaker/core';
+import type { Direction } from '@threemaker/gameplay';
+import { GridMover, PassabilityGrid } from '@threemaker/gameplay';
 import type { RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
 import type { SheetPixelSizes } from '@threemaker/renderer';
 import { buildChunks, loadSheetTexture, TilemapScene } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
-import { fixtureImageUrl, fixtureJsonUrl } from './fixture-paths.js';
+import { CharacterSprite, tileCenterToWorld } from './character-sprite.js';
+import { fixtureCharacterUrl, fixtureImageUrl, fixtureJsonUrl } from './fixture-paths.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
+import { findSpawnTile } from './spawn.js';
+import { WalkAnimation } from './walk-animation.js';
 
 // The Roseliam fixture (see fixtures/README.md) ships 3 sample maps; Map007
 // is the nicest of the three for this slice (a dungeon interior with both
 // ground and upper-layer/"star" tiles).
 const FIXTURE_MAP_ID = 7;
 const FIXTURE_MAP_FILE = 'Map007.json';
+
+// See fixtures/README.md: `Actor1.png` is the standard MV/MZ naming
+// convention for a playable-party-member sheet (8 characters, 4x2 grid);
+// character block 0 (top-left) is used as the player.
+const CHARACTER_SHEET_FILE = 'Actor1';
+const CHARACTER_INDEX = 0;
+const CHARACTER_SHEET_COLUMNS = 4;
+const CHARACTER_SHEET_ROWS = 2;
 
 const LOCALE_STORAGE_KEY = 'threemaker:locale';
 
@@ -73,6 +86,7 @@ interface FixtureMapData {
   readonly tileset: RpgmTileset;
   readonly sheetPixelSizes: SheetPixelSizes;
   readonly textures: Partial<Record<TileSheetId, THREE.Texture>>;
+  readonly characterTexture: THREE.Texture;
 }
 
 function assertOk(response: Response): Response {
@@ -85,17 +99,19 @@ function assertOk(response: Response): Response {
 }
 
 /**
- * Loads Map007 + its tileset from the Roseliam fixture over Vite's dev-only
- * `/@fs/` endpoint (see fixture-paths.ts and vite.config.ts) and loads every
- * sheet texture it references. Throws if the fixture folder is missing or
- * this isn't a dev server (`__FIXTURES_DIR__` still resolves, but `/@fs/`
- * only exists under `vite dev`) -- callers show a localized message instead
- * of letting this crash the app.
+ * Loads Map007 + its tileset + the player character sheet from the Roseliam
+ * fixture over Vite's dev-only `/@fs/` endpoint (see fixture-paths.ts and
+ * vite.config.ts) and loads every tileset sheet texture Map007 references.
+ * Throws if the fixture folder is missing or this isn't a dev server
+ * (`__FIXTURES_DIR__` still resolves, but `/@fs/` only exists under `vite
+ * dev`) -- callers show a localized message instead of letting this crash
+ * the app.
  */
 async function loadFixtureMapData(): Promise<FixtureMapData> {
-  const [mapJson, tilesetsJson] = await Promise.all([
+  const [mapJson, tilesetsJson, characterTexture] = await Promise.all([
     fetch(fixtureJsonUrl(__FIXTURES_DIR__, FIXTURE_MAP_FILE)).then((res) => assertOk(res).json()),
     fetch(fixtureJsonUrl(__FIXTURES_DIR__, 'Tilesets.json')).then((res) => assertOk(res).json()),
+    loadSheetTexture(fixtureCharacterUrl(__FIXTURES_DIR__, CHARACTER_SHEET_FILE)),
   ]);
 
   const map = parseMap(mapJson, FIXTURE_MAP_ID);
@@ -120,32 +136,61 @@ async function loadFixtureMapData(): Promise<FixtureMapData> {
     }),
   );
 
-  return { map, tileset, sheetPixelSizes, textures };
+  return { map, tileset, sheetPixelSizes, textures, characterTexture };
 }
 
-/** WASD/arrow keys pan the camera target; movement speed is in world units/second. */
-const PAN_SPEED = 6;
+// World-space size of one tile edge; must match everywhere a world position
+// is derived from a tile coordinate (chunk geometry, the character quad).
+const TILE_WORLD_SIZE = 1;
+// Player movement speed, in tiles/second.
+const PLAYER_SPEED = 4;
+// How quickly the camera catches up to the character; higher = snappier.
+// Framerate-independent exponential smoothing (see `renderFixtureMap`).
+const CAMERA_FOLLOW_SPEED = 6;
 
 // HD-2D camera tuning knobs.
 const CAMERA_TILT_DEG = 40;
 const CAMERA_DISTANCE_FACTOR = 0.9; // distance = max(map width, height) * factor
 const CAMERA_FOV_DEG = 45;
-const PAN_KEYS: Record<string, readonly [number, number]> = {
-  w: [0, -1],
-  arrowup: [0, -1],
-  s: [0, 1],
-  arrowdown: [0, 1],
-  a: [-1, 0],
-  arrowleft: [-1, 0],
-  d: [1, 0],
-  arrowright: [1, 0],
+
+/** WASD/arrow keys -> the grid direction they move the character in. */
+const MOVE_KEYS: Record<string, Direction> = {
+  w: 'up',
+  arrowup: 'up',
+  s: 'down',
+  arrowdown: 'down',
+  a: 'left',
+  arrowleft: 'left',
+  d: 'right',
+  arrowright: 'right',
 };
 
+/** Tracks currently-held movement keys in press order; the most recently pressed one (still held) wins when several are held at once. */
+function createMostRecentHeldDirection(): { current(): Direction | undefined } {
+  const held: Direction[] = [];
+
+  window.addEventListener('keydown', (event) => {
+    const direction = MOVE_KEYS[event.key.toLowerCase()];
+    if (!direction) return;
+    const index = held.indexOf(direction);
+    if (index !== -1) held.splice(index, 1);
+    held.push(direction);
+  });
+  window.addEventListener('keyup', (event) => {
+    const direction = MOVE_KEYS[event.key.toLowerCase()];
+    if (!direction) return;
+    const index = held.indexOf(direction);
+    if (index !== -1) held.splice(index, 1);
+  });
+
+  return { current: () => held[held.length - 1] };
+}
+
 async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): Promise<void> {
-  const { map, tileset, sheetPixelSizes, textures } = data;
+  const { map, tileset, sheetPixelSizes, textures, characterTexture } = data;
 
   const chunks = buildChunks(map, tileset, sheetPixelSizes);
-  const tilemap = new TilemapScene(chunks, textures);
+  const tilemap = new TilemapScene(chunks, textures, { tileWorldSize: TILE_WORLD_SIZE });
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a2e);
@@ -155,9 +200,39 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   light.position.set(map.width * 0.3, 20, map.height * 0.2);
   scene.add(light, new THREE.AmbientLight(0x404060, 2));
 
+  // Passability + a spawn tile computed from it (never hardcoded): search
+  // outward from the map's center for the nearest tile the character can
+  // actually stand on.
+  const passability = new PassabilityGrid(map, tileset);
+  const spawn = findSpawnTile(passability, map.width / 2, map.height / 2);
+
+  const mover = new GridMover({
+    x: spawn.x,
+    y: spawn.y,
+    speed: PLAYER_SPEED,
+    canMove: (x, y, direction) => passability.canMove(x, y, direction),
+  });
+  const walkAnimation = new WalkAnimation();
+
+  const character = new CharacterSprite({
+    texture: characterTexture,
+    sheetColumns: CHARACTER_SHEET_COLUMNS,
+    sheetRows: CHARACTER_SHEET_ROWS,
+    characterIndex: CHARACTER_INDEX,
+    tileWorldSize: TILE_WORLD_SIZE,
+  });
+  character.setTilePosition(mover.renderPosition.x, mover.renderPosition.y, TILE_WORLD_SIZE);
+  scene.add(character.mesh);
+
   // HD-2D-style tilted perspective: looking down at the map from the south
-  // at ~40 degrees.
-  const target = new THREE.Vector3(map.width / 2, 0, map.height / 2);
+  // at ~40 degrees. The target starts on the character and smoothly follows
+  // it every frame (see the game loop below) instead of a fixed map-center
+  // point.
+  const target = new THREE.Vector3(
+    tileCenterToWorld(spawn.x, TILE_WORLD_SIZE),
+    0,
+    tileCenterToWorld(spawn.y, TILE_WORLD_SIZE),
+  );
   const tiltAngle = THREE.MathUtils.degToRad(CAMERA_TILT_DEG);
   const distance = Math.max(map.width, map.height) * CAMERA_DISTANCE_FACTOR;
   const offset = new THREE.Vector3(
@@ -180,28 +255,33 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
 
-  const pressedKeys = new Set<string>();
-  window.addEventListener('keydown', (event) => pressedKeys.add(event.key.toLowerCase()));
-  window.addEventListener('keyup', (event) => pressedKeys.delete(event.key.toLowerCase()));
+  const heldDirection = createMostRecentHeldDirection();
 
   // Custom clock, not `THREE.Clock` (deprecated since three r183) -- reuses
   // the engine's own game loop from `@threemaker/core`.
   const gameLoop = new GameLoop({
     onTick(dt) {
-      let dx = 0;
-      let dz = 0;
-      for (const key of pressedKeys) {
-        const direction = PAN_KEYS[key];
-        if (!direction) continue;
-        dx += direction[0];
-        dz += direction[1];
-      }
-      if (dx !== 0 || dz !== 0) {
-        target.x += dx * PAN_SPEED * dt;
-        target.z += dz * PAN_SPEED * dt;
-        camera.position.copy(target).add(offset);
-        camera.lookAt(target);
-      }
+      const direction = heldDirection.current();
+      if (direction) mover.requestMove(direction);
+      mover.update(dt);
+
+      if (mover.moving) walkAnimation.update(dt);
+      else walkAnimation.reset();
+
+      character.setFrame(mover.facing, walkAnimation.frameColumn(mover.moving));
+      character.setTilePosition(mover.renderPosition.x, mover.renderPosition.y, TILE_WORLD_SIZE);
+      character.faceCamera(camera);
+
+      // Framerate-independent exponential smoothing: the camera closes a
+      // fixed fraction of the remaining distance per second, regardless of
+      // how `dt` is chopped into frames.
+      const desiredX = tileCenterToWorld(mover.renderPosition.x, TILE_WORLD_SIZE);
+      const desiredZ = tileCenterToWorld(mover.renderPosition.y, TILE_WORLD_SIZE);
+      const followAmount = 1 - Math.exp(-CAMERA_FOLLOW_SPEED * dt);
+      target.x += (desiredX - target.x) * followAmount;
+      target.z += (desiredZ - target.z) * followAmount;
+      camera.position.copy(target).add(offset);
+      camera.lookAt(target);
     },
   });
 
