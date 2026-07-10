@@ -9,6 +9,7 @@ import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
 import { CharacterSprite, tileCenterToWorld } from './character-sprite.js';
 import { fixtureCharacterUrl, fixtureImageUrl, fixtureJsonUrl } from './fixture-paths.js';
+import { createHd2dPipeline } from './hd2d-pipeline.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 import { findSpawnTile } from './spawn.js';
@@ -257,6 +258,15 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
 
   const heldDirection = createMostRecentHeldDirection();
 
+  const hd2d = createHd2dPipeline(renderer, scene, camera);
+  let postProcessingEnabled = true;
+  if (import.meta.env.DEV) window.__hd2d = { renderer };
+  window.addEventListener('keydown', (event) => {
+    if (event.repeat || event.key.toLowerCase() !== 'p') return;
+    postProcessingEnabled = !postProcessingEnabled;
+    hd2d.setEnabled(postProcessingEnabled);
+  });
+
   // Custom clock, not `THREE.Clock` (deprecated since three r183) -- reuses
   // the engine's own game loop from `@threemaker/core`.
   const gameLoop = new GameLoop({
@@ -301,7 +311,8 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   renderer.setAnimationLoop(() => {
     stats.begin();
     gameLoop.tick();
-    renderer.render(scene, camera);
+    hd2d.setFocusDistance(camera.position.distanceTo(character.mesh.position));
+    hd2d.render();
     stats.end();
     stats.update();
   });
