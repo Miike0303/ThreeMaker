@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getAutotileKind, getLocalTileIndex, getTileSheet, isAutotile } from '../src/tile-id.js';
+import {
+  getAutotileKind,
+  getAutotileShape,
+  getLocalTileIndex,
+  getTileSheet,
+  isAutotile,
+} from '../src/tile-id.js';
 
 describe('isAutotile', () => {
   it('is false for normal single-frame tile ids (B-E, A5)', () => {
@@ -74,5 +80,23 @@ describe('getAutotileKind', () => {
     // A1 spans 2048-2815 = 768 ids = 16 kinds (0-15); A2 starts at kind 16.
     expect(getAutotileKind(2815)).toBe(15);
     expect(getAutotileKind(2816)).toBe(16);
+  });
+});
+
+describe('getAutotileShape', () => {
+  it('is 0 at the start of every 48-id kind block', () => {
+    expect(getAutotileShape(2048)).toBe(0);
+    expect(getAutotileShape(2048 + 48)).toBe(0);
+    expect(getAutotileShape(2816)).toBe(0);
+  });
+
+  it('counts up to 47 across a kind block then wraps for the next kind', () => {
+    expect(getAutotileShape(2048 + 47)).toBe(47);
+    expect(getAutotileShape(2048 + 48)).toBe(0);
+  });
+
+  it('matches Tilemap.getAutotileShape semantics: (tileId - TILE_ID_A1) % 48', () => {
+    // Arbitrary mid-range id, cross-checked against the corescript formula.
+    expect(getAutotileShape(4352 + 130)).toBe(130 % 48);
   });
 });

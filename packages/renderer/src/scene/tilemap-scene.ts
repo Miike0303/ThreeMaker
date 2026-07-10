@@ -35,7 +35,29 @@ export class TilemapScene {
     const materialsBySheet: Partial<Record<TileSheetId, THREE.Material>> = {};
     for (const [sheet, texture] of Object.entries(textures) as [TileSheetId, THREE.Texture][]) {
       configurePixelArtTexture(texture);
-      materialsBySheet[sheet as TileSheetId] = new THREE.MeshBasicMaterial({ map: texture });
+      // Decorative RPG Maker sprites (statues, torches, chests...) are
+      // non-rectangular cutouts on a transparent PNG background, and some of
+      // those exporters leave arbitrary RGB (commonly opaque white) behind
+      // fully-transparent (alpha=0) pixels -- verified in this fixture by
+      // decoding Dungeon_B.png directly: tile id 92's cell contains pixels
+      // like rgba(255,255,255,0). Without `transparent: true`, three.js
+      // ignores alpha and paints that raw white RGB opaquely, which is what
+      // produced the solid white rectangles seen next to statue tiles.
+      // `alphaTest` (not `transparent` blending) keeps hard, unblended tile
+      // edges -- the right call for nearest-filtered pixel art, where soft
+      // alpha blending would fuzz the crisp silhouette.
+      //
+      // `side: DoubleSide` additionally renders the same texture on a quad's
+      // back face: upper-layer ("star") tiles are extruded as single
+      // zero-thickness standing quads (see `build-chunk-group.ts`) with no
+      // back/side geometry of their own, so from an unusual angle their
+      // default-culled back face would otherwise show nothing. Ground quads
+      // are unaffected (always viewed from above).
+      materialsBySheet[sheet as TileSheetId] = new THREE.MeshBasicMaterial({
+        map: texture,
+        side: THREE.DoubleSide,
+        alphaTest: 0.5,
+      });
     }
     this.ownedMaterials = Object.values(materialsBySheet);
     this.ownedTextures = Object.values(textures);

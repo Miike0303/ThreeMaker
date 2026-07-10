@@ -56,7 +56,7 @@ export function buildChunks(
           tileY: y,
           layerIndex: layerIndex as 0 | 1 | 2 | 3,
           sheet: tileUv.sheet,
-          uv: tileUv.uv,
+          quads: tileUv.quads,
           elevation: flags.isUpperLayer ? 'upper' : 'ground',
         });
       }

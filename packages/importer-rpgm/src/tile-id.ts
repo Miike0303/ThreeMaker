@@ -4,15 +4,11 @@
  * The tileset image is split into 9 fixed sheets (A1-A5, B, C, D, E), each
  * with a fixed tile ID range. IDs 2048 and above (sheets A1-A4) are
  * autotiles: each "kind" (a distinct autotile pattern, e.g. one specific
- * water or cliff tile) spans exactly 48 consecutive IDs (16 shape variants,
- * used by the renderer to pick the right blob-tile piece per neighbor
- * configuration). This mirrors `Tilemap.TILE_ID_*` / `Tilemap.getAutotileKind`
- * in RPG Maker's `rmmz_core.js` corescript — the reference implementation
- * this package targets.
- *
- * Autotile shape geometry (which of the 47 neighbor-based variants to render)
- * is out of scope for this slice; only sheet/kind classification is needed
- * to feed the future renderer.
+ * water or cliff tile) spans exactly 48 consecutive IDs — one per shape
+ * variant (0-47), used by the renderer to pick the right blob-tile piece per
+ * neighbor configuration. This mirrors `Tilemap.TILE_ID_*` /
+ * `Tilemap.getAutotileKind` in RPG Maker's `rmmz_core.js` corescript — the
+ * reference implementation this package targets.
  */
 
 export type TileSheetId = 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'B' | 'C' | 'D' | 'E';
@@ -52,6 +48,17 @@ export function isAutotile(tileId: number): boolean {
  */
 export function getAutotileKind(tileId: number): number {
   return Math.floor((tileId - AUTOTILE_BASE) / AUTOTILE_IDS_PER_KIND);
+}
+
+/**
+ * Which of a kind's 48 "blob tile" shape variants this tile ID selects
+ * (0-47), matching `Tilemap.getAutotileShape` in corescript exactly:
+ * `(tileId - TILE_ID_A1) % 48`. Only meaningful for autotile IDs — check
+ * `isAutotile` first. Combined with `getAutotileKind`, this is the pair the
+ * renderer's quarter-tile composition tables are indexed by.
+ */
+export function getAutotileShape(tileId: number): number {
+  return (tileId - AUTOTILE_BASE) % AUTOTILE_IDS_PER_KIND;
 }
 
 /**

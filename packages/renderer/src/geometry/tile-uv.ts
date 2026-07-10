@@ -1,38 +1,16 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
-import {
-  getAutotileKind,
-  getLocalTileIndex,
-  getTileSheet,
-  isAutotile,
-} from '@threemaker/importer-rpgm';
+import { getLocalTileIndex, getTileSheet, isAutotile } from '@threemaker/importer-rpgm';
+import type { AutotileSheetId } from './autotile-tables.js';
+import { computeAutotileQuarterOrigins } from './autotile-tables.js';
 import type { SheetPixelSize, SheetPixelSizes, UvRect } from './types.js';
 import { TILE_SIZE_PX } from './types.js';
 
-type AutotileSheetId = 'A1' | 'A2' | 'A3' | 'A4';
+const QUARTER_SIZE_PX = TILE_SIZE_PX / 2;
+const AUTOTILE_SHEETS: readonly AutotileSheetId[] = ['A1', 'A2', 'A3', 'A4'];
 
-// ponytail: real RPG Maker MV/MZ autotiles (A1-A4) compose each tile from up
-// to 47 neighbor-dependent shape variants (the classic "blob tile" algorithm
-// in Tilemap.prototype._drawTile), picking corner/edge pieces so adjacent
-// autotiles blend seamlessly. That algorithm is out of scope for this slice.
-// Instead, every one of a kind's 48 shape ids (see `getAutotileKind`) is
-// rendered with the SAME fixed sub-tile: the top-left tile of that kind's
-// block in the sheet image. Visually this means autotiles render as a flat
-// repeated tile with no blending at their edges. Full 48-shape composition
-// (reading each tile's 4/8-neighbor configuration from the map's own layer
-// data) is a follow-up slice.
-const AUTOTILE_BLOCK_COLS = 2;
-const AUTOTILE_BLOCK_ROWS = 3;
-
-// `getAutotileKind` counts kinds across the whole A1-A4 autotile ID space (see
-// its doc comment in importer-rpgm). Each sheet's image only contains its own
-// kinds, so this offset converts the whole-space kind index back to a
-// per-sheet-local index before it is used to address the image.
-const AUTOTILE_KIND_OFFSET: Record<AutotileSheetId, number> = {
-  A1: 0,
-  A2: 16,
-  A3: 48,
-  A4: 80,
-};
+function isAutotileSheet(sheet: TileSheetId): sheet is AutotileSheetId {
+  return (AUTOTILE_SHEETS as readonly TileSheetId[]).includes(sheet);
+}
 
 function pixelRectToUv(
   x: number,
@@ -51,22 +29,20 @@ function pixelRectToUv(
   };
 }
 
-function computeAutotileUv(
+/**
+ * Composes an autotile map tile id into its 4 quarter-tile UV rects (see
+ * `computeAutotileQuarterOrigins`), in destination order [top-left,
+ * top-right, bottom-left, bottom-right].
+ */
+function computeAutotileQuads(
   tileId: number,
   sheet: AutotileSheetId,
   pixelSize: SheetPixelSize,
-): UvRect {
-  const localKind = getAutotileKind(tileId) - AUTOTILE_KIND_OFFSET[sheet];
-  const blockPixelWidth = AUTOTILE_BLOCK_COLS * TILE_SIZE_PX;
-  const blockPixelHeight = AUTOTILE_BLOCK_ROWS * TILE_SIZE_PX;
-  const blocksPerRow = Math.max(1, Math.floor(pixelSize.width / blockPixelWidth));
-
-  const blockCol = localKind % blocksPerRow;
-  const blockRow = Math.floor(localKind / blocksPerRow);
-
-  const pixelX = blockCol * blockPixelWidth;
-  const pixelY = blockRow * blockPixelHeight;
-  return pixelRectToUv(pixelX, pixelY, TILE_SIZE_PX, TILE_SIZE_PX, pixelSize);
+): readonly [UvRect, UvRect, UvRect, UvRect] {
+  const origins = computeAutotileQuarterOrigins(tileId, sheet);
+  return origins.map((origin) =>
+    pixelRectToUv(origin.x, origin.y, QUARTER_SIZE_PX, QUARTER_SIZE_PX, pixelSize),
+  ) as unknown as [UvRect, UvRect, UvRect, UvRect];
 }
 
 function computeGridUv(tileId: number, pixelSize: SheetPixelSize): UvRect | null {
@@ -89,11 +65,16 @@ function computeGridUv(tileId: number, pixelSize: SheetPixelSize): UvRect | null
 
 export interface TileUv {
   readonly sheet: TileSheetId;
-  readonly uv: UvRect;
+  /**
+   * 1 entry for a plain single-frame tile, or 4 quarter-tile entries (in
+   * destination order [top-left, top-right, bottom-left, bottom-right]) for
+   * an autotile -- see `computeAutotileQuads`.
+   */
+  readonly quads: readonly UvRect[];
 }
 
 /**
- * Resolves which sheet a tile id belongs to and its UV rect within that
+ * Resolves which sheet a tile id belongs to and its UV rect(s) within that
  * sheet's image, given the pixel sizes of the sheets actually loaded.
  * Returns `null` for an empty tile (id 0), an id outside all known sheet
  * ranges, or a sheet whose pixel size was not provided (not loaded/unused).
@@ -107,13 +88,10 @@ export function computeTileUv(tileId: number, sheetPixelSizes: SheetPixelSizes):
   const pixelSize = sheetPixelSizes[sheet];
   if (!pixelSize) return null;
 
-  if (isAutotile(tileId)) {
-    // Safe cast: isAutotile(tileId) === true implies tileId is in the A1-A4
-    // range, so getTileSheet must have returned one of those 4 ids.
-    const uv = computeAutotileUv(tileId, sheet as AutotileSheetId, pixelSize);
-    return { sheet, uv };
+  if (isAutotile(tileId) && isAutotileSheet(sheet)) {
+    return { sheet, quads: computeAutotileQuads(tileId, sheet, pixelSize) };
   }
 
   const uv = computeGridUv(tileId, pixelSize);
-  return uv ? { sheet, uv } : null;
+  return uv ? { sheet, quads: [uv] } : null;
 }

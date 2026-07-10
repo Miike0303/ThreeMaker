@@ -35,7 +35,12 @@ export interface TileBuildData {
   /** Which of the map's 4 editable tile layers this tile came from (0 = bottom). */
   readonly layerIndex: 0 | 1 | 2 | 3;
   readonly sheet: TileSheetId;
-  readonly uv: UvRect;
+  /**
+   * 1 entry for a plain tile (covers the whole tile), or 4 for an autotile
+   * (one per quarter, in destination order [top-left, top-right,
+   * bottom-left, bottom-right] -- see `computeAutotileQuads` in `tile-uv.ts`).
+   */
+  readonly quads: readonly UvRect[];
   readonly elevation: ElevationClass;
 }
 

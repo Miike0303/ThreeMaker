@@ -7,7 +7,13 @@ export { parseTilesets } from './parse-tilesets.js';
 export type { TileFlags } from './tile-flags.js';
 export { decodeTileFlags } from './tile-flags.js';
 export type { TileSheetId } from './tile-id.js';
-export { getAutotileKind, getLocalTileIndex, getTileSheet, isAutotile } from './tile-id.js';
+export {
+  getAutotileKind,
+  getAutotileShape,
+  getLocalTileIndex,
+  getTileSheet,
+  isAutotile,
+} from './tile-id.js';
 export type {
   RpgmMap,
   RpgmMapInfo,

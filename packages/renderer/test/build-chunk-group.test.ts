@@ -21,7 +21,7 @@ describe('buildChunkGroup', () => {
           tileY: 0,
           layerIndex: 0,
           sheet: 'B',
-          uv: { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
           elevation: 'ground',
         },
         {
@@ -29,7 +29,7 @@ describe('buildChunkGroup', () => {
           tileY: 0,
           layerIndex: 0,
           sheet: 'B',
-          uv: { u0: 0.1, v0: 0, u1: 0.2, v1: 0.1 },
+          quads: [{ u0: 0.1, v0: 0, u1: 0.2, v1: 0.1 }],
           elevation: 'ground',
         },
         {
@@ -37,7 +37,7 @@ describe('buildChunkGroup', () => {
           tileY: 1,
           layerIndex: 0,
           sheet: 'C',
-          uv: { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
           elevation: 'ground',
         },
       ],
@@ -62,7 +62,7 @@ describe('buildChunkGroup', () => {
           tileY: 0,
           layerIndex: 0,
           sheet: 'B',
-          uv: { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
           elevation: 'ground',
         },
         {
@@ -70,7 +70,7 @@ describe('buildChunkGroup', () => {
           tileY: 0,
           layerIndex: 0,
           sheet: 'B',
-          uv: { u0: 0.1, v0: 0, u1: 0.2, v1: 0.1 },
+          quads: [{ u0: 0.1, v0: 0, u1: 0.2, v1: 0.1 }],
           elevation: 'ground',
         },
       ],
@@ -92,7 +92,7 @@ describe('buildChunkGroup', () => {
           tileY: 0,
           layerIndex: 0,
           sheet: 'B',
-          uv: { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
           elevation: 'ground',
         },
       ],
@@ -111,7 +111,7 @@ describe('buildChunkGroup', () => {
           tileY: 0,
           layerIndex: 0,
           sheet: 'B',
-          uv: { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
           elevation: 'ground',
         },
       ],
@@ -135,7 +135,7 @@ describe('buildChunkGroup', () => {
           tileY: 0,
           layerIndex: 0,
           sheet: 'B',
-          uv: { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
           elevation: 'upper',
         },
       ],
@@ -151,5 +151,72 @@ describe('buildChunkGroup', () => {
     // A standing wall quad spans from the ground up to wallHeight.
     expect(upperBox.min.y).toBeCloseTo(0);
     expect(upperBox.max.y).toBeCloseTo(1);
+  });
+
+  it('expands a 4-quad autotile ground tile into 4 quarter geometries covering the full tile footprint', () => {
+    const fourQuads = [
+      { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
+      { u0: 0.1, v0: 0, u1: 0.2, v1: 0.1 },
+      { u0: 0, v0: 0.1, u1: 0.1, v1: 0.2 },
+      { u0: 0.1, v0: 0.1, u1: 0.2, v1: 0.2 },
+    ];
+    const chunk = makeChunk({
+      tiles: [
+        { tileX: 0, tileY: 0, layerIndex: 0, sheet: 'B', quads: fourQuads, elevation: 'ground' },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    // 4 quarter-quads * 4 vertices each -- draw-call count is unaffected
+    // (still one merged mesh), but the geometry now carries 4x the vertices
+    // of a plain tile.
+    expect(geometry.getAttribute('position').count).toBe(16);
+
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox as THREE.Box3;
+    // The 4 quarters still tile together into the full 1x1 footprint, not 4
+    // separate smaller tiles floating at the origin.
+    expect(box.min.x).toBeCloseTo(0);
+    expect(box.max.x).toBeCloseTo(1);
+    expect(box.min.z).toBeCloseTo(0);
+    expect(box.max.z).toBeCloseTo(1);
+  });
+
+  it('expands a 4-quad autotile upper tile into quarters still spanning the full wall footprint and height', () => {
+    const fourQuads = [
+      { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
+      { u0: 0.1, v0: 0, u1: 0.2, v1: 0.1 },
+      { u0: 0, v0: 0.1, u1: 0.1, v1: 0.2 },
+      { u0: 0.1, v0: 0.1, u1: 0.2, v1: 0.2 },
+    ];
+    const chunk = makeChunk({
+      tiles: [
+        { tileX: 0, tileY: 0, layerIndex: 0, sheet: 'B', quads: fourQuads, elevation: 'upper' },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    expect(geometry.getAttribute('position').count).toBe(16);
+
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox as THREE.Box3;
+    expect(box.min.x).toBeCloseTo(0);
+    expect(box.max.x).toBeCloseTo(1);
+    expect(box.min.y).toBeCloseTo(0);
+    expect(box.max.y).toBeCloseTo(1);
   });
 });

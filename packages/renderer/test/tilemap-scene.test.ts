@@ -13,7 +13,7 @@ function makeChunk(chunkX: number, chunkY: number, sheet: 'B' | 'C'): ChunkBuild
         tileY: 0,
         layerIndex: 0,
         sheet,
-        uv: { u0: 0, v0: 0, u1: 0.5, v1: 0.5 },
+        quads: [{ u0: 0, v0: 0, u1: 0.5, v1: 0.5 }],
         elevation: 'ground',
       },
     ],
@@ -41,6 +41,23 @@ describe('TilemapScene', () => {
     expect(texture.magFilter).toBe(THREE.NearestFilter);
     expect(texture.minFilter).toBe(THREE.NearestFilter);
     expect(texture.generateMipmaps).toBe(false);
+    scene.dispose();
+  });
+
+  it('configures every material as double-sided with alpha-tested cutout transparency', () => {
+    // Regression test: decorative sprite sheets carry fully-transparent
+    // (alpha=0) pixels with arbitrary opaque-looking RGB (e.g. white) baked
+    // in. Without alphaTest, three.js ignores alpha and paints that raw RGB
+    // as if opaque, showing solid color blobs where a tile should be
+    // invisible. DoubleSide additionally covers an extruded upper-layer
+    // quad's unlit back face.
+    const chunks = [makeChunk(0, 0, 'B')];
+    const scene = new TilemapScene(chunks, { B: new THREE.Texture() });
+
+    const mesh = scene.group.children[0]?.children[0] as THREE.Mesh;
+    const material = mesh.material as THREE.MeshBasicMaterial;
+    expect(material.side).toBe(THREE.DoubleSide);
+    expect(material.alphaTest).toBeGreaterThan(0);
     scene.dispose();
   });
 
