@@ -5,7 +5,7 @@
 
 mod catalog_ipc;
 
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use catalog_ipc::{
     resolve_catalog_db_path, AssetFilter, AssetPage, CatalogError, GameRow, TilesetRow,
@@ -23,9 +23,23 @@ fn open_state_connection() -> Option<Connection> {
     catalog_ipc::open_catalog_connection(&path).ok()
 }
 
+/// Locks the catalog mutex, mapping a poisoned lock (a previous panic while
+/// holding it) to a clean `CatalogError::QueryFailed` IPC response instead
+/// of panicking the whole Tauri command handler. A poisoned mutex still
+/// holds a perfectly usable `Option<Connection>` underneath -- `.expect()`
+/// here would turn one earlier panic into every subsequent catalog command
+/// panicking too, which is strictly worse than surfacing one clean error.
+fn lock_catalog(state: &CatalogState) -> Result<MutexGuard<'_, Option<Connection>>, CatalogError> {
+    state.0.lock().map_err(|_| {
+        CatalogError::QueryFailed(
+            "catalog connection lock was poisoned by a previous internal error".to_string(),
+        )
+    })
+}
+
 #[tauri::command]
 fn catalog_list_games(state: tauri::State<CatalogState>) -> Result<Vec<GameRow>, CatalogError> {
-    let guard = state.0.lock().expect("catalog mutex poisoned");
+    let guard = lock_catalog(&state)?;
     let conn = guard.as_ref().ok_or(CatalogError::NotFound)?;
     catalog_ipc::list_games(conn)
 }
@@ -36,7 +50,7 @@ fn catalog_list_assets(
     filter: AssetFilter,
     page: u32,
 ) -> Result<AssetPage, CatalogError> {
-    let guard = state.0.lock().expect("catalog mutex poisoned");
+    let guard = lock_catalog(&state)?;
     let conn = guard.as_ref().ok_or(CatalogError::NotFound)?;
     catalog_ipc::list_assets(conn, &filter, page)
 }
@@ -46,7 +60,7 @@ fn catalog_get_tileset(
     state: tauri::State<CatalogState>,
     id: i64,
 ) -> Result<Option<TilesetRow>, CatalogError> {
-    let guard = state.0.lock().expect("catalog mutex poisoned");
+    let guard = lock_catalog(&state)?;
     let conn = guard.as_ref().ok_or(CatalogError::NotFound)?;
     catalog_ipc::get_tileset(conn, id)
 }
@@ -61,6 +75,33 @@ fn catalog_asset_store_dir() -> String {
         .parent()
         .map(|dir| dir.to_string_lossy().to_string())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn poisoned_catalog_mutex_maps_to_a_clean_query_failed_error_instead_of_panicking() {
+        let state = CatalogState(Mutex::new(None));
+
+        // Deliberately poison the mutex from a panic while it's held --
+        // exactly the scenario `lock_catalog` must survive without
+        // panicking itself.
+        let poison_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = state.0.lock().expect("lock for poisoning");
+            panic!("intentional poison for test");
+        }));
+        assert!(poison_result.is_err(), "the panic should have poisoned the mutex");
+
+        let outcome = lock_catalog(&state);
+        match outcome {
+            Err(CatalogError::QueryFailed(message)) => {
+                assert!(message.contains("poisoned"));
+            }
+            other => panic!("expected a clean QueryFailed error, got {other:?}"),
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

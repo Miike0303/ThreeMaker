@@ -78,6 +78,24 @@ CREATE INDEX IF NOT EXISTS idx_assets_sha256 ON assets(sha256);
 CREATE INDEX IF NOT EXISTS idx_objects_kind ON objects(kind);
 `;
 
+/**
+ * Schema version stamp, written via `PRAGMA user_version` after the schema
+ * is ensured (see the constructor). This is the cheapest honest drift guard
+ * across the catalog's readers: `apps/editor/src-tauri/src/catalog_ipc.rs`'s
+ * `EXPECTED_SCHEMA_VERSION` and `apps/editor/dev-server/catalog-api.ts`'s
+ * `EXPECTED_SCHEMA_VERSION` must both match this value exactly, and both
+ * assert it on open, failing loudly on mismatch instead of silently reading
+ * stale/missing columns.
+ *
+ * BUMP DISCIPLINE: whenever `SCHEMA_SQL` changes in a way that alters what a
+ * reader expects (new/renamed/removed column, changed semantics of an
+ * existing column), increment this constant AND the two Rust/TS constants
+ * above in the same change. This is a version STAMP, not a migration system
+ * -- there is no registered upgrade path yet; a version bump here is a
+ * signal to readers, not an automatic transformation of old data.
+ */
+export const SCHEMA_VERSION = 1;
+
 export interface GameRow {
   readonly id: number;
   readonly rootPath: string;
@@ -107,6 +125,12 @@ export interface ScanErrorRow {
 export interface AssetFilter {
   readonly gameId?: number;
   readonly type?: string;
+}
+
+export interface AssetPagination {
+  /** 0-indexed page number. */
+  readonly page: number;
+  readonly pageSize: number;
 }
 
 export interface ScanErrorFilter {
@@ -188,6 +212,10 @@ export class Catalog {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('busy_timeout = 5000');
     this.db.exec(SCHEMA_SQL);
+    // Stamped every open (idempotent: setting to the same value is a no-op)
+    // so any catalog ever written by this version of the writer reports the
+    // current schema version, not just freshly-created ones.
+    this.db.pragma(`user_version = ${SCHEMA_VERSION}`);
   }
 
   close(): void {
@@ -266,24 +294,40 @@ export class Catalog {
     return rows.map(mapGameRow);
   }
 
-  listAssets(filter: AssetFilter = {}): AssetRow[] {
-    const clauses: string[] = [];
-    const params: (string | number)[] = [];
-    if (filter.gameId !== undefined) {
-      clauses.push('game_id = ?');
-      params.push(filter.gameId);
+  /**
+   * Lists assets matching `filter`, optionally SQL-level `LIMIT`/`OFFSET`
+   * paginated via `pagination` (page is 0-indexed). Omitting `pagination`
+   * preserves the original unpaginated behavior exactly (every existing
+   * caller — dedupe stats, CLI reporting, etc. — is unaffected). Pair with
+   * `countAssets(filter)` for a total count without loading the full result
+   * set into memory (see that method's doc).
+   */
+  listAssets(filter: AssetFilter = {}, pagination?: AssetPagination): AssetRow[] {
+    const { where, params } = buildAssetWhereClause(filter);
+    let sql = `SELECT id, game_id, rel_path, type, sha256, was_encrypted FROM assets ${where} ORDER BY rel_path`;
+    const allParams: (string | number)[] = [...params];
+    if (pagination) {
+      sql += ' LIMIT ? OFFSET ?';
+      allParams.push(pagination.pageSize, pagination.page * pagination.pageSize);
     }
-    if (filter.type !== undefined) {
-      clauses.push('type = ?');
-      params.push(filter.type);
-    }
-    const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
-    const rows = this.db
-      .prepare<(string | number)[], AssetRowRaw>(
-        `SELECT id, game_id, rel_path, type, sha256, was_encrypted FROM assets ${where} ORDER BY rel_path`,
-      )
-      .all(...params);
+    const rows = this.db.prepare<(string | number)[], AssetRowRaw>(sql).all(...allParams);
     return rows.map(mapAssetRow);
+  }
+
+  /**
+   * `COUNT(*)` over the same filter `listAssets` would apply, without ever
+   * loading matching rows into memory — the SQL-level counterpart to
+   * `listAssets`'s pagination, so a caller can compute "showing X–Y of Z"
+   * without fetching Z rows to measure Z.
+   */
+  countAssets(filter: AssetFilter = {}): number {
+    const { where, params } = buildAssetWhereClause(filter);
+    const row = this.db
+      .prepare<(string | number)[], { count: number }>(
+        `SELECT COUNT(*) as count FROM assets ${where}`,
+      )
+      .get(...params);
+    return row?.count ?? 0;
   }
 
   listScanErrors(filter: ScanErrorFilter = {}): ScanErrorRow[] {
@@ -318,6 +362,24 @@ export class Catalog {
 
 export function openCatalog(dbPath: string): Catalog {
   return new Catalog(dbPath);
+}
+
+/** Shared `WHERE` clause builder for `listAssets`/`countAssets`, so the two never drift out of sync with each other. */
+function buildAssetWhereClause(filter: AssetFilter): {
+  where: string;
+  params: (string | number)[];
+} {
+  const clauses: string[] = [];
+  const params: (string | number)[] = [];
+  if (filter.gameId !== undefined) {
+    clauses.push('game_id = ?');
+    params.push(filter.gameId);
+  }
+  if (filter.type !== undefined) {
+    clauses.push('type = ?');
+    params.push(filter.type);
+  }
+  return { where: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '', params };
 }
 
 function mapGameRow(row: GameRowRaw): GameRow {

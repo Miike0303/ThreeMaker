@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Catalog, IngestGameResult } from '../src/catalog.js';
-import { ingestGame, openCatalog, sumResults } from '../src/catalog.js';
+import { ingestGame, openCatalog, SCHEMA_VERSION, sumResults } from '../src/catalog.js';
 import type { GameRecord } from '../src/scanner.js';
 
 // A tiny valid PNG (1x1 transparent pixel) used as "decrypted" content in
@@ -71,6 +71,10 @@ describe('catalog', () => {
     expect(Number(catalog.getPragma('busy_timeout'))).toBeGreaterThan(0);
   });
 
+  it('stamps the schema version via PRAGMA user_version, so readers (Rust IPC, dev fallback) can detect drift', () => {
+    expect(Number(catalog.getPragma('user_version'))).toBe(SCHEMA_VERSION);
+  });
+
   it('dedupes identical decrypted content across two games into 1 object + 2 references', () => {
     const gameA = join(workDir, 'en', 'Game');
     const gameB = join(workDir, 'es', 'Game');
@@ -114,6 +118,34 @@ describe('catalog', () => {
 
     const allAssets = catalog.listAssets({ gameId });
     expect(allAssets).toHaveLength(2);
+  });
+
+  it('supports SQL-level LIMIT/OFFSET pagination without loading the full result set', () => {
+    const gameRoot = join(workDir, 'Game');
+    // 5 distinct tileset assets, sorted by rel_path: A, B, C, D, E.
+    for (const letter of ['A', 'B', 'C', 'D', 'E']) {
+      writeAsset(gameRoot, 'img', `tilesets/${letter}.png`, TINY_PNG);
+    }
+    const record = makeGame({
+      rootPath: gameRoot,
+      imageAssets: ['A', 'B', 'C', 'D', 'E'].map((letter) => `tilesets/${letter}.png`),
+    });
+    ingestGame(catalog, record, { storeDir });
+
+    const firstPage = catalog.listAssets({ type: 'tileset' }, { page: 0, pageSize: 2 });
+    expect(firstPage.map((a) => a.relPath)).toEqual(['img/tilesets/A.png', 'img/tilesets/B.png']);
+
+    const secondPage = catalog.listAssets({ type: 'tileset' }, { page: 1, pageSize: 2 });
+    expect(secondPage.map((a) => a.relPath)).toEqual(['img/tilesets/C.png', 'img/tilesets/D.png']);
+
+    const lastPartialPage = catalog.listAssets({ type: 'tileset' }, { page: 2, pageSize: 2 });
+    expect(lastPartialPage.map((a) => a.relPath)).toEqual(['img/tilesets/E.png']);
+
+    // No pagination argument -- unchanged, unpaginated behavior (existing callers unaffected).
+    expect(catalog.listAssets({ type: 'tileset' })).toHaveLength(5);
+
+    expect(catalog.countAssets({ type: 'tileset' })).toBe(5);
+    expect(catalog.countAssets({ type: 'bgm' })).toBe(0);
   });
 
   it('catalogs a non-rendered additive type (parallax) as queryable metadata', () => {

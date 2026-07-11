@@ -60,7 +60,12 @@ export interface TilesetRow {
   readonly sheets: readonly TilesetSheetRow[];
 }
 
-export type CatalogErrorCode = 'NotFound' | 'OpenFailed' | 'QueryFailed';
+export type CatalogErrorCode =
+  | 'NotFound'
+  | 'OpenFailed'
+  | 'QueryFailed'
+  | 'SchemaVersionMismatch'
+  | 'InvalidSha256';
 
 export class CatalogClientError extends Error {
   readonly code: CatalogErrorCode;
@@ -126,11 +131,19 @@ async function assertOk(response: Response): Promise<Response> {
   if (response.status === 404) {
     const body = (await response.json().catch(() => ({ code: 'NotFound' }))) as {
       code?: CatalogErrorCode;
+      message?: string;
     };
-    throw new CatalogClientError(body.code ?? 'NotFound', 'Catalog not found.');
+    throw new CatalogClientError(body.code ?? 'NotFound', body.message ?? 'Catalog not found.');
   }
   if (!response.ok) {
-    throw new CatalogClientError('QueryFailed', `Request failed: ${response.status}`);
+    const body = (await response.json().catch(() => ({}))) as {
+      code?: CatalogErrorCode;
+      message?: string;
+    };
+    throw new CatalogClientError(
+      body.code ?? 'QueryFailed',
+      body.message ?? `Request failed: ${response.status}`,
+    );
   }
   return response;
 }

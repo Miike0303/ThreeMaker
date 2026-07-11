@@ -3,7 +3,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
-import { DevCatalogReader } from './dev-server/catalog-api.js';
+import {
+  DevCatalogReader,
+  isValidSha256,
+  SchemaVersionMismatchError,
+} from './dev-server/catalog-api.js';
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(APP_DIR, '..', '..');
@@ -23,6 +27,11 @@ const DEV_CATALOG_DB_PATH =
     'catalog.db',
   );
 const DEV_ASSET_STORE_DIR = resolve(dirname(DEV_CATALOG_DB_PATH));
+
+// Mirrors apps/editor/src-tauri/src/catalog_ipc.rs's PAGE_SIZE (100) -- no
+// cross-language sharing needed for a single fixed constant; keep both in
+// sync by hand if this value is ever tuned.
+const DEV_PAGE_SIZE = 100;
 
 const OBJECT_KIND_CONTENT_TYPE: Record<string, string> = {
   png: 'image/png',
@@ -62,7 +71,19 @@ function devCatalogApiPlugin(): Plugin {
           return;
         }
 
-        const catalog = new DevCatalogReader(DEV_CATALOG_DB_PATH);
+        let catalog: DevCatalogReader;
+        try {
+          catalog = new DevCatalogReader(DEV_CATALOG_DB_PATH);
+        } catch (err) {
+          if (err instanceof SchemaVersionMismatchError) {
+            res.statusCode = 409;
+            res.setHeader('content-type', 'application/json');
+            res.end(JSON.stringify({ code: 'SchemaVersionMismatch', message: err.message }));
+            return;
+          }
+          throw err;
+        }
+
         try {
           if (segments.length === 1 && segments[0] === 'games') {
             const games = catalog.listGames();
@@ -74,28 +95,30 @@ function devCatalogApiPlugin(): Plugin {
           if (segments.length === 1 && segments[0] === 'assets') {
             const gameId = url.searchParams.get('gameId');
             const type = url.searchParams.get('type');
-            const assets = catalog.listAssets({
+            const filter = {
               ...(gameId ? { gameId: Number(gameId) } : {}),
               ...(type ? { type } : {}),
-            });
+            };
             const page = Number(url.searchParams.get('page') ?? '0');
-            const pageSize = 100;
-            const start = page * pageSize;
+            // SQL-level LIMIT/OFFSET pagination (Catalog.listAssets'
+            // pagination param) -- never loads the full filtered table into
+            // Node memory just to slice it in JS.
+            const rows = catalog.listAssets(filter, { page, pageSize: DEV_PAGE_SIZE });
+            const total = catalog.countAssets(filter);
             res.setHeader('content-type', 'application/json');
-            res.end(
-              JSON.stringify({
-                rows: assets.slice(start, start + pageSize),
-                total: assets.length,
-                page,
-                pageSize,
-              }),
-            );
+            res.end(JSON.stringify({ rows, total, page, pageSize: DEV_PAGE_SIZE }));
             return;
           }
 
           if (segments.length === 2 && segments[0] === 'object') {
             const sha256 = segments[1] ?? '';
             const kind = url.searchParams.get('kind') ?? 'other';
+            if (!isValidSha256(sha256)) {
+              res.statusCode = 400;
+              res.setHeader('content-type', 'application/json');
+              res.end(JSON.stringify({ code: 'InvalidSha256' }));
+              return;
+            }
             const bytesPath = catalog.objectPath(DEV_ASSET_STORE_DIR, sha256);
             if (!existsSync(bytesPath)) {
               res.statusCode = 404;

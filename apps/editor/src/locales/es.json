@@ -10,7 +10,10 @@
     "catalog.allGames": "Todos los juegos",
     "catalog.filterType": "Tipo",
     "catalog.allTypes": "Todos los tipos",
-    "catalog.resultCount": "{count} recursos",
+    "catalog.resultRange": "{start}–{end} de {count} recursos",
+    "catalog.noResults": "Ningún recurso coincide con este filtro.",
+    "catalog.prevPage": "Anterior",
+    "catalog.nextPage": "Siguiente",
     "viewer.loading": "Cargando mapa…",
     "viewer.unavailable": "Visor de mapas no disponible — ver la consola para más detalles."
   }

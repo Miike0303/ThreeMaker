@@ -10,7 +10,10 @@
     "catalog.allGames": "All games",
     "catalog.filterType": "Type",
     "catalog.allTypes": "All types",
-    "catalog.resultCount": "{count} assets",
+    "catalog.resultRange": "{start}–{end} of {count} assets",
+    "catalog.noResults": "No assets match this filter.",
+    "catalog.prevPage": "Previous",
+    "catalog.nextPage": "Next",
     "viewer.loading": "Loading map…",
     "viewer.unavailable": "Map viewer unavailable — see console for details."
   }

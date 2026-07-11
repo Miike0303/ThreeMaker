@@ -92,6 +92,14 @@ CREATE INDEX IF NOT EXISTS idx_objects_kind ON objects(kind);
 /// this slice has no UI for yet.
 pub const PAGE_SIZE: u32 = 100;
 
+/// MUST match `packages/assets/src/catalog.ts`'s `SCHEMA_VERSION` exactly
+/// (and `apps/editor/dev-server/catalog-api.ts`'s `EXPECTED_SCHEMA_VERSION`).
+/// No cross-language sharing exists for this constant — bump all three
+/// together whenever the Node writer's `SCHEMA_SQL` changes in a way that
+/// affects what a reader expects. See that constant's doc comment for the
+/// full bump-discipline note.
+pub const EXPECTED_SCHEMA_VERSION: i64 = 1;
+
 #[derive(Debug, Serialize)]
 pub struct GameRow {
     pub id: i64,
@@ -154,6 +162,7 @@ pub enum CatalogError {
     NotFound,
     OpenFailed(String),
     QueryFailed(String),
+    SchemaVersionMismatch(String),
 }
 
 impl From<rusqlite::Error> for CatalogError {
@@ -180,13 +189,36 @@ pub fn resolve_catalog_db_path() -> PathBuf {
 
 /// Opens `path` read-only. Missing file is reported as `NotFound` (not a
 /// generic open error) so the frontend can show a localized "run a bulk scan
-/// first" empty state instead of an opaque failure.
+/// first" empty state instead of an opaque failure. Verifies the catalog's
+/// schema version before returning it (see `verify_schema_version`) — a
+/// mismatched version fails loudly rather than silently reading
+/// stale/missing columns.
 pub fn open_catalog_connection(path: &Path) -> Result<Connection, CatalogError> {
     if !path.exists() {
         return Err(CatalogError::NotFound);
     }
-    Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .map_err(|err| CatalogError::OpenFailed(err.to_string()))
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|err| CatalogError::OpenFailed(err.to_string()))?;
+    verify_schema_version(&conn)?;
+    Ok(conn)
+}
+
+/// Asserts the open connection's `PRAGMA user_version` matches
+/// `EXPECTED_SCHEMA_VERSION` exactly. This is the cheapest honest guard
+/// against the Node writer (`packages/assets/src/catalog.ts`) and this Rust
+/// reader drifting apart — there is no shared schema source between the two
+/// languages (see this module's doc comment).
+pub fn verify_schema_version(conn: &Connection) -> Result<(), CatalogError> {
+    let actual: i64 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(|err| CatalogError::QueryFailed(err.to_string()))?;
+    if actual != EXPECTED_SCHEMA_VERSION {
+        return Err(CatalogError::SchemaVersionMismatch(format!(
+            "catalog schema version mismatch: expected {EXPECTED_SCHEMA_VERSION}, found {actual}. \
+             Re-run the bulk-scan CLI (packages/assets) to rebuild the catalog with the current schema."
+        )));
+    }
+    Ok(())
 }
 
 pub fn list_games(conn: &Connection) -> Result<Vec<GameRow>, CatalogError> {
@@ -327,6 +359,8 @@ mod tests {
     fn fixture_connection() -> Connection {
         let conn = Connection::open_in_memory().expect("open in-memory db");
         conn.execute_batch(SCHEMA_SQL).expect("apply schema");
+        conn.pragma_update(None, "user_version", EXPECTED_SCHEMA_VERSION)
+            .expect("stamp schema version");
 
         conn.execute(
             "INSERT INTO games (root_path, title, engine, encryption_key, scanned_at) \
@@ -472,5 +506,28 @@ mod tests {
         let missing = Path::new("this/path/does/not/exist/catalog.db");
         let result = open_catalog_connection(missing);
         assert!(matches!(result, Err(CatalogError::NotFound)));
+    }
+
+    #[test]
+    fn verify_schema_version_passes_for_the_matching_version() {
+        let conn = fixture_connection();
+        assert!(verify_schema_version(&conn).is_ok());
+    }
+
+    #[test]
+    fn verify_schema_version_fails_loudly_for_a_mismatched_version() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(SCHEMA_SQL).expect("apply schema");
+        conn.pragma_update(None, "user_version", 999i64)
+            .expect("stamp a deliberately wrong schema version");
+
+        let result = verify_schema_version(&conn);
+        match result {
+            Err(CatalogError::SchemaVersionMismatch(message)) => {
+                assert!(message.contains("expected 1"));
+                assert!(message.contains("found 999"));
+            }
+            other => panic!("expected SchemaVersionMismatch, got {other:?}"),
+        }
     }
 }

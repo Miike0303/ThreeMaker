@@ -83,6 +83,30 @@
         gap: 2px;
         font-size: 12px;
       }
+      .catalog-pagination {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .catalog-pagination .catalog-count {
+        margin: 0;
+        flex: 1;
+        font-size: 12px;
+      }
+      .catalog-pagination button {
+        background: #20202e;
+        color: inherit;
+        border: 1px solid #2c2c3d;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .catalog-pagination button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
       .catalog-asset-list {
         list-style: none;
         margin: 0;
