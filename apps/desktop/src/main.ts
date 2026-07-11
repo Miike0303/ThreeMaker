@@ -5,7 +5,7 @@ import { DIRECTION_DELTA, GridMover, NpcRegistry, TriggerIndex } from '@threemak
 import type { RampCellInput, RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
 import { bindStoryToWorld, compileInk, InkDialogueProvider } from '@threemaker/narrative';
-import type { SheetPixelSizes } from '@threemaker/renderer';
+import type { FloorVisibilityPolicy, SheetPixelSizes } from '@threemaker/renderer';
 import {
   buildChunks,
   ChunkStreamer,
@@ -13,6 +13,7 @@ import {
   generateSyntheticMap,
   loadSheetTexture,
   StreamingTilemapScene,
+  WindowedFloorPolicy,
 } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
@@ -320,6 +321,15 @@ const STREAM_DISPOSE_RADIUS = 3;
 const GIANT_MAP_SIZE = 512;
 const GIANT_MAP_SEED = 20260710;
 
+// Dev-only 2-floor synthetic demo (see the 'g' map-cycle's 'floors' mode
+// below), used to visually verify the render window/Y-offset ahead of a real
+// authored multi-floor `.tmmap`. Mirrors the design's `DEFAULT_FLOOR_HEIGHT`
+// (packages/map-format/src/schema.ts) -- kept as a local constant rather than
+// a cross-package import since apps/desktop has no other dependency on
+// @threemaker/map-format yet.
+const DEV_DEMO_FLOOR_HEIGHT = 3;
+const DEV_DEMO_FLOOR_SIZE = 32;
+
 /** WASD/arrow keys -> the grid direction they move the character in. */
 const MOVE_KEYS: Record<string, Direction> = {
   w: 'up',
@@ -371,27 +381,65 @@ function createMostRecentHeldDirection(): {
   };
 }
 
-/** Everything owned by one loaded map: streamed tilemap, passability, and the character's mover. */
+/**
+ * One floor's render-side inputs (Plantas Apiladas design: "each floor is a
+ * map" -- the renderer half of that; see `FloorGameplay` in floor-runtime.ts
+ * for the gameplay half). `floorId`/`baseElevation` mirror the matching
+ * `FloorGameplay` entry built from the same source.
+ */
+interface FloorSource {
+  readonly floorId: string;
+  readonly baseElevation: number;
+  readonly map: RpgmMap;
+  readonly tileset: RpgmTileset;
+  readonly textures: Partial<Record<TileSheetId, THREE.Texture>>;
+  readonly sheetPixelSizes: SheetPixelSizes;
+  readonly rampCells?: readonly RampCellInput[];
+}
+
+/**
+ * One floor's renderer-side state: a `StreamingTilemapScene` + `ChunkStreamer`
+ * pair, or `undefined` while this floor is outside the visibility window.
+ * Kept in main.ts rather than folded into `FloorGameplay`/floor-runtime.ts --
+ * that module stays DOM/three-free by design (see its own doc comments), so
+ * the renderer-facing half of a floor's runtime lives alongside the rest of
+ * this file's three.js scene wiring instead. Re-entering the window rebuilds
+ * a FRESH `render` from `source` (design: "re-window on swap = dispose +
+ * fresh streamer.update") rather than reusing a disposed instance --
+ * `StreamingTilemapScene` cannot be un-disposed.
+ */
+interface FloorRenderSlot {
+  readonly source: FloorSource;
+  render: { readonly tilemap: StreamingTilemapScene; readonly streamer: ChunkStreamer } | undefined;
+}
+
+/** Everything owned by one loaded map: per-floor streamed tilemaps, passability, and the character's mover. */
 interface MapSession {
   readonly map: RpgmMap;
-  readonly tilemap: StreamingTilemapScene;
-  readonly streamer: ChunkStreamer;
   readonly mover: GridMover;
   readonly spawn: { readonly x: number; readonly y: number };
   /**
    * Per-floor gameplay containers (design "Plantas Apiladas": "each floor is
    * a map") -- `floorRouter.floors` holds one `{floorId, baseElevation,
    * elevation, passability}` entry per floor, and `floorRouter.currentFloor`
-   * selects which one gameplay queries route to. This slice always builds
-   * exactly one entry (`floor-0`), matching the single `RpgmMap` this
-   * session loads, and `currentFloor` stays `0` at runtime (no stair
-   * traversal yet -- that's a later slice) -- but the array/index shape is
-   * already floor-ready. `floorRouter.elevation`/`.passability` transparently
-   * route to the active floor's container; every call site below that used
-   * to read a plain `session.elevation` field now reads
-   * `session.floorRouter.elevation` instead (see `groundYAt` call sites).
+   * selects which one gameplay queries route to. `floorRouter.elevation`/
+   * `.passability` transparently route to the active floor's container;
+   * every call site below reads `session.floorRouter.elevation` (see
+   * `groundYAt` call sites) rather than a plain `session.elevation` field.
    */
   readonly floorRouter: FloorRouter;
+  /** Sum of live GPU chunk counts across every floor currently in the render window (debug/telemetry only -- see `buildDebugSnapshot`). */
+  liveChunkCount(): number;
+  /**
+   * Re-derives the render window for `floorRouter.currentFloor` around
+   * `(focusX, focusY)` via `WindowedFloorPolicy`: disposes floors that fell
+   * out of the window, builds a fresh `{tilemap, streamer}` for floors that
+   * entered it, and streams chunks (via each floor's own `ChunkStreamer`) for
+   * every floor still in the window. Cheap to call every frame -- each
+   * floor's `ChunkStreamer.update` early-exits while the focus tile stays in
+   * the same chunk, same as the single-floor streaming this replaces.
+   */
+  applyFloorWindow(focusX: number, focusY: number): void;
   dispose(): void;
 }
 
@@ -417,32 +465,28 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   const maxAnisotropy = renderer.getMaxAnisotropy();
 
   /**
-   * Builds a fully wired session for one map: chunk data for the whole map
-   * (pure, cheap to keep), a streaming scene that only holds GPU geometry
-   * near the character, passability + a spawn tile computed from it (never
-   * hardcoded), and the character's grid mover. `mapTileset`/`mapTextures`/
-   * `mapSheetPixelSizes` are per-map-source (the mz-project1 dev toggle uses
-   * an entirely different tileset/texture set than the Roseliam fixture);
-   * textures are shared across sessions of the same source
-   * (`ownsTextures: false`), so cycling back to a previously-seen map never
-   * reloads them.
+   * Builds one floor's renderer state: chunk data for its whole map (pure,
+   * cheap to keep), and a streaming scene that only holds GPU geometry near
+   * the character. `group.position.y` is offset by `baseElevation *
+   * HEIGHT_UNIT` (design: "group.position.y = baseElevation * HEIGHT_UNIT")
+   * so a floor above the ground floor physically sits above it in world
+   * space. Textures are shared across sessions/floors of the same source
+   * (`ownsTextures: false`), so cycling back to a previously-seen map (or
+   * building a second floor from the same tileset) never reloads them.
    */
-  function createMapSession(
-    map: RpgmMap,
-    mapTileset: RpgmTileset,
-    mapTextures: Partial<Record<TileSheetId, THREE.Texture>>,
-    mapSheetPixelSizes: SheetPixelSizes,
-    rampCells: readonly RampCellInput[] = [],
-  ): MapSession {
+  function buildFloorRender(source: FloorSource): {
+    readonly tilemap: StreamingTilemapScene;
+    readonly streamer: ChunkStreamer;
+  } {
     const chunks = buildChunks(
-      map,
-      mapTileset,
-      mapSheetPixelSizes,
+      source.map,
+      source.tileset,
+      source.sheetPixelSizes,
       DEFAULT_CHUNK_SIZE,
       undefined,
-      rampCells,
+      source.rampCells ?? [],
     );
-    const tilemap = new StreamingTilemapScene(chunks, mapTextures, {
+    const tilemap = new StreamingTilemapScene(chunks, source.textures, {
       tileWorldSize: TILE_WORLD_SIZE,
       ownsTextures: false,
       // HD-2D convention (Octopath Traveler): the tileset environment is
@@ -451,33 +495,86 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       // see `loadFixtureMapData`) keeps the crisp nearest/no-mipmap default.
       textureOptions: { mipmaps: true, maxAnisotropy },
     });
+    tilemap.group.position.y = source.baseElevation * HEIGHT_UNIT;
     const streamer = new ChunkStreamer({
       chunkSize: DEFAULT_CHUNK_SIZE,
-      mapWidth: map.width,
-      mapHeight: map.height,
+      mapWidth: source.map.width,
+      mapHeight: source.map.height,
       buildRadius: STREAM_BUILD_RADIUS,
       disposeRadius: STREAM_DISPOSE_RADIUS,
     });
+    return { tilemap, streamer };
+  }
 
-    // `rampCells` defaults to `[]` for every map except the mz-project1 dev
-    // map-cycle map (see `DEMO_RAMP_SEMANTICS` above, passed in by this
-    // function's only 'mz'-mode caller below) -- an empty list degenerates
-    // every ramp lookup to "no ramp" (an all-zero rampGrid), so passability/
-    // height sampling/geometry stay byte-identical to pre-ramp behavior on
-    // every other map. Shared between `passability` and the session's own
-    // height sampling (`groundYAt`) so both can never disagree about where a
-    // ramp's surface sits; `buildChunks` above receives the SAME list so the
-    // rendered slope and the walkable slope always agree.
-    //
-    // Floor-aware (this slice): this session always loads exactly one
-    // `RpgmMap`, so `floors` always has exactly one entry (`floor-0`,
-    // `baseElevation: 0`) -- built via the SAME unchanged single-map
-    // constructors as before (`buildFloorGameplay`, see floor-runtime.ts),
-    // just wrapped in the floor-indexed shape a later slice will populate
-    // with more than one entry.
-    const floors = [buildFloorGameplay('floor-0', 0, map, mapTileset, rampCells)];
+  /**
+   * Builds a fully wired session for one or more stacked floors: one
+   * `FloorGameplay` (passability/elevation) and one renderer `FloorRenderSlot`
+   * per source, a floor-scoped spawn tile (never hardcoded), and the
+   * character's grid mover. `floorSources[0]` is the "ground"/primary floor
+   * (its `map` backs `session.map` for display/camera purposes); every real
+   * caller below still passes exactly one source, so behavior on Map007/mz
+   * hill stays byte-identical to before this slice -- only the dev-only
+   * 'floors' map-cycle mode (see below) passes more than one.
+   */
+  function createMapSession(floorSources: readonly FloorSource[]): MapSession {
+    const primary = floorSources[0];
+    if (!primary) throw new Error('createMapSession requires at least one floor source.');
+
+    // Gameplay containers (unchanged from slice 2): one ElevationField +
+    // PassabilityGrid per floor, routed by `floorRouter.currentFloor`.
+    const floors = floorSources.map((source) =>
+      buildFloorGameplay(
+        source.floorId,
+        source.baseElevation,
+        source.map,
+        source.tileset,
+        source.rampCells ?? [],
+      ),
+    );
     const floorRouter = createFloorRouter(floors);
-    const spawn = findSpawnTile(floorRouter.passability, map.width / 2, map.height / 2);
+
+    // Renderer containers (this slice): one StreamingTilemapScene +
+    // ChunkStreamer PER floor. `WindowedFloorPolicy` (design "Render
+    // policy") governs which floors have live render state at all -- a
+    // floor outside the window is fully disposed (`render` is `undefined`),
+    // not merely hidden, and is rebuilt fresh the next time it enters the
+    // window (design: "re-window on swap = dispose + fresh streamer.update").
+    const floorSlots: FloorRenderSlot[] = floorSources.map((source) => ({
+      source,
+      render: undefined,
+    }));
+    const visibilityPolicy: FloorVisibilityPolicy = new WindowedFloorPolicy();
+
+    function applyFloorWindow(focusX: number, focusY: number): void {
+      const visible = new Set(
+        visibilityPolicy.visibleFloors(floorRouter.currentFloor, floorSlots.length),
+      );
+      for (let i = 0; i < floorSlots.length; i++) {
+        const slot = floorSlots[i];
+        if (!slot) continue;
+        if (visible.has(i)) {
+          if (!slot.render) {
+            slot.render = buildFloorRender(slot.source);
+            scene.add(slot.render.tilemap.group);
+          }
+          slot.render.tilemap.applyDiff(slot.render.streamer.update(focusX, focusY));
+        } else if (slot.render) {
+          scene.remove(slot.render.tilemap.group);
+          slot.render.tilemap.dispose();
+          slot.render = undefined;
+        }
+      }
+    }
+
+    function liveChunkCount(): number {
+      return floorSlots.reduce((sum, slot) => sum + (slot.render?.tilemap.liveChunkCount ?? 0), 0);
+    }
+
+    const spawn = findSpawnTile(
+      floorRouter.passability,
+      primary.map.width / 2,
+      primary.map.height / 2,
+    );
     const mover = new GridMover({
       x: spawn.x,
       y: spawn.y,
@@ -491,7 +588,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       // completes) -- `demoMapActive` also scopes the check to the fixture
       // map, since the demo NPCs' tiles are meaningless on the dev map-cycle's
       // other maps. `floorRouter.passability` routes to the mover's
-      // `currentFloor` (stays 0 this slice, see `FloorRouter`'s doc).
+      // `currentFloor`.
       canMove: (x, y, direction) => {
         if (!floorRouter.passability.canMove(x, y, direction)) return false;
         if (!demoMapActive || !npcRegistry) return true;
@@ -500,25 +597,31 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       },
     });
 
-    // Build the spawn surroundings before the first frame renders.
-    tilemap.applyDiff(streamer.update(spawn.x, spawn.y));
-    scene.add(tilemap.group);
+    // Build the spawn surroundings, for every floor the initial window
+    // covers, before the first frame renders.
+    applyFloorWindow(spawn.x, spawn.y);
 
     return {
-      map,
-      tilemap,
-      streamer,
+      map: primary.map,
       mover,
       spawn,
       floorRouter,
+      liveChunkCount,
+      applyFloorWindow,
       dispose() {
-        scene.remove(tilemap.group);
-        tilemap.dispose();
+        for (const slot of floorSlots) {
+          if (!slot.render) continue;
+          scene.remove(slot.render.tilemap.group);
+          slot.render.tilemap.dispose();
+          slot.render = undefined;
+        }
       },
     };
   }
 
-  let session = createMapSession(fixtureMap, tileset, textures, sheetPixelSizes);
+  let session = createMapSession([
+    { floorId: 'floor-0', baseElevation: 0, map: fixtureMap, tileset, textures, sheetPixelSizes },
+  ]);
   const walkAnimation = new WalkAnimation();
 
   const character = new CharacterSprite({
@@ -634,7 +737,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       cameraModeLabel: i18n.t(CAMERA_MODE_LOCALE_KEY[cameraMode]),
       tiltDeg: cameraTiltDeg,
       distance: cameraDistance,
-      liveChunks: session.tilemap.liveChunkCount,
+      liveChunks: session.liveChunkCount(),
       drawCalls: renderer.info.render.drawCalls,
       tile: { x: session.mover.tile.x, y: session.mover.tile.y },
       elevation: session.floorRouter.elevation.heightAt(session.mover.tile.x, session.mover.tile.y),
@@ -650,7 +753,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     window.__hd2d = { renderer };
     window.__threemaker_debug = {
       get liveChunks() {
-        return session.tilemap.liveChunkCount;
+        return session.liveChunkCount();
       },
       get drawCalls() {
         return renderer.info.render.drawCalls;
@@ -913,14 +1016,18 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   // Dev map-cycle toggle: 'g' cycles the fixture map -> a giant deterministic
   // synthetic map (same tileset, so all textures are reused) -> the
   // mz-project1 fixture's Map001 (a different tileset/texture set, carrying
-  // a painted region hill to exercise elevation) -> back to the fixture map.
+  // a painted region hill to exercise elevation) -> a 2-floor synthetic demo
+  // (Plantas Apiladas slice 3: visually verifies the per-floor Y-offset and
+  // WindowedFloorPolicy ahead of a real authored multi-floor `.tmmap`) ->
+  // back to the fixture map.
   if (import.meta.env.DEV) {
-    type MapCycleMode = 'fixture' | 'giant' | 'mz';
-    const CYCLE_ORDER: readonly MapCycleMode[] = ['fixture', 'giant', 'mz'];
+    type MapCycleMode = 'fixture' | 'giant' | 'mz' | 'floors';
+    const CYCLE_ORDER: readonly MapCycleMode[] = ['fixture', 'giant', 'mz', 'floors'];
 
     let mode: MapCycleMode = 'fixture';
     let giantMap: RpgmMap | undefined;
     let mzData: MapSourceData | undefined;
+    let floorsDemoMaps: readonly [RpgmMap, RpgmMap] | undefined;
     let cycling = false;
 
     window.addEventListener('keydown', (event) => {
@@ -948,27 +1055,91 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
               seed: GIANT_MAP_SEED,
             });
             session.dispose();
-            session = createMapSession(giantMap, tileset, textures, sheetPixelSizes);
+            session = createMapSession([
+              {
+                floorId: 'floor-0',
+                baseElevation: 0,
+                map: giantMap,
+                tileset,
+                textures,
+                sheetPixelSizes,
+              },
+            ]);
           } else if (mode === 'mz') {
             mzData ??= await loadMzFixtureMapData();
             session.dispose();
-            session = createMapSession(
-              mzData.map,
-              mzData.tileset,
-              mzData.textures,
-              mzData.sheetPixelSizes,
-              DEMO_RAMP_SEMANTICS,
-            );
+            session = createMapSession([
+              {
+                floorId: 'floor-0',
+                baseElevation: 0,
+                map: mzData.map,
+                tileset: mzData.tileset,
+                textures: mzData.textures,
+                sheetPixelSizes: mzData.sheetPixelSizes,
+                rampCells: DEMO_RAMP_SEMANTICS,
+              },
+            ]);
+          } else if (mode === 'floors') {
+            // Reuses the fixture map's own tileset/textures (same convention
+            // as 'giant' above) so no extra load is needed -- only the map
+            // layout differs per floor (different seeds), same tileset.
+            floorsDemoMaps ??= [
+              generateSyntheticMap({
+                width: DEV_DEMO_FLOOR_SIZE,
+                height: DEV_DEMO_FLOOR_SIZE,
+                seed: GIANT_MAP_SEED,
+              }),
+              generateSyntheticMap({
+                width: DEV_DEMO_FLOOR_SIZE,
+                height: DEV_DEMO_FLOOR_SIZE,
+                seed: GIANT_MAP_SEED + 1,
+              }),
+            ];
+            session.dispose();
+            session = createMapSession([
+              {
+                floorId: 'floor-0',
+                baseElevation: 0,
+                map: floorsDemoMaps[0],
+                tileset,
+                textures,
+                sheetPixelSizes,
+              },
+              {
+                floorId: 'floor-1',
+                baseElevation: DEV_DEMO_FLOOR_HEIGHT,
+                map: floorsDemoMaps[1],
+                tileset,
+                textures,
+                sheetPixelSizes,
+              },
+            ]);
+            // Jump straight to floor 1 so WindowedFloorPolicy's window
+            // becomes [0, 1] -- this is the visual check this dev mode
+            // exists for (floor 1 rendered physically above floor 0, per
+            // baseElevation*HEIGHT_UNIT, with both floors visible at once).
+            session.floorRouter.currentFloor = 1;
+            session.applyFloorWindow(session.spawn.x, session.spawn.y);
           } else {
             session.dispose();
-            session = createMapSession(fixtureMap, tileset, textures, sheetPixelSizes);
+            session = createMapSession([
+              {
+                floorId: 'floor-0',
+                baseElevation: 0,
+                map: fixtureMap,
+                tileset,
+                textures,
+                sheetPixelSizes,
+              },
+            ]);
           }
           focusCameraOnSpawn();
 
           // The demo NPCs/triggers are authored against the fixture map's
           // own tile coordinates -- irrelevant (and potentially
-          // out-of-bounds) on the giant/mz maps, so hide the NPC billboards
-          // and stop routing interact/enter input to them while cycled away.
+          // out-of-bounds) on the giant/mz/floors maps, so hide the NPC
+          // billboards and stop routing interact/enter input to them while
+          // cycled away.
           demoMapActive = mode === 'fixture';
           for (const sprite of npcSprites.values()) sprite.mesh.visible = demoMapActive;
         } catch (error) {
@@ -989,7 +1160,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   // the engine's own game loop from `@threemaker/core`.
   const gameLoop = new GameLoop({
     onTick(dt) {
-      const { mover, streamer, tilemap } = session;
+      const { mover } = session;
       const interpreterIdle = !interpreter || interpreter.state === 'idle';
 
       // Input pause (design's data-flow contract): the player's own
@@ -1032,10 +1203,11 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
 
       for (const sprite of npcSprites.values()) sprite.faceCamera(camera);
 
-      // Cheap per-frame streaming check: `update` early-exits with an empty
-      // diff while the character stays inside the same chunk, so geometry
-      // work only happens on chunk-boundary crossings.
-      tilemap.applyDiff(streamer.update(mover.tile.x, mover.tile.y));
+      // Cheap per-frame streaming check: each floor's `ChunkStreamer.update`
+      // early-exits with an empty diff while the character stays inside the
+      // same chunk, so geometry work only happens on chunk-boundary
+      // crossings; floors outside the current window are skipped entirely.
+      session.applyFloorWindow(mover.tile.x, mover.tile.y);
 
       if (mover.moving) walkAnimation.update(dt);
       else walkAnimation.reset();

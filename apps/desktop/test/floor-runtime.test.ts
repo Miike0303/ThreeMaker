@@ -85,6 +85,14 @@ describe('createFloorRouter', () => {
 
     expect(() => router.passability).toThrow(/no floor at index 2/i);
   });
+
+  it('throws the same clear error for a negative currentFloor index', () => {
+    const router = buildTwoFloorRouter();
+    router.currentFloor = -1;
+
+    expect(() => router.passability).toThrow(/no floor at index -1/i);
+    expect(() => router.elevation).toThrow(/no floor at index -1/i);
+  });
 });
 
 describe('single-floor regression: floor-container routing is byte-identical to constructing PassabilityGrid/ElevationField directly', () => {
