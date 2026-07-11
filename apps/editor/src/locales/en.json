@@ -1,0 +1,17 @@
+{
+  "name": "English",
+  "strings": {
+    "app.title": "ThreeMaker Editor",
+    "locale.selectorLabel": "Language",
+    "catalog.loading": "Loading catalog…",
+    "catalog.empty": "No catalog found — run the bulk scan CLI first (see packages/assets).",
+    "catalog.error": "Failed to load the catalog — see console for details.",
+    "catalog.filterGame": "Game",
+    "catalog.allGames": "All games",
+    "catalog.filterType": "Type",
+    "catalog.allTypes": "All types",
+    "catalog.resultCount": "{count} assets",
+    "viewer.loading": "Loading map…",
+    "viewer.unavailable": "Map viewer unavailable — see console for details."
+  }
+}

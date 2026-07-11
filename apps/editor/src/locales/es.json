@@ -1,0 +1,17 @@
+{
+  "name": "Español",
+  "strings": {
+    "app.title": "Editor de ThreeMaker",
+    "locale.selectorLabel": "Idioma",
+    "catalog.loading": "Cargando catálogo…",
+    "catalog.empty": "No se encontró el catálogo — ejecutá primero el escaneo masivo (ver packages/assets).",
+    "catalog.error": "No se pudo cargar el catálogo — ver la consola para más detalles.",
+    "catalog.filterGame": "Juego",
+    "catalog.allGames": "Todos los juegos",
+    "catalog.filterType": "Tipo",
+    "catalog.allTypes": "Todos los tipos",
+    "catalog.resultCount": "{count} recursos",
+    "viewer.loading": "Cargando mapa…",
+    "viewer.unavailable": "Visor de mapas no disponible — ver la consola para más detalles."
+  }
+}
