@@ -19,4 +19,6 @@ export type {
   StairTraversalWaypoint,
 } from './stair-traversal.js';
 export { StairTraversal } from './stair-traversal.js';
+export type { StairLinkDefinition, StairTriggerTile } from './stair-trigger-tracker.js';
+export { StairTriggerTracker } from './stair-trigger-tracker.js';
 export { TriggerIndex } from './trigger-index.js';

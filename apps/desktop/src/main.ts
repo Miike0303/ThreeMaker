@@ -1,11 +1,17 @@
 import type { EventHost, EventScript } from '@threemaker/core';
 import { EventInterpreter, GameLoop, WorldState } from '@threemaker/core';
-import type { Direction, StairTraversalFloor, StairTraversalWaypoint } from '@threemaker/gameplay';
+import type {
+  Direction,
+  StairTraversalFloor,
+  StairTraversalFrame,
+  StairTraversalWaypoint,
+} from '@threemaker/gameplay';
 import {
   DIRECTION_DELTA,
   GridMover,
   NpcRegistry,
   StairTraversal,
+  StairTriggerTracker,
   TriggerIndex,
 } from '@threemaker/gameplay';
 import type { RampCellInput, RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
@@ -349,6 +355,14 @@ const DEV_DEMO_FLOOR_SIZE = 32;
  * row (`y === centerY` is a full-width clear corridor on every seed), so the
  * demo never places a stair endpoint on a wall tile regardless of each
  * floor's independent wall-scatter seed.
+ *
+ * `DEV_DEMO_STAIR_ROW` doubles as BOTH the Y-axis row shared by every
+ * waypoint below AND the numeric base `DEV_DEMO_STAIR_ENTRY_X`/
+ * `DEV_DEMO_STAIR_LANDING_X` offset from -- an X-axis value borrowed from a
+ * Y-axis "ROW" constant. This only lines up because `DEV_DEMO_FLOOR_SIZE` is
+ * square (width === height, so the same halfway-point arithmetic is valid on
+ * either axis); a non-square demo floor would need separate row/column base
+ * constants.
  */
 const DEV_DEMO_STAIR_ROW = Math.floor(DEV_DEMO_FLOOR_SIZE / 2);
 const DEV_DEMO_STAIR_ENTRY_X = DEV_DEMO_STAIR_ROW + 1;
@@ -533,6 +547,13 @@ interface MapSession {
     x: number,
     y: number,
   ): readonly StairTraversalWaypoint[] | undefined;
+  /**
+   * Records `(floorIndex, x, y)` as already-checked without evaluating any
+   * stair-link (`StairTriggerTracker#mark`) -- for the traversal completion
+   * frame's own teleport-onto-landing arrival, which has no use for a match
+   * result it would only discard.
+   */
+  markStairArrival(floorIndex: number, x: number, y: number): void;
   dispose(): void;
 }
 
@@ -669,48 +690,33 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       return floorSlots.reduce((sum, slot) => sum + (slot.render?.tilemap.liveChunkCount ?? 0), 0);
     }
 
-    // `lastStairCheckKey` tracks the last `(floorIndex, x, y)` reported to
-    // `stairTriggerAt`, for on-arrival dedup -- same rationale/pattern as
-    // `@threemaker/gameplay`'s `TriggerIndex#enter` (see its own doc
-    // comment): calling it again for the same tile (standing still, or every
-    // frame while a chained multi-tile move holds a direction key -- see
-    // `GridMover`'s own chaining behavior) is a no-op, but a genuinely NEW
-    // tile always re-evaluates, even one visited before. Critically, this is
-    // also what stops a traversal's own completion-frame teleport onto a
-    // `bidirectional` link's landing waypoint from instantly re-triggering
-    // the reverse trip the moment it lands -- the game loop's
-    // completion-frame branch calls this function once more (result
-    // discarded) purely to mark that arrival, exactly like
-    // `TriggerIndex`'s own `initialTile` constructor param avoids firing for
-    // a trigger the player merely spawns on top of.
-    let lastStairCheckKey = '';
+    // Stair-link trigger dedup: extracted to `@threemaker/gameplay`'s
+    // `StairTriggerTracker` (Slice 5 gate-fix -- makes the on-arrival dedup
+    // unit-testable outside main.ts). Same rationale/pattern as
+    // `TriggerIndex#enter` (see its own doc comment): reporting a tile again
+    // (standing still, or every frame while a chained multi-tile move holds
+    // a direction key -- see `GridMover`'s own chaining behavior) is a
+    // no-op, but a genuinely NEW tile always re-evaluates, even one visited
+    // before. Critically, this is also what stops a traversal's own
+    // completion-frame teleport onto a `bidirectional` link's landing
+    // waypoint from instantly re-triggering the reverse trip the moment it
+    // lands -- the game loop's completion-frame branch calls
+    // `markStairArrival` (not `stairTriggerAt`) purely to mark that arrival,
+    // without scanning `stairLinks` for a match it would only discard;
+    // exactly like `TriggerIndex`'s own `initialTile` constructor param
+    // avoids firing for a trigger the player merely spawns on top of.
+    const stairTriggerTracker = new StairTriggerTracker();
 
     function stairTriggerAt(
       floorIndex: number,
       x: number,
       y: number,
     ): readonly StairTraversalWaypoint[] | undefined {
-      const key = `${floorIndex}:${x}:${y}`;
-      if (key === lastStairCheckKey) return undefined;
-      lastStairCheckKey = key;
+      return stairTriggerTracker.shouldTrigger({ floor: floorIndex, x, y }, stairLinks);
+    }
 
-      for (const link of stairLinks) {
-        const entry = link.waypoints[0];
-        if (entry && entry.floor === floorIndex && entry.x === x && entry.y === y) {
-          return link.waypoints;
-        }
-        const landing = link.waypoints[link.waypoints.length - 1];
-        if (
-          link.bidirectional &&
-          landing &&
-          landing.floor === floorIndex &&
-          landing.x === x &&
-          landing.y === y
-        ) {
-          return [...link.waypoints].reverse();
-        }
-      }
-      return undefined;
+    function markStairArrival(floorIndex: number, x: number, y: number): void {
+      stairTriggerTracker.mark({ floor: floorIndex, x, y });
     }
 
     const spawn = findSpawnTile(
@@ -721,7 +727,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     // Spawning exactly on a stair-link waypoint (unlikely, but possible on a
     // hand-authored map) should not immediately trigger a traversal --
     // matches `TriggerIndex`'s own initialTile convention.
-    lastStairCheckKey = `${floorRouter.currentFloor}:${spawn.x}:${spawn.y}`;
+    markStairArrival(floorRouter.currentFloor, spawn.x, spawn.y);
     const mover = new GridMover({
       x: spawn.x,
       y: spawn.y,
@@ -756,6 +762,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       liveChunkCount,
       applyFloorWindow,
       stairTriggerAt,
+      markStairArrival,
       dispose() {
         for (const slot of floorSlots) {
           if (!slot.render) continue;
@@ -775,13 +782,18 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   // The render-position handoff selector (design "Render-position handoff"):
   // `null` = normal mover-sourced play (branch a); non-null = the walker owns
   // the character's world position and camera target for this frame (branch
-  // b), until it reports `done` (branch c, the completion frame). Paired
-  // with the SAME waypoints the walker was built from -- needed at the
-  // completion frame (exit cell + facing + destination floor) and every
-  // frame in between (the `max(fromFloor, toFloor)` render-window pin) --
-  // since `StairTraversal` itself doesn't expose them.
-  let activeTraversal: StairTraversal | null = null;
-  let activeTraversalWaypoints: readonly StairTraversalWaypoint[] | null = null;
+  // b) -- and on the SAME tick `frame.done` first reports `true`, the
+  // completion frame (branch c) also runs, since it is the tail of branch b's
+  // own `if`, not a separate tick. `waypoints` is paired with `walker` here
+  // (one nullable object, not two separately-nulled variables, so nothing can
+  // set/clear one half without the other) -- needed at the completion frame
+  // (exit cell + facing + destination floor) and every frame in between (the
+  // `max(fromFloor, toFloor)` render-window pin), since `StairTraversal`
+  // itself doesn't expose them.
+  let activeTraversal: {
+    readonly walker: StairTraversal;
+    readonly waypoints: readonly StairTraversalWaypoint[];
+  } | null = null;
   // Last composed world Y actually rendered this frame (mover-sourced
   // `groundYAt` in branch a, or the walker's own `worldY` in branch b) --
   // exposed via `window.__threemaker_debug.worldY` so a headless check can
@@ -1350,15 +1362,25 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
 
   // Custom clock, not `THREE.Clock` (deprecated since three r183) -- reuses
   // the engine's own game loop from `@threemaker/core`.
-  /** Moves the character/camera to `(x, y, worldY)` and closes the exponential camera-follow step -- the shared tail of every per-frame source (mover-sourced or walker-sourced). */
+  /**
+   * Moves the character/camera to `position` and closes the exponential
+   * camera-follow step -- the shared tail of every per-frame source
+   * (mover-sourced or walker-sourced). `position` is a single object, not
+   * three positional numbers -- `x`/`y`/`worldY` are all plain `number`s, so
+   * passing them positionally would let a caller swap two of them without a
+   * type error; `Pick<StairTraversalFrame, 'x' | 'y' | 'worldY'>` matches the
+   * shape both call sites already have in scope (the walker-frame branch
+   * passes its `StairTraversalFrame` directly; the mover-frame branch builds
+   * the matching object from `mover.renderPosition` + the composed
+   * `groundY`).
+   */
   function renderCharacterAt(
-    x: number,
-    y: number,
-    worldY: number,
+    position: Pick<StairTraversalFrame, 'x' | 'y' | 'worldY'>,
     facing: Direction,
     moving: boolean,
     dt: number,
   ): void {
+    const { x, y, worldY } = position;
     lastGroundY = worldY;
     character.setFrame(facing, walkAnimation.frameColumn(moving));
     character.setTilePosition(x, y, TILE_WORLD_SIZE, worldY);
@@ -1385,37 +1407,41 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       // handoff", branch b) -- `mover.update` is never called here, so
       // `currentFloor`/the mover's tile stay frozen mid-traversal (the
       // invariant: both mutate ONLY at the completion frame, below).
-      if (activeTraversal && activeTraversalWaypoints) {
-        const frame = activeTraversal.update(dt);
-        const first = activeTraversalWaypoints[0];
-        const last = activeTraversalWaypoints[activeTraversalWaypoints.length - 1];
+      if (activeTraversal) {
+        const { walker, waypoints } = activeTraversal;
+        const frame = walker.update(dt);
+        const first = waypoints[0];
+        const last = waypoints[waypoints.length - 1];
         const pinnedFloor = Math.max(first?.floor ?? 0, last?.floor ?? 0);
         session.applyFloorWindow(frame.x, frame.y, pinnedFloor);
 
         walkAnimation.update(dt);
-        renderCharacterAt(frame.x, frame.y, frame.worldY, mover.facing, true, dt);
+        renderCharacterAt(frame, mover.facing, true, dt);
 
-        // (c) Completion frame: the walker's last act is
-        // `mover.teleport(exitCell, facing)` with `currentFloor` flipped to
-        // the destination BEFORE the flag clears (design invariant) -- the
-        // very next frame resumes branch (a), now mover-sourced on the
-        // destination floor, with no camera/position pop (the walker's final
-        // `worldY` already equals that floor's own `groundYAt` at the
-        // landing cell, since both use the same composed formula).
+        // (c) Completion frame: fires on THIS SAME tick, the instant
+        // `frame.done` first reports true -- not a separate tick after (b).
+        // The walker's last act is `mover.teleport(exitCell, facing)` with
+        // `currentFloor` flipped to the destination BEFORE `activeTraversal`
+        // clears (design invariant) -- the NEXT tick resumes branch (a), now
+        // mover-sourced on the destination floor, with no camera/position pop
+        // (the walker's final `worldY` already equals that floor's own
+        // `groundYAt` at the landing cell, since both use the same composed
+        // formula).
         if (frame.done && last) {
-          const previous = activeTraversalWaypoints[activeTraversalWaypoints.length - 2] ?? first;
+          const previous = waypoints[waypoints.length - 2] ?? first;
           const facing = (previous && directionBetween(previous, last)) ?? mover.facing;
           mover.teleport(last.x, last.y, facing);
           session.floorRouter.currentFloor = last.floor;
           activeTraversal = null;
-          activeTraversalWaypoints = null;
           session.applyFloorWindow(last.x, last.y);
           // Marks the landing tile as already-checked (see
-          // `lastStairCheckKey`'s doc comment) so this SAME teleported
+          // `StairTriggerTracker#mark`'s doc comment) so this SAME teleported
           // arrival doesn't instantly re-trigger a bidirectional link's
           // reverse trip the very next frame -- the player must actually
-          // walk away and back onto it for that.
-          session.stairTriggerAt(last.floor, last.x, last.y);
+          // walk away and back onto it for that. Uses `mark`, not
+          // `stairTriggerAt`, since this call has no use for a match result
+          // it would only discard.
+          session.markStairArrival(last.floor, last.x, last.y);
         }
         return;
       }
@@ -1459,7 +1485,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       // ALWAYS the last fully-settled integer tile, never a mid-step
       // fractional position -- exactly like `triggerIndex.enter` just below.
       // `session.stairTriggerAt` internally dedups on-arrival (see
-      // `lastStairCheckKey`), so a continuously-held direction key that
+      // `StairTriggerTracker`), so a continuously-held direction key that
       // chains through several tiles per call (see `GridMover`'s own
       // chaining behavior) still only fires once per NEW tile, not once per
       // frame spent standing on it. Only ever finds a match when
@@ -1476,13 +1502,15 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
           baseElevation: floor.baseElevation,
           elevation: floor.elevation,
         }));
-        activeTraversal = new StairTraversal({
+        activeTraversal = {
+          walker: new StairTraversal({
+            waypoints: stairWaypoints,
+            floors,
+            speed: PLAYER_SPEED,
+            heightUnit: HEIGHT_UNIT,
+          }),
           waypoints: stairWaypoints,
-          floors,
-          speed: PLAYER_SPEED,
-          heightUnit: HEIGHT_UNIT,
-        });
-        activeTraversalWaypoints = stairWaypoints;
+        };
       }
 
       if (demoMapActive && interpreter && triggerIndex && demoEvents) {
@@ -1520,9 +1548,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       );
 
       renderCharacterAt(
-        mover.renderPosition.x,
-        mover.renderPosition.y,
-        groundY,
+        { x: mover.renderPosition.x, y: mover.renderPosition.y, worldY: groundY },
         mover.facing,
         mover.moving,
         dt,
