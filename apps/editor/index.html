@@ -18,6 +18,108 @@
         display: flex;
         flex-direction: column;
       }
+      .app-shell {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+      }
+      .app-header {
+        padding: 8px 16px;
+        border-bottom: 1px solid #2c2c3d;
+        flex: none;
+      }
+      .app-header h1 {
+        margin: 0;
+        font-size: 18px;
+      }
+      .app-main {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+      .app-panel {
+        min-width: 0;
+        min-height: 0;
+      }
+      .app-panel-catalog {
+        width: 420px;
+        flex: none;
+        overflow-y: auto;
+        border-right: 1px solid #2c2c3d;
+        padding: 12px;
+      }
+      .app-panel-viewer {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+      .app-footer {
+        flex: none;
+        padding: 6px 16px;
+        border-top: 1px solid #2c2c3d;
+        font-size: 12px;
+        opacity: 0.8;
+      }
+      .catalog-filters {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+      .catalog-filters label {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 12px;
+      }
+      .catalog-asset-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-height: 40vh;
+        overflow-y: auto;
+      }
+      .catalog-asset-list li {
+        margin-bottom: 2px;
+      }
+      .catalog-asset-list button {
+        width: 100%;
+        text-align: left;
+        background: #20202e;
+        color: inherit;
+        border: 1px solid #2c2c3d;
+        border-radius: 4px;
+        padding: 4px 6px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .catalog-asset-list button.catalog-asset-selected {
+        border-color: #6c7dff;
+      }
+      .catalog-preview-image {
+        max-width: 100%;
+        image-rendering: pixelated;
+      }
+      .map-viewer {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+        position: relative;
+      }
+      .map-viewer-canvas {
+        flex: 1;
+        min-height: 0;
+      }
+      .map-viewer-status {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>

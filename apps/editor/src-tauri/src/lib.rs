@@ -51,6 +51,18 @@ fn catalog_get_tileset(
     catalog_ipc::get_tileset(conn, id)
 }
 
+/// Returns the asset-store directory (the catalog db's parent folder) as a
+/// string, so the frontend can compute `convertFileSrc` paths for object
+/// preview images -- the asset-protocol scope in `tauri.conf.json` is
+/// exactly this directory.
+#[tauri::command]
+fn catalog_asset_store_dir() -> String {
+    resolve_catalog_db_path()
+        .parent()
+        .map(|dir| dir.to_string_lossy().to_string())
+        .unwrap_or_default()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -59,7 +71,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             catalog_list_games,
             catalog_list_assets,
-            catalog_get_tileset
+            catalog_get_tileset,
+            catalog_asset_store_dir
         ])
         .run(tauri::generate_context!())
         .expect("error while running the ThreeMaker editor shell");
