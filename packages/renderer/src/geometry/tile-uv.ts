@@ -12,6 +12,18 @@ function isAutotileSheet(sheet: TileSheetId): sheet is AutotileSheetId {
   return (AUTOTILE_SHEETS as readonly TileSheetId[]).includes(sheet);
 }
 
+/**
+ * Half a source-image texel, in pixels: every rect this module produces gets
+ * inset by this much on all 4 sides before converting to UV space. Nearest
+ * quads share a texture (all tiles of a sheet live on the one bound
+ * texture), so without an inset, bilinear/mip sampling right at a shared UV
+ * boundary can pick up a sliver of the *neighboring* tile's pixels -- visible
+ * as a thin seam line between tiles, especially once the environment texture
+ * gets mipmapped (see `pixel-art-texture.ts`). Insetting by half a texel
+ * keeps every sample point strictly inside its own tile's pixels.
+ */
+const HALF_TEXEL_PX = 0.5;
+
 function pixelRectToUv(
   x: number,
   y: number,
@@ -22,10 +34,10 @@ function pixelRectToUv(
   // Image space has Y growing downward; three.js texture UV space has V
   // growing upward. Flip once here so every caller gets ready-to-use UVs.
   return {
-    u0: x / pixelSize.width,
-    u1: (x + w) / pixelSize.width,
-    v0: 1 - (y + h) / pixelSize.height,
-    v1: 1 - y / pixelSize.height,
+    u0: (x + HALF_TEXEL_PX) / pixelSize.width,
+    u1: (x + w - HALF_TEXEL_PX) / pixelSize.width,
+    v0: 1 - (y + h - HALF_TEXEL_PX) / pixelSize.height,
+    v1: 1 - (y + HALF_TEXEL_PX) / pixelSize.height,
   };
 }
 

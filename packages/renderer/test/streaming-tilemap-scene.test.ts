@@ -138,6 +138,57 @@ describe('StreamingTilemapScene', () => {
     expect(textureSpy).not.toHaveBeenCalled();
   });
 
+  it('culls the interior face between wall tiles in different chunks (whole-map wallTileKeys, not chunk-local)', () => {
+    // Chunk (0,0)'s wall tile sits at the chunk's east edge (chunkSize
+    // defaults to 16, so tileX=15 is the last column); chunk (1,0)'s wall
+    // tile is immediately across the border at tileX=16. Both chunks are
+    // built (live) so their meshes can be compared.
+    const chunkA: ChunkBuildData = {
+      chunkX: 0,
+      chunkY: 0,
+      tiles: [
+        {
+          tileX: 15,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'A4',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+      ],
+    };
+    const chunkB: ChunkBuildData = {
+      chunkX: 1,
+      chunkY: 0,
+      tiles: [
+        {
+          tileX: 16,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'A4',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+      ],
+    };
+    const scene = new StreamingTilemapScene([chunkA, chunkB], { A4: new THREE.Texture() });
+
+    scene.applyDiff({ toBuild: ['0,0', '1,0'], toDispose: [] });
+
+    const meshA = scene.group.children
+      .find((child) => child.name === 'chunk-0-0')
+      ?.children.find((child) => child.name === 'chunk-0-0-A4') as THREE.Mesh;
+    const meshB = scene.group.children
+      .find((child) => child.name === 'chunk-1-0')
+      ?.children.find((child) => child.name === 'chunk-1-0-A4') as THREE.Mesh;
+
+    // 3 open sides + 1 cap per tile (not 4+1) -- the shared face across the
+    // chunk border is suppressed on both sides.
+    expect(meshA.geometry.getAttribute('position').count).toBe(4 * 4);
+    expect(meshB.geometry.getAttribute('position').count).toBe(4 * 4);
+    scene.dispose();
+  });
+
   it('builds shadow overlay meshes lazily with the chunk they belong to', () => {
     const chunk: ChunkBuildData = {
       chunkX: 0,

@@ -12,6 +12,7 @@ export {
   computeCliffEdges,
   computeHeightGrid,
   computeOpenEdges,
+  computeWallTileKeys,
   heightForRegion,
   isWallSheet,
 } from './geometry/elevation.js';
@@ -32,6 +33,7 @@ export {
 } from './geometry/types.js';
 export type { BuildChunkGroupOptions } from './scene/build-chunk-group.js';
 export { buildChunkGroup } from './scene/build-chunk-group.js';
+export type { PixelArtTextureOptions } from './scene/pixel-art-texture.js';
 export { configurePixelArtTexture, loadSheetTexture } from './scene/pixel-art-texture.js';
 export type {
   ChunkSetDiff,

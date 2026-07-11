@@ -5,9 +5,11 @@ import { describe, expect, it } from 'vitest';
 import {
   computeCliffEdges,
   computeOpenEdges,
+  computeWallTileKeys,
   isWallSheet,
   tileKey,
 } from '../src/geometry/elevation.js';
+import type { TileBuildData } from '../src/geometry/types.js';
 import { MZ_PROJECT1_FIXTURE_DIR, requireFixture } from './fixture-path.js';
 
 async function readMz001Map() {
@@ -117,5 +119,42 @@ describe('computeOpenEdges', () => {
       tileKey(2, 1),
     ]);
     expect(computeOpenEdges(occupied, 1, 1)).toEqual([]);
+  });
+});
+
+describe('computeWallTileKeys', () => {
+  type WallTileKeyInput = Pick<TileBuildData, 'tileX' | 'tileY' | 'sheet' | 'elevation'>;
+
+  function tile(overrides: Partial<WallTileKeyInput> = {}): WallTileKeyInput {
+    return { tileX: 0, tileY: 0, sheet: 'A4', elevation: 'ground', ...overrides };
+  }
+
+  it('includes a ground-elevation A3/A4 tile', () => {
+    const keys = computeWallTileKeys([tile({ tileX: 3, tileY: 4, sheet: 'A3' })]);
+    expect(keys.has(tileKey(3, 4))).toBe(true);
+  });
+
+  it('excludes a non-wall-sheet tile even at the same coordinates', () => {
+    const keys = computeWallTileKeys([tile({ sheet: 'B' })]);
+    expect(keys.size).toBe(0);
+  });
+
+  it('excludes an "upper" (star-bit) A3/A4 tile -- only ground-elevation wall tiles are prisms', () => {
+    const keys = computeWallTileKeys([tile({ elevation: 'upper' })]);
+    expect(keys.size).toBe(0);
+  });
+
+  it('combines wall tiles that would belong to different chunks into one whole-map set', () => {
+    // Simulates the real caller: TilemapScene/StreamingTilemapScene flatten
+    // every chunk's tiles together before calling this, specifically so a
+    // wall tile in chunk (0,0) and one in the neighboring chunk (1,0) can
+    // still see each other as occupied neighbors.
+    const chunkATiles = [tile({ tileX: 15, tileY: 0 })];
+    const chunkBTiles = [tile({ tileX: 16, tileY: 0 })];
+
+    const keys = computeWallTileKeys([...chunkATiles, ...chunkBTiles]);
+
+    expect(keys.has(tileKey(15, 0))).toBe(true);
+    expect(keys.has(tileKey(16, 0))).toBe(true);
   });
 });

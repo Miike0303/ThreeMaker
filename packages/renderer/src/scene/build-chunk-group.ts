@@ -2,7 +2,7 @@ import type { TileSheetId } from '@threemaker/importer-rpgm';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { EdgeDirection } from '../geometry/elevation.js';
-import { computeOpenEdges, isWallSheet, tileKey } from '../geometry/elevation.js';
+import { computeOpenEdges, computeWallTileKeys, isWallSheet } from '../geometry/elevation.js';
 import type { ChunkBuildData, ShadowBuildData, TileBuildData, UvRect } from '../geometry/types.js';
 
 export interface BuildChunkGroupOptions {
@@ -29,6 +29,17 @@ export interface BuildChunkGroupOptions {
    * material.
    */
   readonly shadowMaterial?: THREE.Material;
+  /**
+   * Whole-map wall-tile occupancy (see `computeWallTileKeys`), used to cull
+   * interior faces between adjacent A3/A4 wall prisms even when they sit in
+   * different chunks. When omitted, falls back to this chunk's own tiles
+   * only -- correct within a single chunk, but a wall tile at a chunk's edge
+   * then always reports its border-facing sides as open, which can draw a
+   * z-fighting interior face against a wall tile that actually continues in
+   * the neighboring chunk. Callers building a whole map's worth of chunks
+   * (`TilemapScene`, `StreamingTilemapScene`) always pass this.
+   */
+  readonly wallTileKeys?: ReadonlySet<string>;
 }
 
 /**
@@ -364,16 +375,10 @@ export function buildChunkGroup(
   const heightUnit = options.heightUnit ?? tileWorldSize;
   const wallPrismHeight = options.wallPrismHeight ?? 2 * tileWorldSize;
 
-  // Wall-tile adjacency for interior-face culling: chunk-local only (see
-  // `computeOpenEdges`'s ponytail note -- a wall tile at a chunk's edge
-  // always reports its border-facing sides as "open", even when a wall
-  // tile actually continues in the next chunk).
-  const wallTileKeys = new Set<string>();
-  for (const tile of chunk.tiles) {
-    if (tile.elevation !== 'upper' && isWallSheet(tile.sheet)) {
-      wallTileKeys.add(tileKey(tile.tileX, tile.tileY));
-    }
-  }
+  // Wall-tile adjacency for interior-face culling: whole-map when the caller
+  // provides it (see `BuildChunkGroupOptions.wallTileKeys`), else falls back
+  // to this chunk's own tiles only.
+  const wallTileKeys = options.wallTileKeys ?? computeWallTileKeys(chunk.tiles);
 
   const geometriesBySheet = new Map<TileSheetId, THREE.BufferGeometry[]>();
   for (const tile of chunk.tiles) {

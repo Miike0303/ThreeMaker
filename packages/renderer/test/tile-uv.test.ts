@@ -15,6 +15,13 @@ const AUTOTILE_SHEET_SIZES: SheetPixelSizes = {
   A2: { width: 768, height: 576 },
 };
 
+// Every returned UV rect is inset by half a source-image texel on each side
+// (see `pixelRectToUv` in `tile-uv.ts`) to avoid sampling a neighboring
+// tile's pixels at the shared edge -- the fix for visible seam lines between
+// tiles. `HALF` mirrors that inset so expectations stay in lockstep with the
+// pixel math instead of re-deriving it per test.
+const HALF = 0.5;
+
 describe('computeTileUv', () => {
   it('returns null for tile id 0 (empty tile)', () => {
     expect(computeTileUv(0, GRID_SHEET_SIZES)).toBeNull();
@@ -25,15 +32,15 @@ describe('computeTileUv', () => {
     expect(computeTileUv(5, AUTOTILE_SHEET_SIZES)).toBeNull();
   });
 
-  it('maps a plain (non-autotile) tile id to a single full-tile UV quad', () => {
+  it('maps a plain (non-autotile) tile id to a single full-tile UV quad, inset by half a texel', () => {
     const result = computeTileUv(1, GRID_SHEET_SIZES);
     expect(result?.sheet).toBe('B');
     expect(result?.quads).toHaveLength(1);
     // col=1, row=0 -> pixel x=48..96, y=0..48 -> u=[0.0625, 0.125], v flipped: [1 - 48/768, 1 - 0/768]
-    expect(result?.quads[0]?.u0).toBeCloseTo(48 / 768);
-    expect(result?.quads[0]?.u1).toBeCloseTo(96 / 768);
-    expect(result?.quads[0]?.v0).toBeCloseTo(1 - 48 / 768);
-    expect(result?.quads[0]?.v1).toBeCloseTo(1);
+    expect(result?.quads[0]?.u0).toBeCloseTo((48 + HALF) / 768);
+    expect(result?.quads[0]?.u1).toBeCloseTo((96 - HALF) / 768);
+    expect(result?.quads[0]?.v0).toBeCloseTo(1 - (48 - HALF) / 768);
+    expect(result?.quads[0]?.v1).toBeCloseTo(1 - HALF / 768);
   });
 
   it('maps local index 16 to the third row of the left 8-wide block, not a 16-wide row', () => {
@@ -43,10 +50,10 @@ describe('computeTileUv', () => {
     // Local index 16 = left block, col 0, row 2.
     const result = computeTileUv(16, GRID_SHEET_SIZES);
     expect(result?.sheet).toBe('B');
-    expect(result?.quads[0]?.u0).toBeCloseTo(0);
-    expect(result?.quads[0]?.u1).toBeCloseTo(48 / 768);
-    expect(result?.quads[0]?.v0).toBeCloseTo(1 - 144 / 768);
-    expect(result?.quads[0]?.v1).toBeCloseTo(1 - 96 / 768);
+    expect(result?.quads[0]?.u0).toBeCloseTo((0 + HALF) / 768);
+    expect(result?.quads[0]?.u1).toBeCloseTo((48 - HALF) / 768);
+    expect(result?.quads[0]?.v0).toBeCloseTo(1 - (144 - HALF) / 768);
+    expect(result?.quads[0]?.v1).toBeCloseTo(1 - (96 + HALF) / 768);
   });
 
   it('maps B tile 77 to corescript cell (240,432) -- the Map007 dark-diamond regression', () => {
@@ -56,29 +63,29 @@ describe('computeTileUv', () => {
     // (240,432) that RPG Maker draws (sx=((77/128|0)%2*8+77%8)*48=240,
     // sy=(77/8|0)%16*48=432).
     const result = computeTileUv(77, GRID_SHEET_SIZES);
-    expect(result?.quads[0]?.u0).toBeCloseTo(240 / 768);
-    expect(result?.quads[0]?.u1).toBeCloseTo(288 / 768);
-    expect(result?.quads[0]?.v0).toBeCloseTo(1 - 480 / 768);
-    expect(result?.quads[0]?.v1).toBeCloseTo(1 - 432 / 768);
+    expect(result?.quads[0]?.u0).toBeCloseTo((240 + HALF) / 768);
+    expect(result?.quads[0]?.u1).toBeCloseTo((288 - HALF) / 768);
+    expect(result?.quads[0]?.v0).toBeCloseTo(1 - (480 - HALF) / 768);
+    expect(result?.quads[0]?.v1).toBeCloseTo(1 - (432 + HALF) / 768);
   });
 
   it('maps ids 128+ into the right 8-wide block of a B-E sheet', () => {
     // Local index 130 = right block (128+), col 8+2=10, row 0.
     const result = computeTileUv(130, GRID_SHEET_SIZES);
-    expect(result?.quads[0]?.u0).toBeCloseTo(480 / 768);
-    expect(result?.quads[0]?.u1).toBeCloseTo(528 / 768);
-    expect(result?.quads[0]?.v0).toBeCloseTo(1 - 48 / 768);
-    expect(result?.quads[0]?.v1).toBeCloseTo(1);
+    expect(result?.quads[0]?.u0).toBeCloseTo((480 + HALF) / 768);
+    expect(result?.quads[0]?.u1).toBeCloseTo((528 - HALF) / 768);
+    expect(result?.quads[0]?.v0).toBeCloseTo(1 - (48 - HALF) / 768);
+    expect(result?.quads[0]?.v1).toBeCloseTo(1 - HALF / 768);
   });
 
   it('maps A5 tiles onto its single 8-wide block', () => {
     // A5 ids start at 1536; local index 9 = col 1, row 1 of the 8x16 sheet.
     const result = computeTileUv(1536 + 9, { A5: { width: 384, height: 768 } });
     expect(result?.sheet).toBe('A5');
-    expect(result?.quads[0]?.u0).toBeCloseTo(48 / 384);
-    expect(result?.quads[0]?.u1).toBeCloseTo(96 / 384);
-    expect(result?.quads[0]?.v0).toBeCloseTo(1 - 96 / 768);
-    expect(result?.quads[0]?.v1).toBeCloseTo(1 - 48 / 768);
+    expect(result?.quads[0]?.u0).toBeCloseTo((48 + HALF) / 384);
+    expect(result?.quads[0]?.u1).toBeCloseTo((96 - HALF) / 384);
+    expect(result?.quads[0]?.v0).toBeCloseTo(1 - (96 - HALF) / 768);
+    expect(result?.quads[0]?.v1).toBeCloseTo(1 - (48 + HALF) / 768);
   });
 
   it('maps an autotile id to 4 quarter-tile UV quads, not 1 repeated rect', () => {
@@ -91,19 +98,19 @@ describe('computeTileUv', () => {
     expect(result?.quads).toHaveLength(4);
 
     const [q0, q1, q2, q3] = result?.quads ?? [];
-    expect(q0?.u0).toBeCloseTo(48 / 768);
-    expect(q0?.u1).toBeCloseTo(72 / 768);
-    expect(q0?.v0).toBeCloseTo(1 - 120 / 576);
-    expect(q0?.v1).toBeCloseTo(1 - 96 / 576);
+    expect(q0?.u0).toBeCloseTo((48 + HALF) / 768);
+    expect(q0?.u1).toBeCloseTo((72 - HALF) / 768);
+    expect(q0?.v0).toBeCloseTo(1 - (120 - HALF) / 576);
+    expect(q0?.v1).toBeCloseTo(1 - (96 + HALF) / 576);
 
-    expect(q1?.u0).toBeCloseTo(24 / 768);
-    expect(q1?.u1).toBeCloseTo(48 / 768);
+    expect(q1?.u0).toBeCloseTo((24 + HALF) / 768);
+    expect(q1?.u1).toBeCloseTo((48 - HALF) / 768);
 
-    expect(q2?.v0).toBeCloseTo(1 - 96 / 576);
-    expect(q2?.v1).toBeCloseTo(1 - 72 / 576);
+    expect(q2?.v0).toBeCloseTo(1 - (96 - HALF) / 576);
+    expect(q2?.v1).toBeCloseTo(1 - (72 + HALF) / 576);
 
-    expect(q3?.u0).toBeCloseTo(24 / 768);
-    expect(q3?.v0).toBeCloseTo(1 - 96 / 576);
+    expect(q3?.u0).toBeCloseTo((24 + HALF) / 768);
+    expect(q3?.v0).toBeCloseTo(1 - (96 - HALF) / 576);
   });
 
   it('gives different shapes of the same autotile kind different quads (real blob-tile blending, not the old flat repeat)', () => {
@@ -112,5 +119,47 @@ describe('computeTileUv', () => {
     const shape0 = computeTileUv(2816, AUTOTILE_SHEET_SIZES);
     const shape47 = computeTileUv(2816 + 47, AUTOTILE_SHEET_SIZES);
     expect(shape47?.quads).not.toEqual(shape0?.quads);
+  });
+
+  describe('Map007 crystal-decor regression (two blue crystal spikes flanking the boss event)', () => {
+    // Verified against the real Roseliam fixture `Dungeon_B.png` (768x768):
+    // pixel-sampling cell (240,384)-(288,432) and (240,432)-(288,480) shows
+    // the top and bottom halves of a tall blue crystal spike -- confirming
+    // the B-E 8-wide-block addressing (see the tile-77 regression above)
+    // already routes these correctly. Pins the mapping so a future change to
+    // that addressing can't silently regress it back to reading unrelated
+    // art, the way the old naive-16-wide-grid bug did for tile 77.
+    it('maps tile 69 (crystal top half) to cell (240,384)', () => {
+      const result = computeTileUv(69, GRID_SHEET_SIZES);
+      expect(result?.sheet).toBe('B');
+      expect(result?.quads[0]?.u0).toBeCloseTo((240 + HALF) / 768);
+      expect(result?.quads[0]?.u1).toBeCloseTo((288 - HALF) / 768);
+      expect(result?.quads[0]?.v0).toBeCloseTo(1 - (432 - HALF) / 768);
+      expect(result?.quads[0]?.v1).toBeCloseTo(1 - (384 + HALF) / 768);
+    });
+
+    it('maps tile 77 (crystal bottom half) to cell (240,432)', () => {
+      const result = computeTileUv(77, GRID_SHEET_SIZES);
+      expect(result?.quads[0]?.u0).toBeCloseTo((240 + HALF) / 768);
+      expect(result?.quads[0]?.u1).toBeCloseTo((288 - HALF) / 768);
+      expect(result?.quads[0]?.v0).toBeCloseTo(1 - (480 - HALF) / 768);
+      expect(result?.quads[0]?.v1).toBeCloseTo(1 - (432 + HALF) / 768);
+    });
+
+    it('maps tile 84 (ice-pillar top half) to cell (192,480)', () => {
+      const result = computeTileUv(84, GRID_SHEET_SIZES);
+      expect(result?.quads[0]?.u0).toBeCloseTo((192 + HALF) / 768);
+      expect(result?.quads[0]?.u1).toBeCloseTo((240 - HALF) / 768);
+      expect(result?.quads[0]?.v0).toBeCloseTo(1 - (528 - HALF) / 768);
+      expect(result?.quads[0]?.v1).toBeCloseTo(1 - (480 + HALF) / 768);
+    });
+
+    it('maps tile 92 (ice-pillar bottom half) to cell (192,528)', () => {
+      const result = computeTileUv(92, GRID_SHEET_SIZES);
+      expect(result?.quads[0]?.u0).toBeCloseTo((192 + HALF) / 768);
+      expect(result?.quads[0]?.u1).toBeCloseTo((240 - HALF) / 768);
+      expect(result?.quads[0]?.v0).toBeCloseTo(1 - (576 - HALF) / 768);
+      expect(result?.quads[0]?.v1).toBeCloseTo(1 - (528 + HALF) / 768);
+    });
   });
 });

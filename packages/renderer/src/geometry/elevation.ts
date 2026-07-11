@@ -1,4 +1,5 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
+import type { TileBuildData } from './types.js';
 
 /** Which of a tile's 4 edges, in map space (north = toward smaller tileY / image-top). */
 export type EdgeDirection = 'north' | 'south' | 'east' | 'west';
@@ -69,13 +70,14 @@ export function computeCliffEdges(
  * Which of tile `(x, y)`'s 4 edges have no same-set neighbor -- i.e. should
  * draw a face because nothing occupies the adjacent cell in `occupiedKeys`.
  * Generic over what "occupied" means: used both for wall-prism side-face
- * culling (occupied = other wall tiles in the same chunk) and could serve
- * any other adjacency-driven face culling.
+ * culling (occupied = other wall tiles) and could serve any other
+ * adjacency-driven face culling.
  *
- * ponytail: `occupiedKeys` is chunk-local by every current caller, so a wall
- * tile at a chunk's edge always reports an open face toward the next chunk
- * even when a wall tile actually continues there -- an acceptable seam this
- * slice (see build-chunk-group.ts).
+ * `occupiedKeys` must cover the full extent a caller cares about checking
+ * neighbors against -- for wall-prism culling that means the whole map (see
+ * `computeWallTileKeys`), not just one chunk, or a wall tile at a chunk's
+ * edge would wrongly report an open face toward a wall tile that actually
+ * continues in the next chunk (see `build-chunk-group.ts`).
  */
 export function computeOpenEdges(
   occupiedKeys: ReadonlySet<string>,
@@ -88,4 +90,24 @@ export function computeOpenEdges(
     if (!occupiedKeys.has(tileKey(x + delta.dx, y + delta.dy))) edges.push(edge);
   }
   return edges;
+}
+
+/**
+ * The set of `tileKey`s for every ground-elevation wall-autotile (A3/A4)
+ * tile among `tiles` -- the "occupied" set `computeOpenEdges` needs for
+ * wall-prism interior-face culling. Building this from `tiles` spanning the
+ * *whole map* (every chunk's tiles, not just one chunk's) is what lets two
+ * wall prisms on either side of a chunk border correctly suppress the
+ * interior face between them -- see `build-chunk-group.ts`.
+ */
+export function computeWallTileKeys(
+  tiles: readonly Pick<TileBuildData, 'tileX' | 'tileY' | 'sheet' | 'elevation'>[],
+): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const tile of tiles) {
+    if (tile.elevation !== 'upper' && isWallSheet(tile.sheet)) {
+      keys.add(tileKey(tile.tileX, tile.tileY));
+    }
+  }
+  return keys;
 }

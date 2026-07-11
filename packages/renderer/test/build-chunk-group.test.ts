@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { computeWallTileKeys } from '../src/geometry/elevation.js';
 import type { ChunkBuildData, TileBuildData } from '../src/geometry/types.js';
 import { buildChunkGroup } from '../src/scene/build-chunk-group.js';
 
@@ -337,6 +338,47 @@ describe('buildChunkGroup wall prisms (A3/A4)', () => {
     const box = mesh.geometry.boundingBox as THREE.Box3;
     expect(box.min.y).toBeCloseTo(0);
     expect(box.max.y).toBeCloseTo(2);
+  });
+
+  it('draws no interior face between two wall tiles in DIFFERENT chunks, given the whole-map wallTileKeys', () => {
+    // Chunk (0,0) holds a wall tile at the chunk's east edge; chunk (1,0)
+    // holds the adjacent wall tile just across the border. Built as two
+    // separate `buildChunkGroup` calls (like the real per-chunk pipeline),
+    // sharing one whole-map `wallTileKeys` computed from both chunks' tiles
+    // together -- the fix for the chunk-local-only culling that let two
+    // coplanar wall faces both draw at a chunk border (z-fighting flicker).
+    const chunkA: ChunkBuildData = { chunkX: 0, chunkY: 0, tiles: [wallTile(15, 0)] };
+    const chunkB: ChunkBuildData = { chunkX: 1, chunkY: 0, tiles: [wallTile(16, 0)] };
+    const wallTileKeys = computeWallTileKeys([...chunkA.tiles, ...chunkB.tiles]);
+    const materials = { A4: new THREE.MeshBasicMaterial() };
+
+    const groupA = buildChunkGroup(chunkA, materials, { tileWorldSize: 1, wallTileKeys });
+    const groupB = buildChunkGroup(chunkB, materials, { tileWorldSize: 1, wallTileKeys });
+
+    const meshA = groupA.children[0] as THREE.Mesh;
+    const meshB = groupB.children[0] as THREE.Mesh;
+    // Each tile contributes 3 open sides + 1 cap (not 4+1) -- the shared
+    // east/west face across the chunk border is suppressed on both sides.
+    expect((meshA.geometry as THREE.BufferGeometry).getAttribute('position').count).toBe(4 * 4);
+    expect((meshB.geometry as THREE.BufferGeometry).getAttribute('position').count).toBe(4 * 4);
+  });
+
+  it('without wallTileKeys, falls back to chunk-local culling (each chunk only sees its own tiles)', () => {
+    // Same cross-chunk layout as above, but built without the whole-map
+    // wallTileKeys override -- each `buildChunkGroup` call only knows about
+    // its own chunk's tile, so neither sees the other as a neighbor and both
+    // draw all 4 side faces (the pre-fix, chunk-local-only behavior).
+    const chunkA: ChunkBuildData = { chunkX: 0, chunkY: 0, tiles: [wallTile(15, 0)] };
+    const chunkB: ChunkBuildData = { chunkX: 1, chunkY: 0, tiles: [wallTile(16, 0)] };
+    const materials = { A4: new THREE.MeshBasicMaterial() };
+
+    const groupA = buildChunkGroup(chunkA, materials, { tileWorldSize: 1 });
+    const groupB = buildChunkGroup(chunkB, materials, { tileWorldSize: 1 });
+
+    const meshA = groupA.children[0] as THREE.Mesh;
+    const meshB = groupB.children[0] as THREE.Mesh;
+    expect((meshA.geometry as THREE.BufferGeometry).getAttribute('position').count).toBe(5 * 4);
+    expect((meshB.geometry as THREE.BufferGeometry).getAttribute('position').count).toBe(5 * 4);
   });
 
   it('a plain (non-A3/A4) ground tile is unaffected -- still a single flat quad', () => {

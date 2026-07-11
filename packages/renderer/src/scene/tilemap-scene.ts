@@ -1,10 +1,16 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import * as THREE from 'three';
+import { computeWallTileKeys } from '../geometry/elevation.js';
 import type { ChunkBuildData } from '../geometry/types.js';
 import { type BuildChunkGroupOptions, buildChunkGroup } from './build-chunk-group.js';
+import type { PixelArtTextureOptions } from './pixel-art-texture.js';
 import { createShadowMaterial, createSheetMaterials } from './sheet-materials.js';
 
-export type TilemapSceneOptions = Omit<BuildChunkGroupOptions, 'shadowMaterial'>;
+export interface TilemapSceneOptions
+  extends Omit<BuildChunkGroupOptions, 'shadowMaterial' | 'wallTileKeys'> {
+  /** Forwarded to `createSheetMaterials` for every sheet texture; see `PixelArtTextureOptions`. */
+  readonly textureOptions?: PixelArtTextureOptions;
+}
 
 /**
  * Owns the full three.js side of a rendered tilemap: one merged mesh per
@@ -34,13 +40,23 @@ export class TilemapScene {
     this.group = new THREE.Group();
     this.group.name = 'tilemap';
 
-    const materialsBySheet = createSheetMaterials(textures);
+    const { textureOptions, ...buildOptions } = options;
+    const materialsBySheet = createSheetMaterials(textures, textureOptions);
     const shadowMaterial = createShadowMaterial();
     this.ownedMaterials = [...Object.values(materialsBySheet), shadowMaterial];
     this.ownedTextures = Object.values(textures);
 
+    // Whole-map wall-tile occupancy, computed once so cross-chunk wall
+    // prisms cull their shared interior faces correctly (see
+    // `computeWallTileKeys` / `BuildChunkGroupOptions.wallTileKeys`).
+    const wallTileKeys = computeWallTileKeys(chunks.flatMap((chunk) => chunk.tiles));
+
     for (const chunk of chunks) {
-      const chunkGroup = buildChunkGroup(chunk, materialsBySheet, { ...options, shadowMaterial });
+      const chunkGroup = buildChunkGroup(chunk, materialsBySheet, {
+        ...buildOptions,
+        shadowMaterial,
+        wallTileKeys,
+      });
       for (const child of chunkGroup.children) {
         if (child instanceof THREE.Mesh) this.ownedGeometries.push(child.geometry);
       }

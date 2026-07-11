@@ -1,6 +1,6 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import * as THREE from 'three';
-import { configurePixelArtTexture } from './pixel-art-texture.js';
+import { configurePixelArtTexture, type PixelArtTextureOptions } from './pixel-art-texture.js';
 
 /**
  * Builds the shared per-sheet tile materials, configuring each texture for
@@ -25,13 +25,22 @@ import { configurePixelArtTexture } from './pixel-art-texture.js';
  * back/side geometry of their own, so from an unusual angle their
  * default-culled back face would otherwise show nothing. Ground quads
  * are unaffected (always viewed from above).
+ *
+ * `textureOptions` is forwarded to `configurePixelArtTexture` for every
+ * sheet texture -- e.g. `{ mipmaps: true, maxAnisotropy }` for the HD-2D
+ * "filtered environment" look (see `PixelArtTextureOptions.mipmaps`), which
+ * tames the perspective aliasing/shimmer a purely nearest-filtered,
+ * non-mipmapped tileset shows while walking. Defaults to the crisp
+ * no-mipmap sprite configuration, unchanged from before this option
+ * existed -- the art call on tileset filtering is the caller's to make.
  */
 export function createSheetMaterials(
   textures: Partial<Record<TileSheetId, THREE.Texture>>,
+  textureOptions: PixelArtTextureOptions = {},
 ): Partial<Record<TileSheetId, THREE.Material>> {
   const materialsBySheet: Partial<Record<TileSheetId, THREE.Material>> = {};
   for (const [sheet, texture] of Object.entries(textures) as [TileSheetId, THREE.Texture][]) {
-    configurePixelArtTexture(texture);
+    configurePixelArtTexture(texture, textureOptions);
     materialsBySheet[sheet] = new THREE.MeshBasicMaterial({
       map: texture,
       side: THREE.DoubleSide,

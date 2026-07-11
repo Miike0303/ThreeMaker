@@ -1,12 +1,14 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import * as THREE from 'three';
+import { computeWallTileKeys } from '../geometry/elevation.js';
 import type { ChunkBuildData } from '../geometry/types.js';
 import { chunkKey } from '../streaming/chunk-streamer.js';
 import { type BuildChunkGroupOptions, buildChunkGroup } from './build-chunk-group.js';
+import type { PixelArtTextureOptions } from './pixel-art-texture.js';
 import { createShadowMaterial, createSheetMaterials } from './sheet-materials.js';
 
 export interface StreamingTilemapSceneOptions
-  extends Omit<BuildChunkGroupOptions, 'shadowMaterial'> {
+  extends Omit<BuildChunkGroupOptions, 'shadowMaterial' | 'wallTileKeys'> {
   /**
    * Whether `dispose()` also disposes the provided sheet textures. Pass
    * `false` when the same textures back several scenes over time (e.g.
@@ -14,6 +16,8 @@ export interface StreamingTilemapSceneOptions
    * Default `true`, matching `TilemapScene`.
    */
   readonly ownsTextures?: boolean;
+  /** Forwarded to `createSheetMaterials` for every sheet texture; see `PixelArtTextureOptions`. */
+  readonly textureOptions?: PixelArtTextureOptions;
 }
 
 /** The subset of a `ChunkStreamer` diff this scene consumes (kept structural to avoid a hard coupling). */
@@ -48,6 +52,7 @@ export class StreamingTilemapScene {
   private readonly shadowMaterial: THREE.Material;
   private readonly ownedTextures: THREE.Texture[];
   private readonly buildOptions: Omit<BuildChunkGroupOptions, 'shadowMaterial'>;
+  private readonly wallTileKeys: ReadonlySet<string>;
   private disposed = false;
 
   constructor(
@@ -58,15 +63,22 @@ export class StreamingTilemapScene {
     this.group = new THREE.Group();
     this.group.name = 'tilemap';
 
-    const { ownsTextures = true, ...buildOptions } = options;
+    const { ownsTextures = true, textureOptions, ...buildOptions } = options;
     this.buildOptions = buildOptions;
-    this.materialsBySheet = createSheetMaterials(textures);
+    this.materialsBySheet = createSheetMaterials(textures, textureOptions);
     this.shadowMaterial = createShadowMaterial();
     this.ownedTextures = ownsTextures ? Object.values(textures) : [];
 
     for (const chunk of chunks) {
       this.chunkData.set(chunkKey(chunk.chunkX, chunk.chunkY), chunk);
     }
+
+    // Whole-map wall-tile occupancy, computed once up front (from every
+    // chunk's data, not just the chunks currently live) so cross-chunk wall
+    // prisms cull their shared interior faces correctly regardless of
+    // streaming order -- see `computeWallTileKeys` /
+    // `BuildChunkGroupOptions.wallTileKeys`.
+    this.wallTileKeys = computeWallTileKeys(chunks.flatMap((chunk) => chunk.tiles));
   }
 
   /** Number of chunks with live GPU geometry right now. */
@@ -83,6 +95,7 @@ export class StreamingTilemapScene {
     const chunkGroup = buildChunkGroup(chunk, this.materialsBySheet, {
       ...this.buildOptions,
       shadowMaterial: this.shadowMaterial,
+      wallTileKeys: this.wallTileKeys,
     });
     const geometries: THREE.BufferGeometry[] = [];
     for (const child of chunkGroup.children) {

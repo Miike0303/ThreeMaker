@@ -31,6 +31,37 @@ describe('TilemapScene', () => {
     scene.dispose();
   });
 
+  it('culls the interior face between wall tiles in different chunks (whole-map wallTileKeys, not chunk-local)', () => {
+    // Mirrors the StreamingTilemapScene regression test: chunk (0,0)'s wall
+    // tile at its east edge (tileX=15) and chunk (1,0)'s wall tile across
+    // the border (tileX=16) must not draw the shared face between them.
+    const wallTile = (tileX: number) => ({
+      tileX,
+      tileY: 0,
+      layerIndex: 0 as const,
+      sheet: 'A4' as const,
+      quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+      elevation: 'ground' as const,
+    });
+    const chunkA: ChunkBuildData = { chunkX: 0, chunkY: 0, tiles: [wallTile(15)] };
+    const chunkB: ChunkBuildData = { chunkX: 1, chunkY: 0, tiles: [wallTile(16)] };
+
+    const scene = new TilemapScene([chunkA, chunkB], { A4: new THREE.Texture() });
+
+    const meshA = scene.group.children
+      .find((child) => child.name === 'chunk-0-0')
+      ?.children.find((child) => child.name === 'chunk-0-0-A4') as THREE.Mesh;
+    const meshB = scene.group.children
+      .find((child) => child.name === 'chunk-1-0')
+      ?.children.find((child) => child.name === 'chunk-1-0-A4') as THREE.Mesh;
+
+    // 3 open sides + 1 cap per tile (not 4+1) -- the shared face across the
+    // chunk border is suppressed on both sides.
+    expect(meshA.geometry.getAttribute('position').count).toBe(4 * 4);
+    expect(meshB.geometry.getAttribute('position').count).toBe(4 * 4);
+    scene.dispose();
+  });
+
   it('configures every provided texture for pixel-art rendering (nearest filter, no mipmaps)', () => {
     const chunks = [makeChunk(0, 0, 'B')];
     const texture = new THREE.Texture();

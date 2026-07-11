@@ -141,6 +141,9 @@ async function loadUsedSheetTextures(
   const sheetPixelSizes: SheetPixelSizes = {};
   await Promise.all(
     usedSheets.map(async ([sheet, name]) => {
+      // loadSheetTexture applies the crisp no-mipmap default; createMapSession
+      // re-configures these same textures with mipmaps/anisotropy later, so
+      // the configuration here is a placeholder, not the final filtering.
       const texture = await loadSheetTexture(fixtureImageUrl(fixturesDir, name));
       textures[sheet] = texture;
       const image = texture.image as { width: number; height: number };
@@ -304,6 +307,17 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   light.position.set(fixtureMap.width * 0.3, 20, fixtureMap.height * 0.2);
   scene.add(light, new THREE.AmbientLight(0x404060, 2));
 
+  // Created (and initialized) before any map session so `getMaxAnisotropy()`
+  // is available up front -- every session's tileset materials use it for
+  // the HD-2D filtered-environment texture configuration (see
+  // `createMapSession` below and `PixelArtTextureOptions`).
+  const renderer = new THREE.WebGPURenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
+  await renderer.init();
+  const maxAnisotropy = renderer.getMaxAnisotropy();
+
   /**
    * Builds a fully wired session for one map: chunk data for the whole map
    * (pure, cheap to keep), a streaming scene that only holds GPU geometry
@@ -325,6 +339,11 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     const tilemap = new StreamingTilemapScene(chunks, mapTextures, {
       tileWorldSize: TILE_WORLD_SIZE,
       ownsTextures: false,
+      // HD-2D convention (Octopath Traveler): the tileset environment is
+      // filtered/mipmapped so it doesn't shimmer/alias under perspective
+      // minification while walking; the character sprite (loaded separately,
+      // see `loadFixtureMapData`) keeps the crisp nearest/no-mipmap default.
+      textureOptions: { mipmaps: true, maxAnisotropy },
     });
     const streamer = new ChunkStreamer({
       chunkSize: DEFAULT_CHUNK_SIZE,
@@ -410,11 +429,6 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     camera.lookAt(target);
   }
   focusCameraOnSpawn();
-
-  const renderer = new THREE.WebGPURenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  container.appendChild(renderer.domElement);
 
   const heldDirection = createMostRecentHeldDirection();
 
@@ -551,8 +565,6 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
-
-  await renderer.init();
 
   const stats = new Stats({ trackGPU: true });
   container.appendChild(stats.dom);
