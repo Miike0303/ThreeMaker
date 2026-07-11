@@ -16,7 +16,6 @@ describe('parseEventScript', () => {
           {
             type: 'conditional',
             if: { key: 'metElder', op: 'eq', value: true },
-            // biome-ignore lint/suspicious/noThenProperty: "then" is the EventCommand v1 conditional-branch field name, not a thenable
             then: [{ type: 'setWorldVar', key: 'gold', value: 10 }],
             else: [{ type: 'teleport', entityId: 'hero', x: 3, y: 4, facing: 'down' }],
           },
@@ -157,7 +156,6 @@ describe('parseEventScript', () => {
     expect(() =>
       parseEventScript({
         version: 1,
-        // biome-ignore lint/suspicious/noThenProperty: "then" is the EventCommand v1 conditional-branch field name, not a thenable
         events: { intro: [{ type: 'conditional', then: [] }] },
       }),
     ).toThrow('Invalid Event Script: events.intro[0] (conditional) requires an "if" object.');
@@ -172,7 +170,6 @@ describe('parseEventScript', () => {
             {
               type: 'conditional',
               if: { key: 'gold', op: 'greater-than', value: 5 },
-              // biome-ignore lint/suspicious/noThenProperty: "then" is the EventCommand v1 conditional-branch field name, not a thenable
               then: [],
             },
           ],
@@ -203,7 +200,6 @@ describe('parseEventScript', () => {
             {
               type: 'conditional',
               if: { key: 'gold', op: 'eq', value: 5 },
-              // biome-ignore lint/suspicious/noThenProperty: "then" is the EventCommand v1 conditional-branch field name, not a thenable
               then: [{ type: 'attack' }],
             },
           ],

@@ -21,6 +21,23 @@
       "preset": "recommended"
     }
   },
+  "overrides": [
+    {
+      "includes": [
+        "packages/core/src/event-command.ts",
+        "packages/core/src/event-interpreter.ts",
+        "packages/core/test/event-command.test.ts",
+        "packages/core/test/event-interpreter.test.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noThenProperty": "off"
+          }
+        }
+      }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "single",

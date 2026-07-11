@@ -161,7 +161,6 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
       return {
         type: 'conditional',
         if: { key, op: op as ConditionalOp, value: conditionValue },
-        // biome-ignore lint/suspicious/noThenProperty: "then" is the EventCommand v1 conditional-branch field name, not a thenable
         then: parsedThen,
         ...(parsedElse !== undefined ? { else: parsedElse } : {}),
       };
