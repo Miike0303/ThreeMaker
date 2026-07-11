@@ -3,6 +3,7 @@ import type { MapDocument, SemanticClass } from '@threemaker/map-format';
 import type { SheetPixelSize } from '@threemaker/renderer';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type GameRow, getTileset, listGames, objectPreviewUrl } from '../catalog-client.js';
+import { exportProject } from '../export-client.js';
 import { formatTemplate } from '../format-template.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, seedDemoTiles } from '../map-compose.js';
@@ -86,6 +87,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [painterState, setPainterState] = useState<PainterState | undefined>(undefined);
   const [paletteSlots, setPaletteSlots] = useState<readonly PaletteSlotInfo[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     listGames()
@@ -152,6 +154,28 @@ export function PainterPanel({ t }: PainterPanelProps) {
     } catch (err) {
       console.error('Failed to save the map:', err);
       setStatusMessage(t('painter.saveFailed'));
+    }
+  }, [t]);
+
+  const handleExport = useCallback(async () => {
+    const doc = viewportRef.current?.currentDocument();
+    if (!doc) return;
+    setExporting(true);
+    setStatusMessage(t('painter.exportRunning'));
+    try {
+      const result = await exportProject(doc);
+      setStatusMessage(
+        formatTemplate(t('painter.exportSuccess'), {
+          outDir: result.outDir,
+          marker: result.markerValueUsed,
+        }),
+      );
+    } catch (err) {
+      console.error('Failed to export the map:', err);
+      const message = err instanceof Error ? err.message : String(err);
+      setStatusMessage(formatTemplate(t('painter.exportFailed'), { message }));
+    } finally {
+      setExporting(false);
     }
   }, [t]);
 
@@ -278,6 +302,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
 
           <button type="button" onClick={handleSave}>
             {t('painter.save')}
+          </button>
+          <button type="button" disabled={exporting} onClick={handleExport}>
+            {t('painter.export')}
           </button>
         </div>
       )}

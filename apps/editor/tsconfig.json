@@ -14,5 +14,9 @@
     "declarationMap": false
   },
   "include": ["src"],
-  "references": [{ "path": "../../packages/importer-rpgm" }, { "path": "../../packages/renderer" }]
+  "references": [
+    { "path": "../../packages/importer-rpgm" },
+    { "path": "../../packages/exporter-rpgm" },
+    { "path": "../../packages/renderer" }
+  ]
 }

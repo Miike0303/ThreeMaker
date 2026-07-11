@@ -45,6 +45,10 @@
     "painter.semanticClass.wall": "Pared",
     "painter.semanticClass.door": "Puerta",
     "painter.semanticClass.window": "Ventana",
-    "painter.semanticClass.furniture": "Mobiliario"
+    "painter.semanticClass.furniture": "Mobiliario",
+    "painter.export": "Exportar a RPG Maker MZ",
+    "painter.exportRunning": "Exportando…",
+    "painter.exportSuccess": "Exportado a {outDir} (marcador: {marker}).",
+    "painter.exportFailed": "Falló la exportación: {message}"
   }
 }
