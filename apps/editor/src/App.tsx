@@ -2,6 +2,7 @@ import { useCallback, useReducer, useState } from 'react';
 import type { AssetRow } from './catalog-client.js';
 import { CatalogBrowser } from './components/CatalogBrowser.js';
 import { MapViewer } from './components/MapViewer.js';
+import { PainterPanel } from './components/PainterPanel.js';
 import type { I18n } from './i18n.js';
 
 export interface AppProps {
@@ -51,6 +52,9 @@ export function App({ i18n, localeStorageKey }: AppProps) {
           <MapViewer t={t} />
         </section>
       </main>
+      <section className="app-panel-painter">
+        <PainterPanel t={t} />
+      </section>
       {selectedAsset && <footer className="app-footer">{selectedAsset.relPath}</footer>}
     </div>
   );

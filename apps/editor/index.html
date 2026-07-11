@@ -154,6 +154,53 @@
         margin: 0;
         pointer-events: none;
       }
+      .app-panel-painter {
+        flex: none;
+        height: 45vh;
+        border-top: 1px solid #2c2c3d;
+        padding: 12px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .painter-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+        flex: 1;
+      }
+      .painter-setup {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+      }
+      .painter-setup label {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 12px;
+      }
+      .painter-toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        font-size: 12px;
+      }
+      .painter-toolbar button.painter-tool-active {
+        border-color: #6c7dff;
+      }
+      .painter-status {
+        margin: 0;
+        font-size: 12px;
+      }
+      .painter-viewport-canvas {
+        flex: 1;
+        min-height: 200px;
+      }
     </style>
   </head>
   <body>

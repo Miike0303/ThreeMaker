@@ -37,6 +37,27 @@ export interface DevAssetPagination {
   readonly pageSize: number;
 }
 
+export type DevTilesetSlot = 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'B' | 'C' | 'D' | 'E';
+
+export interface DevTilesetSummaryRow {
+  readonly id: number;
+  readonly gameId: number;
+  readonly rpgmId: number | null;
+  readonly name: string | null;
+}
+
+export interface DevTilesetSheetRow {
+  readonly slot: DevTilesetSlot;
+  readonly assetId: number;
+  readonly sha256: string;
+  readonly relPath: string;
+}
+
+export interface DevTilesetRow extends DevTilesetSummaryRow {
+  readonly flags: string | null;
+  readonly sheets: readonly DevTilesetSheetRow[];
+}
+
 /**
  * MUST match `packages/assets/src/catalog.ts`'s `SCHEMA_VERSION` exactly
  * (and `apps/editor/src-tauri/src/catalog_ipc.rs`'s `EXPECTED_SCHEMA_VERSION`).
@@ -115,6 +136,43 @@ export class DevCatalogReader {
       | { count: number }
       | undefined;
     return row?.count ?? 0;
+  }
+
+  /** Tilesets belonging to one game, without their sheet rows -- for a picker/dropdown UI. */
+  listTilesetsForGame(gameId: number): DevTilesetSummaryRow[] {
+    return this.db
+      .prepare(
+        'SELECT id, game_id as gameId, rpgm_id as rpgmId, name FROM tilesets WHERE game_id = ? ORDER BY rpgm_id',
+      )
+      .all(gameId) as DevTilesetSummaryRow[];
+  }
+
+  /** One tileset's full composition: sheet slots joined with their cataloged asset. `null` if `id` doesn't exist. */
+  getTileset(id: number): DevTilesetRow | null {
+    const tileset = this.db
+      .prepare(
+        'SELECT id, game_id as gameId, rpgm_id as rpgmId, name, flags FROM tilesets WHERE id = ?',
+      )
+      .get(id) as
+      | {
+          id: number;
+          gameId: number;
+          rpgmId: number | null;
+          name: string | null;
+          flags: string | null;
+        }
+      | undefined;
+    if (!tileset) return null;
+
+    const sheets = this.db
+      .prepare(
+        `SELECT ts.slot as slot, ts.asset_id as assetId, a.sha256 as sha256, a.rel_path as relPath
+         FROM tileset_sheets ts JOIN assets a ON a.id = ts.asset_id
+         WHERE ts.tileset_id = ? ORDER BY ts.slot`,
+      )
+      .all(id) as DevTilesetSheetRow[];
+
+    return { ...tileset, sheets };
   }
 
   /** Throws for a non-hex/wrong-length `sha256` instead of ever joining an unvalidated path segment into a filesystem path. */

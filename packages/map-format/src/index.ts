@@ -10,6 +10,7 @@ export type {
   SlotComposition,
   SlotSource,
   TileLayerData,
+  TileSemanticEntry,
   TileSheetSlot,
 } from './schema.js';
 export {

@@ -175,10 +175,33 @@ export async function listAssets(filter: AssetFilter, page: number): Promise<Ass
 
 export async function getTileset(id: number): Promise<TilesetRow | null> {
   if (isTauriAvailable()) return invokeTauri<TilesetRow | null>('catalog_get_tileset', { id });
-  // Dev fallback has no populated tilesets endpoint yet (tileset_sheets isn't
-  // populated until Slice 4) -- always empty, consistent with the real
-  // catalog's current state.
-  return null;
+  const response = await fetch(`${DEV_API_BASE}/tileset/${id}`);
+  await assertOk(response);
+  return (await response.json()) as TilesetRow | null;
+}
+
+export interface TilesetSummaryRow {
+  readonly id: number;
+  readonly gameId: number;
+  readonly rpgmId: number | null;
+  readonly name: string | null;
+}
+
+/** Tilesets belonging to one game, without their sheet rows -- for a picker/dropdown UI. Pair with `getTileset(id)` for the full composition. */
+export async function listTilesetsForGame(gameId: number): Promise<readonly TilesetSummaryRow[]> {
+  if (isTauriAvailable()) {
+    // No dedicated Rust IPC command exists yet for a game-scoped tileset
+    // list (only `catalog_get_tileset(id)` for one already-known id) --
+    // out of scope this slice, since the dev fallback is what this slice's
+    // headed-Edge verification actually exercises.
+    throw new CatalogClientError(
+      'QueryFailed',
+      'listTilesetsForGame is not implemented for the real Tauri host yet.',
+    );
+  }
+  const response = await fetch(`${DEV_API_BASE}/tilesets?gameId=${gameId}`);
+  await assertOk(response);
+  return (await response.json()) as TilesetSummaryRow[];
 }
 
 /**

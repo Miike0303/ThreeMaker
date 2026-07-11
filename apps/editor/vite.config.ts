@@ -8,6 +8,7 @@ import {
   isValidSha256,
   SchemaVersionMismatchError,
 } from './dev-server/catalog-api.js';
+import { loadMapFile, saveMapFile } from './dev-server/map-api.js';
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(APP_DIR, '..', '..');
@@ -27,6 +28,9 @@ const DEV_CATALOG_DB_PATH =
     'catalog.db',
   );
 const DEV_ASSET_STORE_DIR = resolve(dirname(DEV_CATALOG_DB_PATH));
+// Single working map file (Slice 4 dev-fallback save/load), kept in the same
+// never-committed asset-store directory as the catalog db/objects.
+const DEV_MAP_FILE_PATH = resolve(DEV_ASSET_STORE_DIR, 'editor-map.tmmap.json');
 
 // Mirrors apps/editor/src-tauri/src/catalog_ipc.rs's PAGE_SIZE (100) -- no
 // cross-language sharing needed for a single fixed constant; keep both in
@@ -110,6 +114,27 @@ function devCatalogApiPlugin(): Plugin {
             return;
           }
 
+          if (segments.length === 1 && segments[0] === 'tilesets') {
+            const gameId = Number(url.searchParams.get('gameId') ?? Number.NaN);
+            if (Number.isNaN(gameId)) {
+              res.statusCode = 400;
+              res.setHeader('content-type', 'application/json');
+              res.end(JSON.stringify({ code: 'InvalidGameId' }));
+              return;
+            }
+            res.setHeader('content-type', 'application/json');
+            res.end(JSON.stringify(catalog.listTilesetsForGame(gameId)));
+            return;
+          }
+
+          if (segments.length === 2 && segments[0] === 'tileset') {
+            const id = Number(segments[1]);
+            const tileset = Number.isNaN(id) ? null : catalog.getTileset(id);
+            res.setHeader('content-type', 'application/json');
+            res.end(JSON.stringify(tileset));
+            return;
+          }
+
           if (segments.length === 2 && segments[0] === 'object') {
             const sha256 = segments[1] ?? '';
             const kind = url.searchParams.get('kind') ?? 'other';
@@ -144,13 +169,60 @@ function devCatalogApiPlugin(): Plugin {
   };
 }
 
+/**
+ * Dev-only fallback for map persistence (Slice 4: "map format save"). A
+ * single working `.tmmap.json` file, kept in the never-committed asset-store
+ * directory. Real Tauri host save/load is NOT wired this slice -- see
+ * `map-client.ts`'s doc comment.
+ */
+function devMapApiPlugin(): Plugin {
+  return {
+    name: 'threemaker-dev-map-api',
+    configureServer(server) {
+      server.middlewares.use('/api/dev-map', (req, res) => {
+        const url = new URL(req.url ?? '/', 'http://localhost');
+        const segments = url.pathname.split('/').filter(Boolean);
+
+        if (segments.length === 1 && segments[0] === 'load' && req.method === 'GET') {
+          const json = loadMapFile(DEV_MAP_FILE_PATH);
+          if (json === null) {
+            res.statusCode = 404;
+            res.end();
+            return;
+          }
+          res.setHeader('content-type', 'application/json');
+          res.end(json);
+          return;
+        }
+
+        if (segments.length === 1 && segments[0] === 'save' && req.method === 'POST') {
+          let body = '';
+          req.setEncoding('utf8');
+          req.on('data', (chunk: string) => {
+            body += chunk;
+          });
+          req.on('end', () => {
+            saveMapFile(DEV_MAP_FILE_PATH, body);
+            res.statusCode = 204;
+            res.end();
+          });
+          return;
+        }
+
+        res.statusCode = 404;
+        res.end();
+      });
+    },
+  };
+}
+
 // Tauri expects a fixed dev server port and a relative frontend build so the
 // generated app can load assets correctly regardless of host origin. Port
 // 1421 (not 1420) so the editor's dev server never collides with
 // apps/desktop's.
 export default defineConfig({
   clearScreen: false,
-  plugins: [react(), devCatalogApiPlugin()],
+  plugins: [react(), devCatalogApiPlugin(), devMapApiPlugin()],
   server: {
     port: 1421,
     strictPort: true,

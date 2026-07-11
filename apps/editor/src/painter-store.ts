@@ -12,6 +12,8 @@
 
 import type {
   CommandStackState,
+  SemanticClass,
+  SemanticOverrides,
   TileCellDiff,
   TileDiff,
   TileLayerSet,
@@ -23,6 +25,7 @@ import {
   redoCommand,
   undoCommand,
 } from '@threemaker/map-format';
+import { assignSemanticClass, resolveTouchedTileIds } from './semantic-store.js';
 import type { TilePoint, ToolId, ToolSMState, ToolSMStrokingState } from './tool-sm.js';
 import { beginStroke, continueStroke, endStroke, TOOL_SM_IDLE } from './tool-sm.js';
 
@@ -36,6 +39,10 @@ export interface PainterState {
   readonly fillTileId: number;
   readonly stroke: ToolSMState;
   readonly commandStack: CommandStackState;
+  /** When true, a committed stroke assigns `semanticClass` to every distinct tile id it touches instead of painting -- the visual tile layer is never modified (spec: "Semantic-only edit"). */
+  readonly semanticMode: boolean;
+  readonly semanticClass: SemanticClass;
+  readonly semantics: SemanticOverrides;
 }
 
 export function createPainterState(
@@ -43,6 +50,7 @@ export function createPainterState(
   width: number,
   height: number,
   fillTileId = 0,
+  semantics: SemanticOverrides = {},
 ): PainterState {
   return {
     layers,
@@ -53,7 +61,21 @@ export function createPainterState(
     fillTileId,
     stroke: TOOL_SM_IDLE,
     commandStack: EMPTY_COMMAND_STACK,
+    semanticMode: false,
+    semanticClass: 'none',
+    semantics,
   };
+}
+
+/** Toggles semantic-class painting mode. Ignored mid-stroke, same as `setTool`. */
+export function setSemanticMode(state: PainterState, enabled: boolean): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  return { ...state, semanticMode: enabled };
+}
+
+/** Sets the class assigned by the next committed stroke while semantic mode is active. */
+export function setSemanticClass(state: PainterState, cls: SemanticClass): PainterState {
+  return { ...state, semanticClass: cls };
 }
 
 /** Switches the active tool. Ignored mid-stroke (a stroke commits/cancels via pointerup before the tool can change). */
@@ -96,11 +118,13 @@ export function pointerMove(state: PainterState, point: TilePoint): PainterState
 
 export interface PointerUpResult {
   readonly state: PainterState;
-  /** The committed diff, if the stroke touched at least one cell whose value actually changed. Absent for a no-op stroke (e.g. filling with the value already there). */
+  /** The committed diff, if the stroke touched at least one cell whose value actually changed. Absent for a no-op stroke (e.g. filling with the value already there) OR while semantic mode is active (semantic edits never touch the tile layer -- see `semanticTileIds` instead). */
   readonly diff?: TileDiff;
+  /** Set only when a stroke committed WHILE semantic mode was active: the distinct tile ids the stroke touched, which now carry `state.semanticClass`. The visual tile layer is unchanged. */
+  readonly semanticTileIds?: ReadonlySet<number>;
 }
 
-/** `pointerup`: commits the in-progress stroke -- computes its touched cells, builds a `TileDiff`, applies it, and pushes it onto the undo stack. No-op while idle. */
+/** `pointerup`: commits the in-progress stroke. In semantic mode, assigns the active semantic class to every distinct tile id touched (no layer/diff change). Otherwise computes the stroke's touched cells, builds a `TileDiff`, applies it, and pushes it onto the undo stack. No-op while idle. */
 export function pointerUp(state: PainterState): PointerUpResult {
   if (state.stroke.status !== 'stroking') return { state };
 
@@ -109,9 +133,16 @@ export function pointerUp(state: PainterState): PointerUpResult {
 
   const cells = computeStrokeTouchedCells(stroke, state.layers, state.width, state.height);
   const layer = state.layers[stroke.layer];
-  const diff = layer
-    ? buildTileDiff(cells, layer, state.width, stroke.layer, state.fillTileId)
-    : undefined;
+  if (!layer) return { state: idleState };
+
+  if (state.semanticMode) {
+    const tileIds = resolveTouchedTileIds(cells, layer, state.width);
+    if (tileIds.size === 0) return { state: idleState };
+    const semantics = assignSemanticClass(state.semantics, tileIds, state.semanticClass);
+    return { state: { ...idleState, semantics }, semanticTileIds: tileIds };
+  }
+
+  const diff = buildTileDiff(cells, layer, state.width, stroke.layer, state.fillTileId);
   if (!diff) return { state: idleState };
 
   const layers = applyTileDiff(state.layers, state.width, diff);

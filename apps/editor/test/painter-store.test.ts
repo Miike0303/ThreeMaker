@@ -8,6 +8,8 @@ import {
   redo,
   setActiveLayer,
   setFillTileId,
+  setSemanticClass,
+  setSemanticMode,
   setTool,
   undo,
 } from '../src/painter-store.js';
@@ -193,5 +195,44 @@ describe('painter-store: undo/redo integration', () => {
     const state = createPainterState(makeLayers(2, 2), 2, 2, 1);
     expect(undo(state).diff).toBeUndefined();
     expect(redo(state).diff).toBeUndefined();
+  });
+});
+
+describe('painter-store: semantic-class mode (spec: "Semantic-only edit")', () => {
+  it('assigns the active class to the touched tile id without altering the visual tile layer', () => {
+    const layers = makeLayers(2, 2);
+    const layer0 = layers[0].slice();
+    layer0[0] = 5; // some existing painted tile
+    const seeded: TileLayerSet = [layer0, layers[1], layers[2], layers[3]];
+
+    let state = createPainterState(seeded, 2, 2, 9); // fillTileId=9 must be IGNORED in semantic mode
+    state = setSemanticMode(state, true);
+    state = setSemanticClass(state, 'door');
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = pointerUp(state);
+
+    expect(result.diff).toBeUndefined(); // no tile-layer diff
+    expect(result.semanticTileIds).toEqual(new Set([5]));
+    expect(result.state.layers[0]?.[0]).toBe(5); // visual tile UNCHANGED
+    expect(result.state.semantics['5']).toEqual({ class: 'door' });
+    expect(result.state.commandStack.undoStack).toHaveLength(0); // not part of tile undo history
+  });
+
+  it('produces no assignment when the stroke only touches empty (id 0) cells', () => {
+    let state = createPainterState(makeLayers(2, 2), 2, 2, 1);
+    state = setSemanticMode(state, true);
+    state = setSemanticClass(state, 'wall');
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = pointerUp(state);
+
+    expect(result.semanticTileIds).toBeUndefined();
+    expect(result.state.semantics).toEqual({});
+  });
+
+  it('setSemanticMode/setSemanticClass are ignored mid-stroke, same as setTool', () => {
+    let state = createPainterState(makeLayers(3, 3), 3, 3, 1);
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const switched = setSemanticMode(state, true);
+    expect(switched).toBe(state);
   });
 });
