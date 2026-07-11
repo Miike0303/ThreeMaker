@@ -66,6 +66,9 @@ importers:
       '@threemaker/importer-rpgm':
         specifier: workspace:*
         version: link:../../packages/importer-rpgm
+      '@threemaker/map-format':
+        specifier: workspace:*
+        version: link:../../packages/map-format
       '@threemaker/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
