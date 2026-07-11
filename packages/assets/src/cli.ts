@@ -47,7 +47,8 @@ function main(argv: readonly string[]): void {
     games: result.games.map((game) => ({
       rootPath: game.rootPath,
       engine: game.engine,
-      encrypted: game.encrypted,
+      hasEncryptedImages: game.hasEncryptedImages,
+      hasEncryptedAudio: game.hasEncryptedAudio,
       imageAssetCount: game.imageAssets.length,
       audioAssetCount: game.audioAssets.length,
     })),

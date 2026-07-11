@@ -83,7 +83,8 @@ describe('scanGames — folder-agnostic MV/MZ auto-detect', () => {
     const mz = result.games.find((g) => g.rootPath === mzRoot);
     expect(mz).toBeDefined();
     expect(mz?.engine).toBe('mz');
-    expect(mz?.encrypted).toBe(true);
+    expect(mz?.hasEncryptedImages).toBe(true);
+    expect(mz?.hasEncryptedAudio).toBe(false); // absent from System.json → defaults false
     expect(mz?.encryptionKey).not.toBeNull();
     expect(mz?.imageAssets).toEqual(['tilesets/Outside.rpgmvp']);
     expect(mz?.audioAssets).toEqual(['bgm/Theme.ogg_']);
@@ -91,10 +92,95 @@ describe('scanGames — folder-agnostic MV/MZ auto-detect', () => {
     const mv = result.games.find((g) => g.rootPath === mvRoot);
     expect(mv).toBeDefined();
     expect(mv?.engine).toBe('mv');
-    expect(mv?.encrypted).toBe(false);
+    expect(mv?.hasEncryptedImages).toBe(false);
+    expect(mv?.hasEncryptedAudio).toBe(false);
     expect(mv?.encryptionKey).toBeNull();
     expect(mv?.imageAssets).toEqual(['characters/Actor1.png']);
     expect(mv?.audioAssets).toEqual([]);
+  });
+});
+
+describe('scanGames — encryption flags model ground truth, not derived from key parseability', () => {
+  it('reflects hasEncryptedImages=false even when a parseable key is present', () => {
+    const gameDir = join(workDir, 'flagged-false-with-key');
+    writeSystemJson(join(gameDir, 'data'), {
+      gameTitle: 'Key present, flag false',
+      hasEncryptedImages: false,
+      hasEncryptedAudio: false,
+      encryptionKey: 'd41d8cd98f00b204e9800998ecf8427e',
+    });
+
+    const result = scanGames(workDir, { maxDepth: 12 });
+
+    expect(result.errors).toHaveLength(0);
+    const game = result.games.find((g) => g.rootPath === gameDir);
+    expect(game).toBeDefined();
+    // The key is parseable, but the game's own flags say it's not encrypted —
+    // ground truth must come from the flags, not from "can we parse a key".
+    expect(game?.hasEncryptedImages).toBe(false);
+    expect(game?.hasEncryptedAudio).toBe(false);
+    expect(game?.encryptionKey).not.toBeNull();
+  });
+
+  it('records hasEncryptedImages=true faithfully even when no parseable key is present (broken game)', () => {
+    const gameDir = join(workDir, 'flagged-true-no-key');
+    writeSystemJson(join(gameDir, 'data'), {
+      gameTitle: 'Flag true, no usable key',
+      hasEncryptedImages: true,
+      hasEncryptedAudio: true,
+      // encryptionKey deliberately absent — a broken/incomplete game export.
+    });
+
+    const result = scanGames(workDir, { maxDepth: 12 });
+
+    expect(result.errors).toHaveLength(0);
+    const game = result.games.find((g) => g.rootPath === gameDir);
+    expect(game).toBeDefined();
+    expect(game?.hasEncryptedImages).toBe(true);
+    expect(game?.hasEncryptedAudio).toBe(true);
+    expect(game?.encryptionKey).toBeNull();
+  });
+});
+
+describe('scanGames — asset-tree traversal shares the same guarded walk as the game-root walk', () => {
+  it('abandons a runaway branch inside img/ once it exceeds maxDepth', () => {
+    const gameDir = join(workDir, 'deep-assets-game');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+
+    let current = join(gameDir, 'img', 'o');
+    mkdirSync(current, { recursive: true });
+    for (let i = 0; i < 20; i++) {
+      current = join(current, 'o');
+      mkdirSync(current, { recursive: true });
+    }
+
+    const result = scanGames(workDir, { maxDepth: 5 });
+
+    const game = result.games.find((g) => g.rootPath === gameDir);
+    expect(game).toBeDefined();
+    expect(game?.imageAssets).toEqual([]);
+
+    const depthErrors = result.errors.filter((e) => e.code === 'depth-exceeded');
+    expect(depthErrors.length).toBeGreaterThan(0);
+  });
+
+  it('abandons a branch inside audio/ that revisits an already-seen real path (junction cycle)', () => {
+    const gameDir = join(workDir, 'cyclic-assets-game');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+
+    const audioDir = join(gameDir, 'audio');
+    mkdirSync(audioDir, { recursive: true });
+    // A junction inside the asset tree that points back to the game's audio
+    // root, forming a real cycle scoped to the asset walk (not the game walk).
+    symlinkSync(audioDir, join(audioDir, 'loop-back'), 'junction');
+
+    const result = scanGames(workDir, { maxDepth: 12 });
+
+    const game = result.games.find((g) => g.rootPath === gameDir);
+    expect(game).toBeDefined();
+
+    const cycleErrors = result.errors.filter((e) => e.code === 'cycle-detected');
+    expect(cycleErrors.length).toBeGreaterThan(0);
   });
 });
 
