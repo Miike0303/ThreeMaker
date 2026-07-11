@@ -29,6 +29,9 @@ importers:
       '@threemaker/importer-rpgm':
         specifier: workspace:*
         version: link:../../packages/importer-rpgm
+      '@threemaker/narrative':
+        specifier: workspace:*
+        version: link:../../packages/narrative
       '@threemaker/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer

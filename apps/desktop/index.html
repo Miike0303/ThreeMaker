@@ -126,6 +126,56 @@
         font-family: ui-monospace, 'SF Mono', Consolas, monospace;
         opacity: 0.9;
       }
+      .dialogue-overlay {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 20;
+        width: min(560px, calc(100vw - 48px));
+        font-family: system-ui, sans-serif;
+        color: #e6e6f0;
+        background: rgba(16, 16, 26, 0.9);
+        border: 1px solid #3c3c5a;
+        border-radius: 8px;
+        padding: 14px 18px;
+        backdrop-filter: blur(4px);
+      }
+      .dialogue-overlay-error {
+        border-color: #a33;
+      }
+      .dialogue-speaker {
+        font-weight: 600;
+        font-size: 13px;
+        opacity: 0.85;
+        margin-bottom: 4px;
+      }
+      .dialogue-text {
+        font-size: 16px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+      }
+      .dialogue-choices {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .dialogue-choice {
+        font-size: 14px;
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+      .dialogue-choice-highlighted {
+        background: rgba(120, 140, 255, 0.25);
+      }
+      .dialogue-hint {
+        margin-top: 10px;
+        font-size: 12px;
+        opacity: 0.7;
+      }
       .status-message {
         position: absolute;
         inset: 0;

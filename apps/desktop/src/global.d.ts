@@ -48,6 +48,8 @@ declare global {
       readonly cameraPosition: { readonly x: number; readonly y: number; readonly z: number };
       /** The camera rig's smoothed follow target, in world units. */
       readonly targetPosition: { readonly x: number; readonly y: number; readonly z: number };
+      /** The demo `EventInterpreter`'s current state, or `'idle'` if the demo content failed to load. */
+      readonly dialogueState: string;
     };
   }
 }

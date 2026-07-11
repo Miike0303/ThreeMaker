@@ -1,8 +1,16 @@
-import { GameLoop } from '@threemaker/core';
+import type { EventHost, EventScript } from '@threemaker/core';
+import { EventInterpreter, GameLoop, WorldState } from '@threemaker/core';
 import type { Direction } from '@threemaker/gameplay';
-import { GridMover, PassabilityGrid } from '@threemaker/gameplay';
+import {
+  DIRECTION_DELTA,
+  GridMover,
+  NpcRegistry,
+  PassabilityGrid,
+  TriggerIndex,
+} from '@threemaker/gameplay';
 import type { RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { computeHeightGrid, parseMap, parseTilesets } from '@threemaker/importer-rpgm';
+import { bindStoryToWorld, compileInk, InkDialogueProvider } from '@threemaker/narrative';
 import type { SheetPixelSizes } from '@threemaker/renderer';
 import {
   buildChunks,
@@ -20,6 +28,12 @@ import { CharacterSprite, tileCenterToWorld } from './character-sprite.js';
 import { clampRange } from './clamp.js';
 import type { DebugSnapshot } from './debug-panel.js';
 import { createDebugPanel } from './debug-panel.js';
+import { loadDemoContent } from './demo-content.js';
+import {
+  createDialogueOverlay,
+  nextHighlightedIndex,
+  resolveDialogueKeyAction,
+} from './dialogue-ui.js';
 import {
   fixtureCharacterUrl,
   fixtureImageUrl,
@@ -381,7 +395,21 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       x: spawn.x,
       y: spawn.y,
       speed: PLAYER_SPEED,
-      canMove: (x, y, direction) => passability.canMove(x, y, direction),
+      // Composed per @threemaker/gameplay's documented pattern
+      // (NpcRegistry#occupies JSDoc): PassabilityGrid stays terrain-only,
+      // NPC collision is added at this callsite. `npcRegistry` and
+      // `demoMapActive` are declared later in this function (demo wiring,
+      // below) but already initialized by the time this closure is ever
+      // invoked (first call happens from the game loop, well after setup
+      // completes) -- `demoMapActive` also scopes the check to the fixture
+      // map, since the demo NPCs' tiles are meaningless on the dev map-cycle's
+      // other maps.
+      canMove: (x, y, direction) => {
+        if (!passability.canMove(x, y, direction)) return false;
+        if (!demoMapActive || !npcRegistry) return true;
+        const delta = DIRECTION_DELTA[direction];
+        return !npcRegistry.occupies(x + delta.x, y + delta.y);
+      },
     });
 
     // Build the spawn surroundings before the first frame renders.
@@ -562,8 +590,173 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       get targetPosition() {
         return { x: target.x, y: target.y, z: target.z };
       },
+      get dialogueState() {
+        return interpreter?.state ?? 'idle';
+      },
     };
   }
+
+  // Narrative demo wiring (dev-only, layered on the fixture map -- see
+  // demo-content.ts and dialogue-ui.ts): loads apps/desktop/src/demo/'s
+  // map007 NPCs/triggers/events/ink and wires them through
+  // @threemaker/core's EventInterpreter + @threemaker/narrative's
+  // InkDialogueProvider. `demoMapActive` gates NPC/trigger interaction to
+  // only the fixture map -- the 'g' dev map-cycle toggle below switches to
+  // maps this demo's tile coordinates don't apply to.
+  let npcRegistry: NpcRegistry | undefined;
+  let triggerIndex: TriggerIndex | undefined;
+  let interpreter: EventInterpreter | undefined;
+  let demoEvents: EventScript | undefined;
+  const npcSprites = new Map<string, CharacterSprite>();
+  let demoMapActive = true;
+  let activeEntityMove: {
+    readonly mover: GridMover;
+    readonly direction: Direction;
+    stepsRemaining: number;
+    readonly done: () => void;
+  } | null = null;
+
+  if (import.meta.env.DEV) {
+    try {
+      const demoContent = loadDemoContent();
+      demoEvents = demoContent.events;
+
+      const world = new WorldState();
+      for (const [key, value] of demoContent.worldSeeds) world.set(key, value);
+
+      const stories = new Map(
+        [...demoContent.inkSources].map(([storyId, source]) => {
+          const story = compileInk(source);
+          bindStoryToWorld(story, { storyId, world });
+          return [storyId, story] as const;
+        }),
+      );
+      const provider = new InkDialogueProvider(stories);
+
+      const host: EventHost = {
+        moveEntity(entityId, direction, steps, done) {
+          if (entityId !== 'player') {
+            // NPCs are static in this demo slice (see NpcRegistry's
+            // documented v1 ceiling) -- nothing to drive.
+            done();
+            return;
+          }
+          if (activeEntityMove) {
+            // No parallel events in v1 (core's own documented ceiling), so
+            // an overlapping request here would be a content bug; defensive.
+            done();
+            return;
+          }
+          activeEntityMove = {
+            mover: session.mover,
+            direction: direction as Direction,
+            stepsRemaining: Math.max(0, Math.trunc(steps)),
+            done,
+          };
+        },
+        teleport(entityId, x, y, facing) {
+          if (entityId !== 'player') return;
+          session.mover.teleport(x, y, facing as Direction | undefined);
+        },
+      };
+
+      interpreter = new EventInterpreter({ world, host, provider });
+      npcRegistry = new NpcRegistry(demoContent.npcs.npcs);
+      triggerIndex = new TriggerIndex(demoContent.triggers.triggers, session.spawn);
+
+      for (const npc of demoContent.npcs.npcs) {
+        if (npc.sprite.sheet !== CHARACTER_SHEET_FILE) {
+          throw new Error(
+            `Demo NPC "${npc.id}" references sprite sheet "${npc.sprite.sheet}", but only "${CHARACTER_SHEET_FILE}" is loaded.`,
+          );
+        }
+        const sprite = new CharacterSprite({
+          texture: characterTexture,
+          sheetColumns: CHARACTER_SHEET_COLUMNS,
+          sheetRows: CHARACTER_SHEET_ROWS,
+          characterIndex: npc.sprite.index,
+          tileWorldSize: TILE_WORLD_SIZE,
+        });
+        sprite.setFrame(npc.facing, 1);
+        sprite.setTilePosition(npc.x, npc.y, TILE_WORLD_SIZE, groundYAt(session, npc.x, npc.y));
+        scene.add(sprite.mesh);
+        npcSprites.set(npc.id, sprite);
+      }
+
+      const dialogueOverlay = createDialogueOverlay(i18n.t);
+      container.appendChild(dialogueOverlay.element);
+      let highlightedIndex = 0;
+      let pendingChoiceCount = 0;
+
+      interpreter.signals.on('dialogue:line', (event) => {
+        dialogueOverlay.showLine(event.speaker, event.text);
+      });
+      interpreter.signals.on('dialogue:choices', (event) => {
+        highlightedIndex = 0;
+        pendingChoiceCount = event.options.length;
+        dialogueOverlay.showChoices(event.options, highlightedIndex);
+      });
+      interpreter.signals.on('dialogue:closed', () => {
+        pendingChoiceCount = 0;
+      });
+      interpreter.signals.on('script:finished', () => {
+        pendingChoiceCount = 0;
+        dialogueOverlay.hide();
+      });
+      interpreter.signals.on('script:failed', (event) => {
+        pendingChoiceCount = 0;
+        const message = event.error instanceof Error ? event.error.message : String(event.error);
+        console.error('Event script failed:', event.error);
+        dialogueOverlay.showError(message);
+      });
+
+      window.addEventListener('keydown', (event) => {
+        if (event.repeat || !interpreter || !demoMapActive) return;
+
+        if (interpreter.state === 'idle') {
+          if (event.key.toLowerCase() !== 'e') return;
+          const { x, y } = session.mover.tile;
+          const facing = session.mover.facing;
+          const npc = npcRegistry?.npcAdjacentFacing(x, y, facing);
+          if (npc) {
+            interpreter.run(demoEvents?.[npc.onInteract] ?? []);
+            return;
+          }
+          for (const eventId of triggerIndex?.interact(x, y, facing) ?? []) {
+            interpreter.run(demoEvents?.[eventId] ?? []);
+          }
+          return;
+        }
+
+        const hasChoices = interpreter.state === 'waiting-for-choice';
+        const action = resolveDialogueKeyAction(event.key, hasChoices);
+        if (!action) return;
+
+        switch (action.kind) {
+          case 'advance':
+            if (interpreter.state === 'waiting-for-dialogue') interpreter.advance();
+            return;
+          case 'confirmHighlighted':
+            interpreter.choose(highlightedIndex);
+            return;
+          case 'chooseIndex':
+            if (action.index < pendingChoiceCount) interpreter.choose(action.index);
+            return;
+          case 'navigate':
+            highlightedIndex = nextHighlightedIndex(
+              highlightedIndex,
+              action.delta,
+              pendingChoiceCount,
+            );
+            dialogueOverlay.setHighlightedIndex(highlightedIndex);
+            return;
+        }
+      });
+    } catch (error) {
+      console.error('Failed to load demo dialogue content:', error);
+    }
+  }
+
   window.addEventListener('keydown', (event) => {
     if (event.repeat) return;
     switch (event.key.toLowerCase()) {
@@ -646,6 +839,13 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
             session = createMapSession(fixtureMap, tileset, textures, sheetPixelSizes);
           }
           focusCameraOnSpawn();
+
+          // The demo NPCs/triggers are authored against the fixture map's
+          // own tile coordinates -- irrelevant (and potentially
+          // out-of-bounds) on the giant/mz maps, so hide the NPC billboards
+          // and stop routing interact/enter input to them while cycled away.
+          demoMapActive = mode === 'fixture';
+          for (const sprite of npcSprites.values()) sprite.mesh.visible = demoMapActive;
         } catch (error) {
           console.error('Failed to switch to the next dev map-cycle map:', error);
           // Roll the mode back so the next 'g' press retries the same target
@@ -665,9 +865,47 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   const gameLoop = new GameLoop({
     onTick(dt) {
       const { mover, streamer, tilemap } = session;
-      const direction = heldDirection.current();
-      if (direction) mover.requestMove(direction);
+      const interpreterIdle = !interpreter || interpreter.state === 'idle';
+
+      // Input pause (design's data-flow contract): the player's own
+      // requestMove is skipped whenever the interpreter isn't idle, so
+      // walking is frozen during dialogue/scripts. A moveEntity command in
+      // flight still drives the mover -- that's the interpreter itself
+      // commanding the move, not the held keyboard direction.
+      if (interpreterIdle) {
+        const direction = heldDirection.current();
+        if (direction) mover.requestMove(direction);
+      } else if (activeEntityMove?.mover === mover) {
+        mover.requestMove(activeEntityMove.direction);
+      }
+
+      const tileBeforeUpdate = mover.tile;
       mover.update(dt);
+
+      if (activeEntityMove?.mover === mover) {
+        const tileAfterUpdate = mover.tile;
+        const stepped =
+          tileAfterUpdate.x !== tileBeforeUpdate.x || tileAfterUpdate.y !== tileBeforeUpdate.y;
+        if (stepped) activeEntityMove.stepsRemaining -= 1;
+        // A step either landed (stepped) or was refused outright (blocked,
+        // never started moving this frame) -- either way, once the mover
+        // isn't mid-interpolation, this call is either finished (no steps
+        // left) or blocked (didn't step at all): both end the moveEntity
+        // per EventHost's "partial-block = still done" contract.
+        if (!mover.moving && (activeEntityMove.stepsRemaining <= 0 || !stepped)) {
+          const finished = activeEntityMove;
+          activeEntityMove = null;
+          finished.done();
+        }
+      }
+
+      if (demoMapActive && interpreter && triggerIndex && demoEvents) {
+        for (const eventId of triggerIndex.enter(mover.tile.x, mover.tile.y)) {
+          interpreter.run(demoEvents[eventId] ?? []);
+        }
+      }
+
+      for (const sprite of npcSprites.values()) sprite.faceCamera(camera);
 
       // Cheap per-frame streaming check: `update` early-exits with an empty
       // diff while the character stays inside the same chunk, so geometry

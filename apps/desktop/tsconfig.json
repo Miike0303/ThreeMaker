@@ -17,6 +17,7 @@
     { "path": "../../packages/core" },
     { "path": "../../packages/gameplay" },
     { "path": "../../packages/importer-rpgm" },
+    { "path": "../../packages/narrative" },
     { "path": "../../packages/renderer" }
   ]
 }

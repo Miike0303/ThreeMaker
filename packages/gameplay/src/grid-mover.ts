@@ -123,6 +123,24 @@ export class GridMover {
     this.pendingDirection = direction;
   }
 
+  /**
+   * Places the mover directly at `(x, y)`, bypassing `canMove` and any
+   * step interpolation -- cancels an in-progress step, if any. Optionally
+   * sets `facing`; omitting it preserves whatever the mover was already
+   * facing. For an `EventCommand`'s `teleport` command (see
+   * `@threemaker/core`'s `EventHost#teleport`), not everyday movement.
+   */
+  teleport(x: number, y: number, facing?: Direction): void {
+    this.tileX = x;
+    this.tileY = y;
+    this.destX = x;
+    this.destY = y;
+    this.isMoving = false;
+    this.stepProgress = 0;
+    this.pendingDirection = null;
+    if (facing !== undefined) this.currentFacing = facing;
+  }
+
   /** Advances the simulation by `dt` seconds. */
   update(dt: number): void {
     const direction = this.pendingDirection;

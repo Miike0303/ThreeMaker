@@ -181,3 +181,39 @@ describe('GridMover (passability)', () => {
     expect(mover.tile).toEqual({ x: 1, y: 0 });
   });
 });
+
+describe('GridMover.teleport', () => {
+  it('sets the tile position directly, bypassing canMove and interpolation', () => {
+    const canMove = vi.fn().mockReturnValue(false);
+    const mover = new GridMover({ x: 1, y: 1, facing: 'down', speed: SPEED, canMove });
+
+    mover.teleport(9, 4);
+
+    expect(mover.tile).toEqual({ x: 9, y: 4 });
+    expect(mover.renderPosition).toEqual({ x: 9, y: 4 });
+    expect(mover.moving).toBe(false);
+    expect(canMove).not.toHaveBeenCalled();
+  });
+
+  it('optionally sets facing, and preserves the current facing when omitted', () => {
+    const mover = new GridMover({ x: 0, y: 0, facing: 'down' });
+
+    mover.teleport(2, 2, 'left');
+    expect(mover.facing).toBe('left');
+
+    mover.teleport(3, 3);
+    expect(mover.facing).toBe('left');
+  });
+
+  it('cancels an in-progress step', () => {
+    const mover = new GridMover({ x: 0, y: 0, facing: 'down', speed: SPEED });
+    mover.requestMove('down');
+    mover.update(STEP_TIME / 2); // now mid-step
+
+    mover.teleport(5, 5);
+
+    expect(mover.moving).toBe(false);
+    expect(mover.progress).toBe(0);
+    expect(mover.tile).toEqual({ x: 5, y: 5 });
+  });
+});
