@@ -4,6 +4,16 @@ import type { TileBuildData } from './types.js';
 /** Which of a tile's 4 edges, in map space (north = toward smaller tileY / image-top). */
 export type EdgeDirection = 'north' | 'south' | 'east' | 'west';
 
+/**
+ * A ramp cell's downhill direction. Same 4-value union as `EdgeDirection`
+ * (duplicated on purpose, not imported, from `@threemaker/importer-rpgm`'s
+ * own `RampDirection` -- mirrors this file's existing `EdgeDirection`
+ * duplication, a pattern already approved for this feature in Slice 1's
+ * design notes: renderer/gameplay each keep their own copy of shared literal
+ * unions rather than depending on importer-rpgm's types for them).
+ */
+export type RampDirection = EdgeDirection;
+
 export const EDGE_DIRECTIONS: readonly EdgeDirection[] = ['north', 'south', 'east', 'west'];
 
 /** Tile-coordinate delta toward the neighbor across each edge. */
@@ -90,6 +100,40 @@ export function computeOpenEdges(
     if (!occupiedKeys.has(tileKey(x + delta.dx, y + delta.dy))) edges.push(edge);
   }
   return edges;
+}
+
+/** `computeRampGrid`'s (importer-rpgm) cell encoding: 0 = none, 1-4 = N/S/E/W downhill direction -- duplicated here (not imported) for the same reason as `RampDirection` above; kept in exact sync with importer-rpgm's own `RAMP_DIRECTION_BY_CODE`. */
+const RAMP_DIRECTION_BY_CODE: readonly (RampDirection | undefined)[] = [
+  undefined,
+  'north',
+  'south',
+  'east',
+  'west',
+];
+
+/** A ramp tile's slope descriptor: which way it faces downhill, and the two heights (tile-height units) its edges span. Ramps are always exactly 1 level tall (`lowHeight === highHeight - 1`) -- see `computeRampGrid`'s multi-level-span-is-inert rule. */
+export interface RampData {
+  readonly direction: RampDirection;
+  /** This cell's own height -- the ramp's uphill edge (matches `TileBuildData.height` when present). */
+  readonly highHeight: number;
+  /** The ramp's downhill edge height, always `highHeight - 1`. */
+  readonly lowHeight: number;
+}
+
+/**
+ * Resolves one map cell's `rampGrid` code into the `RampData` descriptor
+ * `TileBuildData.ramp` carries, so `build-chunk-group.ts` can build the
+ * inclined quad and skirt faces from `direction`/`highHeight`/`lowHeight`
+ * alone -- without needing the whole-map height/ramp grids itself (a ramp
+ * cell's own corner heights are purely a function of its own height + own
+ * direction, see importer-rpgm's `elevation.ts` module doc). Returns
+ * `undefined` for a non-ramp cell (code 0).
+ */
+export function rampDataAt(code: number, ownHeight: number): RampData | undefined {
+  const direction = RAMP_DIRECTION_BY_CODE[code];
+  return direction === undefined
+    ? undefined
+    : { direction, highHeight: ownHeight, lowHeight: ownHeight - 1 };
 }
 
 /**

@@ -1,6 +1,11 @@
-import type { RpgmMap, RpgmTileset } from '@threemaker/importer-rpgm';
-import { computeHeightGrid, decodeTileFlags, getTileSheet } from '@threemaker/importer-rpgm';
-import { computeCliffEdges } from './elevation.js';
+import type { RampCellInput, RpgmMap, RpgmTileset } from '@threemaker/importer-rpgm';
+import {
+  computeHeightGrid,
+  computeRampGrid,
+  decodeTileFlags,
+  getTileSheet,
+} from '@threemaker/importer-rpgm';
+import { computeCliffEdges, rampDataAt } from './elevation.js';
 import { computeTileUv } from './tile-uv.js';
 import type {
   ChunkBuildData,
@@ -134,11 +139,20 @@ function chunkTileRegion(
  * `chunk-geometry.test.ts`'s "onlyChunks" property test), but at a fraction
  * of the cost on a large map, since cells outside the requested chunks are
  * never even visited. The region-derived grids (`heightGrid`/`upperGrid`/
- * `wallGrid`) are still computed over the WHOLE map regardless -- they are
- * cheap flat typed-array passes, and cliff/star-stack lookups need
- * whole-map neighbor data to stay correct at a scoped chunk's own edges
+ * `wallGrid`/`rampGrid`) are still computed over the WHOLE map regardless --
+ * they are cheap flat typed-array passes, and cliff/star-stack/ramp lookups
+ * need whole-map neighbor data to stay correct at a scoped chunk's own edges
  * (benchmarked as a small fraction of full `buildChunks` cost; see the
  * decision-gate benchmark in `test/build-chunks-benchmark.test.ts`).
+ *
+ * `rampCells`, when given, is the resolved list of map cells classified
+ * `'ramp'` by tileset semantics (see importer-rpgm's `computeRampGrid`,
+ * which this function calls directly -- callers resolve `SemanticOverrides`
+ * lookups into this list; `buildChunks` never re-derives ramp semantics
+ * itself, matching the one-directional layering importer-rpgm's own
+ * `RampCellInput` doc describes). Omitted/empty degenerates every ramp
+ * lookup to "no ramp" (an all-zero `rampGrid`), so a map with no ramp-tagged
+ * cells renders byte-identical to before this feature existed.
  */
 export function buildChunks(
   map: RpgmMap,
@@ -146,6 +160,7 @@ export function buildChunks(
   sheetPixelSizes: SheetPixelSizes,
   chunkSize: number = DEFAULT_CHUNK_SIZE,
   onlyChunks?: ReadonlySet<string>,
+  rampCells?: readonly RampCellInput[],
 ): ChunkBuildData[] {
   if (chunkSize <= 0) {
     throw new Error(`chunkSize must be a positive number, got ${chunkSize}.`);
@@ -158,6 +173,10 @@ export function buildChunks(
   const heightGrid = computeHeightGrid(map);
   const upperGrid = computeUpperGrid(map, tileset);
   const wallGrid = computeWallGrid(map);
+  const rampGrid = computeRampGrid(
+    { heightGrid, mapWidth: map.width, mapHeight: map.height },
+    rampCells ?? [],
+  );
 
   const chunkTiles = new Map<string, TileBuildData[]>();
 
@@ -211,6 +230,15 @@ export function buildChunks(
               ? computeCliffEdges(heightGrid, map.width, map.height, x, y)
               : undefined;
 
+          // Same layer-0/ground ownership rule as cliffEdges above: a ramp's
+          // slope descriptor belongs to the cell's own floor tile only, so
+          // it isn't duplicated across whatever else got painted on higher
+          // editable layers at the same spot.
+          const ramp =
+            layerIndex === 0 && elevation === 'ground'
+              ? rampDataAt(rampGrid[y * map.width + x] ?? 0, height)
+              : undefined;
+
           // ponytail: chunk assignment below still keys off this tile's own
           // (x, y), not its shifted `starStack.baseTileY` -- a star tile right
           // at a chunk's southern edge can therefore land in the chunk one row
@@ -231,6 +259,7 @@ export function buildChunks(
             elevation,
             ...(height !== 0 ? { height } : {}),
             ...(cliffEdges && cliffEdges.length > 0 ? { cliffEdges } : {}),
+            ...(ramp ? { ramp } : {}),
             ...(starStack ? { starStack } : {}),
           });
         }

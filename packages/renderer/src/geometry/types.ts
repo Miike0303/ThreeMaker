@@ -1,5 +1,5 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
-import type { CliffEdgeData } from './elevation.js';
+import type { CliffEdgeData, RampData } from './elevation.js';
 
 /** RPG Maker MV/MZ standard tile edge length in source-image pixels. */
 export const TILE_SIZE_PX = 48;
@@ -58,6 +58,16 @@ export interface TileBuildData {
    * whatever else got painted on higher editable layers at the same spot.
    */
   readonly cliffEdges?: readonly CliffEdgeData[];
+  /**
+   * Only present for the layer-0 ground tile of a map cell classified
+   * `'ramp'` (same cell-ownership rule as `cliffEdges` -- see
+   * `chunk-geometry.ts`): the slope's downhill direction and the two
+   * heights its edges span. Drives `build-chunk-group.ts`'s inclined quad +
+   * skirt faces, and suppresses the `cliffEdges` entry on the ramp's own
+   * downhill edge (the slope already meets the lower neighbor's floor
+   * exactly, so no separate vertical face is needed there).
+   */
+  readonly ramp?: RampData;
   /**
    * Only present for `elevation === 'upper'` (star-bit) tiles: where and how
    * high this tile's standing quad should actually be anchored, per MV3D's

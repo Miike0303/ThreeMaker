@@ -486,6 +486,83 @@ describe('buildChunks', () => {
   });
 });
 
+describe('buildChunks ramp grid (Slice 2a plumbing)', () => {
+  it('attaches a ramp descriptor to a layer-0 ground tile whose cell is a resolved ramp candidate', () => {
+    // 1x2 column: (0,0) height 3 with a unique lower neighbor south at
+    // height 2 -- computeRampGrid resolves this as a 'south' ramp (the only
+    // candidate), matching importer-rpgm's "Single lower neighbor" scenario.
+    const width = 1;
+    const height = 2;
+    const layer0 = [1, 1];
+    const regions = [3, 2];
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [layer0, new Array(2).fill(0), new Array(2).fill(0), new Array(2).fill(0)],
+        shadows: new Array(2).fill(0),
+        regions,
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16, undefined, [{ x: 0, y: 0 }]);
+    const tiles = chunks[0]?.tiles ?? [];
+    const rampTile = tiles.find((tile) => tile.tileY === 0);
+    const flatTile = tiles.find((tile) => tile.tileY === 1);
+
+    expect(rampTile?.ramp).toEqual({ direction: 'south', highHeight: 3, lowHeight: 2 });
+    expect(flatTile?.ramp).toBeUndefined();
+  });
+
+  it('omits ramp from a cell with no rampCells entry, even on an elevated map (rampGrid stays all-zero)', () => {
+    const width = 1;
+    const height = 2;
+    const layer0 = [1, 1];
+    const regions = [3, 2];
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [layer0, new Array(2).fill(0), new Array(2).fill(0), new Array(2).fill(0)],
+        shadows: new Array(2).fill(0),
+        regions,
+      },
+    });
+
+    // No rampCells argument at all -- degenerate "no ramp semantics resolved" path.
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+    const tiles = chunks[0]?.tiles ?? [];
+
+    expect(tiles.every((tile) => tile.ramp === undefined)).toBe(true);
+  });
+
+  it('REGRESSION GUARD: a map with no ramp cells produces byte-identical TileBuildData to the pre-ramp shape (no `ramp` key at all)', () => {
+    const width = 2;
+    const height = 1;
+    const layer0 = [1, 1];
+    const regions = [0, 3];
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [layer0, new Array(2).fill(0), new Array(2).fill(0), new Array(2).fill(0)],
+        shadows: new Array(2).fill(0),
+        regions,
+      },
+    });
+
+    const withoutRampParam = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+    const withEmptyRampCells = buildChunks(map, makeTileset(), SHEET_SIZES, 16, undefined, []);
+
+    for (const chunks of [withoutRampParam, withEmptyRampCells]) {
+      for (const tile of chunks[0]?.tiles ?? []) {
+        expect(Object.hasOwn(tile, 'ramp')).toBe(false);
+      }
+    }
+    expect(withoutRampParam).toEqual(withEmptyRampCells);
+  });
+});
+
 describe('buildChunks onlyChunks (property: onlyChunks output === full output filtered to those keys)', () => {
   const CHUNK_SIZE = 4;
 
