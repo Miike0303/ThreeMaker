@@ -231,6 +231,15 @@ const EDGE_OUTWARD_NORMAL: Record<EdgeDirection, THREE.Vector3> = {
  * Vertex winding is chosen so the face's normal always points outward
  * (away from the ramp tile), regardless of which absolute corner happens to
  * be "up" for a given direction (see `buildRampSkirts`).
+ *
+ * The UV for the two downhill-corner vertices (`b`/`c`) is derived from
+ * their SAME semantic height role (`b` = downhill corner at the high
+ * height, `c` = downhill corner at the low height) that drives their
+ * position, and is re-paired in lockstep whenever the winding swap above
+ * reorders them into the buffer -- gate-fix for a bug where the UV stayed
+ * hardcoded at a fixed buffer-slot order ([slot1, slot2] = [high, low])
+ * while positions swapped slots for winding correction, silently inverting
+ * the V axis on exactly one of a ramp's two skirt triangles.
  */
 function buildRampSkirtTriangle(
   uv: UvRect,
@@ -243,9 +252,13 @@ function buildRampSkirtTriangle(
   const a = new THREE.Vector3(cornerUp[0], highY, cornerUp[1]);
   const b = new THREE.Vector3(cornerDown[0], highY, cornerDown[1]);
   const c = new THREE.Vector3(cornerDown[0], lowY, cornerDown[1]);
+  const uvB: readonly [number, number] = [uv.u1, uv.v1];
+  const uvC: readonly [number, number] = [uv.u1, uv.v0];
 
   const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
-  const [v1, v2] = normal.dot(EDGE_OUTWARD_NORMAL[edge]) >= 0 ? [b, c] : [c, b];
+  const outward = normal.dot(EDGE_OUTWARD_NORMAL[edge]) >= 0;
+  const [v1, v2] = outward ? [b, c] : [c, b];
+  const [uv1, uv2] = outward ? [uvB, uvC] : [uvC, uvB];
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute(
@@ -257,7 +270,7 @@ function buildRampSkirtTriangle(
   );
   geometry.setAttribute(
     'uv',
-    new THREE.BufferAttribute(new Float32Array([uv.u0, uv.v1, uv.u1, uv.v1, uv.u1, uv.v0]), 2),
+    new THREE.BufferAttribute(new Float32Array([uv.u0, uv.v1, uv1[0], uv1[1], uv2[0], uv2[1]]), 2),
   );
   // PlaneGeometry (used by every other quad this file builds) is indexed;
   // mergeGeometries requires ALL merged geometries to agree on that, so this

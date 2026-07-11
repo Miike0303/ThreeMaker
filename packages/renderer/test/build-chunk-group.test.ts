@@ -829,3 +829,168 @@ describe('buildChunkGroup ramp geometry (Slice 2b)', () => {
     );
   });
 });
+
+describe('buildChunkGroup ramp skirt UV winding correctness (gate-fix)', () => {
+  /**
+   * Exact (x,y,z) match -- unlike `findVertexIndex` (x,z only), this also
+   * checks Y, because a ramp skirt's downhill corner exists at TWO
+   * different heights (the skirt's own high-side vertex and its low-side
+   * vertex), and the main quad's own corner at that same (x,z) always sits
+   * at the LOW height there -- so matching on Y too is what isolates the
+   * skirt-only "high" vertex unambiguously from the main quad's vertex.
+   */
+  function findVertexIndexXYZ(
+    position: THREE.BufferAttribute,
+    x: number,
+    y: number,
+    z: number,
+  ): number | undefined {
+    for (let i = 0; i < position.count; i++) {
+      if (
+        Math.abs(position.getX(i) - x) < 1e-6 &&
+        Math.abs(position.getY(i) - y) < 1e-6 &&
+        Math.abs(position.getZ(i) - z) < 1e-6
+      ) {
+        return i;
+      }
+    }
+    return undefined;
+  }
+
+  function rampTile(overrides: Partial<TileBuildData> = {}): TileBuildData {
+    return {
+      tileX: 0,
+      tileY: 0,
+      layerIndex: 0,
+      sheet: 'B',
+      quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+      elevation: 'ground',
+      height: 3,
+      ramp: { direction: 'south', highHeight: 3, lowHeight: 2 },
+      ...overrides,
+    };
+  }
+
+  it("keeps the west skirt's downhill-high vertex on the high (v1) UV row for a south ramp, whose west skirt needs its winding auto-corrected", () => {
+    const chunk = makeChunk({ tiles: [rampTile()] }); // south, highHeight=3, lowHeight=2
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, heightUnit: 1 },
+    );
+    const geometry = (group.children[0] as THREE.Mesh).geometry as THREE.BufferGeometry;
+    const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+    const uvAttr = geometry.getAttribute('uv') as THREE.BufferAttribute;
+
+    // West skirt of a south ramp: the downhill corner (sw) at the ramp's
+    // HIGH height -- this position exists ONLY on the skirt triangle (the
+    // main quad's own sw corner sits at lowY=2, not highY=3, there).
+    const highDownhillIdx = findVertexIndexXYZ(position, 0, 3, 1);
+    expect(highDownhillIdx).toBeDefined();
+
+    // This vertex sits at the ramp's HIGH height, so it must carry the
+    // "high" V coordinate (v1 = 0.1) -- regardless of which winding order
+    // this particular triangle needed to face outward correctly.
+    expect(uvAttr.getX(highDownhillIdx as number)).toBeCloseTo(0.1);
+    expect(uvAttr.getY(highDownhillIdx as number)).toBeCloseTo(0.1);
+  });
+
+  it("keeps the east skirt's downhill-high vertex on the high (v1) UV row for a north ramp -- the opposite winding-flip case from the south ramp's west skirt above", () => {
+    const chunk = makeChunk({
+      tiles: [rampTile({ ramp: { direction: 'north', highHeight: 3, lowHeight: 2 } })],
+    });
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, heightUnit: 1 },
+    );
+    const geometry = (group.children[0] as THREE.Mesh).geometry as THREE.BufferGeometry;
+    const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+    const uvAttr = geometry.getAttribute('uv') as THREE.BufferAttribute;
+
+    // East skirt of a north ramp: the downhill corner (ne) at the ramp's
+    // HIGH height -- again, unique to the skirt (the main quad's own ne
+    // corner sits at lowY=2 for a north ramp).
+    const highDownhillIdx = findVertexIndexXYZ(position, 1, 3, 0);
+    expect(highDownhillIdx).toBeDefined();
+
+    expect(uvAttr.getX(highDownhillIdx as number)).toBeCloseTo(0.1);
+    expect(uvAttr.getY(highDownhillIdx as number)).toBeCloseTo(0.1);
+  });
+});
+
+describe('buildChunkGroup golden regression guard (no ramps, gate-fix hardening)', () => {
+  it('renders a flat + cliff + wall (no-ramp) fixture with byte-identical merged vertex-position and UV arrays (protects Slices 3-4 from unintended non-ramp geometry drift)', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+        {
+          tileX: 1,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0.1, v0: 0, u1: 0.2, v1: 0.1 }],
+          elevation: 'ground',
+          height: 2,
+          cliffEdges: [{ edge: 'west', neighborHeight: 0 }],
+        },
+        {
+          tileX: 2,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'A4',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial(), A4: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, heightUnit: 1 },
+    );
+
+    const meshByName = Object.fromEntries(
+      group.children.map((child) => [child.name, child as THREE.Mesh]),
+    );
+    const bGeometry = meshByName['chunk-0-0-B']?.geometry as THREE.BufferGeometry;
+    const wallGeometry = meshByName['chunk-0-0-A4']?.geometry as THREE.BufferGeometry;
+    expect(bGeometry).toBeDefined();
+    expect(wallGeometry).toBeDefined();
+
+    /** Rounds to 6 decimal places, absorbing Float32/trig noise (e.g. `computeVertexNormals`'s ~1e-17 residue) and normalizing -0 to 0, without masking any real geometry drift. */
+    const round = (values: ArrayLike<number>): number[] =>
+      Array.from(values, (value) => Math.round(value * 1e6) / 1e6 || 0);
+
+    // Golden arrays captured once from this exact fixture on the
+    // already-verified pre-gate-fix geometry pipeline (flat quad + elevated
+    // quad + 1 cliff face for the B sheet; isolated wall prism -- 4 sides +
+    // 1 cap -- for the A4 sheet). A future change that alters non-ramp
+    // vertex or UV generation for ANY of these tile kinds will fail this
+    // test, even though no ramp is involved.
+    expect(round(bGeometry.getAttribute('position').array)).toEqual([
+      0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 2, 0, 2, 2, 0, 1, 2, 1, 2, 2, 1, 1, 2, 0, 1, 2, 1, 1,
+      0, 0, 1, 0, 1,
+    ]);
+    expect(round(bGeometry.getAttribute('uv').array)).toEqual([
+      0, 0.1, 0.1, 0.1, 0, 0, 0.1, 0, 0.1, 0.1, 0.2, 0.1, 0.1, 0, 0.2, 0, 0.1, 0.1, 0.2, 0.1, 0.1,
+      0, 0.2, 0,
+    ]);
+    expect(round(wallGeometry.getAttribute('position').array)).toEqual([
+      3, 2, 0, 2, 2, 0, 3, 0, 0, 2, 0, 0, 2, 2, 1, 3, 2, 1, 2, 0, 1, 3, 0, 1, 3, 2, 1, 3, 2, 0, 3,
+      0, 1, 3, 0, 0, 2, 2, 0, 2, 2, 1, 2, 0, 0, 2, 0, 1, 2, 2, 0, 3, 2, 0, 2, 2, 1, 3, 2, 1,
+    ]);
+    expect(round(wallGeometry.getAttribute('uv').array)).toEqual([
+      0, 0.1, 0.1, 0.1, 0, 0, 0.1, 0, 0, 0.1, 0.1, 0.1, 0, 0, 0.1, 0, 0, 0.1, 0.1, 0.1, 0, 0, 0.1,
+      0, 0, 0.1, 0.1, 0.1, 0, 0, 0.1, 0, 0, 0.1, 0.1, 0.1, 0, 0, 0.1, 0,
+    ]);
+  });
+});

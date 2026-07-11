@@ -102,7 +102,17 @@ function isInBounds(x: number, y: number, mapWidth: number, mapHeight: number): 
 
 /** `rampGrid` cell encoding: 0 = no ramp, 1-4 = downhill direction (design: "rampGrid: 0 = none, 1-4 encode N/S/E/W"). */
 const RAMP_DIRECTION_CODE: Record<RampDirection, number> = { north: 1, south: 2, east: 3, west: 4 };
-const RAMP_DIRECTION_BY_CODE: readonly (RampDirection | undefined)[] = [
+
+/**
+ * `rampGrid` cell encoding table: index 0 = no ramp, 1-4 = downhill
+ * direction N/S/E/W (design: "rampGrid: 0 = none, 1-4 encode N/S/E/W").
+ * Exported so any consumer needing the same decode table -- e.g. the
+ * renderer, which resolves a cell's `RampData` from a raw `rampGrid` code in
+ * `packages/renderer/src/geometry/elevation.ts` -- imports this canonical
+ * array instead of maintaining its own duplicate kept in sync by comment
+ * only.
+ */
+export const RAMP_DIRECTION_BY_CODE: readonly (RampDirection | undefined)[] = [
   undefined,
   'north',
   'south',

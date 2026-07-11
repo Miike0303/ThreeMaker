@@ -16,6 +16,7 @@ export {
   heightForRegion,
   MAX_REGION_HEIGHT,
   profilesEqual,
+  RAMP_DIRECTION_BY_CODE,
   surfaceHeightAt,
 } from './elevation.js';
 export { parseMap } from './parse-map.js';

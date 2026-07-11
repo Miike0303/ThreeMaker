@@ -1,4 +1,5 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
+import { RAMP_DIRECTION_BY_CODE } from '@threemaker/importer-rpgm';
 import type { TileBuildData } from './types.js';
 
 /** Which of a tile's 4 edges, in map space (north = toward smaller tileY / image-top). */
@@ -101,15 +102,6 @@ export function computeOpenEdges(
   }
   return edges;
 }
-
-/** `computeRampGrid`'s (importer-rpgm) cell encoding: 0 = none, 1-4 = N/S/E/W downhill direction -- duplicated here (not imported) for the same reason as `RampDirection` above; kept in exact sync with importer-rpgm's own `RAMP_DIRECTION_BY_CODE`. */
-const RAMP_DIRECTION_BY_CODE: readonly (RampDirection | undefined)[] = [
-  undefined,
-  'north',
-  'south',
-  'east',
-  'west',
-];
 
 /** A ramp tile's slope descriptor: which way it faces downhill, and the two heights (tile-height units) its edges span. Ramps are always exactly 1 level tall (`lowHeight === highHeight - 1`) -- see `computeRampGrid`'s multi-level-span-is-inert rule. */
 export interface RampData {
