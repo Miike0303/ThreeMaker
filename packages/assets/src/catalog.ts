@@ -122,6 +122,42 @@ export interface ScanErrorRow {
   readonly message: string;
 }
 
+/** One of RPG Maker's 9 fixed tileset sheet slots (matches `tileset_sheets.slot`'s CHECK constraint). */
+export type TilesetSlot = 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'B' | 'C' | 'D' | 'E';
+
+export interface TilesetSummaryRow {
+  readonly id: number;
+  readonly gameId: number;
+  readonly rpgmId: number | null;
+  readonly name: string | null;
+}
+
+export interface TilesetSheetRow {
+  readonly slot: TilesetSlot;
+  readonly assetId: number;
+  readonly sha256: string;
+  readonly relPath: string;
+}
+
+export interface TilesetRow extends TilesetSummaryRow {
+  readonly flags: string | null;
+  readonly sheets: readonly TilesetSheetRow[];
+}
+
+export interface UpsertTilesetInput {
+  readonly gameId: number;
+  readonly rpgmId: number | null;
+  readonly name: string | null;
+  /** JSON-stringified `readonly number[]` (RPGM per-tile-id flags bitfield). */
+  readonly flags: string | null;
+}
+
+export interface UpsertTilesetSheetInput {
+  readonly tilesetId: number;
+  readonly slot: TilesetSlot;
+  readonly assetId: number;
+}
+
 export interface AssetFilter {
   readonly gameId?: number;
   readonly type?: string;
@@ -357,6 +393,103 @@ export class Catalog {
       .get(...params);
     // COUNT(*) with no GROUP BY always yields exactly one row, even over zero matches.
     return row ?? { assetCount: 0, distinctObjectCount: 0 };
+  }
+
+  /** Looks up a single asset by its unique `(game_id, rel_path)` -- used by tileset ingestion to resolve a sheet name to its already-cataloged object. */
+  getAssetByRelPath(gameId: number, relPath: string): AssetRow | null {
+    const row = this.db
+      .prepare<[number, string], AssetRowRaw>(
+        `SELECT id, game_id, rel_path, type, sha256, was_encrypted FROM assets WHERE game_id = ? AND rel_path = ?`,
+      )
+      .get(gameId, relPath);
+    return row ? mapAssetRow(row) : null;
+  }
+
+  /** Insert-or-update by `(game_id, rpgm_id)` (no schema-level unique constraint, so this queries first) -- re-ingesting a game's Tilesets.json updates existing rows rather than duplicating them. */
+  upsertTileset(input: UpsertTilesetInput): number {
+    const existing = this.db
+      .prepare<[number, number | null], { id: number }>(
+        `SELECT id FROM tilesets WHERE game_id = ? AND rpgm_id IS ?`,
+      )
+      .get(input.gameId, input.rpgmId);
+    if (existing) {
+      this.db
+        .prepare(`UPDATE tilesets SET name = ?, flags = ? WHERE id = ?`)
+        .run(input.name, input.flags, existing.id);
+      return existing.id;
+    }
+    const row = this.db
+      .prepare<[number, number | null, string | null, string | null], { id: number }>(
+        `INSERT INTO tilesets (game_id, rpgm_id, name, flags) VALUES (?, ?, ?, ?) RETURNING id`,
+      )
+      .get(input.gameId, input.rpgmId, input.name, input.flags);
+    if (!row) throw new Error('upsertTileset: RETURNING id produced no row.');
+    return row.id;
+  }
+
+  /** Insert-or-update by `(tileset_id, slot)` (primary key) -- re-ingestion never duplicates a slot's link. */
+  upsertTilesetSheet(input: UpsertTilesetSheetInput): void {
+    this.db
+      .prepare(
+        `INSERT INTO tileset_sheets (tileset_id, slot, asset_id) VALUES (?, ?, ?)
+         ON CONFLICT(tileset_id, slot) DO UPDATE SET asset_id = excluded.asset_id`,
+      )
+      .run(input.tilesetId, input.slot, input.assetId);
+  }
+
+  /** Tilesets belonging to one game, without their (possibly numerous) sheet rows -- for a picker/dropdown UI. Pair with `getTileset(id)` for the full composition. */
+  listTilesetsForGame(gameId: number): TilesetSummaryRow[] {
+    const rows = this.db
+      .prepare<
+        [number],
+        { id: number; game_id: number; rpgm_id: number | null; name: string | null }
+      >(`SELECT id, game_id, rpgm_id, name FROM tilesets WHERE game_id = ? ORDER BY rpgm_id`)
+      .all(gameId);
+    return rows.map((row) => ({
+      id: row.id,
+      gameId: row.game_id,
+      rpgmId: row.rpgm_id,
+      name: row.name,
+    }));
+  }
+
+  /** One tileset's full composition: its sheet slots joined with the cataloged asset each one resolves to. `null` if `id` doesn't exist. */
+  getTileset(id: number): TilesetRow | null {
+    const tileset = this.db
+      .prepare<
+        [number],
+        {
+          id: number;
+          game_id: number;
+          rpgm_id: number | null;
+          name: string | null;
+          flags: string | null;
+        }
+      >(`SELECT id, game_id, rpgm_id, name, flags FROM tilesets WHERE id = ?`)
+      .get(id);
+    if (!tileset) return null;
+
+    const sheetRows = this.db
+      .prepare<[number], { slot: TilesetSlot; asset_id: number; sha256: string; rel_path: string }>(
+        `SELECT ts.slot, ts.asset_id, a.sha256, a.rel_path
+         FROM tileset_sheets ts JOIN assets a ON a.id = ts.asset_id
+         WHERE ts.tileset_id = ? ORDER BY ts.slot`,
+      )
+      .all(id);
+
+    return {
+      id: tileset.id,
+      gameId: tileset.game_id,
+      rpgmId: tileset.rpgm_id,
+      name: tileset.name,
+      flags: tileset.flags,
+      sheets: sheetRows.map((row) => ({
+        slot: row.slot,
+        assetId: row.asset_id,
+        sha256: row.sha256,
+        relPath: row.rel_path,
+      })),
+    };
   }
 }
 

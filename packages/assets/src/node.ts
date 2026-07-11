@@ -11,9 +11,14 @@ export type {
   IngestGameResult,
   ScanErrorFilter,
   ScanErrorRow,
+  TilesetRow,
+  TilesetSheetRow,
+  TilesetSlot,
+  TilesetSummaryRow,
+  UpsertTilesetInput,
+  UpsertTilesetSheetInput,
 } from './catalog.js';
 export { Catalog, ingestGame, openCatalog } from './catalog.js';
-
 export type { StoreObjectResult } from './object-store.js';
 export { hashBytes, objectPath, storeObject } from './object-store.js';
 export type {
@@ -24,3 +29,5 @@ export type {
   ScanResult,
 } from './scanner.js';
 export { scanGames } from './scanner.js';
+export type { TilesetIngestResult } from './tileset-ingest.js';
+export { ingestTilesetsForGame } from './tileset-ingest.js';

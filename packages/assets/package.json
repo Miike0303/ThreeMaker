@@ -13,7 +13,8 @@
     "test": "vitest run",
     "typecheck": "tsc -b --pretty",
     "scan": "tsx src/cli.ts scan",
-    "catalog": "tsx src/cli.ts catalog"
+    "catalog": "tsx src/cli.ts catalog",
+    "ingest-tilesets": "tsx src/cli.ts ingest-tilesets"
   },
   "devDependencies": {
     "tsx": "^4.23.0",
@@ -21,6 +22,7 @@
     "vitest": "4.1.10"
   },
   "dependencies": {
+    "@threemaker/importer-rpgm": "workspace:*",
     "better-sqlite3": "^11.10.0"
   }
 }

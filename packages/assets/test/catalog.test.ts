@@ -222,6 +222,129 @@ describe('catalog', () => {
   });
 });
 
+describe('catalog tileset composition (getAssetByRelPath / upsertTileset / upsertTilesetSheet / getTileset)', () => {
+  let workDir: string;
+  let catalog: Catalog;
+  let gameId: number;
+  let assetId: number;
+
+  beforeEach(() => {
+    workDir = mkdtempSync(join(tmpdir(), 'threemaker-catalog-tileset-test-'));
+    catalog = openCatalog(join(workDir, 'catalog.db'));
+    gameId = catalog.upsertGame({
+      rootPath: join(workDir, 'game'),
+      title: 'Test Game',
+      engine: 'mz',
+      encryptionKey: null,
+      scannedAt: new Date().toISOString(),
+    });
+    catalog.insertObject({ sha256: 'sha-outside-a2', bytes: 100, kind: 'png' });
+    catalog.upsertAsset({
+      gameId,
+      relPath: 'img/tilesets/Outside_A2.png',
+      type: 'tileset',
+      sha256: 'sha-outside-a2',
+      wasEncrypted: false,
+    });
+    const asset = catalog.getAssetByRelPath(gameId, 'img/tilesets/Outside_A2.png');
+    if (!asset) throw new Error('unreachable: asset was just upserted');
+    assetId = asset.id;
+  });
+
+  afterEach(() => {
+    catalog.close();
+    rmSync(workDir, { recursive: true, force: true });
+  });
+
+  it('getAssetByRelPath returns null for an unknown rel_path', () => {
+    expect(catalog.getAssetByRelPath(gameId, 'img/tilesets/Nope.png')).toBeNull();
+  });
+
+  it('upsertTileset inserts a new row and getTileset returns it with no sheets yet', () => {
+    const tilesetId = catalog.upsertTileset({
+      gameId,
+      rpgmId: 1,
+      name: 'Outside',
+      flags: '[0,16]',
+    });
+
+    const tileset = catalog.getTileset(tilesetId);
+    expect(tileset).toEqual({
+      id: tilesetId,
+      gameId,
+      rpgmId: 1,
+      name: 'Outside',
+      flags: '[0,16]',
+      sheets: [],
+    });
+  });
+
+  it('upsertTileset re-run with the same (gameId, rpgmId) updates in place, not duplicates', () => {
+    const firstId = catalog.upsertTileset({ gameId, rpgmId: 1, name: 'Outside', flags: '[0]' });
+    const secondId = catalog.upsertTileset({
+      gameId,
+      rpgmId: 1,
+      name: 'Outside Renamed',
+      flags: '[0,1]',
+    });
+
+    expect(secondId).toBe(firstId);
+    expect(catalog.getTileset(firstId)?.name).toBe('Outside Renamed');
+    expect(catalog.listTilesetsForGame(gameId)).toHaveLength(1);
+  });
+
+  it('upsertTilesetSheet links a slot to an asset, resolvable via getTileset', () => {
+    const tilesetId = catalog.upsertTileset({ gameId, rpgmId: 1, name: 'Outside', flags: '[0]' });
+    catalog.upsertTilesetSheet({ tilesetId, slot: 'A2', assetId });
+
+    const tileset = catalog.getTileset(tilesetId);
+    expect(tileset?.sheets).toEqual([
+      { slot: 'A2', assetId, sha256: 'sha-outside-a2', relPath: 'img/tilesets/Outside_A2.png' },
+    ]);
+  });
+
+  it('upsertTilesetSheet re-run for the same (tilesetId, slot) replaces the asset, not duplicates the row', () => {
+    catalog.insertObject({ sha256: 'sha-outside-a2-v2', bytes: 100, kind: 'png' });
+    catalog.upsertAsset({
+      gameId,
+      relPath: 'img/tilesets/Outside_A2_v2.png',
+      type: 'tileset',
+      sha256: 'sha-outside-a2-v2',
+      wasEncrypted: false,
+    });
+    const secondAsset = catalog.getAssetByRelPath(gameId, 'img/tilesets/Outside_A2_v2.png');
+    if (!secondAsset) throw new Error('unreachable');
+
+    const tilesetId = catalog.upsertTileset({ gameId, rpgmId: 1, name: 'Outside', flags: '[0]' });
+    catalog.upsertTilesetSheet({ tilesetId, slot: 'A2', assetId });
+    catalog.upsertTilesetSheet({ tilesetId, slot: 'A2', assetId: secondAsset.id });
+
+    const tileset = catalog.getTileset(tilesetId);
+    expect(tileset?.sheets).toHaveLength(1);
+    expect(tileset?.sheets[0]?.assetId).toBe(secondAsset.id);
+  });
+
+  it('getTileset returns null for an unknown id', () => {
+    expect(catalog.getTileset(999)).toBeNull();
+  });
+
+  it('listTilesetsForGame scopes to the given game only', () => {
+    const otherGameId = catalog.upsertGame({
+      rootPath: join(workDir, 'other-game'),
+      title: 'Other Game',
+      engine: 'mv',
+      encryptionKey: null,
+      scannedAt: new Date().toISOString(),
+    });
+    catalog.upsertTileset({ gameId, rpgmId: 1, name: 'Mine', flags: '[0]' });
+    catalog.upsertTileset({ gameId: otherGameId, rpgmId: 1, name: 'Theirs', flags: '[0]' });
+
+    const mine = catalog.listTilesetsForGame(gameId);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.name).toBe('Mine');
+  });
+});
+
 describe('sumResults', () => {
   it('sums ingest results across games, field by field', () => {
     const results: IngestGameResult[] = [

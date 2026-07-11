@@ -9,23 +9,50 @@ import { join } from 'node:path';
 import type { IngestGameResult } from './catalog.js';
 import { ingestGame, openCatalog, sumResults } from './catalog.js';
 import { scanGames } from './scanner.js';
+import { ingestTilesetsForGame } from './tileset-ingest.js';
 
 const DEFAULT_STORE_DIR = join(homedir(), '.threemaker', 'asset-store');
 
 function printUsage(): void {
   console.error('Usage: tsx src/cli.ts scan <rootDir> [--max-depth <n>]');
   console.error('Usage: tsx src/cli.ts catalog <rootDir> [--store <dir>] [--max-depth <n>]');
+  console.error('Usage: tsx src/cli.ts ingest-tilesets [--store <dir>]');
 }
 
-interface ParsedArgs {
+interface ScanOrCatalogArgs {
   readonly command: 'scan' | 'catalog';
   readonly rootDir: string;
   readonly maxDepth?: number;
   readonly storeDir?: string;
 }
 
+interface IngestTilesetsArgs {
+  readonly command: 'ingest-tilesets';
+  readonly storeDir?: string;
+}
+
+type ParsedArgs = ScanOrCatalogArgs | IngestTilesetsArgs;
+
+function parseStoreOnlyArgs(
+  command: 'ingest-tilesets',
+  rest: readonly string[],
+): IngestTilesetsArgs | null {
+  let storeDir: string | undefined;
+  const storeFlagIndex = rest.indexOf('--store');
+  if (storeFlagIndex !== -1) {
+    storeDir = rest[storeFlagIndex + 1];
+    if (!storeDir) return null;
+  }
+  return { command, ...(storeDir === undefined ? {} : { storeDir }) };
+}
+
 function parseArgs(argv: readonly string[]): ParsedArgs | null {
-  const [command, rootDir, ...rest] = argv;
+  const [command, ...afterCommand] = argv;
+  if (command === 'ingest-tilesets') {
+    return parseStoreOnlyArgs(command, afterCommand);
+  }
+
+  const [rootDir, ...rest] = afterCommand;
   if ((command !== 'scan' && command !== 'catalog') || !rootDir) return null;
 
   let maxDepth: number | undefined;
@@ -50,6 +77,49 @@ function parseArgs(argv: readonly string[]): ParsedArgs | null {
     ...(maxDepth === undefined ? {} : { maxDepth }),
     ...(storeDir === undefined ? {} : { storeDir }),
   };
+}
+
+function runIngestTilesets(storeDir: string): void {
+  const dbPath = join(storeDir, 'catalog.db');
+  const catalog = openCatalog(dbPath);
+  try {
+    const games = catalog.listGames();
+    let gamesFailed = 0;
+    // Per-game error isolation (same convention as runCatalog/ingestGame): a
+    // single game with a malformed Tilesets.json (real-world games DO ship
+    // these -- e.g. a corrupt/truncated flags array) must not abort the
+    // whole multi-game run.
+    const perGame = games.map((game) => {
+      try {
+        return {
+          rootPath: game.rootPath,
+          ok: true as const,
+          ...ingestTilesetsForGame(catalog, game),
+        };
+      } catch (err) {
+        gamesFailed++;
+        const message = err instanceof Error ? err.message : String(err);
+        return { rootPath: game.rootPath, ok: false as const, message };
+      }
+    });
+    const totals = perGame.reduce(
+      (acc, game) => ({
+        tilesetsProcessed: acc.tilesetsProcessed + (game.ok ? game.tilesetsProcessed : 0),
+        sheetsLinked: acc.sheetsLinked + (game.ok ? game.sheetsLinked : 0),
+        sheetsSkipped: acc.sheetsSkipped + (game.ok ? game.sheetsSkipped : 0),
+      }),
+      { tilesetsProcessed: 0, sheetsLinked: 0, sheetsSkipped: 0 },
+    );
+    console.log(
+      JSON.stringify(
+        { storeDir, dbPath, gamesProcessed: games.length, gamesFailed, totals, perGame },
+        null,
+        2,
+      ),
+    );
+  } finally {
+    catalog.close();
+  }
 }
 
 function runScan(rootDir: string, maxDepth: number | undefined): void {
@@ -154,6 +224,11 @@ function main(argv: readonly string[]): void {
   if (!parsed) {
     printUsage();
     process.exitCode = 1;
+    return;
+  }
+
+  if (parsed.command === 'ingest-tilesets') {
+    runIngestTilesets(parsed.storeDir ?? DEFAULT_STORE_DIR);
     return;
   }
 
