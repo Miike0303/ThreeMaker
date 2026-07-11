@@ -3,13 +3,14 @@ import { EventInterpreter, GameLoop, WorldState } from '@threemaker/core';
 import type { Direction } from '@threemaker/gameplay';
 import {
   DIRECTION_DELTA,
+  ElevationField,
   GridMover,
   NpcRegistry,
   PassabilityGrid,
   TriggerIndex,
 } from '@threemaker/gameplay';
 import type { RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
-import { computeHeightGrid, parseMap, parseTilesets } from '@threemaker/importer-rpgm';
+import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
 import { bindStoryToWorld, compileInk, InkDialogueProvider } from '@threemaker/narrative';
 import type { SheetPixelSizes } from '@threemaker/renderer';
 import {
@@ -40,6 +41,7 @@ import {
   fixtureJsonUrl,
   mzFixtureJsonUrl,
 } from './fixture-paths.js';
+import { groundYAt } from './ground-y.js';
 import { createHd2dPipeline } from './hd2d-pipeline.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
@@ -338,17 +340,15 @@ interface MapSession {
   readonly streamer: ChunkStreamer;
   readonly mover: GridMover;
   readonly spawn: { readonly x: number; readonly y: number };
-  /** Region-derived elevation grid (tile-height units), see `elevation.ts`; used to lift the character/camera onto elevated ground. */
-  readonly heightGrid: Uint8Array;
+  /**
+   * Region-derived elevation + ramp slope data (see `@threemaker/gameplay`'s
+   * `ElevationField`), shared with this session's `PassabilityGrid` so both
+   * agree on where a ramp's surface sits. Sampled via `groundYAt` (see
+   * `ground-y.ts`) to lift the character/NPC/camera onto elevated ground,
+   * continuously across a ramp step.
+   */
+  readonly elevation: ElevationField;
   dispose(): void;
-}
-
-/** World-space Y of the ground the character (or camera) should sit at, given its current tile. */
-function groundYAt(session: MapSession, tileX: number, tileY: number): number {
-  const x = Math.round(tileX);
-  const y = Math.round(tileY);
-  const height = session.heightGrid[y * session.map.width + x] ?? 0;
-  return height * HEIGHT_UNIT;
 }
 
 async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): Promise<void> {
@@ -407,7 +407,16 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       disposeRadius: STREAM_DISPOSE_RADIUS,
     });
 
-    const passability = new PassabilityGrid(map, mapTileset);
+    // No ramp semantics resolution exists yet (painter authoring + demo
+    // wiring is Slice 4's job -- see design doc "Ramps y Escaleras"): built
+    // with no ramp cells, every ramp lookup degenerates to "no ramp" (an
+    // all-zero rampGrid), so passability/height sampling stay byte-identical
+    // to pre-ramp behavior on every map today. Shared between `passability`
+    // and the session's own height sampling (`groundYAt`) so both can never
+    // disagree about where a ramp's surface sits, once Slice 4 wires real
+    // ramp cells in.
+    const elevation = new ElevationField(map);
+    const passability = new PassabilityGrid(map, mapTileset, elevation);
     const spawn = findSpawnTile(passability, map.width / 2, map.height / 2);
     const mover = new GridMover({
       x: spawn.x,
@@ -440,7 +449,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       streamer,
       mover,
       spawn,
-      heightGrid: computeHeightGrid(map),
+      elevation,
       dispose() {
         scene.remove(tilemap.group);
         tilemap.dispose();
@@ -462,7 +471,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     session.mover.renderPosition.x,
     session.mover.renderPosition.y,
     TILE_WORLD_SIZE,
-    groundYAt(session, session.mover.tile.x, session.mover.tile.y),
+    groundYAt(session.elevation, session.mover.tile.x, session.mover.tile.y, HEIGHT_UNIT),
   );
   scene.add(character.mesh);
 
@@ -517,7 +526,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     );
     target.set(
       tileCenterToWorld(session.spawn.x, TILE_WORLD_SIZE),
-      groundYAt(session, session.spawn.x, session.spawn.y),
+      groundYAt(session.elevation, session.spawn.x, session.spawn.y, HEIGHT_UNIT),
       tileCenterToWorld(session.spawn.y, TILE_WORLD_SIZE),
     );
     applyCameraPose();
@@ -562,8 +571,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       liveChunks: session.tilemap.liveChunkCount,
       drawCalls: renderer.info.render.drawCalls,
       tile: { x: session.mover.tile.x, y: session.mover.tile.y },
-      elevation:
-        session.heightGrid[session.mover.tile.y * session.map.width + session.mover.tile.x] ?? 0,
+      elevation: session.elevation.heightAt(session.mover.tile.x, session.mover.tile.y),
     };
   }
   debugPanel.update(buildDebugSnapshot());
@@ -696,7 +704,12 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
           tileWorldSize: TILE_WORLD_SIZE,
         });
         sprite.setFrame(npc.facing, 1);
-        sprite.setTilePosition(npc.x, npc.y, TILE_WORLD_SIZE, groundYAt(session, npc.x, npc.y));
+        sprite.setTilePosition(
+          npc.x,
+          npc.y,
+          TILE_WORLD_SIZE,
+          groundYAt(session.elevation, npc.x, npc.y, HEIGHT_UNIT),
+        );
         scene.add(sprite.mesh);
         npcSprites.set(npc.id, sprite);
       }
@@ -949,12 +962,21 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       if (mover.moving) walkAnimation.update(dt);
       else walkAnimation.reset();
 
-      // The mover's own tile (not the mid-step renderPosition) always has a
-      // single well-defined elevation: PassabilityGrid blocks any step whose
-      // source and destination heights differ, so a step's source and
-      // destination tile are always the same height -- no interpolation
-      // between two different ground heights is ever needed mid-step.
-      const groundY = groundYAt(session, mover.tile.x, mover.tile.y);
+      // The mover's fractional renderPosition (not its settled tile) is
+      // sampled here: a step across a ramp connects two different heights
+      // (PassabilityGrid's edge-profile rule authorizes exactly that
+      // crossing, see passability-grid.ts), so groundYAt must interpolate
+      // continuously across the step instead of holding the source tile's
+      // height until completion -- otherwise the sprite/camera would pop at
+      // the moment the step finishes. A flat (non-ramp) step still resolves
+      // to one constant height throughout, since source and destination
+      // heights are equal there -- interpolation is a no-op in that case.
+      const groundY = groundYAt(
+        session.elevation,
+        mover.renderPosition.x,
+        mover.renderPosition.y,
+        HEIGHT_UNIT,
+      );
 
       character.setFrame(mover.facing, walkAnimation.frameColumn(mover.moving));
       character.setTilePosition(

@@ -1,3 +1,4 @@
+export { ElevationField } from './elevation-field.js';
 export type {
   Direction,
   GridMoverOptions,

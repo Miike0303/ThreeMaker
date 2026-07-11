@@ -1,5 +1,6 @@
 import type { RpgmMap, RpgmMapLayers, RpgmTileset, TileLayer } from '@threemaker/importer-rpgm';
 import { describe, expect, it } from 'vitest';
+import { ElevationField } from '../src/elevation-field.js';
 import { PassabilityGrid } from '../src/passability-grid.js';
 
 // Raw flag bits, mirroring importer-rpgm's tile-flags.ts (kept as plain
@@ -189,5 +190,105 @@ describe('PassabilityGrid elevation (region-derived height)', () => {
 
     expect(grid.canMove(0, 0, 'right')).toBe(true);
     expect(grid.canMove(1, 0, 'left')).toBe(true);
+  });
+});
+
+describe('PassabilityGrid ramp crossing (edge-profile rule)', () => {
+  // Shared 3x3 fixture: center (1,1) height 1, explicit rampDirection
+  // override 'west' toward (0,1) height 0 (override sidesteps any tie-break
+  // ambiguity from off-map/neighbor heights, per importer-rpgm's documented
+  // "explicit override wins" precedence). North neighbor (1,0) sits at an
+  // unrelated height (3) to prove wrong-side entry stays blocked; south/east
+  // sit at the ramp cell's OWN height (1) to exercise the perpendicular
+  // same-height rule.
+  //
+  //   (0,0)=1  (1,0)=3  (2,0)=1
+  //   (0,1)=0  (1,1)=1  (2,1)=1   <- ramp cell (1,1), rampDirection 'west'
+  //   (0,2)=1  (1,2)=1  (2,2)=1
+  function buildRampFixture() {
+    const layer0 = new Array(9).fill(1);
+    // biome-ignore format: grid literal reads clearer un-wrapped
+    const regions = [
+      1, 3, 1,
+      0, 1, 1,
+      1, 1, 1,
+    ];
+    const map = buildMap(3, 3, { 0: layer0 }, regions);
+    const tileset = buildTileset({ 1: 0 });
+    const elevation = new ElevationField(map, [{ x: 1, y: 1, rampDirection: 'west' as const }]);
+    return new PassabilityGrid(map, tileset, elevation);
+  }
+
+  it('opens the authorized crossing in both directions (ascend and descend)', () => {
+    const grid = buildRampFixture();
+
+    expect(grid.canMove(1, 1, 'left')).toBe(true); // descend ramp -> ground
+    expect(grid.canMove(0, 1, 'right')).toBe(true); // ascend ground -> ramp
+  });
+
+  it('still blocks a non-ramp cliff step (cliff invariant holds)', () => {
+    const grid = buildRampFixture();
+
+    // (1,1) height 1 vs (1,0) height 3: a real cliff, no ramp authorizes it.
+    expect(grid.canMove(1, 1, 'up')).toBe(false);
+    expect(grid.canMove(1, 0, 'down')).toBe(false);
+  });
+
+  it('blocks wrong-side entry: a same-height-looking step through the ramp cell that is not its authorized edge', () => {
+    const grid = buildRampFixture();
+
+    // (1,1) and (1,0) are NOT connected by the ramp (its direction is west,
+    // not north) -- this is the same assertion as the cliff-invariant test
+    // above, restated as "wrong side" per spec: the ramp authorizes exactly
+    // one crossing, nothing else opens just because the ramp exists nearby.
+    expect(grid.canMove(1, 1, 'up')).toBe(false);
+  });
+
+  it('blocks perpendicular same-height entry onto a mid-slope ramp', () => {
+    const grid = buildRampFixture();
+
+    // (2,1) is flat height 1 -- the SAME own-height as the ramp cell (1,1)
+    // -- but the ramp's east edge (opposite the downhill west edge) is the
+    // flat, non-sloped side, so this step IS allowed (matches design: "the
+    // opposite edge = H", coplanar with a flat same-height neighbor).
+    expect(grid.canMove(1, 1, 'right')).toBe(true);
+    expect(grid.canMove(2, 1, 'left')).toBe(true);
+
+    // (1,2) is flat height 1 too, but sits across the ramp's SOUTH edge --
+    // a perpendicular edge that slopes linearly (H..H-1) on the ramp cell's
+    // side while the flat neighbor's edge is constant H. Profiles disagree
+    // -> blocked, even though both cells report the same own-height.
+    expect(grid.canMove(1, 1, 'down')).toBe(false);
+    expect(grid.canMove(1, 2, 'up')).toBe(false);
+  });
+
+  it('allows sideways movement between two identically-directed parallel ramps (wide stairs)', () => {
+    const layer0 = new Array(6).fill(1);
+    // 3x2 grid: two side-by-side ramp cells at (1,0) and (1,1), both height 1,
+    // both explicitly overridden to ramp west toward (0,*) height 0.
+    const regions = [0, 1, 1, 0, 1, 1];
+    const map = buildMap(3, 2, { 0: layer0 }, regions);
+    const tileset = buildTileset({ 1: 0 });
+    const elevation = new ElevationField(map, [
+      { x: 1, y: 0, rampDirection: 'west' as const },
+      { x: 1, y: 1, rampDirection: 'west' as const },
+    ]);
+    const grid = new PassabilityGrid(map, tileset, elevation);
+
+    expect(grid.canMove(1, 0, 'down')).toBe(true);
+    expect(grid.canMove(1, 1, 'up')).toBe(true);
+  });
+
+  it('regression: a map with no ramp cells at all behaves byte-identically (default ElevationField, no elevation param)', () => {
+    const layer0 = new Array(4).fill(1);
+    const regions = [0, 1, 1, 0]; // (0,0)=0,(1,0)=1,(0,1)=1,(1,1)=0
+    const map = buildMap(2, 2, { 0: layer0 }, regions);
+    const tileset = buildTileset({ 1: 0 });
+    const grid = new PassabilityGrid(map, tileset); // no elevation param at all
+
+    expect(grid.canMove(0, 0, 'right')).toBe(false); // cliff, unchanged
+    expect(grid.canMove(0, 0, 'down')).toBe(false); // cliff, unchanged
+    expect(grid.canMove(1, 0, 'left')).toBe(false);
+    expect(grid.canMove(0, 1, 'up')).toBe(false);
   });
 });

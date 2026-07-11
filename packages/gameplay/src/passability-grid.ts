@@ -1,5 +1,6 @@
-import type { RpgmMap, RpgmTileset, TileFlags } from '@threemaker/importer-rpgm';
-import { computeHeightGrid, decodeTileFlags } from '@threemaker/importer-rpgm';
+import type { EdgeDirection, RpgmMap, RpgmTileset, TileFlags } from '@threemaker/importer-rpgm';
+import { decodeTileFlags, profilesEqual } from '@threemaker/importer-rpgm';
+import { ElevationField } from './elevation-field.js';
 import type { Direction } from './grid-mover.js';
 import { DIRECTION_DELTA } from './grid-mover.js';
 
@@ -8,6 +9,14 @@ const OPPOSITE: Record<Direction, Direction> = {
   up: 'down',
   left: 'right',
   right: 'left',
+};
+
+/** Movement direction -> the map-space edge a step crosses (`down`/`up` vary in y = south/north; `left`/`right` vary in x = west/east). */
+const DIRECTION_EDGE: Record<Direction, EdgeDirection> = {
+  down: 'south',
+  up: 'north',
+  left: 'west',
+  right: 'east',
 };
 
 function isBlockedDirection(flags: TileFlags, direction: Direction): boolean {
@@ -39,10 +48,14 @@ function isBlockedDirection(flags: TileFlags, direction: Direction): boolean {
  * terrain passability, and are out of scope for this slice.
  * ponytail: other characters/events occupying a tile (RPG Maker's
  * "through"/character collision) are not modeled; this is terrain-only.
- * ponytail: elevation (region-derived, see `heightGrid` below) only ever
- * blocks a step outright when the two tiles' heights differ -- there is no
- * ramp/stairs support yet, so the only way up or down a terrace is a future
- * feature, not this slice.
+ * ponytail: elevation (region-derived, see `elevation` below) blocks a step
+ * whenever the shared edge's height profiles disagree between the two
+ * tiles (design doc "Ramps y Escaleras": edge height profile) -- a ramp
+ * cell's downhill/uphill edges match its lower/higher flat neighbors
+ * exactly, opening that one authorized crossing, while every other
+ * cross-height edge (and any same-height-but-mismatched-slope edge, e.g. a
+ * flat cell against a ramp's perpendicular side) still blocks, matching the
+ * pre-ramp cliff-invariant behavior byte-for-byte on maps with no ramps.
  */
 export class PassabilityGrid {
   private readonly mapWidth: number;
@@ -50,16 +63,27 @@ export class PassabilityGrid {
   // One decisive TileFlags per map tile, or `null` when no non-star,
   // non-empty tile was found on any layer (treated as fully open).
   private readonly decisiveFlags: (TileFlags | null)[];
-  // Region-derived elevation per tile (MV3D convention: region 1-7 = that
-  // many tile-heights up). A step is blocked whenever source and destination
-  // heights differ, ramps/stairs aside (see class doc).
-  private readonly heightGrid: Uint8Array;
+  // Region-derived elevation + ramp slope data (MV3D height convention +
+  // "edge height profile" ramps, see `ElevationField`). Shared with the app
+  // layer's height sampling when a caller passes one in (see constructor);
+  // built with no ramp cells (all-zero rampGrid) when omitted, which
+  // degenerates every edge-profile check to a plain height comparison.
+  private readonly elevation: ElevationField;
 
-  constructor(map: RpgmMap, tileset: RpgmTileset) {
+  /**
+   * `elevation`, when given, lets a caller share ONE `ElevationField`
+   * between this grid's `canMove` and the app layer's height sampling (see
+   * design's data-flow: both consumers must read the identical
+   * `heightGrid`/`rampGrid` so they can never disagree about a ramp's
+   * surface). Omitted builds a fresh `ElevationField` from `map` with no
+   * ramp cells resolved -- every existing caller that doesn't pass ramp
+   * semantics yet gets exactly today's height-only behavior.
+   */
+  constructor(map: RpgmMap, tileset: RpgmTileset, elevation?: ElevationField) {
     this.mapWidth = map.width;
     this.mapHeight = map.height;
     this.decisiveFlags = new Array(this.mapWidth * this.mapHeight);
-    this.heightGrid = computeHeightGrid(map);
+    this.elevation = elevation ?? new ElevationField(map);
 
     for (let y = 0; y < this.mapHeight; y++) {
       for (let x = 0; x < this.mapWidth; x++) {
@@ -82,15 +106,17 @@ export class PassabilityGrid {
 
   /** Region-derived elevation (in tile-height units) at `(x, y)`; 0 for an out-of-bounds query. */
   elevationAt(x: number, y: number): number {
-    if (!this.inBounds(x, y)) return 0;
-    return this.heightGrid[y * this.mapWidth + x] ?? 0;
+    return this.elevation.heightAt(x, y);
   }
 
   /**
    * Whether a mover standing on `(x, y)` can step toward `direction`.
-   * Blocked when the destination is out of bounds, when source and
-   * destination sit at different elevations (no ramps/stairs yet -- see
-   * class doc), when `(x, y)`'s decisive flags forbid leaving in
+   * Blocked when the destination is out of bounds, when the shared edge's
+   * height profiles disagree from either side (the edge-profile rule: see
+   * class doc -- this is what opens an authorized ramp crossing in both
+   * directions while still blocking every other cross-height step, and also
+   * blocks a same-height step onto a ramp's mid-slope perpendicular edge
+   * from a flat neighbor), when `(x, y)`'s decisive flags forbid leaving in
    * `direction`, or when the destination tile's decisive flags forbid
    * entering from the opposite side.
    */
@@ -102,9 +128,13 @@ export class PassabilityGrid {
     const destY = y + delta.y;
     if (!this.inBounds(destX, destY)) return false;
 
-    const sourceHeight = this.heightGrid[y * this.mapWidth + x] ?? 0;
-    const destHeight = this.heightGrid[destY * this.mapWidth + destX] ?? 0;
-    if (sourceHeight !== destHeight) return false;
+    const sourceEdge = this.elevation.edgeProfileAt(x, y, DIRECTION_EDGE[direction]);
+    const destEdge = this.elevation.edgeProfileAt(
+      destX,
+      destY,
+      DIRECTION_EDGE[OPPOSITE[direction]],
+    );
+    if (!profilesEqual(sourceEdge, destEdge)) return false;
 
     const sourceFlags = this.decisiveFlags[y * this.mapWidth + x];
     if (sourceFlags && isBlockedDirection(sourceFlags, direction)) return false;
