@@ -1,26 +1,9 @@
 import { ElevationField } from '@threemaker/gameplay';
-import type { RpgmMap, RpgmMapLayers, TileLayer } from '@threemaker/importer-rpgm';
 import { describe, expect, it } from 'vitest';
 import { groundYAt } from '../src/ground-y.js';
+import { buildMap } from './fixtures.js';
 
 const HEIGHT_UNIT = 1;
-
-/** Builds a minimal synthetic `RpgmMap`. `regions` defaults to all-zero (ground level everywhere). */
-function buildMap(width: number, height: number, regions?: TileLayer): RpgmMap {
-  const size = width * height;
-  const zeros: TileLayer = new Array(size).fill(0);
-  const tileLayers: RpgmMapLayers['tileLayers'] = [zeros, zeros, zeros, zeros];
-
-  return {
-    id: 1,
-    displayName: 'synthetic',
-    width,
-    height,
-    tilesetId: 1,
-    scrollType: 0,
-    layers: { tileLayers, shadows: zeros, regions: regions ?? zeros },
-  };
-}
 
 describe('groundYAt', () => {
   it('flat step unchanged: constant world Y across a fractional position on a flat cell', () => {

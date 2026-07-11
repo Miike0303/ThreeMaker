@@ -1,7 +1,7 @@
-import type { RpgmMap, RpgmMapLayers, RpgmTileset, TileLayer } from '@threemaker/importer-rpgm';
 import { describe, expect, it } from 'vitest';
 import { ElevationField } from '../src/elevation-field.js';
 import { PassabilityGrid } from '../src/passability-grid.js';
+import { buildMap, buildTileset } from './fixtures.js';
 
 // Raw flag bits, mirroring importer-rpgm's tile-flags.ts (kept as plain
 // numbers here so this test doesn't depend on that module's internals,
@@ -11,47 +11,6 @@ const IMPASSABLE_LEFT = 0x2;
 const IMPASSABLE_RIGHT = 0x4;
 const IMPASSABLE_UP = 0x8;
 const STAR_UPPER_LAYER = 0x10;
-
-/** Builds a minimal synthetic `RpgmMap`. `layer0`/`layer3` are row-major, length width*height; omitted layers are all-zero (empty). `regions` defaults to all-zero (ground level everywhere). */
-function buildMap(
-  width: number,
-  height: number,
-  layerOverrides: Partial<Record<0 | 1 | 2 | 3, TileLayer>> = {},
-  regions?: TileLayer,
-): RpgmMap {
-  const size = width * height;
-  const zeros: TileLayer = new Array(size).fill(0);
-  const tileLayers: RpgmMapLayers['tileLayers'] = [
-    layerOverrides[0] ?? zeros,
-    layerOverrides[1] ?? zeros,
-    layerOverrides[2] ?? zeros,
-    layerOverrides[3] ?? zeros,
-  ];
-
-  return {
-    id: 1,
-    displayName: 'synthetic',
-    width,
-    height,
-    tilesetId: 1,
-    scrollType: 0,
-    layers: { tileLayers, shadows: zeros, regions: regions ?? zeros },
-  };
-}
-
-/** Builds a minimal synthetic `RpgmTileset`. `flags` is a sparse map of tile id -> raw flag bits. */
-function buildTileset(flags: Record<number, number>): RpgmTileset {
-  const maxId = Math.max(0, ...Object.keys(flags).map(Number));
-  const flagArray = new Array(maxId + 1).fill(0);
-  for (const [id, value] of Object.entries(flags)) flagArray[Number(id)] = value;
-
-  return {
-    id: 1,
-    name: 'synthetic',
-    sheetNames: { A1: '', A2: '', A3: '', A4: '', A5: '', B: '', C: '', D: '', E: '' },
-    flags: flagArray,
-  };
-}
 
 describe('PassabilityGrid (synthetic maps)', () => {
   it('allows movement everywhere on a fully open floor', () => {
@@ -279,16 +238,38 @@ describe('PassabilityGrid ramp crossing (edge-profile rule)', () => {
     expect(grid.canMove(1, 1, 'up')).toBe(true);
   });
 
-  it('regression: a map with no ramp cells at all behaves byte-identically (default ElevationField, no elevation param)', () => {
-    const layer0 = new Array(4).fill(1);
-    const regions = [0, 1, 1, 0]; // (0,0)=0,(1,0)=1,(0,1)=1,(1,1)=0
-    const map = buildMap(2, 2, { 0: layer0 }, regions);
-    const tileset = buildTileset({ 1: 0 });
+  it('regression: canMove on a flat+cliff map with NO ramp cells matches documented pre-ramp behavior across a representative matrix (default ElevationField, no elevation param)', () => {
+    // 3x2 grid, tile id 1 = fully open, tile id 2 = open but sealed rightward
+    // (a flag block, independent of elevation).
+    //   (0,0)=1  (1,0)=1  (2,0)=1     heights: 2  2  6
+    //   (0,1)=2  (1,1)=1  (2,1)=1     heights: 2  2  2
+    const layer0 = [1, 1, 1, 2, 1, 1];
+    // biome-ignore format: grid literal reads clearer un-wrapped
+    const regions = [
+      2, 2, 6,
+      2, 2, 2,
+    ];
+    const map = buildMap(3, 2, { 0: layer0 }, regions);
+    const tileset = buildTileset({ 1: 0, 2: IMPASSABLE_RIGHT });
     const grid = new PassabilityGrid(map, tileset); // no elevation param at all
 
-    expect(grid.canMove(0, 0, 'right')).toBe(false); // cliff, unchanged
-    expect(grid.canMove(0, 0, 'down')).toBe(false); // cliff, unchanged
-    expect(grid.canMove(1, 0, 'left')).toBe(false);
-    expect(grid.canMove(0, 1, 'up')).toBe(false);
+    // Same-height adjacent: allowed, both directions.
+    expect(grid.canMove(0, 0, 'right')).toBe(true);
+    expect(grid.canMove(1, 0, 'left')).toBe(true);
+
+    // Cliff up / cliff down across the same edge: blocked both ways.
+    expect(grid.canMove(1, 0, 'right')).toBe(false); // height 2 -> 6, ascend blocked
+    expect(grid.canMove(2, 0, 'left')).toBe(false); // height 6 -> 2, descend blocked
+
+    // Out of bounds: blocked regardless of flags/elevation.
+    expect(grid.canMove(0, 0, 'left')).toBe(false);
+    expect(grid.canMove(0, 0, 'up')).toBe(false);
+    expect(grid.canMove(2, 1, 'right')).toBe(false);
+    expect(grid.canMove(2, 1, 'down')).toBe(false);
+
+    // Flag-blocked but same height: elevation agrees (both height 2), yet
+    // the tile's own directional flag still blocks the step -- proves the
+    // edge-profile rule doesn't override or short-circuit flag checks.
+    expect(grid.canMove(0, 1, 'right')).toBe(false);
   });
 });

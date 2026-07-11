@@ -1,28 +1,11 @@
-import type { RpgmMap, RpgmMapLayers, TileLayer } from '@threemaker/importer-rpgm';
 import { describe, expect, it } from 'vitest';
 import { ElevationField } from '../src/elevation-field.js';
-
-/** Builds a minimal synthetic `RpgmMap`. `regions` defaults to all-zero (ground level everywhere). */
-function buildMap(width: number, height: number, regions?: TileLayer): RpgmMap {
-  const size = width * height;
-  const zeros: TileLayer = new Array(size).fill(0);
-  const tileLayers: RpgmMapLayers['tileLayers'] = [zeros, zeros, zeros, zeros];
-
-  return {
-    id: 1,
-    displayName: 'synthetic',
-    width,
-    height,
-    tilesetId: 1,
-    scrollType: 0,
-    layers: { tileLayers, shadows: zeros, regions: regions ?? zeros },
-  };
-}
+import { buildMap } from './fixtures.js';
 
 describe('ElevationField', () => {
   it('delegates heightAt to the underlying heightGrid, 0 out of bounds', () => {
     const regions = [0, 3, 8]; // ground, height 3, out-of-range region (also ground)
-    const map = buildMap(3, 1, regions);
+    const map = buildMap(3, 1, {}, regions);
     const field = new ElevationField(map);
 
     expect(field.heightAt(0, 0)).toBe(0);
@@ -32,7 +15,7 @@ describe('ElevationField', () => {
   });
 
   it('rampDirAt is undefined for every cell with no ramp semantics resolved (default)', () => {
-    const map = buildMap(2, 2, [0, 1, 1, 0]);
+    const map = buildMap(2, 2, {}, [0, 1, 1, 0]);
     const field = new ElevationField(map);
 
     expect(field.rampDirAt(0, 0)).toBeUndefined();
@@ -49,7 +32,7 @@ describe('ElevationField', () => {
       0, 1, 1,
       1, 1, 1,
     ];
-    const map = buildMap(3, 3, regions);
+    const map = buildMap(3, 3, {}, regions);
     const field = new ElevationField(map, [{ x: 1, y: 1 }]);
 
     expect(field.rampDirAt(1, 1)).toBe('west');
@@ -58,7 +41,7 @@ describe('ElevationField', () => {
 
   it('surfaceHeightAt is constant across a flat cell regardless of fractional position', () => {
     const regions = [2, 2];
-    const map = buildMap(2, 1, regions);
+    const map = buildMap(2, 1, {}, regions);
     const field = new ElevationField(map);
 
     expect(field.surfaceHeightAt(0, 0)).toBe(2);
@@ -75,7 +58,7 @@ describe('ElevationField', () => {
       0, 1, 1,
       1, 1, 1,
     ];
-    const map = buildMap(3, 3, regions);
+    const map = buildMap(3, 3, {}, regions);
     const field = new ElevationField(map, [{ x: 1, y: 1 }]);
 
     expect(field.surfaceHeightAt(1.01, 1.5)).toBeCloseTo(0.01, 10); // near west (downhill) edge -> near H-1 = 0
@@ -85,7 +68,7 @@ describe('ElevationField', () => {
 
   it('edgeProfileAt matches importer-rpgm semantics: flat cell edges are constant', () => {
     const regions = [4];
-    const map = buildMap(1, 1, regions);
+    const map = buildMap(1, 1, {}, regions);
     const field = new ElevationField(map);
 
     expect(field.edgeProfileAt(0, 0, 'north')).toEqual([4, 4]);
