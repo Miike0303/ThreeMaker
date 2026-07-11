@@ -624,3 +624,208 @@ describe('buildChunkGroup elevation (region-derived height + cliff faces)', () =
     expect((mesh.geometry as THREE.BufferGeometry).getAttribute('position').count).toBe(4);
   });
 });
+
+describe('buildChunkGroup ramp geometry (Slice 2b)', () => {
+  /** Finds the vertex index whose (x,z) matches, within tolerance, so assertions can target a specific corner regardless of buffer layout. */
+  function findVertexIndex(
+    position: THREE.BufferAttribute,
+    x: number,
+    z: number,
+  ): number | undefined {
+    for (let i = 0; i < position.count; i++) {
+      if (Math.abs(position.getX(i) - x) < 1e-6 && Math.abs(position.getZ(i) - z) < 1e-6) {
+        return i;
+      }
+    }
+    return undefined;
+  }
+
+  function rampTile(overrides: Partial<TileBuildData> = {}): TileBuildData {
+    return {
+      tileX: 0,
+      tileY: 0,
+      layerIndex: 0,
+      sheet: 'B',
+      quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+      elevation: 'ground',
+      height: 3,
+      ramp: { direction: 'south', highHeight: 3, lowHeight: 2 },
+      ...overrides,
+    };
+  }
+
+  it('renders a ramp tile as one inclined quad whose corner Y values follow the downhill direction (Inclined quad)', () => {
+    const chunk = makeChunk({ tiles: [rampTile()] });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, heightUnit: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const position = (mesh.geometry as THREE.BufferGeometry).getAttribute(
+      'position',
+    ) as THREE.BufferAttribute;
+
+    // South ramp: north corners (z=0) stay at the tile's own height (3);
+    // south corners (z=1) sit one level down (2) -- exactly the corner
+    // heights `surfaceHeightAt` would report for this cell.
+    const nw = findVertexIndex(position, 0, 0);
+    const ne = findVertexIndex(position, 1, 0);
+    const sw = findVertexIndex(position, 0, 1);
+    const se = findVertexIndex(position, 1, 1);
+    expect(nw).toBeDefined();
+    expect(ne).toBeDefined();
+    expect(sw).toBeDefined();
+    expect(se).toBeDefined();
+
+    expect(position.getY(nw as number)).toBeCloseTo(3);
+    expect(position.getY(ne as number)).toBeCloseTo(3);
+    expect(position.getY(sw as number)).toBeCloseTo(2);
+    expect(position.getY(se as number)).toBeCloseTo(2);
+  });
+
+  it('renders a ramp tile as one inclined quad for an east/west direction too', () => {
+    const chunk = makeChunk({
+      tiles: [rampTile({ ramp: { direction: 'east', highHeight: 5, lowHeight: 4 } })],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, heightUnit: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const position = (mesh.geometry as THREE.BufferGeometry).getAttribute(
+      'position',
+    ) as THREE.BufferAttribute;
+
+    // East ramp: west corners (x=0) stay high (5); east corners (x=1) sit
+    // one level down (4).
+    const nw = findVertexIndex(position, 0, 0);
+    const ne = findVertexIndex(position, 1, 0);
+    const sw = findVertexIndex(position, 0, 1);
+    const se = findVertexIndex(position, 1, 1);
+
+    expect(position.getY(nw as number)).toBeCloseTo(5);
+    expect(position.getY(sw as number)).toBeCloseTo(5);
+    expect(position.getY(ne as number)).toBeCloseTo(4);
+    expect(position.getY(se as number)).toBeCloseTo(4);
+  });
+
+  it("adds 2 triangular skirt faces (3 vertices each) on the ramp's perpendicular edges", () => {
+    const chunk = makeChunk({ tiles: [rampTile()] });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, heightUnit: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    // 1 inclined quad (4 vertices) + 2 triangular skirts (3 vertices each).
+    expect(geometry.getAttribute('position').count).toBe(4 + 3 + 3);
+
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox as THREE.Box3;
+    // The skirts span the same [lowHeight, highHeight] range as the slope.
+    expect(box.min.y).toBeCloseTo(2);
+    expect(box.max.y).toBeCloseTo(3);
+  });
+
+  it('a non-ramp tile gets no skirt faces (0 extra vertices)', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+          height: 3,
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, heightUnit: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    expect((mesh.geometry as THREE.BufferGeometry).getAttribute('position').count).toBe(4);
+  });
+
+  it("suppresses the cliff face on the ramp's own downhill edge (no coplanar overlap) but keeps a cliff face on an unrelated edge", () => {
+    const chunk = makeChunk({
+      tiles: [
+        rampTile({
+          cliffEdges: [
+            { edge: 'south', neighborHeight: 2 }, // matches ramp.direction -- suppressed
+            { edge: 'north', neighborHeight: 1 }, // unrelated edge -- kept
+          ],
+        }),
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, heightUnit: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    // 1 inclined quad (4) + 2 skirts (3 each) + 1 surviving cliff face (4).
+    // The 'south' cliffEdges entry contributes NOTHING (suppressed).
+    expect(geometry.getAttribute('position').count).toBe(4 + 3 + 3 + 4);
+  });
+
+  it("keeps a ramp tile's low edge coplanar with an adjacent flat tile built in a DIFFERENT chunk (seam at ramp-cliff junction)", () => {
+    // Chunk A: the ramp tile at (0,0), south-facing, 3 -> 2. Chunk B: the
+    // flat downhill neighbor at (0,1), height 2 -- built as a SEPARATE
+    // buildChunkGroup call, like real adjacent chunks (274dfec's shared-edge
+    // convention: no special-casing needed, both sides derive the same
+    // world-space Y from their own per-tile data).
+    const chunkA: ChunkBuildData = { chunkX: 0, chunkY: 0, tiles: [rampTile()] };
+    const chunkB: ChunkBuildData = {
+      chunkX: 0,
+      chunkY: 1,
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 1,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+          height: 2,
+        },
+      ],
+    };
+    const materials = { B: new THREE.MeshBasicMaterial() };
+
+    const groupA = buildChunkGroup(chunkA, materials, { tileWorldSize: 1, heightUnit: 1 });
+    const groupB = buildChunkGroup(chunkB, materials, { tileWorldSize: 1, heightUnit: 1 });
+
+    const positionA = (
+      (groupA.children[0] as THREE.Mesh).geometry as THREE.BufferGeometry
+    ).getAttribute('position') as THREE.BufferAttribute;
+    const positionB = (
+      (groupB.children[0] as THREE.Mesh).geometry as THREE.BufferGeometry
+    ).getAttribute('position') as THREE.BufferAttribute;
+
+    const rampSouthEdgeIndex = findVertexIndex(positionA, 0, 1);
+    const flatNorthEdgeIndex = findVertexIndex(positionB, 0, 1);
+    expect(rampSouthEdgeIndex).toBeDefined();
+    expect(flatNorthEdgeIndex).toBeDefined();
+    expect(positionA.getY(rampSouthEdgeIndex as number)).toBeCloseTo(
+      positionB.getY(flatNorthEdgeIndex as number),
+    );
+  });
+});

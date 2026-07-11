@@ -1,7 +1,7 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { EdgeDirection } from '../geometry/elevation.js';
+import type { EdgeDirection, RampData } from '../geometry/elevation.js';
 import { computeOpenEdges, computeWallTileKeys, isWallSheet } from '../geometry/elevation.js';
 import type { ChunkBuildData, ShadowBuildData, TileBuildData, UvRect } from '../geometry/types.js';
 
@@ -195,14 +195,199 @@ function buildCliffGeometry(
   const worldZ = tile.tileY * tileWorldSize;
   const ownHeight = tile.height ?? 0;
 
+  const ramp = tile.ramp;
   const geometries: THREE.BufferGeometry[] = [];
   for (const { edge, neighborHeight } of cliffEdges) {
+    // A ramp tile's own downhill edge is suppressed here -- the inclined
+    // quad `applyRampSlope` builds already meets that neighbor's floor
+    // exactly (both sides agree on the height there), so a separate
+    // vertical face would be a redundant, coplanar-overlapping quad hanging
+    // in front of the slope (design: "downhill cliff suppression"). Every
+    // other edge (the flat uphill edge, or a perpendicular edge with an
+    // even lower neighbor) is unaffected.
+    if (ramp && edge === ramp.direction) continue;
     const faceHeight = (ownHeight - neighborHeight) * heightUnit;
     if (faceHeight <= 0) continue;
     const baseY = neighborHeight * heightUnit;
     geometries.push(buildSideFaceQuad(uv, edge, worldX, worldZ, tileWorldSize, baseY, faceHeight));
   }
   return geometries;
+}
+
+/** Outward-facing normal direction for each of a tile's 4 edges (matches the plane a `buildSideFaceQuad` on that edge would face, via `EDGE_ROTATION_Y`). */
+const EDGE_OUTWARD_NORMAL: Record<EdgeDirection, THREE.Vector3> = {
+  north: new THREE.Vector3(0, 0, -1),
+  south: new THREE.Vector3(0, 0, 1),
+  east: new THREE.Vector3(1, 0, 0),
+  west: new THREE.Vector3(-1, 0, 0),
+};
+
+/**
+ * One triangular skirt face filling the gap between a ramp tile's sloped
+ * edge and a flat neighbor sitting at the ramp's own (higher) height: the
+ * edge's "uphill" corner already sits at that height (a degenerate,
+ * zero-height point), and the "downhill" corner drops the full
+ * `highY - lowY` -- see the design's "trapezoid/triangle skirts" note.
+ * Vertex winding is chosen so the face's normal always points outward
+ * (away from the ramp tile), regardless of which absolute corner happens to
+ * be "up" for a given direction (see `buildRampSkirts`).
+ */
+function buildRampSkirtTriangle(
+  uv: UvRect,
+  edge: EdgeDirection,
+  cornerUp: readonly [number, number],
+  cornerDown: readonly [number, number],
+  highY: number,
+  lowY: number,
+): THREE.BufferGeometry {
+  const a = new THREE.Vector3(cornerUp[0], highY, cornerUp[1]);
+  const b = new THREE.Vector3(cornerDown[0], highY, cornerDown[1]);
+  const c = new THREE.Vector3(cornerDown[0], lowY, cornerDown[1]);
+
+  const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
+  const [v1, v2] = normal.dot(EDGE_OUTWARD_NORMAL[edge]) >= 0 ? [b, c] : [c, b];
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    'position',
+    new THREE.BufferAttribute(
+      new Float32Array([a.x, a.y, a.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z]),
+      3,
+    ),
+  );
+  geometry.setAttribute(
+    'uv',
+    new THREE.BufferAttribute(new Float32Array([uv.u0, uv.v1, uv.u1, uv.v1, uv.u1, uv.v0]), 2),
+  );
+  // PlaneGeometry (used by every other quad this file builds) is indexed;
+  // mergeGeometries requires ALL merged geometries to agree on that, so this
+  // hand-built triangle needs an explicit index too, even though it's a
+  // trivial 1:1 identity one.
+  geometry.setIndex([0, 1, 2]);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/**
+ * The 2 triangular skirt faces a ramp tile needs on its perpendicular edges
+ * (the edges NOT aligned with the slope direction) -- see module doc. Each
+ * fills the gap between the ramp's sloped edge and where a flat neighbor at
+ * the ramp's own height would otherwise leave a vertical drop with no face:
+ * `buildCliffGeometry` never generates this case, since both cells report
+ * the SAME `heightGrid` value there (no cliff is flagged at all). Returns
+ * `[]` for a tile with no `ramp` descriptor.
+ *
+ * ponytail: unconditional -- doesn't check whether the perpendicular
+ * neighbor is itself an identically-directed ramp (parallel "wide stairs"),
+ * which would need NO skirt (a continuous shared slope). That neighbor
+ * lookup needs whole-map ramp data this per-tile function doesn't have;
+ * gameplay's wide-stairs case (spec: "parallel identical ramps allowed") is
+ * a passability rule, not a rendering requirement this slice's spec covers.
+ */
+function buildRampSkirts(
+  tile: TileBuildData,
+  tileWorldSize: number,
+  heightUnit: number,
+): THREE.BufferGeometry[] {
+  const ramp = tile.ramp;
+  if (!ramp) return [];
+  const uv = tile.quads[0];
+  if (!uv) return [];
+
+  const worldX = tile.tileX * tileWorldSize;
+  const worldZ = tile.tileY * tileWorldSize;
+  const east = worldX + tileWorldSize;
+  const south = worldZ + tileWorldSize;
+  const highY = ramp.highHeight * heightUnit;
+  const lowY = ramp.lowHeight * heightUnit;
+
+  const nw: readonly [number, number] = [worldX, worldZ];
+  const ne: readonly [number, number] = [east, worldZ];
+  const sw: readonly [number, number] = [worldX, south];
+  const se: readonly [number, number] = [east, south];
+
+  switch (ramp.direction) {
+    case 'south':
+      return [
+        buildRampSkirtTriangle(uv, 'west', nw, sw, highY, lowY),
+        buildRampSkirtTriangle(uv, 'east', ne, se, highY, lowY),
+      ];
+    case 'north':
+      return [
+        buildRampSkirtTriangle(uv, 'west', sw, nw, highY, lowY),
+        buildRampSkirtTriangle(uv, 'east', se, ne, highY, lowY),
+      ];
+    case 'east':
+      return [
+        buildRampSkirtTriangle(uv, 'north', nw, ne, highY, lowY),
+        buildRampSkirtTriangle(uv, 'south', sw, se, highY, lowY),
+      ];
+    case 'west':
+      return [
+        buildRampSkirtTriangle(uv, 'north', ne, nw, highY, lowY),
+        buildRampSkirtTriangle(uv, 'south', se, sw, highY, lowY),
+      ];
+  }
+}
+
+/**
+ * The 4 tile-corner surface heights (nw, ne, sw, se), in tile-height units,
+ * for a ramp descriptor -- mirrors importer-rpgm's private `cornerHeight`
+ * logic (own height everywhere except the 2 corners on the downhill edge,
+ * which sit one level below). Kept local since `TileBuildData.ramp` already
+ * carries the resolved direction + both heights (see `rampDataAt` in
+ * `elevation.ts`), so this file never needs the raw height/ramp grids.
+ */
+function rampCornerHeights(ramp: RampData): {
+  readonly nw: number;
+  readonly ne: number;
+  readonly sw: number;
+  readonly se: number;
+} {
+  const { direction, highHeight, lowHeight } = ramp;
+  switch (direction) {
+    case 'north':
+      return { nw: lowHeight, ne: lowHeight, sw: highHeight, se: highHeight };
+    case 'south':
+      return { nw: highHeight, ne: highHeight, sw: lowHeight, se: lowHeight };
+    case 'west':
+      return { nw: lowHeight, ne: highHeight, sw: lowHeight, se: highHeight };
+    case 'east':
+      return { nw: highHeight, ne: lowHeight, sw: highHeight, se: lowHeight };
+  }
+}
+
+/**
+ * Bilinear-lifts a flat ground quad's vertices into the inclined surface a
+ * ramp tile's `RampData` describes, instead of the uniform `elevationLift`
+ * translate a flat tile gets. Works for both a plain tile's single
+ * full-footprint quad and an autotile's 4 quarter quads: each vertex's
+ * height is interpolated from the tile's 4 CORNER heights using its own
+ * (u,v) fraction across the FULL tile footprint (`worldX`/`worldZ`/
+ * `tileWorldSize` always describe the whole tile, even when `geometry` is
+ * only one quarter of it) -- the same bilinear math importer-rpgm's
+ * `surfaceHeightAt` uses, which is exactly linear here since a ramp's 4
+ * corners always have 2 pairs sharing a height (see that module's doc).
+ */
+function applyRampSlope(
+  geometry: THREE.BufferGeometry,
+  ramp: RampData,
+  worldX: number,
+  worldZ: number,
+  tileWorldSize: number,
+  heightUnit: number,
+): void {
+  const { nw, ne, sw, se } = rampCornerHeights(ramp);
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < position.count; i++) {
+    const u = (position.getX(i) - worldX) / tileWorldSize;
+    const v = (position.getZ(i) - worldZ) / tileWorldSize;
+    const top = nw * (1 - u) + ne * u;
+    const bottom = sw * (1 - u) + se * u;
+    position.setY(i, (top * (1 - v) + bottom * v) * heightUnit);
+  }
+  position.needsUpdate = true;
+  geometry.computeVertexNormals();
 }
 
 /**
@@ -337,6 +522,7 @@ function buildTileGeometry(
     return buildWallPrismGeometry(tile, tileWorldSize, wallPrismHeight, heightUnit, wallOpenEdges);
   }
 
+  const ramp = tile.ramp;
   const geometries: THREE.BufferGeometry[] = [];
   if (tile.quads.length === 4) {
     const half = tileWorldSize / 2;
@@ -346,18 +532,27 @@ function buildTileGeometry(
       const col = i % 2;
       const row = Math.floor(i / 2);
       const quad = buildGroundQuad(uv, worldX + col * half, worldZ + row * half, half, half);
-      if (elevationLift !== 0) quad.translate(0, elevationLift, 0);
+      if (ramp) {
+        applyRampSlope(quad, ramp, worldX, worldZ, tileWorldSize, heightUnit);
+      } else if (elevationLift !== 0) {
+        quad.translate(0, elevationLift, 0);
+      }
       geometries.push(quad);
     }
   } else {
     const uv = tile.quads[0];
     if (uv) {
       const quad = buildGroundQuad(uv, worldX, worldZ, tileWorldSize, tileWorldSize);
-      if (elevationLift !== 0) quad.translate(0, elevationLift, 0);
+      if (ramp) {
+        applyRampSlope(quad, ramp, worldX, worldZ, tileWorldSize, heightUnit);
+      } else if (elevationLift !== 0) {
+        quad.translate(0, elevationLift, 0);
+      }
       geometries.push(quad);
     }
   }
   geometries.push(...buildCliffGeometry(tile, tileWorldSize, heightUnit));
+  geometries.push(...buildRampSkirts(tile, tileWorldSize, heightUnit));
   return geometries;
 }
 
