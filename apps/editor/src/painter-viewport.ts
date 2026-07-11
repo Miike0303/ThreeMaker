@@ -1,6 +1,5 @@
 import type { RampDirection, TileSheetId } from '@threemaker/importer-rpgm';
 import type { MapDocument, SemanticClass, TileDiff } from '@threemaker/map-format';
-import { primaryFloorLayers, withPrimaryFloorLayers } from '@threemaker/map-format';
 import type { ChunkBuildData, SheetPixelSizes } from '@threemaker/renderer';
 import {
   buildChunks,
@@ -12,7 +11,12 @@ import {
 import * as THREE from 'three';
 import { objectPreviewUrl } from './catalog-client.js';
 import { computeDirtyChunkKeys } from './dirty-region.js';
-import { toRenderableMap, toRenderableTileset } from './map-compose.js';
+import {
+  composeDocumentFromPainterFloors,
+  painterFloorsFromDocument,
+  toRenderableMap,
+  toRenderableTileset,
+} from './map-compose.js';
 import type { PainterState } from './painter-store.js';
 import * as painter from './painter-store.js';
 import { computeRampGlyphCells } from './ramp-glyph.js';
@@ -99,6 +103,7 @@ export class PainterViewport {
   private animationHandle: number | undefined;
   private doc: MapDocument | undefined;
   private sheetPixelSizes: SheetPixelSizes = {};
+  private textures: Partial<Record<TileSheetId, THREE.Texture>> = {};
   private state: PainterState | undefined;
   /** Set by `frameCamera`; the overview camera never pans/zooms afterward, so this stays valid for the whole session (see `recomputeRampGlyphs`). */
   private cameraPose: OverviewCameraPose | undefined;
@@ -135,7 +140,7 @@ export class PainterViewport {
     return this.state;
   }
 
-  /** Mounts `doc`, building every chunk with data live up front (a bounded authoring map, not a streamed world). */
+  /** Mounts `doc`, building every chunk of its ACTIVE (floor 0, ground) floor with data live up front (a bounded authoring map, not a streamed world). Every floor is loaded into the painter store (spec: floor switcher), but only the active floor's chunks are ever built (spec: "editor viewport shows active floor only"). */
   loadMap(
     doc: MapDocument,
     textures: Partial<Record<TileSheetId, THREE.Texture>>,
@@ -144,25 +149,49 @@ export class PainterViewport {
   ): void {
     this.doc = doc;
     this.sheetPixelSizes = sheetPixelSizes;
+    this.textures = textures;
     this.state = painter.createPainterState({
-      layers: primaryFloorLayers(doc).tiles,
+      floors: painterFloorsFromDocument(doc),
       width: doc.width,
       height: doc.height,
       fillTileId,
       semantics: doc.tileset.semantics,
     });
 
-    const map = toRenderableMap(doc);
-    const tileset = toRenderableTileset(doc);
-    const chunks = buildChunks(map, tileset, sheetPixelSizes);
-
-    this.tilemap?.dispose();
-    this.tilemap = new StreamingTilemapScene(chunks, textures, { tileWorldSize: TILE_WORLD_SIZE });
-    for (const chunk of chunks) this.tilemap.buildChunk(chunkKey(chunk.chunkX, chunk.chunkY));
-    this.scene.add(this.tilemap.group);
-
+    this.rebuildActiveFloorScene();
     this.frameCamera(doc.width, doc.height);
     this.startRenderLoop();
+    this.emitState();
+    this.recomputeRampGlyphs();
+  }
+
+  /** Adds a new blank floor on top of the stack and makes it active (spec: "adding a floor"). No-op if no map is loaded. */
+  addFloor(id: string, label?: string): void {
+    if (!this.state) return;
+    this.state = painter.addFloor(this.state, label === undefined ? { id } : { id, label });
+    this.rebuildActiveFloorScene();
+    this.emitState();
+    this.recomputeRampGlyphs();
+  }
+
+  /** Switches the active floor; the viewport re-renders showing ONLY that floor (spec: "editor viewport shows active floor only"). Ignored mid-stroke/out-of-range (see `painter.selectFloor`). */
+  selectFloor(index: number): void {
+    if (!this.state) return;
+    const next = painter.selectFloor(this.state, index);
+    if (next === this.state) return;
+    this.state = next;
+    this.rebuildActiveFloorScene();
+    this.emitState();
+    this.recomputeRampGlyphs();
+  }
+
+  /** Removes the floor at `index` (min 1 floor enforced; see `painter.removeFloor`). Ignored mid-stroke/out-of-range/last-floor. */
+  removeFloor(index: number): void {
+    if (!this.state) return;
+    const next = painter.removeFloor(this.state, index);
+    if (next === this.state) return;
+    this.state = next;
+    this.rebuildActiveFloorScene();
     this.emitState();
     this.recomputeRampGlyphs();
   }
@@ -213,16 +242,13 @@ export class PainterViewport {
     this.emitState();
   }
 
-  /** The current map state (layers + semantics), for saving. `undefined` if no map is loaded. */
+  /** The current map state (ALL floors' layers + semantics), for saving -- not just the active floor. `undefined` if no map is loaded. */
   currentDocument(): MapDocument | undefined {
     if (!this.doc || !this.state) return undefined;
-    const withLayers = withPrimaryFloorLayers(this.doc, {
-      ...primaryFloorLayers(this.doc),
-      tiles: this.state.layers,
-    });
+    const composed = composeDocumentFromPainterFloors(this.doc, this.state.floors);
     return {
-      ...withLayers,
-      tileset: { ...withLayers.tileset, semantics: this.state.semantics },
+      ...composed,
+      tileset: { ...composed.tileset, semantics: this.state.semantics },
     };
   }
 
@@ -277,16 +303,35 @@ export class PainterViewport {
     if (tool) this.setTool(tool);
   }
 
-  /** Scoped live update: dirty-region -> buildChunks(onlyChunks) -> patchChunks, plus explicit buildChunk for any dirty chunk not yet live (a from-scratch blank map starts with zero live chunks). */
+  /**
+   * Fully rebuilds the tilemap scene from the ACTIVE floor only (spec:
+   * "editor viewport shows active floor only") -- used on initial load AND
+   * every floor add/select/remove, since a floor switch is a full re-scope
+   * of what's visible/editable, not a scoped diff. Reuses the already-
+   * loaded `this.textures`/`this.sheetPixelSizes` (shared tileset across
+   * floors, per spec: "catalog/palette stays floor-agnostic").
+   */
+  private rebuildActiveFloorScene(): void {
+    if (!this.doc || !this.state) return;
+    const composed = composeDocumentFromPainterFloors(this.doc, this.state.floors);
+    const map = toRenderableMap(composed, this.state.activeFloor);
+    const tileset = toRenderableTileset(composed);
+    const chunks = buildChunks(map, tileset, this.sheetPixelSizes);
+
+    this.tilemap?.dispose();
+    this.tilemap = new StreamingTilemapScene(chunks, this.textures, {
+      tileWorldSize: TILE_WORLD_SIZE,
+    });
+    for (const chunk of chunks) this.tilemap.buildChunk(chunkKey(chunk.chunkX, chunk.chunkY));
+    this.scene.add(this.tilemap.group);
+  }
+
+  /** Scoped live update on the ACTIVE floor: dirty-region -> buildChunks(onlyChunks) -> patchChunks, plus explicit buildChunk for any dirty chunk not yet live (a from-scratch blank map starts with zero live chunks). */
   private applyDiffLiveUpdate(diff: TileDiff): void {
     if (!this.doc || !this.state || !this.tilemap) return;
-    const map = toRenderableMap(
-      withPrimaryFloorLayers(this.doc, {
-        ...primaryFloorLayers(this.doc),
-        tiles: this.state.layers,
-      }),
-    );
-    const tileset = toRenderableTileset(this.doc);
+    const composed = composeDocumentFromPainterFloors(this.doc, this.state.floors);
+    const map = toRenderableMap(composed, this.state.activeFloor);
+    const tileset = toRenderableTileset(composed);
 
     const dirtyKeys = computeDirtyChunkKeys(diff.cells, map, tileset, DEFAULT_CHUNK_SIZE);
     if (dirtyKeys.size === 0) return;
@@ -333,9 +378,12 @@ export class PainterViewport {
    */
   private recomputeRampGlyphs(): void {
     if (!this.doc || !this.state || !this.cameraPose) return;
+    const composed = composeDocumentFromPainterFloors(this.doc, this.state.floors);
+    const activeFloor = composed.floors[this.state.activeFloor];
+    if (!activeFloor) return;
     const cells = computeRampGlyphCells(
-      this.state.layers,
-      primaryFloorLayers(this.doc).regions,
+      painter.activeFloorState(this.state).layers,
+      activeFloor.layers.regions,
       this.state.semantics,
       this.doc.width,
       this.doc.height,

@@ -8,6 +8,13 @@
  * Autotile neighbor-rule shape resolution is intentionally out of scope
  * this slice (see `tool-sm.ts`'s doc comment) -- every tool places the
  * literal active tile id (`fillTileId`), eraser is just `fillTileId = 0`.
+ *
+ * Plantas Apiladas (Slice 4, painter-floors spec): the map is an ordered
+ * stack of floors, each with its OWN layers + undo/redo command stack.
+ * Every painting/undo/redo op is scoped to `floors[activeFloor]` only --
+ * see `activeFloorState`. Tool/layer/fill-id/semantic-mode selection and
+ * the `semantics` tile-id-keyed overrides stay top-level/shared across
+ * floors (catalog/palette is floor-agnostic per spec).
  */
 
 import type {
@@ -20,6 +27,7 @@ import type {
 } from '@threemaker/map-format';
 import {
   applyTileDiff,
+  DEFAULT_FLOOR_HEIGHT,
   EMPTY_COMMAND_STACK,
   pushCommand,
   redoCommand,
@@ -29,8 +37,27 @@ import { assignSemanticClass, resolveTouchedTileIds } from './semantic-store.js'
 import type { TilePoint, ToolId, ToolSMState, ToolSMStrokingState } from './tool-sm.js';
 import { beginStroke, continueStroke, endStroke, TOOL_SM_IDLE } from './tool-sm.js';
 
-export interface PainterState {
+/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"). */
+export interface PainterFloorState {
+  readonly id: string;
+  readonly label?: string;
+  readonly baseElevation: number;
   readonly layers: TileLayerSet;
+  readonly commandStack: CommandStackState;
+}
+
+/** A floor's initial layers, as sourced from a loaded/composed `MapDocument` (see `map-compose.ts`'s `painterFloorsFromDocument`) or freshly created for a blank floor -- command stacks are always session-local, never persisted. */
+export interface PainterFloorInit {
+  readonly id: string;
+  readonly label?: string;
+  readonly baseElevation: number;
+  readonly layers: TileLayerSet;
+}
+
+export interface PainterState {
+  readonly floors: readonly PainterFloorState[];
+  /** Index into `floors` of the floor currently being edited/rendered (spec: "editor viewport shows active floor only"). */
+  readonly activeFloor: number;
   readonly width: number;
   readonly height: number;
   readonly tool: ToolId;
@@ -38,7 +65,6 @@ export interface PainterState {
   /** The tile id every non-eyedropper tool paints; 0 = eraser. */
   readonly fillTileId: number;
   readonly stroke: ToolSMState;
-  readonly commandStack: CommandStackState;
   /** When true, a committed stroke assigns `semanticClass` to every distinct tile id it touches instead of painting -- the visual tile layer is never modified (spec: "Semantic-only edit"). */
   readonly semanticMode: boolean;
   readonly semanticClass: SemanticClass;
@@ -46,29 +72,113 @@ export interface PainterState {
 }
 
 export interface CreatePainterStateOptions {
-  readonly layers: TileLayerSet;
+  /** Non-empty ordered floor stack (index 0 = ground), matching `MapDocument.floors`. */
+  readonly floors: readonly PainterFloorInit[];
   readonly width: number;
   readonly height: number;
   readonly fillTileId?: number;
   readonly semantics?: SemanticOverrides;
+  /** Which floor starts active; defaults to 0 (ground). */
+  readonly activeFloor?: number;
 }
 
-/** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. */
+/** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. Every floor gets a fresh, empty command stack: undo/redo history is session-local, never carried over from a saved document. */
 export function createPainterState(options: CreatePainterStateOptions): PainterState {
-  const { layers, width, height, fillTileId = 0, semantics = {} } = options;
+  const { floors, width, height, fillTileId = 0, semantics = {}, activeFloor = 0 } = options;
   return {
-    layers,
+    floors: floors.map((floor) => ({ ...floor, commandStack: EMPTY_COMMAND_STACK })),
+    activeFloor,
     width,
     height,
     tool: 'brush',
     activeLayer: 0,
     fillTileId,
     stroke: TOOL_SM_IDLE,
-    commandStack: EMPTY_COMMAND_STACK,
     semanticMode: false,
     semanticClass: 'none',
     semantics,
   };
+}
+
+/** The floor currently being edited/rendered. Throws if `activeFloor` is out of range -- an internal-invariant violation, never user-reachable (every mutator below keeps `activeFloor` in range). */
+export function activeFloorState(state: PainterState): PainterFloorState {
+  const floor = state.floors[state.activeFloor];
+  if (!floor) {
+    throw new Error(
+      `activeFloorState: no floor at index ${state.activeFloor} (floors.length=${state.floors.length}).`,
+    );
+  }
+  return floor;
+}
+
+function replaceActiveFloor(
+  state: PainterState,
+  patch: Partial<Pick<PainterFloorState, 'layers' | 'commandStack'>>,
+): PainterState {
+  const floors = state.floors.map((floor, index) =>
+    index === state.activeFloor ? { ...floor, ...patch } : floor,
+  );
+  return { ...state, floors };
+}
+
+function createEmptyLayers(width: number, height: number): TileLayerSet {
+  const size = width * height;
+  const empty = () => new Array(size).fill(0);
+  return [empty(), empty(), empty(), empty()];
+}
+
+export interface AddFloorOptions {
+  readonly id: string;
+  readonly label?: string;
+}
+
+/**
+ * Appends a new blank floor on TOP of the stack (stacking order, not
+ * active-floor order) at `baseElevation = topFloor.baseElevation +
+ * DEFAULT_FLOOR_HEIGHT` [CHECKPOINT-APPROVED default], and makes it active
+ * (spec: "adding a floor"). Ignored mid-stroke, same as `setTool`.
+ */
+export function addFloor(state: PainterState, options: AddFloorOptions): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const top = state.floors[state.floors.length - 1];
+  const baseElevation = (top?.baseElevation ?? 0) + DEFAULT_FLOOR_HEIGHT;
+  const floor: PainterFloorState = {
+    id: options.id,
+    ...(options.label !== undefined ? { label: options.label } : {}),
+    baseElevation,
+    layers: createEmptyLayers(state.width, state.height),
+    commandStack: EMPTY_COMMAND_STACK,
+  };
+  const floors = [...state.floors, floor];
+  return { ...state, floors, activeFloor: floors.length - 1 };
+}
+
+/** Switches the active floor. Ignored mid-stroke or for an out-of-range index. */
+export function selectFloor(state: PainterState, index: number): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (index < 0 || index >= state.floors.length) return state;
+  return { ...state, activeFloor: index };
+}
+
+/**
+ * Removes the floor at `index`. Refuses (no-op) to drop the last remaining
+ * floor -- min 1 floor is always enforced. Ignored mid-stroke or for an
+ * out-of-range index. `activeFloor` is re-clamped: shifts down by one if a
+ * floor BEFORE it was removed, stays at the same index (now pointing at
+ * whatever took its place, or clamped to the new last floor) if the active
+ * floor itself was removed.
+ */
+export function removeFloor(state: PainterState, index: number): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (state.floors.length <= 1) return state;
+  if (index < 0 || index >= state.floors.length) return state;
+
+  const floors = state.floors.filter((_, i) => i !== index);
+  const activeFloor =
+    index < state.activeFloor
+      ? state.activeFloor - 1
+      : Math.min(state.activeFloor, floors.length - 1);
+  return { ...state, floors, activeFloor };
 }
 
 /** Toggles semantic-class painting mode. Ignored mid-stroke, same as `setTool`. */
@@ -104,10 +214,11 @@ export interface PointerDownResult {
   readonly pickedTileId?: number;
 }
 
-/** `pointerdown`: eyedropper picks immediately (no stroke); every other tool begins a stroke. */
+/** `pointerdown`: eyedropper picks immediately (no stroke) from the active floor; every other tool begins a stroke. */
 export function pointerDown(state: PainterState, point: TilePoint): PointerDownResult {
   if (state.tool === 'eyedropper') {
-    const layer = state.layers[state.activeLayer];
+    const floor = activeFloorState(state);
+    const layer = floor.layers[state.activeLayer];
     const pickedTileId = layer?.[point.y * state.width + point.x] ?? 0;
     return { state, pickedTileId };
   }
@@ -128,15 +239,16 @@ export interface PointerUpResult {
   readonly semanticTileIds?: ReadonlySet<number>;
 }
 
-/** `pointerup`: commits the in-progress stroke. In semantic mode, assigns the active semantic class to every distinct tile id touched (no layer/diff change). Otherwise computes the stroke's touched cells, builds a `TileDiff`, applies it, and pushes it onto the undo stack. No-op while idle. */
+/** `pointerup`: commits the in-progress stroke onto the ACTIVE floor only (spec: "editing the active floor only"). In semantic mode, assigns the active semantic class to every distinct tile id touched (no layer/diff change, and NOT part of the per-floor tile undo history). Otherwise computes the stroke's touched cells, builds a `TileDiff`, applies it to the active floor's layers, and pushes it onto the active floor's OWN command stack. No-op while idle. */
 export function pointerUp(state: PainterState): PointerUpResult {
   if (state.stroke.status !== 'stroking') return { state };
 
   const stroke = state.stroke;
   const idleState: PainterState = { ...state, stroke: endStroke(state.stroke) };
 
-  const cells = computeStrokeTouchedCells(stroke, state.layers, state.width, state.height);
-  const layer = state.layers[stroke.layer];
+  const floor = activeFloorState(state);
+  const cells = computeStrokeTouchedCells(stroke, floor.layers, state.width, state.height);
+  const layer = floor.layers[stroke.layer];
   if (!layer) return { state: idleState };
 
   if (state.semanticMode) {
@@ -149,9 +261,9 @@ export function pointerUp(state: PainterState): PointerUpResult {
   const diff = buildTileDiff(cells, layer, state.width, stroke.layer, state.fillTileId);
   if (!diff) return { state: idleState };
 
-  const layers = applyTileDiff(state.layers, state.width, diff);
-  const commandStack = pushCommand(state.commandStack, diff);
-  return { state: { ...idleState, layers, commandStack }, diff };
+  const layers = applyTileDiff(floor.layers, state.width, diff);
+  const commandStack = pushCommand(floor.commandStack, diff);
+  return { state: replaceActiveFloor(idleState, { layers, commandStack }), diff };
 }
 
 export interface CommandStepOutcome {
@@ -159,20 +271,28 @@ export interface CommandStepOutcome {
   readonly diff?: TileDiff;
 }
 
-/** Undoes the most recent committed stroke, if any. */
+/** Undoes the most recent committed stroke on the ACTIVE floor's OWN command stack, if any -- never a different floor's (spec: "per-floor undo isolation"). */
 export function undo(state: PainterState): CommandStepOutcome {
-  const result = undoCommand(state.commandStack);
+  const floor = activeFloorState(state);
+  const result = undoCommand(floor.commandStack);
   if (!result) return { state };
-  const layers = applyTileDiff(state.layers, state.width, result.diff);
-  return { state: { ...state, layers, commandStack: result.state }, diff: result.diff };
+  const layers = applyTileDiff(floor.layers, state.width, result.diff);
+  return {
+    state: replaceActiveFloor(state, { layers, commandStack: result.state }),
+    diff: result.diff,
+  };
 }
 
-/** Re-applies the most recently undone stroke, if any. */
+/** Re-applies the most recently undone stroke on the ACTIVE floor's OWN command stack, if any. */
 export function redo(state: PainterState): CommandStepOutcome {
-  const result = redoCommand(state.commandStack);
+  const floor = activeFloorState(state);
+  const result = redoCommand(floor.commandStack);
   if (!result) return { state };
-  const layers = applyTileDiff(state.layers, state.width, result.diff);
-  return { state: { ...state, layers, commandStack: result.state }, diff: result.diff };
+  const layers = applyTileDiff(floor.layers, state.width, result.diff);
+  return {
+    state: replaceActiveFloor(state, { layers, commandStack: result.state }),
+    diff: result.diff,
+  };
 }
 
 // --- Stroke -> touched-cells resolution (per tool) ----------------------

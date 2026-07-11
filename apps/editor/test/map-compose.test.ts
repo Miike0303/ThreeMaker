@@ -1,9 +1,11 @@
 import { primaryFloorLayers } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import {
+  composeDocumentFromPainterFloors,
   composeMapFromTilesets,
   createBlankMapDocument,
   mergeSlotFlags,
+  painterFloorsFromDocument,
   seedDemoTiles,
   toRenderableMap,
   toRenderableTileset,
@@ -163,5 +165,191 @@ describe('composeMapFromTilesets', () => {
       sources: [{ slot: 'A2', tileset: { id: 1, gameId: 1, flags: null, sheets: [] } }],
     });
     expect(doc.tileset.slots.A2).toBeUndefined();
+  });
+});
+
+describe('toRenderableMap: explicit floor index (Slice 4 -- active-floor-only viewport)', () => {
+  it('renders floor 0 by default, unchanged from the pre-Slice-4 single-floor behavior', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 2,
+      height: 2,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const seeded = seedDemoTiles(doc, 5, 0);
+    const map = toRenderableMap(seeded);
+    expect(map.layers.tileLayers[0]).toBe(seeded.floors[0]?.layers.tiles[0]);
+  });
+
+  it('renders the given floor index, not floor 0', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 2,
+      height: 2,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const floor1Tiles = [1, 1, 1, 1];
+    const groundFloor = doc.floors[0];
+    if (!groundFloor) throw new Error('test setup: createBlankMapDocument always yields floors[0]');
+    const twoFloorDoc = {
+      ...doc,
+      floors: [
+        groundFloor,
+        {
+          id: 'floor-1',
+          baseElevation: 3,
+          layers: {
+            tiles: [floor1Tiles, floor1Tiles, floor1Tiles, floor1Tiles],
+            shadows: [0, 0, 0, 0],
+            regions: [0, 0, 0, 0],
+          },
+        },
+      ],
+    };
+    const map = toRenderableMap(twoFloorDoc, 1);
+    expect(map.layers.tileLayers[0]).toBe(floor1Tiles);
+  });
+
+  it('throws for an out-of-range floor index', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 2,
+      height: 2,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    expect(() => toRenderableMap(doc, 5)).toThrow();
+  });
+});
+
+describe('painterFloorsFromDocument / composeDocumentFromPainterFloors (Slice 4 -- v2 multi-floor roundtrip)', () => {
+  it('roundtrips a single-floor document unchanged (regression: v1-migrated maps)', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 2,
+      height: 2,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const seeded = seedDemoTiles(doc, 9, 0);
+
+    const painterFloors = painterFloorsFromDocument(seeded);
+    expect(painterFloors).toHaveLength(1);
+    expect(painterFloors[0]).toMatchObject({ id: 'floor-0', baseElevation: 0 });
+
+    const composed = composeDocumentFromPainterFloors(seeded, painterFloors);
+    expect(composed.floors).toHaveLength(1);
+    expect(composed.floors[0]?.layers.tiles).toEqual(seeded.floors[0]?.layers.tiles);
+    expect(composed.floors[0]?.layers.shadows).toBe(seeded.floors[0]?.layers.shadows);
+    expect(composed.floors[0]?.layers.regions).toBe(seeded.floors[0]?.layers.regions);
+    expect(composed.stairLinks).toEqual([]);
+  });
+
+  it('composes a real multi-floor document, preserving each floors baseElevation/label/shadows/regions and dropping stair-links referencing a removed floor', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 2,
+      height: 2,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const groundFloor = doc.floors[0];
+    if (!groundFloor) throw new Error('test setup: createBlankMapDocument always yields floors[0]');
+    const withStairLink = {
+      ...doc,
+      floors: [
+        groundFloor,
+        {
+          id: 'floor-1',
+          label: 'Roof',
+          baseElevation: 3,
+          layers: {
+            tiles: [
+              [7, 7, 7, 7],
+              [0, 0, 0, 0],
+              [0, 0, 0, 0],
+              [0, 0, 0, 0],
+            ] as const,
+            shadows: [1, 1, 1, 1],
+            regions: [2, 2, 2, 2],
+          },
+        },
+      ],
+      stairLinks: [
+        {
+          id: 'stair-1',
+          fromFloor: 'floor-0',
+          toFloor: 'floor-1',
+          bidirectional: true,
+          waypoints: [
+            { x: 0, y: 0, floor: 'floor-0' },
+            { x: 0, y: 0, floor: 'floor-1' },
+          ],
+        },
+      ],
+    };
+
+    // The painter edited floor 0's tiles but floor 1 stays byte-identical.
+    const painterFloors = painterFloorsFromDocument(withStairLink).map((floor) =>
+      floor.id === 'floor-0'
+        ? {
+            ...floor,
+            layers: [[9, 9, 9, 9], floor.layers[1], floor.layers[2], floor.layers[3]] as const,
+          }
+        : floor,
+    );
+
+    const composed = composeDocumentFromPainterFloors(withStairLink, painterFloors);
+    expect(composed.floors).toHaveLength(2);
+    expect(composed.floors[0]?.layers.tiles[0]).toEqual([9, 9, 9, 9]);
+    expect(composed.floors[1]).toMatchObject({ id: 'floor-1', label: 'Roof', baseElevation: 3 });
+    expect(composed.floors[1]?.layers.shadows).toEqual([1, 1, 1, 1]);
+    expect(composed.floors[1]?.layers.regions).toEqual([2, 2, 2, 2]);
+    // Both floors still exist -> the stair-link survives.
+    expect(composed.stairLinks).toHaveLength(1);
+
+    // Now simulate floor-1 being removed (painter-store's removeFloor already dropped it from `painterFloors`).
+    const afterRemoval = composeDocumentFromPainterFloors(
+      withStairLink,
+      painterFloors.filter((floor) => floor.id !== 'floor-1'),
+    );
+    expect(afterRemoval.floors).toHaveLength(1);
+    // The stair-link referenced the now-removed floor-1 -> dropped.
+    expect(afterRemoval.stairLinks).toEqual([]);
+  });
+
+  it('gives a brand-new floor (no matching original) blank shadows/regions', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 2,
+      height: 2,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const painterFloors = [
+      ...painterFloorsFromDocument(doc),
+      {
+        id: 'floor-1',
+        baseElevation: 3,
+        layers: [
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+        ] as const,
+      },
+    ];
+
+    const composed = composeDocumentFromPainterFloors(doc, painterFloors);
+    expect(composed.floors[1]?.layers.shadows).toEqual([0, 0, 0, 0]);
+    expect(composed.floors[1]?.layers.regions).toEqual([0, 0, 0, 0]);
   });
 });

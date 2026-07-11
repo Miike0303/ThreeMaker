@@ -2,16 +2,27 @@
  * Composes a fresh `MapDocument` from catalog tileset sources (Slice 4's
  * per-slot multi-tileset model) and bridges it to the shapes
  * `@threemaker/renderer`'s `buildChunks` already understands. Pure.
+ *
+ * Plantas Apiladas (Slice 4, painter-floors): genuinely floor-aware --
+ * `painterFloorsFromDocument`/`composeDocumentFromPainterFloors` bridge a
+ * v2 `MapDocument`'s `floors[]` to/from the painter store's per-floor
+ * state, and `toRenderableMap` takes an explicit floor index. This
+ * replaces Slice 1's transitional `primaryFloorLayers`/
+ * `withPrimaryFloorLayers` single-floor accessors (still exported from
+ * `@threemaker/map-format` for other, not-yet-floor-aware consumers, e.g.
+ * `packages/exporter-rpgm`).
  */
 
 import type { RpgmMap, RpgmTileset, TileSheetNames } from '@threemaker/importer-rpgm';
-import type { MapDocument, SlotComposition, TileSheetSlot } from '@threemaker/map-format';
-import {
-  CURRENT_MAP_FORMAT_VERSION,
-  MAP_FORMAT_MAGIC,
-  primaryFloorLayers,
-  withPrimaryFloorLayers,
+import type {
+  FloorDocument,
+  MapDocument,
+  MapLayers,
+  SlotComposition,
+  TileLayerSet,
+  TileSheetSlot,
 } from '@threemaker/map-format';
+import { CURRENT_MAP_FORMAT_VERSION, MAP_FORMAT_MAGIC } from '@threemaker/map-format';
 
 /**
  * RPGM tile-id range `[start, end)` per sheet slot -- duplicates
@@ -99,17 +110,20 @@ export function createBlankMapDocument(options: CreateBlankMapDocumentOptions): 
 /**
  * Seeds a freshly-created blank map with real tile ids from its composed
  * slots, so there is something to eyedrop/brush/fill/undo immediately.
- * ponytail: a full clickable tileset-image palette is out of scope this
- * slice (see apply-progress); eyedropper-first is the primary tile-
- * selection workflow, with these seeded tiles as the starting material.
+ * Only ever called on a just-created (single-floor) blank document, so it
+ * seeds floor 0 directly. ponytail: a full clickable tileset-image palette
+ * is out of scope this slice (see apply-progress); eyedropper-first is the
+ * primary tile-selection workflow, with these seeded tiles as the starting
+ * material.
  */
 export function seedDemoTiles(
   doc: MapDocument,
   groundTileId: number,
   decorTileId: number,
 ): MapDocument {
-  const layers = primaryFloorLayers(doc);
-  const tiles = layers.tiles.map((layer) => layer.slice()) as [
+  const floor = doc.floors[0];
+  if (!floor) return doc;
+  const tiles = floor.layers.tiles.map((layer) => layer.slice()) as [
     number[],
     number[],
     number[],
@@ -119,7 +133,8 @@ export function seedDemoTiles(
   for (let i = 0; i < groundLayer.length; i++) groundLayer[i] = groundTileId;
   const decorLayer = tiles[2];
   for (let i = 0; i < decorLayer.length; i += DECOR_SPACING) decorLayer[i] = decorTileId;
-  return withPrimaryFloorLayers(doc, { ...layers, tiles });
+  const updatedFloor: FloorDocument = { ...floor, layers: { ...floor.layers, tiles } };
+  return { ...doc, floors: [updatedFloor, ...doc.floors.slice(1)] };
 }
 
 const EMPTY_SHEET_NAMES: TileSheetNames = {
@@ -134,9 +149,21 @@ const EMPTY_SHEET_NAMES: TileSheetNames = {
   E: '',
 };
 
-/** Bridges a `MapDocument`'s (transitionally, its primary floor's) layers to the `RpgmMap` shape `buildChunks` expects -- both use the same 4-tile-layer + shadows + regions structure. */
-export function toRenderableMap(doc: MapDocument): RpgmMap {
-  const layers = primaryFloorLayers(doc);
+/**
+ * Bridges ONE floor of a `MapDocument` (default: floor 0, the ground floor
+ * -- keeps every pre-Slice-4 single-floor call site unchanged) to the
+ * `RpgmMap` shape `buildChunks` expects. Editor viewport callers pass the
+ * ACTIVE floor's index explicitly (spec: "editor viewport shows active
+ * floor only" -- never more than one floor's chunks are ever built at once
+ * for painting).
+ */
+export function toRenderableMap(doc: MapDocument, floorIndex = 0): RpgmMap {
+  const floor = doc.floors[floorIndex];
+  if (!floor) {
+    throw new Error(
+      `toRenderableMap: no floor at index ${floorIndex} (doc has ${doc.floors.length} floor(s)).`,
+    );
+  }
   return {
     id: null,
     displayName: doc.name,
@@ -145,11 +172,75 @@ export function toRenderableMap(doc: MapDocument): RpgmMap {
     tilesetId: 0,
     scrollType: 0,
     layers: {
-      tileLayers: layers.tiles,
-      shadows: layers.shadows,
-      regions: layers.regions,
+      tileLayers: floor.layers.tiles,
+      shadows: floor.layers.shadows,
+      regions: floor.layers.regions,
     },
   };
+}
+
+/** One floor's painter-facing init data, sourced from a document's own `FloorDocument` -- shape matches `painter-store.ts`'s `PainterFloorInit` (that module is a one-way consumer, so this stays a plain structural type here, no cross-package import needed). */
+export interface PainterFloorSource {
+  readonly id: string;
+  readonly label?: string;
+  readonly baseElevation: number;
+  readonly layers: TileLayerSet;
+}
+
+/**
+ * Builds the painter store's initial per-floor list from a loaded/composed
+ * document's `floors[]`. Only the 4 editable tile layers travel into the
+ * painter store -- shadows/regions are read-only passthrough data, not
+ * painted by this slice (see `composeDocumentFromPainterFloors`, which
+ * re-attaches them on save). Command-stack history is NOT restored here:
+ * `painter-store.ts`'s `createPainterState` always starts every floor with
+ * a fresh, empty undo/redo stack (session-local, never persisted).
+ */
+export function painterFloorsFromDocument(doc: MapDocument): readonly PainterFloorSource[] {
+  return doc.floors.map((floor) => ({
+    id: floor.id,
+    ...(floor.label !== undefined ? { label: floor.label } : {}),
+    baseElevation: floor.baseElevation,
+    layers: floor.layers.tiles,
+  }));
+}
+
+/**
+ * Composes a full v2 `MapDocument` from the painter store's current
+ * per-floor tile layers, re-attaching each floor's original shadows/
+ * regions (untouched passthrough; a brand-new floor added in-session --
+ * with no matching original floor id -- gets blank shadows/regions, same
+ * as `createBlankMapDocument`). Any `stairLinks` entry referencing a floor
+ * id no longer present is dropped (spec/task: "remove drops referencing
+ * stair-links") -- a no-op today since this slice authors no stair-links,
+ * but keeps a loaded document with stair-links safe against a floor
+ * removal.
+ */
+export function composeDocumentFromPainterFloors(
+  doc: MapDocument,
+  floors: readonly PainterFloorSource[],
+): MapDocument {
+  const originalById = new Map(doc.floors.map((floor) => [floor.id, floor] as const));
+  const blankLayer = new Array(doc.width * doc.height).fill(0);
+
+  const composedFloors: FloorDocument[] = floors.map((floor) => {
+    const original = originalById.get(floor.id);
+    const layers: MapLayers = {
+      tiles: floor.layers,
+      shadows: original?.layers.shadows ?? blankLayer,
+      regions: original?.layers.regions ?? blankLayer,
+    };
+    return floor.label !== undefined
+      ? { id: floor.id, label: floor.label, baseElevation: floor.baseElevation, layers }
+      : { id: floor.id, baseElevation: floor.baseElevation, layers };
+  });
+
+  const floorIds = new Set(floors.map((floor) => floor.id));
+  const stairLinks = doc.stairLinks.filter(
+    (link) => floorIds.has(link.fromFloor) && floorIds.has(link.toFloor),
+  );
+
+  return { ...doc, floors: composedFloors, stairLinks };
 }
 
 /** Bridges a `MapDocument`'s merged flags to the `RpgmTileset` shape `buildChunks` expects. `sheetNames` is unused by the renderer's build pipeline (only `computeTileUv`'s caller-provided `sheetPixelSizes` matters), so it's a harmless placeholder. */
