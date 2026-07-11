@@ -168,10 +168,9 @@ export class PainterViewport {
   /** Adds a new blank floor on top of the stack and makes it active (spec: "adding a floor"). No-op if no map is loaded. */
   addFloor(id: string, label?: string): void {
     if (!this.state) return;
-    this.state = painter.addFloor(this.state, label === undefined ? { id } : { id, label });
-    this.rebuildActiveFloorScene();
-    this.emitState();
-    this.recomputeRampGlyphs();
+    this.applyFloorMutation(
+      painter.addFloor(this.state, label === undefined ? { id } : { id, label }),
+    );
   }
 
   /** Switches the active floor; the viewport re-renders showing ONLY that floor (spec: "editor viewport shows active floor only"). Ignored mid-stroke/out-of-range (see `painter.selectFloor`). */
@@ -179,10 +178,7 @@ export class PainterViewport {
     if (!this.state) return;
     const next = painter.selectFloor(this.state, index);
     if (next === this.state) return;
-    this.state = next;
-    this.rebuildActiveFloorScene();
-    this.emitState();
-    this.recomputeRampGlyphs();
+    this.applyFloorMutation(next);
   }
 
   /** Removes the floor at `index` (min 1 floor enforced; see `painter.removeFloor`). Ignored mid-stroke/out-of-range/last-floor. */
@@ -190,6 +186,20 @@ export class PainterViewport {
     if (!this.state) return;
     const next = painter.removeFloor(this.state, index);
     if (next === this.state) return;
+    this.applyFloorMutation(next);
+  }
+
+  /**
+   * Shared pipeline for every floor-structure change (add/select/remove):
+   * adopt `next` as the current state, rebuild the active floor's scene
+   * from scratch, and re-emit state/ramp-glyphs. Every floor-structure
+   * change goes through this exact sequence -- see `addFloor`/
+   * `selectFloor`/`removeFloor` above, each of which only computes `next`
+   * via its own `painter.*` mutator (and, for `selectFloor`/`removeFloor`,
+   * its own pre-existing no-op guard when the mutator left state
+   * unchanged -- out of range, mid-stroke, or last-floor removal).
+   */
+  private applyFloorMutation(next: PainterState): void {
     this.state = next;
     this.rebuildActiveFloorScene();
     this.emitState();
@@ -304,6 +314,20 @@ export class PainterViewport {
   }
 
   /**
+   * Composes `doc`'s floors and derives the ACTIVE floor's renderable
+   * `RpgmMap`/`RpgmTileset` pair (see `map-compose.ts`) -- the shared
+   * derivation both `rebuildActiveFloorScene` (full rebuild) and
+   * `applyDiffLiveUpdate` (scoped live patch) need before calling
+   * `buildChunks`.
+   */
+  private renderableSnapshot(doc: MapDocument, state: PainterState) {
+    const composed = composeDocumentFromPainterFloors(doc, state.floors);
+    const map = toRenderableMap(composed, state.activeFloor);
+    const tileset = toRenderableTileset(composed);
+    return { composed, map, tileset };
+  }
+
+  /**
    * Fully rebuilds the tilemap scene from the ACTIVE floor only (spec:
    * "editor viewport shows active floor only") -- used on initial load AND
    * every floor add/select/remove, since a floor switch is a full re-scope
@@ -313,9 +337,7 @@ export class PainterViewport {
    */
   private rebuildActiveFloorScene(): void {
     if (!this.doc || !this.state) return;
-    const composed = composeDocumentFromPainterFloors(this.doc, this.state.floors);
-    const map = toRenderableMap(composed, this.state.activeFloor);
-    const tileset = toRenderableTileset(composed);
+    const { map, tileset } = this.renderableSnapshot(this.doc, this.state);
     const chunks = buildChunks(map, tileset, this.sheetPixelSizes);
 
     this.tilemap?.dispose();
@@ -329,9 +351,7 @@ export class PainterViewport {
   /** Scoped live update on the ACTIVE floor: dirty-region -> buildChunks(onlyChunks) -> patchChunks, plus explicit buildChunk for any dirty chunk not yet live (a from-scratch blank map starts with zero live chunks). */
   private applyDiffLiveUpdate(diff: TileDiff): void {
     if (!this.doc || !this.state || !this.tilemap) return;
-    const composed = composeDocumentFromPainterFloors(this.doc, this.state.floors);
-    const map = toRenderableMap(composed, this.state.activeFloor);
-    const tileset = toRenderableTileset(composed);
+    const { map, tileset } = this.renderableSnapshot(this.doc, this.state);
 
     const dirtyKeys = computeDirtyChunkKeys(diff.cells, map, tileset, DEFAULT_CHUNK_SIZE);
     if (dirtyKeys.size === 0) return;

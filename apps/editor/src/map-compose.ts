@@ -179,7 +179,7 @@ export function toRenderableMap(doc: MapDocument, floorIndex = 0): RpgmMap {
   };
 }
 
-/** One floor's painter-facing init data, sourced from a document's own `FloorDocument` -- shape matches `painter-store.ts`'s `PainterFloorInit` (that module is a one-way consumer, so this stays a plain structural type here, no cross-package import needed). */
+/** One floor's painter-facing init data, sourced from a document's own `FloorDocument` -- shape matches `painter-store.ts`'s `PainterFloorInit` (both modules live in this same app's `src/`, not separate packages). Deliberately NOT imported from `painter-store.ts` (would create an import-cycle risk between the two -- see the `CatalogTilesetSource` comment below for the same pattern); kept as a plain structural type here instead. Cross-reference: `painter-store.ts` also defines `PainterFloorState` (this shape plus `commandStack`) -- all three types are intentionally parallel, not accidentally divergent (see `PainterFloorState`'s own doc comment). */
 export interface PainterFloorSource {
   readonly id: string;
   readonly label?: string;

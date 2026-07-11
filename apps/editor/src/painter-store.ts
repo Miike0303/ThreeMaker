@@ -37,7 +37,7 @@ import { assignSemanticClass, resolveTouchedTileIds } from './semantic-store.js'
 import type { TilePoint, ToolId, ToolSMState, ToolSMStrokingState } from './tool-sm.js';
 import { beginStroke, continueStroke, endStroke, TOOL_SM_IDLE } from './tool-sm.js';
 
-/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"). */
+/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"). Structurally parallel to `map-compose.ts`'s `PainterFloorSource` (`{id, label?, baseElevation, layers}`, no command stack) and `PainterFloorInit` below (same fields as this type, minus `commandStack`) -- three separate types by design, not accidental divergence: each belongs to its own layer (composed-doc source, store-init input, live store state). */
 export interface PainterFloorState {
   readonly id: string;
   readonly label?: string;
@@ -46,7 +46,7 @@ export interface PainterFloorState {
   readonly commandStack: CommandStackState;
 }
 
-/** A floor's initial layers, as sourced from a loaded/composed `MapDocument` (see `map-compose.ts`'s `painterFloorsFromDocument`) or freshly created for a blank floor -- command stacks are always session-local, never persisted. */
+/** A floor's initial layers, as sourced from a loaded/composed `MapDocument` (see `map-compose.ts`'s `painterFloorsFromDocument`, which returns this exact shape as `PainterFloorSource`) or freshly created for a blank floor -- command stacks are always session-local, never persisted. */
 export interface PainterFloorInit {
   readonly id: string;
   readonly label?: string;
