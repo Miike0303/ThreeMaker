@@ -1,0 +1,98 @@
+import { describe, expect, it } from 'vitest';
+import {
+  CURRENT_MAP_FORMAT_VERSION,
+  MAP_FORMAT_MAGIC,
+  MapFormatError,
+  serializeMapDocument,
+  validateCurrentVersionShape,
+} from '../src/schema.js';
+
+function makeValidDocInput(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const size = 2 * 2;
+  return {
+    format: MAP_FORMAT_MAGIC,
+    version: CURRENT_MAP_FORMAT_VERSION,
+    id: 'map-1',
+    name: 'Test Map',
+    width: 2,
+    height: 2,
+    tileset: {
+      slots: { A1: { object: 'sha-a1' } },
+      flags: [0],
+      semantics: {},
+    },
+    layers: {
+      tiles: [
+        new Array(size).fill(0),
+        new Array(size).fill(0),
+        new Array(size).fill(0),
+        new Array(size).fill(0),
+      ],
+      shadows: new Array(size).fill(0),
+      regions: new Array(size).fill(0),
+    },
+    ...overrides,
+  };
+}
+
+describe('validateCurrentVersionShape', () => {
+  it('accepts a well-formed document at the current version', () => {
+    const doc = validateCurrentVersionShape(makeValidDocInput());
+    expect(doc.format).toBe(MAP_FORMAT_MAGIC);
+    expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
+    expect(doc.width).toBe(2);
+    expect(doc.tileset.slots.A1).toEqual({ object: 'sha-a1' });
+  });
+
+  it('rejects a document with the wrong magic', () => {
+    expect(() => validateCurrentVersionShape(makeValidDocInput({ format: 'not-a-map' }))).toThrow(
+      MapFormatError,
+    );
+    try {
+      validateCurrentVersionShape(makeValidDocInput({ format: 'not-a-map' }));
+    } catch (err) {
+      expect((err as MapFormatError).code).toBe('bad-magic');
+    }
+  });
+
+  it('rejects a document at the wrong version for this function', () => {
+    expect(() => validateCurrentVersionShape(makeValidDocInput({ version: 0 }))).toThrow(
+      MapFormatError,
+    );
+  });
+
+  it('rejects missing/malformed required fields', () => {
+    expect(() => validateCurrentVersionShape(makeValidDocInput({ id: '' }))).toThrow(
+      MapFormatError,
+    );
+    expect(() => validateCurrentVersionShape(makeValidDocInput({ width: 0 }))).toThrow(
+      MapFormatError,
+    );
+    expect(() => validateCurrentVersionShape(makeValidDocInput({ width: 1.5 }))).toThrow(
+      MapFormatError,
+    );
+    expect(() =>
+      validateCurrentVersionShape(
+        makeValidDocInput({ tileset: { slots: {}, flags: 'not-an-array', semantics: {} } }),
+      ),
+    ).toThrow(MapFormatError);
+  });
+
+  it('rejects a tile layer whose length does not match width * height', () => {
+    const input = makeValidDocInput();
+    (input.layers as Record<string, unknown>).tiles = [[0], [], [], []];
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects a non-object input', () => {
+    expect(() => validateCurrentVersionShape(null)).toThrow(MapFormatError);
+    expect(() => validateCurrentVersionShape('nope')).toThrow(MapFormatError);
+  });
+
+  it('serializeMapDocument round-trips through JSON.parse + validateCurrentVersionShape', () => {
+    const doc = validateCurrentVersionShape(makeValidDocInput());
+    const json = serializeMapDocument(doc);
+    const reparsed = validateCurrentVersionShape(JSON.parse(json));
+    expect(reparsed).toEqual(doc);
+  });
+});
