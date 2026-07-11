@@ -191,7 +191,7 @@ describe('parseEventScript', () => {
     ).toThrow('Invalid Event Script: events.intro[0] (conditional) requires an array "then".');
   });
 
-  it('throws on a malformed command nested inside a conditional "then" branch', () => {
+  it('throws on a malformed command nested inside a conditional "then" branch, labeled with its branch and index', () => {
     expect(() =>
       parseEventScript({
         version: 1,
@@ -206,7 +206,27 @@ describe('parseEventScript', () => {
         },
       }),
     ).toThrow(
-      'Invalid Event Script: events.intro[0] (conditional) has unknown command type "attack".',
+      'Invalid Event Script: events.intro[0] (conditional).then[0] has unknown command type "attack".',
+    );
+  });
+
+  it('throws on a malformed command nested inside a conditional "else" branch, labeled with its branch and index', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: {
+          intro: [
+            {
+              type: 'conditional',
+              if: { key: 'gold', op: 'eq', value: 5 },
+              then: [],
+              else: [{ type: 'attack' }],
+            },
+          ],
+        },
+      }),
+    ).toThrow(
+      'Invalid Event Script: events.intro[0] (conditional).else[0] has unknown command type "attack".',
     );
   });
 

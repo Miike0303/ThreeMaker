@@ -31,7 +31,16 @@ export type ShowDialogueCommand = {
 export type ConditionalCommand = {
   readonly type: 'conditional';
   readonly if: { readonly key: string; readonly op: ConditionalOp; readonly value: WorldValue };
+  /**
+   * Commands to run when `if` matches. Named `then` per the v1 contract
+   * (not renameable — the field name is part of the schema, authored as
+   * content JSON). Biome's `suspicious/noThenProperty` rule flags any
+   * object with a `then` key as a possible thenable false positive; see the
+   * scoped override in `biome.json` for the files that legitimately
+   * construct these literals.
+   */
   readonly then: readonly EventCommand[];
+  /** Commands to run when `if` does not match, or omitted to run nothing. See {@link ConditionalCommand.then} for the `noThenProperty` note. */
   readonly else?: readonly EventCommand[];
 };
 
@@ -152,11 +161,15 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
         fail(`${label} "if.value" must be a boolean, number, or string.`);
       }
       if (!Array.isArray(then)) fail(`${label} requires an array "then".`);
-      const parsedThen = then.map((command) => parseEventCommand(command, label));
+      const parsedThen = then.map((command, index) =>
+        parseEventCommand(command, `${label}.then[${index}]`),
+      );
       let parsedElse: EventCommand[] | undefined;
       if (elseBranch !== undefined) {
         if (!Array.isArray(elseBranch)) fail(`${label} "else" must be an array when present.`);
-        parsedElse = elseBranch.map((command) => parseEventCommand(command, label));
+        parsedElse = elseBranch.map((command, index) =>
+          parseEventCommand(command, `${label}.else[${index}]`),
+        );
       }
       return {
         type: 'conditional',

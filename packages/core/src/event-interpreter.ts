@@ -35,6 +35,16 @@ export type EventInterpreterEvents = {
   'dialogue:choices': { options: readonly string[] };
   'dialogue:closed': Record<string, never>;
   'script:finished': Record<string, never>;
+  /**
+   * Fires when the `EventHost` or `DialogueProvider` throws synchronously
+   * while executing a command (e.g. a dialogue backend rejecting an
+   * unsupported source, or a host failing to resolve an entity). The
+   * current script is aborted at that point — every command after the one
+   * that failed is skipped, not retried or resumed — and the interpreter
+   * returns to `idle` and drains its pending queue, so a single bad script
+   * never wedges later scripts.
+   */
+  'script:failed': { error: unknown };
 };
 
 function evaluateCondition(world: WorldState, condition: ConditionalCommand['if']): boolean {
@@ -83,6 +93,8 @@ export class EventInterpreter {
   private currentCommands: readonly EventCommand[] = [];
   private currentIndex = 0;
   private activeDialogueCommand: ShowDialogueCommand | null = null;
+  /** Number of options in the most recently emitted `dialogue:choices`, or `null` when not `waiting-for-choice`. Used to bounds-check `choose()`. */
+  private pendingChoiceCount: number | null = null;
 
   constructor(opts: { world: WorldState; host: EventHost; provider: DialogueProvider }) {
     this.world = opts.world;
@@ -123,20 +135,34 @@ export class EventInterpreter {
         `EventInterpreter: advance() called while not waiting for dialogue (state: '${this._state}').`,
       );
     }
-    if (this.stepDialogue()) return;
-    this.continueScript();
+    if (this.stepDialogue() === 'unblocked') this.continueScript();
   }
 
-  /** Select choice `index` from the current `dialogue:choices`. Throws unless `state` is `waiting-for-choice`. */
+  /**
+   * Select choice `index` from the current `dialogue:choices`. Throws
+   * unless `state` is `waiting-for-choice`, or `index` is not an integer in
+   * range `[0, options.length)` — the bounds check runs before the
+   * provider is touched, so an invalid index never reaches it.
+   */
   choose(index: number): void {
     if (this._state !== 'waiting-for-choice') {
       throw new Error(
         `EventInterpreter: choose() called while not waiting for a choice (state: '${this._state}').`,
       );
     }
-    this.provider.choose(index);
-    if (this.stepDialogue()) return;
-    this.continueScript();
+    const count = this.pendingChoiceCount ?? 0;
+    if (!Number.isInteger(index) || index < 0 || index >= count) {
+      throw new Error(
+        `EventInterpreter: choose(${index}) is out of bounds — expected an integer in [0, ${count}).`,
+      );
+    }
+    try {
+      this.provider.choose(index);
+    } catch (error) {
+      this.failScript(error);
+      return;
+    }
+    if (this.stepDialogue() === 'unblocked') this.continueScript();
   }
 
   private setState(next: InterpreterState): void {
@@ -152,32 +178,58 @@ export class EventInterpreter {
     this.continueScript();
   }
 
-  /** Steps the current dialogue session once. Returns `true` if it blocked on a line/choices step, `false` if it ended. */
-  private stepDialogue(): boolean {
-    const step = this.provider.next();
+  /**
+   * Steps the current dialogue session once. Returns `'blocked'` if it
+   * entered a line/choices step, `'unblocked'` if the session ended, or
+   * `'failed'` if `provider.next()` threw — in which case `failScript()`
+   * has already run and the caller must not do anything further.
+   */
+  private stepDialogue(): 'blocked' | 'unblocked' | 'failed' {
+    let step: ReturnType<DialogueProvider['next']>;
+    try {
+      step = this.provider.next();
+    } catch (error) {
+      this.failScript(error);
+      return 'failed';
+    }
     switch (step.kind) {
       case 'line': {
         this.setState('waiting-for-dialogue');
+        this.pendingChoiceCount = null;
         const speaker = step.speaker ?? this.activeDialogueCommand?.speaker;
         this.bus.emit(
           'dialogue:line',
           speaker !== undefined ? { speaker, text: step.text } : { text: step.text },
         );
-        return true;
+        return 'blocked';
       }
       case 'choices':
         this.setState('waiting-for-choice');
+        this.pendingChoiceCount = step.options.length;
         this.bus.emit('dialogue:choices', { options: step.options });
-        return true;
+        return 'blocked';
       case 'end':
         this.setState('running');
         this.activeDialogueCommand = null;
+        this.pendingChoiceCount = null;
         this.bus.emit('dialogue:closed', {});
-        return false;
+        return 'unblocked';
     }
   }
 
-  /** Executes commands synchronously from `currentIndex` until the script finishes or blocks (moveEntity/dialogue). */
+  /**
+   * Executes commands synchronously from `currentIndex` until the script
+   * finishes, blocks (moveEntity/dialogue), or fails.
+   *
+   * ponytail: blocking commands resume via direct recursive calls back into
+   * `continueScript()` (a `moveEntity` `done()` callback, or `advance()`/
+   * `choose()` after a dialogue step) rather than a trampoline/explicit
+   * work-stack. Fine for v1's script lengths; a script with an extremely
+   * deep synchronous chain of moves/dialogue steps could in principle hit
+   * the call-stack limit. If that ever becomes a real constraint, the fix
+   * is a trampoline (an explicit loop draining a work queue instead of
+   * recursive calls), not a change to the public API.
+   */
   private continueScript(): void {
     while (this.currentIndex < this.currentCommands.length) {
       const command = this.currentCommands[this.currentIndex];
@@ -190,7 +242,12 @@ export class EventInterpreter {
           continue;
 
         case 'teleport':
-          this.host.teleport(command.entityId, command.x, command.y, command.facing);
+          try {
+            this.host.teleport(command.entityId, command.x, command.y, command.facing);
+          } catch (error) {
+            this.failScript(error);
+            return;
+          }
           continue;
 
         case 'conditional': {
@@ -202,16 +259,27 @@ export class EventInterpreter {
         }
 
         case 'moveEntity':
-          this.host.moveEntity(command.entityId, command.direction, command.steps, () => {
-            this.continueScript();
-          });
+          try {
+            this.host.moveEntity(command.entityId, command.direction, command.steps, () => {
+              this.continueScript();
+            });
+          } catch (error) {
+            this.failScript(error);
+            return;
+          }
           return;
 
-        case 'showDialogue':
+        case 'showDialogue': {
           this.activeDialogueCommand = command;
-          this.provider.open(command.source);
-          if (this.stepDialogue()) return;
-          continue;
+          try {
+            this.provider.open(command.source);
+          } catch (error) {
+            this.failScript(error);
+            return;
+          }
+          if (this.stepDialogue() === 'unblocked') continue;
+          return;
+        }
       }
     }
 
@@ -222,7 +290,24 @@ export class EventInterpreter {
     this.activeDialogueCommand = null;
     this.currentCommands = [];
     this.currentIndex = 0;
+    this.pendingChoiceCount = null;
     this.bus.emit('script:finished', {});
+    this.setState('idle');
+    this.drainQueueIfIdle();
+  }
+
+  /**
+   * Aborts the current script after a host/provider call threw: the
+   * remaining commands are skipped (not resumed later), `script:failed`
+   * fires with the error, and the interpreter returns to `idle` and drains
+   * its queue so subsequent scripts are unaffected.
+   */
+  private failScript(error: unknown): void {
+    this.activeDialogueCommand = null;
+    this.currentCommands = [];
+    this.currentIndex = 0;
+    this.pendingChoiceCount = null;
+    this.bus.emit('script:failed', { error });
     this.setState('idle');
     this.drainQueueIfIdle();
   }

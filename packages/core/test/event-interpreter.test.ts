@@ -3,6 +3,7 @@ import type { DialogueProvider, DialogueStep } from '../src/dialogue-provider.js
 import type { CardinalDirection, DialogueSource } from '../src/event-command.js';
 import type { EventHost } from '../src/event-interpreter.js';
 import { EventInterpreter } from '../src/event-interpreter.js';
+import { PlainTextDialogueProvider } from '../src/plain-text-dialogue-provider.js';
 import { WorldState } from '../src/world-state.js';
 
 class FakeHost implements EventHost {
@@ -15,6 +16,10 @@ class FakeHost implements EventHost {
   }[] = [];
   /** When true (default), `moveEntity` calls `done()` synchronously. Set to false to hold it open and call `completeMove()` manually. */
   autoComplete = true;
+  /** When set, `moveEntity` throws this instead of recording the call. */
+  throwOnMove: Error | null = null;
+  /** When set, `teleport` throws this instead of recording the call. */
+  throwOnTeleport: Error | null = null;
   private pendingDone: (() => void) | null = null;
 
   moveEntity(
@@ -23,6 +28,7 @@ class FakeHost implements EventHost {
     steps: number,
     done: () => void,
   ): void {
+    if (this.throwOnMove) throw this.throwOnMove;
     this.moveCalls.push({ entityId, direction, steps });
     if (this.autoComplete) {
       done();
@@ -32,6 +38,7 @@ class FakeHost implements EventHost {
   }
 
   teleport(entityId: string, x: number, y: number, facing?: CardinalDirection): void {
+    if (this.throwOnTeleport) throw this.throwOnTeleport;
     this.teleportCalls.push(facing !== undefined ? { entityId, x, y, facing } : { entityId, x, y });
   }
 
@@ -46,6 +53,12 @@ class FakeHost implements EventHost {
 class FakeProvider implements DialogueProvider {
   readonly openCalls: DialogueSource[] = [];
   readonly chooseCalls: number[] = [];
+  /** When set, `open` throws this instead of recording the call. */
+  throwOnOpen: Error | null = null;
+  /** When set, `next` throws this instead of returning a queued step. */
+  throwOnNext: Error | null = null;
+  /** When set, `choose` throws this instead of recording the call. */
+  throwOnChoose: Error | null = null;
   private steps: readonly DialogueStep[] = [];
   private cursor = 0;
 
@@ -56,11 +69,13 @@ class FakeProvider implements DialogueProvider {
   }
 
   open(source: DialogueSource): void {
+    if (this.throwOnOpen) throw this.throwOnOpen;
     this.openCalls.push(source);
     this.cursor = 0;
   }
 
   next(): DialogueStep {
+    if (this.throwOnNext) throw this.throwOnNext;
     const step = this.steps[this.cursor];
     if (step === undefined) return { kind: 'end' };
     this.cursor += 1;
@@ -68,6 +83,7 @@ class FakeProvider implements DialogueProvider {
   }
 
   choose(index: number): void {
+    if (this.throwOnChoose) throw this.throwOnChoose;
     this.chooseCalls.push(index);
   }
 }
@@ -483,6 +499,197 @@ describe('EventInterpreter', () => {
       host.completeMove();
 
       expect(finished).toHaveBeenCalledTimes(2);
+    });
+
+    it('finishes immediately and returns to idle for an empty script', () => {
+      const { interpreter } = setup();
+      const finished = vi.fn();
+      interpreter.signals.on('script:finished', finished);
+
+      interpreter.run([]);
+
+      expect(finished).toHaveBeenCalledTimes(1);
+      expect(interpreter.state).toBe('idle');
+    });
+  });
+
+  describe('script:failed', () => {
+    it('aborts the script, skips remaining commands, and returns to idle when the dialogue provider throws opening an unsupported source', () => {
+      const world = new WorldState();
+      const host = new FakeHost();
+      // Real provider: only supports 'text' sources — an 'ink' source reaching it is the
+      // concrete repro (e.g. a showDialogue routed to the wrong provider).
+      const provider = new PlainTextDialogueProvider();
+      const interpreter = new EventInterpreter({ world, host, provider });
+      const failed = vi.fn();
+      interpreter.signals.on('script:failed', failed);
+
+      interpreter.run([
+        { type: 'setWorldVar', key: 'before', value: true },
+        { type: 'showDialogue', source: { kind: 'ink', storyId: 'guard' } },
+        { type: 'setWorldVar', key: 'after', value: true },
+      ]);
+
+      expect(failed).toHaveBeenCalledTimes(1);
+      expect(failed.mock.calls[0]?.[0].error).toBeInstanceOf(Error);
+      expect(interpreter.state).toBe('idle');
+      expect(world.get('before')).toBe(true);
+      expect(world.has('after')).toBe(false);
+    });
+
+    it('leaves the interpreter usable afterward — a subsequent script still runs to completion', () => {
+      const world = new WorldState();
+      const host = new FakeHost();
+      const provider = new PlainTextDialogueProvider();
+      const interpreter = new EventInterpreter({ world, host, provider });
+
+      interpreter.run([{ type: 'showDialogue', source: { kind: 'ink', storyId: 'guard' } }]);
+      expect(interpreter.state).toBe('idle');
+
+      const finished = vi.fn();
+      interpreter.signals.on('script:finished', finished);
+      interpreter.run([{ type: 'setWorldVar', key: 'stillWorks', value: true }]);
+
+      expect(world.get('stillWorks')).toBe(true);
+      expect(finished).toHaveBeenCalledTimes(1);
+    });
+
+    it('aborts the script and returns to idle when host.moveEntity throws', () => {
+      const { world, host, interpreter } = setup();
+      const moveError = new Error('grid unavailable');
+      host.throwOnMove = moveError;
+      const failed = vi.fn();
+      interpreter.signals.on('script:failed', failed);
+
+      interpreter.run([
+        { type: 'moveEntity', entityId: 'hero', direction: 'up', steps: 1 },
+        { type: 'setWorldVar', key: 'after', value: true },
+      ]);
+
+      expect(failed).toHaveBeenCalledWith({ error: moveError });
+      expect(interpreter.state).toBe('idle');
+      expect(world.has('after')).toBe(false);
+    });
+
+    it('aborts the script and returns to idle when host.teleport throws', () => {
+      const { world, host, interpreter } = setup();
+      const teleportError = new Error('out of bounds');
+      host.throwOnTeleport = teleportError;
+      const failed = vi.fn();
+      interpreter.signals.on('script:failed', failed);
+
+      interpreter.run([
+        { type: 'teleport', entityId: 'hero', x: 1, y: 1 },
+        { type: 'setWorldVar', key: 'after', value: true },
+      ]);
+
+      expect(failed).toHaveBeenCalledWith({ error: teleportError });
+      expect(interpreter.state).toBe('idle');
+      expect(world.has('after')).toBe(false);
+    });
+
+    it('aborts and returns to idle when the provider throws inside next() during advance()', () => {
+      const { world, interpreter, provider } = setup();
+      provider.queueSteps([{ kind: 'line', text: 'One.' }]);
+      const nextError = new Error('story runtime crashed');
+      const failed = vi.fn();
+      interpreter.signals.on('script:failed', failed);
+
+      interpreter.run([
+        { type: 'showDialogue', source: { kind: 'text', lines: ['One.'] } },
+        { type: 'setWorldVar', key: 'after', value: true },
+      ]);
+      provider.throwOnNext = nextError;
+      interpreter.advance();
+
+      expect(failed).toHaveBeenCalledWith({ error: nextError });
+      expect(interpreter.state).toBe('idle');
+      expect(world.has('after')).toBe(false);
+    });
+
+    it('aborts and returns to idle when the provider throws inside choose()', () => {
+      const { world, interpreter, provider } = setup();
+      provider.queueSteps([{ kind: 'choices', options: ['Yes', 'No'] }]);
+      const chooseError = new Error('story runtime crashed');
+      const failed = vi.fn();
+      interpreter.signals.on('script:failed', failed);
+
+      interpreter.run([
+        { type: 'showDialogue', source: { kind: 'text', lines: [] } },
+        { type: 'setWorldVar', key: 'after', value: true },
+      ]);
+      provider.throwOnChoose = chooseError;
+      interpreter.choose(0);
+
+      expect(failed).toHaveBeenCalledWith({ error: chooseError });
+      expect(interpreter.state).toBe('idle');
+      expect(world.has('after')).toBe(false);
+    });
+
+    it('drains a script that was already queued once the failing script aborts', () => {
+      const { world, host, interpreter, provider } = setup();
+      host.autoComplete = false;
+      const openError = new Error('dialogue backend unavailable');
+      const failed = vi.fn();
+      interpreter.signals.on('script:failed', failed);
+
+      interpreter.run([
+        { type: 'moveEntity', entityId: 'hero', direction: 'up', steps: 1 },
+        { type: 'showDialogue', source: { kind: 'text', lines: ['x'] } },
+      ]);
+      interpreter.run([{ type: 'setWorldVar', key: 'queuedRan', value: true }]);
+      expect(interpreter.queueLength).toBe(1);
+
+      provider.throwOnOpen = openError;
+      host.completeMove();
+
+      expect(failed).toHaveBeenCalledWith({ error: openError });
+      expect(world.get('queuedRan')).toBe(true);
+      expect(interpreter.queueLength).toBe(0);
+    });
+  });
+
+  describe('choose() bounds validation', () => {
+    it('throws for a negative index without calling provider.choose()', () => {
+      const { interpreter, provider } = setup();
+      provider.queueSteps([{ kind: 'choices', options: ['Yes', 'No'] }]);
+      interpreter.run([{ type: 'showDialogue', source: { kind: 'text', lines: [] } }]);
+
+      expect(() => interpreter.choose(-1)).toThrow(
+        'EventInterpreter: choose(-1) is out of bounds — expected an integer in [0, 2).',
+      );
+      expect(provider.chooseCalls).toEqual([]);
+    });
+
+    it('throws for a non-integer index without calling provider.choose()', () => {
+      const { interpreter, provider } = setup();
+      provider.queueSteps([{ kind: 'choices', options: ['Yes', 'No'] }]);
+      interpreter.run([{ type: 'showDialogue', source: { kind: 'text', lines: [] } }]);
+
+      expect(() => interpreter.choose(0.5)).toThrow(
+        'EventInterpreter: choose(0.5) is out of bounds — expected an integer in [0, 2).',
+      );
+      expect(provider.chooseCalls).toEqual([]);
+    });
+
+    it('throws for an index >= the number of options without calling provider.choose()', () => {
+      const { interpreter, provider } = setup();
+      provider.queueSteps([{ kind: 'choices', options: ['Yes', 'No'] }]);
+      interpreter.run([{ type: 'showDialogue', source: { kind: 'text', lines: [] } }]);
+
+      expect(() => interpreter.choose(2)).toThrow(
+        'EventInterpreter: choose(2) is out of bounds — expected an integer in [0, 2).',
+      );
+      expect(provider.chooseCalls).toEqual([]);
+    });
+
+    it('accepts a valid index at the upper bound (length - 1)', () => {
+      const { interpreter, provider } = setup();
+      provider.queueSteps([{ kind: 'choices', options: ['Yes', 'No'] }, { kind: 'end' }]);
+      interpreter.run([{ type: 'showDialogue', source: { kind: 'text', lines: [] } }]);
+
+      expect(() => interpreter.choose(1)).not.toThrow();
+      expect(provider.chooseCalls).toEqual([1]);
     });
   });
 });
