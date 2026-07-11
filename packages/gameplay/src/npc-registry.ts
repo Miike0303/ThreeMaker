@@ -1,3 +1,5 @@
+import type { Direction } from './grid-mover.js';
+import { DIRECTION_DELTA } from './grid-mover.js';
 import type { NpcDefinition } from './parse-npcs.js';
 
 function tileKey(x: number, y: number): string {
@@ -40,10 +42,30 @@ export class NpcRegistry {
   }
 
   /**
-   * The NPC standing at `(x, y)`, or `undefined` if none does. Use
-   * `npc.onInteract` to route an interact input to that NPC's event.
+   * The NPC standing at the exact tile `(x, y)`, or `undefined` if none
+   * does. A direct tile lookup -- to route a player's interact input
+   * (which checks the tile one step *ahead* in their facing direction, not
+   * their own tile), use `npcAdjacentFacing` instead.
    */
   findNpcAt(x: number, y: number): NpcDefinition | undefined {
     return this.npcs.find((npc) => npc.x === x && npc.y === y);
+  }
+
+  /**
+   * The NPC the player at `(x, y)` facing `facing` would interact with --
+   * the tile one step ahead in the facing direction (mirrors
+   * `TriggerIndex#interact`'s encapsulated adjacency+facing math, so
+   * callers never hand-roll `DIRECTION_DELTA` arithmetic for this check).
+   * Returns `undefined` when no NPC stands there. Use `npc.onInteract` to
+   * route the result to the NPC's event.
+   *
+   * ```ts
+   * const target = npcRegistry.npcAdjacentFacing(player.tile.x, player.tile.y, player.facing);
+   * if (target) interpreter.run(eventScript.events[target.onInteract]);
+   * ```
+   */
+  npcAdjacentFacing(x: number, y: number, facing: Direction): NpcDefinition | undefined {
+    const delta = DIRECTION_DELTA[facing];
+    return this.findNpcAt(x + delta.x, y + delta.y);
   }
 }

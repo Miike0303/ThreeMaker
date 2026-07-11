@@ -180,4 +180,27 @@ describe('parseNpcs', () => {
       }),
     ).toThrow('Invalid NPC JSON: npcs[0] "sprite.index" must be an integer, got 1.5.');
   });
+
+  it('throws when two npcs occupy the same tile', () => {
+    const npcAt = (id: string, x: number, y: number) => ({
+      id,
+      x,
+      y,
+      facing: 'down',
+      sprite: { sheet: 'Actor1', index: 1 },
+      onInteract: 'e',
+    });
+
+    expect(() =>
+      parseNpcs({
+        version: 1,
+        npcs: [
+          npcAt('villager', 1, 1),
+          npcAt('guard', 4, 7),
+          npcAt('merchant', 2, 2),
+          npcAt('imposter', 4, 7),
+        ],
+      }),
+    ).toThrow('Invalid NPC JSON: npcs[3] occupies the same tile (4,7) as npcs[1].');
+  });
 });

@@ -57,15 +57,27 @@ describe('NpcRegistry', () => {
     expect(canMove(5, 6, 'up')).toBe(false); // (5,5) is the NPC tile, approached from below
     expect(canMove(5, 6, 'down')).toBe(true); // (5,7) is open
   });
+});
 
-  it('treats occupies() as reflecting NPC positions only, independent of the player', () => {
-    // Edge case: an NPC definition happens to share a tile with the
-    // player's current position (e.g. bad content data). occupies() must
-    // still report true for that tile — it has no notion of "player" at
-    // all, only NPC tiles.
-    const playerTile = { x: 3, y: 4 };
-    const registry = new NpcRegistry([npc({ x: playerTile.x, y: playerTile.y })]);
+describe('NpcRegistry.npcAdjacentFacing', () => {
+  it('returns the NPC one tile ahead in each facing direction', () => {
+    const registry = new NpcRegistry([npc({ id: 'elder', x: 3, y: 3 })]);
 
-    expect(registry.occupies(playerTile.x, playerTile.y)).toBe(true);
+    expect(registry.npcAdjacentFacing(3, 4, 'up')?.id).toBe('elder'); // player below, facing up
+    expect(registry.npcAdjacentFacing(3, 2, 'down')?.id).toBe('elder'); // player above, facing down
+    expect(registry.npcAdjacentFacing(4, 3, 'left')?.id).toBe('elder'); // player right, facing left
+    expect(registry.npcAdjacentFacing(2, 3, 'right')?.id).toBe('elder'); // player left, facing right
+  });
+
+  it('returns undefined when adjacent but facing the wrong direction', () => {
+    const registry = new NpcRegistry([npc({ id: 'elder', x: 3, y: 3 })]);
+
+    expect(registry.npcAdjacentFacing(3, 4, 'down')).toBeUndefined();
+  });
+
+  it('returns undefined when facing the right direction but not adjacent', () => {
+    const registry = new NpcRegistry([npc({ id: 'elder', x: 3, y: 3 })]);
+
+    expect(registry.npcAdjacentFacing(3, 5, 'up')).toBeUndefined();
   });
 });

@@ -102,8 +102,26 @@ export function parseNpcs(json: unknown): NpcFile {
     fail('"npcs" must be an array.');
   }
 
-  return {
-    version: 1,
-    npcs: npcs.map((npc, index) => parseNpc(npc, `npcs[${index}]`)),
-  };
+  const parsed: NpcDefinition[] = [];
+  // Tile occupancy is a hard content-authoring invariant: this is a grid
+  // game with NPC collision (see NpcRegistry#occupies), so two NPCs on the
+  // same tile is a content bug -- one of them would be permanently
+  // unreachable. Rejected at parse time rather than left to a runtime
+  // surprise, tracking the first npc index that claimed each tile so the
+  // error can name both conflicting entries.
+  const tileOwner = new Map<string, number>();
+  npcs.forEach((npc, index) => {
+    const parsedNpc = parseNpc(npc, `npcs[${index}]`);
+    const key = `${parsedNpc.x},${parsedNpc.y}`;
+    const owner = tileOwner.get(key);
+    if (owner !== undefined) {
+      fail(
+        `npcs[${index}] occupies the same tile (${parsedNpc.x},${parsedNpc.y}) as npcs[${owner}].`,
+      );
+    }
+    tileOwner.set(key, index);
+    parsed.push(parsedNpc);
+  });
+
+  return { version: 1, npcs: parsed };
 }
