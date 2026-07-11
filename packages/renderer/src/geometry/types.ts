@@ -1,4 +1,5 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
+import type { CliffEdgeData } from './elevation.js';
 
 /** RPG Maker MV/MZ standard tile edge length in source-image pixels. */
 export const TILE_SIZE_PX = 48;
@@ -42,6 +43,21 @@ export interface TileBuildData {
    */
   readonly quads: readonly UvRect[];
   readonly elevation: ElevationClass;
+  /**
+   * Region-derived floor elevation (MV3D convention: region 1-7 = that many
+   * tile-heights up), in tile-height units. Optional/defaults to 0 so
+   * existing literal `TileBuildData` fixtures (tests, callers built before
+   * this field existed) keep compiling unchanged.
+   */
+  readonly height?: number;
+  /**
+   * Cliff side faces this tile's own elevated ground needs, one per edge
+   * whose neighbor sits lower. Only ever populated for the tile that "owns"
+   * a map cell's floor (the layer-0 ground tile there) -- see
+   * `chunk-geometry.ts` -- so a cell's cliff faces aren't duplicated across
+   * whatever else got painted on higher editable layers at the same spot.
+   */
+  readonly cliffEdges?: readonly CliffEdgeData[];
 }
 
 /**
@@ -57,6 +73,8 @@ export interface ShadowBuildData {
   readonly tileY: number;
   /** Quarter bitmask, 1-15 (0 marks are not emitted). */
   readonly mask: number;
+  /** Region-derived floor elevation at this tile, in tile-height units. Optional/defaults to 0, see `TileBuildData.height`. */
+  readonly height?: number;
 }
 
 /** All tiles belonging to one chunkSize x chunkSize region of the map. */

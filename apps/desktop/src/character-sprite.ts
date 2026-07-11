@@ -100,11 +100,19 @@ export class CharacterSprite {
     this.setFrame('down', 1);
   }
 
-  /** Places the quad at a (possibly fractional, mid-step) tile position. `tileWorldSize` must match the value the tilemap was built with. */
-  setTilePosition(tileX: number, tileY: number, tileWorldSize = 1): void {
+  /**
+   * Places the quad at a (possibly fractional, mid-step) tile position.
+   * `tileWorldSize` must match the value the tilemap was built with.
+   * `groundY` is the world-space elevation of the tile the character stands
+   * on (region-derived height * heightUnit, see `elevation.ts`); defaults to
+   * 0 (flat ground). Cross-height steps are blocked by `PassabilityGrid`, so
+   * a single step's source and destination are always the same elevation --
+   * no interpolation between two different `groundY` values is needed here.
+   */
+  setTilePosition(tileX: number, tileY: number, tileWorldSize = 1, groundY = 0): void {
     this.mesh.position.set(
       tileCenterToWorld(tileX, tileWorldSize),
-      0,
+      groundY,
       tileCenterToWorld(tileY, tileWorldSize),
     );
   }

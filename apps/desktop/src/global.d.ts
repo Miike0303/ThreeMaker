@@ -7,6 +7,10 @@ declare global {
   // is no equivalent in a production build.
   const __FIXTURES_DIR__: string;
 
+  // Same as `__FIXTURES_DIR__`, but for the mz-project1 fixture (genuine MZ
+  // dir/data layout) -- see fixture-paths.ts and vite.config.ts.
+  const __MZ_FIXTURES_DIR__: string;
+
   interface Window {
     /**
      * Dev-only hook exposing the renderer, so a headless visual check can

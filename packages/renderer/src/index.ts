@@ -7,6 +7,14 @@ export {
   ROSELIAM_DUNGEON_WALL_TILE_ID,
 } from './dev/synthetic-map.js';
 export { buildChunks } from './geometry/chunk-geometry.js';
+export type { CliffEdgeData, EdgeDirection } from './geometry/elevation.js';
+export {
+  computeCliffEdges,
+  computeHeightGrid,
+  computeOpenEdges,
+  heightForRegion,
+  isWallSheet,
+} from './geometry/elevation.js';
 export type { TileUv } from './geometry/tile-uv.js';
 export { computeTileUv } from './geometry/tile-uv.js';
 export type {

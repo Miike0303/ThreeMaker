@@ -11,11 +11,12 @@ const IMPASSABLE_RIGHT = 0x4;
 const IMPASSABLE_UP = 0x8;
 const STAR_UPPER_LAYER = 0x10;
 
-/** Builds a minimal synthetic `RpgmMap`. `layer0`/`layer3` are row-major, length width*height; omitted layers are all-zero (empty). */
+/** Builds a minimal synthetic `RpgmMap`. `layer0`/`layer3` are row-major, length width*height; omitted layers are all-zero (empty). `regions` defaults to all-zero (ground level everywhere). */
 function buildMap(
   width: number,
   height: number,
   layerOverrides: Partial<Record<0 | 1 | 2 | 3, TileLayer>> = {},
+  regions?: TileLayer,
 ): RpgmMap {
   const size = width * height;
   const zeros: TileLayer = new Array(size).fill(0);
@@ -33,7 +34,7 @@ function buildMap(
     height,
     tilesetId: 1,
     scrollType: 0,
-    layers: { tileLayers, shadows: zeros, regions: zeros },
+    layers: { tileLayers, shadows: zeros, regions: regions ?? zeros },
   };
 }
 
@@ -151,5 +152,42 @@ describe('PassabilityGrid (synthetic maps)', () => {
     expect(grid.isStandable(1, 0)).toBe(true); // partially blocked, still standable
     expect(grid.isStandable(2, 0)).toBe(false); // fully sealed
     expect(grid.isStandable(-1, 0)).toBe(false); // out of bounds
+  });
+});
+
+describe('PassabilityGrid elevation (region-derived height)', () => {
+  it('exposes elevationAt matching the region layer, per the MV3D region-N-is-height-N convention', () => {
+    const layer0 = new Array(3).fill(1);
+    const regions = [0, 3, 8]; // ground, height 3, out-of-range region (also ground)
+    const map = buildMap(3, 1, { 0: layer0 }, regions);
+    const tileset = buildTileset({ 1: 0 });
+    const grid = new PassabilityGrid(map, tileset);
+
+    expect(grid.elevationAt(0, 0)).toBe(0);
+    expect(grid.elevationAt(1, 0)).toBe(3);
+    expect(grid.elevationAt(2, 0)).toBe(0);
+    expect(grid.elevationAt(-1, 0)).toBe(0); // out of bounds
+  });
+
+  it('blocks a step between tiles at different elevations, even with no other passage flags set', () => {
+    const layer0 = new Array(2).fill(1);
+    const regions = [0, 1]; // (0,0) ground, (1,0) height 1
+    const map = buildMap(2, 1, { 0: layer0 }, regions);
+    const tileset = buildTileset({ 1: 0 });
+    const grid = new PassabilityGrid(map, tileset);
+
+    expect(grid.canMove(0, 0, 'right')).toBe(false);
+    expect(grid.canMove(1, 0, 'left')).toBe(false);
+  });
+
+  it('allows a step between tiles at the same elevation, even both nonzero', () => {
+    const layer0 = new Array(2).fill(1);
+    const regions = [2, 2];
+    const map = buildMap(2, 1, { 0: layer0 }, regions);
+    const tileset = buildTileset({ 1: 0 });
+    const grid = new PassabilityGrid(map, tileset);
+
+    expect(grid.canMove(0, 0, 'right')).toBe(true);
+    expect(grid.canMove(1, 0, 'left')).toBe(true);
   });
 });

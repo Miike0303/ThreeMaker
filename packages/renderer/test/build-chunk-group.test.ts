@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import type { ChunkBuildData } from '../src/geometry/types.js';
+import type { ChunkBuildData, TileBuildData } from '../src/geometry/types.js';
 import { buildChunkGroup } from '../src/scene/build-chunk-group.js';
 
 function makeChunk(overrides: Partial<ChunkBuildData> = {}): ChunkBuildData {
@@ -278,5 +278,180 @@ describe('buildChunkGroup', () => {
     expect(box.max.x).toBeCloseTo(1);
     expect(box.min.y).toBeCloseTo(0);
     expect(box.max.y).toBeCloseTo(1);
+  });
+});
+
+describe('buildChunkGroup wall prisms (A3/A4)', () => {
+  function wallTile(x: number, y: number): TileBuildData {
+    return {
+      tileX: x,
+      tileY: y,
+      layerIndex: 0,
+      sheet: 'A4',
+      quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+      elevation: 'ground',
+    };
+  }
+
+  it('renders an isolated wall tile as 4 side faces + a top cap (5 quads, 20 vertices)', () => {
+    const chunk = makeChunk({ tiles: [wallTile(0, 0)] });
+
+    const group = buildChunkGroup(
+      chunk,
+      { A4: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    expect(geometry.getAttribute('position').count).toBe(5 * 4);
+  });
+
+  it('draws no interior face between two adjacent wall tiles (each contributes 3 sides + a cap)', () => {
+    const chunk = makeChunk({ tiles: [wallTile(0, 0), wallTile(1, 0)] });
+
+    const group = buildChunkGroup(
+      chunk,
+      { A4: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    // 2 tiles * (3 open sides + 1 cap) * 4 vertices, instead of 2*(4+1)*4 --
+    // the shared east/west face between them is never drawn on either side.
+    expect(geometry.getAttribute('position').count).toBe(2 * 4 * 4);
+  });
+
+  it('stands a wall prism up from y=0 to the default 2-tile MV3D wall height', () => {
+    const chunk = makeChunk({ tiles: [wallTile(0, 0)] });
+
+    const group = buildChunkGroup(
+      chunk,
+      { A4: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+    expect(box.min.y).toBeCloseTo(0);
+    expect(box.max.y).toBeCloseTo(2);
+  });
+
+  it('a plain (non-A3/A4) ground tile is unaffected -- still a single flat quad', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    expect((mesh.geometry as THREE.BufferGeometry).getAttribute('position').count).toBe(4);
+  });
+});
+
+describe('buildChunkGroup elevation (region-derived height + cliff faces)', () => {
+  it('lifts an elevated ground tile flat quad to y = height * heightUnit', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+          height: 3,
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+    expect(box.min.y).toBeCloseTo(3);
+    expect(box.max.y).toBeCloseTo(3);
+  });
+
+  it('adds one cliff side face per cliffEdges entry, spanning from the neighbor height up to its own', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 2,
+          tileY: 1,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+          height: 3,
+          cliffEdges: [
+            { edge: 'west', neighborHeight: 0 },
+            { edge: 'north', neighborHeight: 1 },
+          ],
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    // 1 ground quad + 2 cliff faces, 4 vertices each.
+    expect(geometry.getAttribute('position').count).toBe(3 * 4);
+
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox as THREE.Box3;
+    // The taller (west) cliff face reaches all the way down to y=0.
+    expect(box.min.y).toBeCloseTo(0);
+    expect(box.max.y).toBeCloseTo(3);
+  });
+
+  it('a ground tile with no cliffEdges has no extra faces beyond its own quad(s)', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+          height: 2,
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    expect((mesh.geometry as THREE.BufferGeometry).getAttribute('position').count).toBe(4);
   });
 });

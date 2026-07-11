@@ -40,6 +40,97 @@ function makeMap(overrides: Partial<RpgmMap> = {}): RpgmMap {
   };
 }
 
+describe('buildChunks elevation (region-derived height)', () => {
+  it('omits height from a ground-level tile (region 0) but reports it for an elevated one', () => {
+    const width = 2;
+    const height = 1;
+    const layer0 = [1, 1];
+    const regions = [0, 3];
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [layer0, new Array(2).fill(0), new Array(2).fill(0), new Array(2).fill(0)],
+        shadows: new Array(2).fill(0),
+        regions,
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+    const tiles = chunks[0]?.tiles ?? [];
+    const groundTile = tiles.find((tile) => tile.tileX === 0);
+    const elevatedTile = tiles.find((tile) => tile.tileX === 1);
+
+    expect(groundTile?.height ?? 0).toBe(0);
+    expect(elevatedTile?.height).toBe(3);
+  });
+
+  it('attaches cliffEdges to a layer-0 ground tile whose neighbor is lower, and omits it otherwise', () => {
+    // 3x3 grid: middle row is (ground, elevated, elevated); top/bottom rows
+    // match the elevated columns' height, so only east/west edges are cliffs
+    // (north/south neighbors are in-bounds and same height, isolating the
+    // check from the map-boundary-is-ground-0 rule exercised elsewhere).
+    const width = 3;
+    const height = 3;
+    // biome-ignore format: readability as a grid
+    const layer0 = [
+      1, 1, 1,
+      1, 1, 1,
+      1, 1, 1,
+    ];
+    // biome-ignore format: readability as a grid
+    const regions = [
+      0, 2, 2,
+      0, 2, 2,
+      0, 2, 2,
+    ];
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [layer0, new Array(9).fill(0), new Array(9).fill(0), new Array(9).fill(0)],
+        shadows: new Array(9).fill(0),
+        regions,
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+    const tiles = chunks[0]?.tiles ?? [];
+    const findAt = (x: number, y: number) =>
+      tiles.find((tile) => tile.tileX === x && tile.tileY === y);
+
+    expect(findAt(0, 1)?.cliffEdges ?? []).toEqual([]); // ground itself: no cliff
+    expect(findAt(1, 1)?.cliffEdges).toEqual([{ edge: 'west', neighborHeight: 0 }]);
+    // (2,1) is bordered by the same-height (1,1) to the west and the map
+    // edge (treated as ground, height 0) to the east.
+    expect(findAt(2, 1)?.cliffEdges).toEqual([{ edge: 'east', neighborHeight: 0 }]);
+  });
+
+  it('does not attach cliffEdges to an "upper" (star-bit) tile even when elevated', () => {
+    // tile id 2 is flagged upper-layer in makeTileset(); give it a region.
+    const width = 1;
+    const height = 1;
+    const layer0 = [2];
+    const regions = [3];
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [layer0, new Array(1).fill(0), new Array(1).fill(0), new Array(1).fill(0)],
+        shadows: new Array(1).fill(0),
+        regions,
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+    const tile = chunks[0]?.tiles[0];
+
+    expect(tile?.elevation).toBe('upper');
+    expect(tile?.height).toBe(3);
+    expect(tile?.cliffEdges).toBeUndefined();
+  });
+});
+
 describe('buildChunks', () => {
   it('returns no chunks for an all-empty map', () => {
     const chunks = buildChunks(makeMap(), makeTileset(), SHEET_SIZES);

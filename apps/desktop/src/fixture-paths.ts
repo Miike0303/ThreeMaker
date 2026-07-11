@@ -11,6 +11,16 @@ export function fixtureJsonUrl(fixturesDir: string, fileName: string): string {
   return `/@fs/${fixturesDir}/${fileName}`;
 }
 
+/**
+ * Same as `fixtureJsonUrl`, but for a fixture using the genuine RPG Maker MZ
+ * project layout (a `data/` subfolder), like `mz-project1` -- unlike
+ * `roseliam`'s flat layout, its `MapXXX.json`/`Tilesets.json`/etc. live under
+ * `<fixturesDir>/data/`.
+ */
+export function mzFixtureJsonUrl(fixturesDir: string, fileName: string): string {
+  return `/@fs/${fixturesDir}/data/${fileName}`;
+}
+
 /** Same as `fixtureJsonUrl`, but for a tileset sheet PNG under `img/tilesets/`. */
 export function fixtureImageUrl(fixturesDir: string, sheetName: string): string {
   return `/@fs/${fixturesDir}/img/tilesets/${sheetName}.png`;

@@ -1,5 +1,6 @@
 import type { RpgmMap, RpgmTileset } from '@threemaker/importer-rpgm';
-import { decodeTileFlags } from '@threemaker/importer-rpgm';
+import { computeHeightGrid, decodeTileFlags } from '@threemaker/importer-rpgm';
+import { computeCliffEdges } from './elevation.js';
 import { computeTileUv } from './tile-uv.js';
 import type { ChunkBuildData, ShadowBuildData, SheetPixelSizes, TileBuildData } from './types.js';
 import { DEFAULT_CHUNK_SIZE } from './types.js';
@@ -27,6 +28,12 @@ export function buildChunks(
     throw new Error(`chunkSize must be a positive number, got ${chunkSize}.`);
   }
 
+  // Region-derived elevation (MV3D convention), computed once for the whole
+  // map so cliff-edge lookups can freely check neighbors across chunk
+  // boundaries (unlike the wall-prism interior-face check in
+  // build-chunk-group.ts, which only has chunk-local data to work with).
+  const heightGrid = computeHeightGrid(map);
+
   const chunkTiles = new Map<string, TileBuildData[]>();
 
   const layers = map.layers.tileLayers;
@@ -43,6 +50,8 @@ export function buildChunks(
         if (!tileUv) continue;
 
         const flags = decodeTileFlags(tileset.flags[tileId] ?? 0);
+        const elevation = flags.isUpperLayer ? 'upper' : 'ground';
+        const height = heightGrid[y * map.width + x] ?? 0;
 
         const chunkX = Math.floor(x / chunkSize);
         const chunkY = Math.floor(y / chunkSize);
@@ -53,13 +62,25 @@ export function buildChunks(
           chunkTiles.set(key, tiles);
         }
 
+        // Cliff faces are derived once per map cell, from that cell's
+        // layer-0 ground tile only -- ponytail: a ground tile painted on a
+        // higher editable layer over an empty layer-0 at the same spot
+        // won't get cliff faces this slice (real maps always paint their
+        // base floor on layer 0, so this doesn't bite the fixtures here).
+        const cliffEdges =
+          layerIndex === 0 && elevation === 'ground'
+            ? computeCliffEdges(heightGrid, map.width, map.height, x, y)
+            : undefined;
+
         tiles.push({
           tileX: x,
           tileY: y,
           layerIndex: layerIndex as 0 | 1 | 2 | 3,
           sheet: tileUv.sheet,
           quads: tileUv.quads,
-          elevation: flags.isUpperLayer ? 'upper' : 'ground',
+          elevation,
+          ...(height !== 0 ? { height } : {}),
+          ...(cliffEdges && cliffEdges.length > 0 ? { cliffEdges } : {}),
         });
       }
     }
@@ -80,7 +101,13 @@ export function buildChunks(
         shadows = [];
         chunkShadows.set(key, shadows);
       }
-      shadows.push({ tileX: x, tileY: y, mask });
+      const shadowHeight = heightGrid[y * map.width + x] ?? 0;
+      shadows.push({
+        tileX: x,
+        tileY: y,
+        mask,
+        ...(shadowHeight !== 0 ? { height: shadowHeight } : {}),
+      });
     }
   }
 

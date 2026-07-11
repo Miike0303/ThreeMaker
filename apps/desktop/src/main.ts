@@ -2,7 +2,7 @@ import { GameLoop } from '@threemaker/core';
 import type { Direction } from '@threemaker/gameplay';
 import { GridMover, PassabilityGrid } from '@threemaker/gameplay';
 import type { RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
-import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
+import { computeHeightGrid, parseMap, parseTilesets } from '@threemaker/importer-rpgm';
 import type { SheetPixelSizes } from '@threemaker/renderer';
 import {
   buildChunks,
@@ -15,7 +15,12 @@ import {
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
 import { CharacterSprite, tileCenterToWorld } from './character-sprite.js';
-import { fixtureCharacterUrl, fixtureImageUrl, fixtureJsonUrl } from './fixture-paths.js';
+import {
+  fixtureCharacterUrl,
+  fixtureImageUrl,
+  fixtureJsonUrl,
+  mzFixtureJsonUrl,
+} from './fixture-paths.js';
 import { createHd2dPipeline } from './hd2d-pipeline.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
@@ -27,6 +32,12 @@ import { WalkAnimation } from './walk-animation.js';
 // ground and upper-layer/"star" tiles).
 const FIXTURE_MAP_ID = 7;
 const FIXTURE_MAP_FILE = 'Map007.json';
+
+// mz-project1 (see fixtures/README.md): a real RPG Maker MZ project, genuine
+// dir/data layout, with a painted region hill on Map001 -- used by the dev
+// map-cycle toggle to exercise region-based elevation end-to-end.
+const MZ_FIXTURE_MAP_ID = 1;
+const MZ_FIXTURE_MAP_FILE = 'Map001.json';
 
 // See fixtures/README.md: `Actor1.png` is the standard MV/MZ naming
 // convention for a playable-party-member sheet (8 characters, 4x2 grid);
@@ -97,6 +108,14 @@ interface FixtureMapData {
   readonly characterTexture: THREE.Texture;
 }
 
+/** A loaded map's own tileset + sheet textures, without the (shared) player character sheet. */
+interface MapSourceData {
+  readonly map: RpgmMap;
+  readonly tileset: RpgmTileset;
+  readonly sheetPixelSizes: SheetPixelSizes;
+  readonly textures: Partial<Record<TileSheetId, THREE.Texture>>;
+}
+
 function assertOk(response: Response): Response {
   if (!response.ok) {
     throw new Error(
@@ -104,6 +123,32 @@ function assertOk(response: Response): Response {
     );
   }
   return response;
+}
+
+/** Loads every sheet texture a tileset references (skipping unused/empty sheet slots). */
+async function loadUsedSheetTextures(
+  fixturesDir: string,
+  tileset: RpgmTileset,
+): Promise<{
+  readonly textures: Partial<Record<TileSheetId, THREE.Texture>>;
+  readonly sheetPixelSizes: SheetPixelSizes;
+}> {
+  const usedSheets = (Object.entries(tileset.sheetNames) as [TileSheetId, string][]).filter(
+    ([, name]) => name.length > 0,
+  );
+
+  const textures: Partial<Record<TileSheetId, THREE.Texture>> = {};
+  const sheetPixelSizes: SheetPixelSizes = {};
+  await Promise.all(
+    usedSheets.map(async ([sheet, name]) => {
+      const texture = await loadSheetTexture(fixtureImageUrl(fixturesDir, name));
+      textures[sheet] = texture;
+      const image = texture.image as { width: number; height: number };
+      sheetPixelSizes[sheet] = { width: image.width, height: image.height };
+    }),
+  );
+
+  return { textures, sheetPixelSizes };
 }
 
 /**
@@ -129,27 +174,49 @@ async function loadFixtureMapData(): Promise<FixtureMapData> {
     throw new Error(`Tileset ${map.tilesetId} not found for ${FIXTURE_MAP_FILE}.`);
   }
 
-  const usedSheets = (Object.entries(tileset.sheetNames) as [TileSheetId, string][]).filter(
-    ([, name]) => name.length > 0,
-  );
-
-  const textures: Partial<Record<TileSheetId, THREE.Texture>> = {};
-  const sheetPixelSizes: SheetPixelSizes = {};
-  await Promise.all(
-    usedSheets.map(async ([sheet, name]) => {
-      const texture = await loadSheetTexture(fixtureImageUrl(__FIXTURES_DIR__, name));
-      textures[sheet] = texture;
-      const image = texture.image as { width: number; height: number };
-      sheetPixelSizes[sheet] = { width: image.width, height: image.height };
-    }),
-  );
+  const { textures, sheetPixelSizes } = await loadUsedSheetTextures(__FIXTURES_DIR__, tileset);
 
   return { map, tileset, sheetPixelSizes, textures, characterTexture };
+}
+
+/**
+ * Loads Map001 + its tileset from the mz-project1 fixture -- a genuine RPG
+ * Maker MZ dir/data-layout project (unlike Roseliam's flat layout, hence
+ * `mzFixtureJsonUrl` rather than `fixtureJsonUrl`) whose Map001 carries a
+ * painted region hill, used by the dev map-cycle toggle. No character sheet:
+ * the same player sprite/texture is reused across every map. Dev-only, same
+ * caveats as `loadFixtureMapData`.
+ */
+async function loadMzFixtureMapData(): Promise<MapSourceData> {
+  const [mapJson, tilesetsJson] = await Promise.all([
+    fetch(mzFixtureJsonUrl(__MZ_FIXTURES_DIR__, MZ_FIXTURE_MAP_FILE)).then((res) =>
+      assertOk(res).json(),
+    ),
+    fetch(mzFixtureJsonUrl(__MZ_FIXTURES_DIR__, 'Tilesets.json')).then((res) =>
+      assertOk(res).json(),
+    ),
+  ]);
+
+  const map = parseMap(mapJson, MZ_FIXTURE_MAP_ID);
+  const tilesets = parseTilesets(tilesetsJson);
+  const tileset = tilesets.find((entry) => entry.id === map.tilesetId);
+  if (!tileset) {
+    throw new Error(`Tileset ${map.tilesetId} not found for ${MZ_FIXTURE_MAP_FILE}.`);
+  }
+
+  const { textures, sheetPixelSizes } = await loadUsedSheetTextures(__MZ_FIXTURES_DIR__, tileset);
+
+  return { map, tileset, sheetPixelSizes, textures };
 }
 
 // World-space size of one tile edge; must match everywhere a world position
 // is derived from a tile coordinate (chunk geometry, the character quad).
 const TILE_WORLD_SIZE = 1;
+// World-space height of one region-elevation step; must match the
+// renderer's own default (`buildChunkGroup`'s `heightUnit` option, which
+// also defaults to `tileWorldSize`) so the character/camera line up with
+// the ground the tilemap actually renders.
+const HEIGHT_UNIT = TILE_WORLD_SIZE;
 // Player movement speed, in tiles/second.
 const PLAYER_SPEED = 4;
 // How quickly the camera catches up to the character; higher = snappier.
@@ -214,7 +281,17 @@ interface MapSession {
   readonly streamer: ChunkStreamer;
   readonly mover: GridMover;
   readonly spawn: { readonly x: number; readonly y: number };
+  /** Region-derived elevation grid (tile-height units), see `elevation.ts`; used to lift the character/camera onto elevated ground. */
+  readonly heightGrid: Uint8Array;
   dispose(): void;
+}
+
+/** World-space Y of the ground the character (or camera) should sit at, given its current tile. */
+function groundYAt(session: MapSession, tileX: number, tileY: number): number {
+  const x = Math.round(tileX);
+  const y = Math.round(tileY);
+  const height = session.heightGrid[y * session.map.width + x] ?? 0;
+  return height * HEIGHT_UNIT;
 }
 
 async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): Promise<void> {
@@ -231,12 +308,21 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
    * Builds a fully wired session for one map: chunk data for the whole map
    * (pure, cheap to keep), a streaming scene that only holds GPU geometry
    * near the character, passability + a spawn tile computed from it (never
-   * hardcoded), and the character's grid mover. Textures are shared across
-   * sessions (`ownsTextures: false`), so switching maps never reloads them.
+   * hardcoded), and the character's grid mover. `mapTileset`/`mapTextures`/
+   * `mapSheetPixelSizes` are per-map-source (the mz-project1 dev toggle uses
+   * an entirely different tileset/texture set than the Roseliam fixture);
+   * textures are shared across sessions of the same source
+   * (`ownsTextures: false`), so cycling back to a previously-seen map never
+   * reloads them.
    */
-  function createMapSession(map: RpgmMap): MapSession {
-    const chunks = buildChunks(map, tileset, sheetPixelSizes);
-    const tilemap = new StreamingTilemapScene(chunks, textures, {
+  function createMapSession(
+    map: RpgmMap,
+    mapTileset: RpgmTileset,
+    mapTextures: Partial<Record<TileSheetId, THREE.Texture>>,
+    mapSheetPixelSizes: SheetPixelSizes,
+  ): MapSession {
+    const chunks = buildChunks(map, mapTileset, mapSheetPixelSizes);
+    const tilemap = new StreamingTilemapScene(chunks, mapTextures, {
       tileWorldSize: TILE_WORLD_SIZE,
       ownsTextures: false,
     });
@@ -248,7 +334,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       disposeRadius: STREAM_DISPOSE_RADIUS,
     });
 
-    const passability = new PassabilityGrid(map, tileset);
+    const passability = new PassabilityGrid(map, mapTileset);
     const spawn = findSpawnTile(passability, map.width / 2, map.height / 2);
     const mover = new GridMover({
       x: spawn.x,
@@ -267,6 +353,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       streamer,
       mover,
       spawn,
+      heightGrid: computeHeightGrid(map),
       dispose() {
         scene.remove(tilemap.group);
         tilemap.dispose();
@@ -274,7 +361,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     };
   }
 
-  let session = createMapSession(fixtureMap);
+  let session = createMapSession(fixtureMap, tileset, textures, sheetPixelSizes);
   const walkAnimation = new WalkAnimation();
 
   const character = new CharacterSprite({
@@ -288,6 +375,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     session.mover.renderPosition.x,
     session.mover.renderPosition.y,
     TILE_WORLD_SIZE,
+    groundYAt(session, session.mover.tile.x, session.mover.tile.y),
   );
   scene.add(character.mesh);
 
@@ -315,7 +403,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     offset.set(0, distance * Math.sin(tiltAngle), distance * Math.cos(tiltAngle));
     target.set(
       tileCenterToWorld(session.spawn.x, TILE_WORLD_SIZE),
-      0,
+      groundYAt(session, session.spawn.x, session.spawn.y),
       tileCenterToWorld(session.spawn.y, TILE_WORLD_SIZE),
     );
     camera.position.copy(target).add(offset);
@@ -355,23 +443,59 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     hd2d.setEnabled(postProcessingEnabled);
   });
 
-  // Dev stress toggle: 'g' swaps between the fixture map and a giant
-  // deterministic synthetic map (same tileset, so all textures are reused).
+  // Dev map-cycle toggle: 'g' cycles the fixture map -> a giant deterministic
+  // synthetic map (same tileset, so all textures are reused) -> the
+  // mz-project1 fixture's Map001 (a different tileset/texture set, carrying
+  // a painted region hill to exercise elevation) -> back to the fixture map.
   if (import.meta.env.DEV) {
+    type MapCycleMode = 'fixture' | 'giant' | 'mz';
+    const CYCLE_ORDER: readonly MapCycleMode[] = ['fixture', 'giant', 'mz'];
+
+    let mode: MapCycleMode = 'fixture';
     let giantMap: RpgmMap | undefined;
+    let mzData: MapSourceData | undefined;
+    let cycling = false;
+
     window.addEventListener('keydown', (event) => {
-      if (event.repeat || event.key.toLowerCase() !== 'g') return;
-      const toGiant = session.map === fixtureMap;
-      if (toGiant) {
-        giantMap ??= generateSyntheticMap({
-          width: GIANT_MAP_SIZE,
-          height: GIANT_MAP_SIZE,
-          seed: GIANT_MAP_SEED,
-        });
-      }
-      session.dispose();
-      session = createMapSession(toGiant && giantMap ? giantMap : fixtureMap);
-      focusCameraOnSpawn();
+      if (event.repeat || event.key.toLowerCase() !== 'g' || cycling) return;
+      cycling = true;
+      void (async () => {
+        try {
+          mode = CYCLE_ORDER[(CYCLE_ORDER.indexOf(mode) + 1) % CYCLE_ORDER.length] ?? 'fixture';
+
+          if (mode === 'giant') {
+            giantMap ??= generateSyntheticMap({
+              width: GIANT_MAP_SIZE,
+              height: GIANT_MAP_SIZE,
+              seed: GIANT_MAP_SEED,
+            });
+            session.dispose();
+            session = createMapSession(giantMap, tileset, textures, sheetPixelSizes);
+          } else if (mode === 'mz') {
+            mzData ??= await loadMzFixtureMapData();
+            session.dispose();
+            session = createMapSession(
+              mzData.map,
+              mzData.tileset,
+              mzData.textures,
+              mzData.sheetPixelSizes,
+            );
+          } else {
+            session.dispose();
+            session = createMapSession(fixtureMap, tileset, textures, sheetPixelSizes);
+          }
+          focusCameraOnSpawn();
+        } catch (error) {
+          console.error('Failed to switch to the next dev map-cycle map:', error);
+          // Roll the mode back so the next 'g' press retries the same target
+          // instead of silently skipping it.
+          const previousIndex =
+            (CYCLE_ORDER.indexOf(mode) - 1 + CYCLE_ORDER.length) % CYCLE_ORDER.length;
+          mode = CYCLE_ORDER[previousIndex] ?? 'fixture';
+        } finally {
+          cycling = false;
+        }
+      })();
     });
   }
 
@@ -392,8 +516,20 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       if (mover.moving) walkAnimation.update(dt);
       else walkAnimation.reset();
 
+      // The mover's own tile (not the mid-step renderPosition) always has a
+      // single well-defined elevation: PassabilityGrid blocks any step whose
+      // source and destination heights differ, so a step's source and
+      // destination tile are always the same height -- no interpolation
+      // between two different ground heights is ever needed mid-step.
+      const groundY = groundYAt(session, mover.tile.x, mover.tile.y);
+
       character.setFrame(mover.facing, walkAnimation.frameColumn(mover.moving));
-      character.setTilePosition(mover.renderPosition.x, mover.renderPosition.y, TILE_WORLD_SIZE);
+      character.setTilePosition(
+        mover.renderPosition.x,
+        mover.renderPosition.y,
+        TILE_WORLD_SIZE,
+        groundY,
+      );
       character.faceCamera(camera);
 
       // Framerate-independent exponential smoothing: the camera closes a
@@ -403,6 +539,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       const desiredZ = tileCenterToWorld(mover.renderPosition.y, TILE_WORLD_SIZE);
       const followAmount = 1 - Math.exp(-CAMERA_FOLLOW_SPEED * dt);
       target.x += (desiredX - target.x) * followAmount;
+      target.y += (groundY - target.y) * followAmount;
       target.z += (desiredZ - target.z) * followAmount;
       camera.position.copy(target).add(offset);
       camera.lookAt(target);

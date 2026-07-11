@@ -1,5 +1,5 @@
 import type { RpgmMap, RpgmTileset, TileFlags } from '@threemaker/importer-rpgm';
-import { decodeTileFlags } from '@threemaker/importer-rpgm';
+import { computeHeightGrid, decodeTileFlags } from '@threemaker/importer-rpgm';
 import type { Direction } from './grid-mover.js';
 import { DIRECTION_DELTA } from './grid-mover.js';
 
@@ -39,6 +39,10 @@ function isBlockedDirection(flags: TileFlags, direction: Direction): boolean {
  * terrain passability, and are out of scope for this slice.
  * ponytail: other characters/events occupying a tile (RPG Maker's
  * "through"/character collision) are not modeled; this is terrain-only.
+ * ponytail: elevation (region-derived, see `heightGrid` below) only ever
+ * blocks a step outright when the two tiles' heights differ -- there is no
+ * ramp/stairs support yet, so the only way up or down a terrace is a future
+ * feature, not this slice.
  */
 export class PassabilityGrid {
   private readonly mapWidth: number;
@@ -46,11 +50,16 @@ export class PassabilityGrid {
   // One decisive TileFlags per map tile, or `null` when no non-star,
   // non-empty tile was found on any layer (treated as fully open).
   private readonly decisiveFlags: (TileFlags | null)[];
+  // Region-derived elevation per tile (MV3D convention: region 1-7 = that
+  // many tile-heights up). A step is blocked whenever source and destination
+  // heights differ, ramps/stairs aside (see class doc).
+  private readonly heightGrid: Uint8Array;
 
   constructor(map: RpgmMap, tileset: RpgmTileset) {
     this.mapWidth = map.width;
     this.mapHeight = map.height;
     this.decisiveFlags = new Array(this.mapWidth * this.mapHeight);
+    this.heightGrid = computeHeightGrid(map);
 
     for (let y = 0; y < this.mapHeight; y++) {
       for (let x = 0; x < this.mapWidth; x++) {
@@ -71,11 +80,19 @@ export class PassabilityGrid {
     return x >= 0 && y >= 0 && x < this.mapWidth && y < this.mapHeight;
   }
 
+  /** Region-derived elevation (in tile-height units) at `(x, y)`; 0 for an out-of-bounds query. */
+  elevationAt(x: number, y: number): number {
+    if (!this.inBounds(x, y)) return 0;
+    return this.heightGrid[y * this.mapWidth + x] ?? 0;
+  }
+
   /**
    * Whether a mover standing on `(x, y)` can step toward `direction`.
-   * Blocked when the destination is out of bounds, when `(x, y)`'s decisive
-   * flags forbid leaving in `direction`, or when the destination tile's
-   * decisive flags forbid entering from the opposite side.
+   * Blocked when the destination is out of bounds, when source and
+   * destination sit at different elevations (no ramps/stairs yet -- see
+   * class doc), when `(x, y)`'s decisive flags forbid leaving in
+   * `direction`, or when the destination tile's decisive flags forbid
+   * entering from the opposite side.
    */
   canMove(x: number, y: number, direction: Direction): boolean {
     if (!this.inBounds(x, y)) return false;
@@ -84,6 +101,10 @@ export class PassabilityGrid {
     const destX = x + delta.x;
     const destY = y + delta.y;
     if (!this.inBounds(destX, destY)) return false;
+
+    const sourceHeight = this.heightGrid[y * this.mapWidth + x] ?? 0;
+    const destHeight = this.heightGrid[destY * this.mapWidth + destX] ?? 0;
+    if (sourceHeight !== destHeight) return false;
 
     const sourceFlags = this.decisiveFlags[y * this.mapWidth + x];
     if (sourceFlags && isBlockedDirection(sourceFlags, direction)) return false;

@@ -1,6 +1,7 @@
 // Browser-safe entry: pure parsers only. The Node-only project loader
 // (which reads from the filesystem) lives at the `./node` subpath export so
 // importing this package never drags `node:fs` into a browser bundle.
+export { computeHeightGrid, heightForRegion, MAX_REGION_HEIGHT } from './elevation.js';
 export { parseMap } from './parse-map.js';
 export { parseMapInfos } from './parse-map-infos.js';
 export { parseTilesets } from './parse-tilesets.js';
