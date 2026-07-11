@@ -11,9 +11,11 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -b --pretty"
+    "typecheck": "tsc -b --pretty",
+    "scan": "tsx src/cli.ts scan"
   },
   "devDependencies": {
+    "tsx": "^4.23.0",
     "typescript": "7.0.2",
     "vitest": "4.1.10"
   }
