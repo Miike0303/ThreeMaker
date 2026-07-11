@@ -24,6 +24,10 @@
     "debug.controls.tilt": "Tilt",
     "debug.controls.zoom": "Zoom",
     "debug.controls.postfx": "Post-processing",
-    "debug.controls.mapCycle": "Cycle map (dev)"
+    "debug.controls.mapCycle": "Cycle map (dev)",
+    "dialogue.unknownSpeaker": "Someone",
+    "dialogue.hint.advance": "E / Enter / Space to continue",
+    "dialogue.hint.choice": "1-9 or ↑↓←→ + Enter to choose",
+    "dialogue.error": "Dialogue error — see console for details"
   }
 }

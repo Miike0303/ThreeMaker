@@ -24,6 +24,10 @@
     "debug.controls.tilt": "Inclinación",
     "debug.controls.zoom": "Zoom",
     "debug.controls.postfx": "Posprocesado",
-    "debug.controls.mapCycle": "Cambiar mapa (dev)"
+    "debug.controls.mapCycle": "Cambiar mapa (dev)",
+    "dialogue.unknownSpeaker": "Alguien",
+    "dialogue.hint.advance": "E / Enter / Espacio para continuar",
+    "dialogue.hint.choice": "1-9 o ↑↓←→ + Enter para elegir",
+    "dialogue.error": "Error de diálogo — ver la consola para más detalles"
   }
 }
