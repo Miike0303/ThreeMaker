@@ -58,6 +58,7 @@ export class CharacterSprite {
   private readonly blockRow: number;
   private readonly cameraBias: number;
   private readonly toCamera = new THREE.Vector3();
+  private readonly basePosition = new THREE.Vector3();
 
   private lastDirection: Direction | null = null;
   private lastFrame: WalkFrameColumn | null = null;
@@ -110,11 +111,12 @@ export class CharacterSprite {
    * no interpolation between two different `groundY` values is needed here.
    */
   setTilePosition(tileX: number, tileY: number, tileWorldSize = 1, groundY = 0): void {
-    this.mesh.position.set(
+    this.basePosition.set(
       tileCenterToWorld(tileX, tileWorldSize),
       groundY,
       tileCenterToWorld(tileY, tileWorldSize),
     );
+    this.mesh.position.copy(this.basePosition);
   }
 
   /** Updates the visible frame to `direction`'s row and `frameColumn`'s column; a no-op (no GPU upload) when neither changed since the last call. */
@@ -147,15 +149,23 @@ export class CharacterSprite {
    * spherical billboard) and nudges it slightly toward the camera along
    * that same direction, so it doesn't z-fight with ground/wall geometry at
    * the same depth. Call after `setTilePosition` each frame.
+   *
+   * Idempotent by construction: the bias is re-derived from `basePosition`
+   * (the last `setTilePosition` call) every time, never from the previously
+   * nudged `mesh.position`. Calling this N times without an intervening
+   * `setTilePosition` leaves the mesh at the same place as calling it once --
+   * this used to mutate `mesh.position` cumulatively, which drifted sprites
+   * that call `faceCamera` every frame but `setTilePosition` only once (NPCs)
+   * toward the camera indefinitely.
    */
   faceCamera(camera: THREE.Camera): void {
-    this.toCamera.copy(camera.position).sub(this.mesh.position);
+    this.toCamera.copy(camera.position).sub(this.basePosition);
     this.toCamera.y = 0;
     if (this.toCamera.lengthSq() === 0) return;
 
     this.mesh.rotation.y = Math.atan2(this.toCamera.x, this.toCamera.z);
     this.toCamera.normalize().multiplyScalar(this.cameraBias);
-    this.mesh.position.add(this.toCamera);
+    this.mesh.position.copy(this.basePosition).add(this.toCamera);
   }
 
   /** Frees the quad's own geometry/material. Does not dispose the shared `texture` passed in -- the caller owns that. */
