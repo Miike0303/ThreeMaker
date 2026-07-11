@@ -16,6 +16,17 @@ export type Listener<TPayload> = (payload: TPayload) => void;
 
 export type Unsubscribe = () => void;
 
+/**
+ * Read-only view of a {@link SignalBus}: subscription methods only, no
+ * `emit`. Expose this type on public fields to let consumers listen while
+ * keeping emission an internal implementation detail — consumers cannot
+ * forge events.
+ */
+export type SignalSubscriber<TEventMap extends Record<string, unknown>> = Pick<
+  SignalBus<TEventMap>,
+  'on' | 'off' | 'once'
+>;
+
 export class SignalBus<TEventMap extends Record<string, unknown>> {
   private readonly listeners = new Map<keyof TEventMap, Set<Listener<never>>>();
 

@@ -1,4 +1,4 @@
-import { SignalBus } from './signal-bus.js';
+import { SignalBus, type SignalSubscriber } from './signal-bus.js';
 
 /** Value types storable in a {@link WorldState}. Content-authored data (JSON), not TS-schema-checked. */
 export type WorldValue = boolean | number | string;
@@ -14,9 +14,20 @@ export type WorldStateEvents = {
  * early since keys are authored as data (JSON/ink), not statically typed.
  */
 export class WorldState {
-  readonly signals = new SignalBus<WorldStateEvents>();
+  /**
+   * Subscribe to state changes. `changed` fires only as a direct result of
+   * a successful `set()` call — never from a failed (type-mismatched) set,
+   * and never forgeable by consumers: this field exposes subscription
+   * methods only (`on`/`off`/`once`), not `emit`.
+   */
+  readonly signals: SignalSubscriber<WorldStateEvents>;
 
+  private readonly bus = new SignalBus<WorldStateEvents>();
   private readonly values = new Map<string, WorldValue>();
+
+  constructor() {
+    this.signals = this.bus;
+  }
 
   /** Read the current value for `key`, or `undefined` if it was never set. */
   get(key: string): WorldValue | undefined {
@@ -36,7 +47,7 @@ export class WorldState {
       );
     }
     this.values.set(key, value);
-    this.signals.emit('changed', { key, value, previous });
+    this.bus.emit('changed', { key, value, previous });
   }
 
   /** Whether `key` has ever been set. */

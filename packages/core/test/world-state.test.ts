@@ -60,6 +60,27 @@ describe('WorldState', () => {
     expect(world.get('gold')).toBe(20);
   });
 
+  it('leaves the stored value unchanged when a type-mismatched set() throws', () => {
+    const world = new WorldState();
+    world.set('gold', 10);
+
+    expect(() => world.set('gold', 'lots')).toThrow();
+
+    expect(world.get('gold')).toBe(10);
+  });
+
+  it('emits changed even when the new value is identical to the current one', () => {
+    const world = new WorldState();
+    world.set('gold', 10);
+    const listener = vi.fn();
+    world.signals.on('changed', listener);
+
+    world.set('gold', 10);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({ key: 'gold', value: 10, previous: 10 });
+  });
+
   it('emits a changed signal with {key, value, previous} on every set', () => {
     const world = new WorldState();
     const listener = vi.fn();
