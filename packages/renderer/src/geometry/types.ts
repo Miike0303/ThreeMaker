@@ -44,9 +44,26 @@ export interface TileBuildData {
   readonly elevation: ElevationClass;
 }
 
+/**
+ * One tile's shadow-pencil mark (map data layer 4). RPG Maker renders each
+ * set bit as a black, half-opacity quarter of the tile; bit order matches
+ * corescript's `Tilemap._addShadow`: bit 0 = upper-left, bit 1 = upper-right,
+ * bit 2 = lower-left, bit 3 = lower-right.
+ */
+export interface ShadowBuildData {
+  /** Tile column within the full map (not the chunk). */
+  readonly tileX: number;
+  /** Tile row within the full map (not the chunk). */
+  readonly tileY: number;
+  /** Quarter bitmask, 1-15 (0 marks are not emitted). */
+  readonly mask: number;
+}
+
 /** All tiles belonging to one chunkSize x chunkSize region of the map. */
 export interface ChunkBuildData {
   readonly chunkX: number;
   readonly chunkY: number;
   readonly tiles: readonly TileBuildData[];
+  /** Shadow-pencil marks inside this chunk; omitted/empty when the region has none. */
+  readonly shadows?: readonly ShadowBuildData[];
 }

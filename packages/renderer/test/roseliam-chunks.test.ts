@@ -65,4 +65,32 @@ describe('buildChunks on the real Roseliam fixture (Map007)', () => {
     // far below the "well under 20 draw calls for a typical map" target.
     expect(drawCallKeys.size).toBeLessThan(20);
   });
+
+  it('extracts the shadow-pencil marks RPG Maker paints east of wall tiles', async () => {
+    const mapJson = await readJson('Map007.json');
+    const tilesetsJson = await readJson('Tilesets.json');
+
+    const map = parseMap(mapJson, 7);
+    const tilesets = parseTilesets(tilesetsJson);
+    const tileset = tilesets.find((entry) => entry.id === map.tilesetId);
+    expect(tileset).toBeDefined();
+    if (!tileset) return;
+
+    const sheetPixelSizes = await loadSheetPixelSizes(tileset);
+    const chunks = buildChunks(map, tileset, sheetPixelSizes);
+
+    // Ground truth decoded straight from the fixture's data layer 4: Map007
+    // carries shadow bitmask 5 (upper-left + lower-left quarters -- the
+    // classic "left half dimmed east of a wall" auto-shadow) at (7,3) and
+    // (9,6). These were the "dark diamond" positions investigated in the
+    // shadow-rendering slice; losing them means the shadow layer regressed
+    // back to being dropped.
+    const allShadows = chunks.flatMap((chunk) => chunk.shadows ?? []);
+    expect(allShadows).toContainEqual({ tileX: 7, tileY: 3, mask: 5 });
+    expect(allShadows).toContainEqual({ tileX: 9, tileY: 6, mask: 5 });
+    for (const shadow of allShadows) {
+      expect(shadow.mask).toBeGreaterThan(0);
+      expect(shadow.mask).toBeLessThanOrEqual(15);
+    }
+  });
 });

@@ -4,7 +4,14 @@ import { GridMover, PassabilityGrid } from '@threemaker/gameplay';
 import type { RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
 import type { SheetPixelSizes } from '@threemaker/renderer';
-import { buildChunks, loadSheetTexture, TilemapScene } from '@threemaker/renderer';
+import {
+  buildChunks,
+  ChunkStreamer,
+  DEFAULT_CHUNK_SIZE,
+  generateSyntheticMap,
+  loadSheetTexture,
+  StreamingTilemapScene,
+} from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
 import { CharacterSprite, tileCenterToWorld } from './character-sprite.js';
@@ -152,7 +159,20 @@ const CAMERA_FOLLOW_SPEED = 6;
 // HD-2D camera tuning knobs.
 const CAMERA_TILT_DEG = 40;
 const CAMERA_DISTANCE_FACTOR = 0.9; // distance = max(map width, height) * factor
+// Cap the camera boom so a giant map cannot push the camera into the far
+// plane; fixture-sized maps stay below the cap and are unaffected.
+const CAMERA_MAX_DISTANCE = 24;
 const CAMERA_FOV_DEG = 45;
+
+// Chunk streaming: only chunks within `STREAM_BUILD_RADIUS` chunks of the
+// character keep live GPU geometry; the extra dispose-radius chunk is
+// hysteresis so walking along a chunk border never build/dispose-thrashes.
+const STREAM_BUILD_RADIUS = 2;
+const STREAM_DISPOSE_RADIUS = 3;
+
+// Dev-only giant synthetic stress map, toggled with the 'g' key.
+const GIANT_MAP_SIZE = 512;
+const GIANT_MAP_SEED = 20260710;
 
 /** WASD/arrow keys -> the grid direction they move the character in. */
 const MOVE_KEYS: Record<string, Direction> = {
@@ -187,32 +207,74 @@ function createMostRecentHeldDirection(): { current(): Direction | undefined } {
   return { current: () => held[held.length - 1] };
 }
 
-async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): Promise<void> {
-  const { map, tileset, sheetPixelSizes, textures, characterTexture } = data;
+/** Everything owned by one loaded map: streamed tilemap, passability, and the character's mover. */
+interface MapSession {
+  readonly map: RpgmMap;
+  readonly tilemap: StreamingTilemapScene;
+  readonly streamer: ChunkStreamer;
+  readonly mover: GridMover;
+  readonly spawn: { readonly x: number; readonly y: number };
+  dispose(): void;
+}
 
-  const chunks = buildChunks(map, tileset, sheetPixelSizes);
-  const tilemap = new TilemapScene(chunks, textures, { tileWorldSize: TILE_WORLD_SIZE });
+async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): Promise<void> {
+  const { map: fixtureMap, tileset, sheetPixelSizes, textures, characterTexture } = data;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a2e);
-  scene.add(tilemap.group);
 
   const light = new THREE.DirectionalLight(0xffffff, 3);
-  light.position.set(map.width * 0.3, 20, map.height * 0.2);
+  light.position.set(fixtureMap.width * 0.3, 20, fixtureMap.height * 0.2);
   scene.add(light, new THREE.AmbientLight(0x404060, 2));
 
-  // Passability + a spawn tile computed from it (never hardcoded): search
-  // outward from the map's center for the nearest tile the character can
-  // actually stand on.
-  const passability = new PassabilityGrid(map, tileset);
-  const spawn = findSpawnTile(passability, map.width / 2, map.height / 2);
+  /**
+   * Builds a fully wired session for one map: chunk data for the whole map
+   * (pure, cheap to keep), a streaming scene that only holds GPU geometry
+   * near the character, passability + a spawn tile computed from it (never
+   * hardcoded), and the character's grid mover. Textures are shared across
+   * sessions (`ownsTextures: false`), so switching maps never reloads them.
+   */
+  function createMapSession(map: RpgmMap): MapSession {
+    const chunks = buildChunks(map, tileset, sheetPixelSizes);
+    const tilemap = new StreamingTilemapScene(chunks, textures, {
+      tileWorldSize: TILE_WORLD_SIZE,
+      ownsTextures: false,
+    });
+    const streamer = new ChunkStreamer({
+      chunkSize: DEFAULT_CHUNK_SIZE,
+      mapWidth: map.width,
+      mapHeight: map.height,
+      buildRadius: STREAM_BUILD_RADIUS,
+      disposeRadius: STREAM_DISPOSE_RADIUS,
+    });
 
-  const mover = new GridMover({
-    x: spawn.x,
-    y: spawn.y,
-    speed: PLAYER_SPEED,
-    canMove: (x, y, direction) => passability.canMove(x, y, direction),
-  });
+    const passability = new PassabilityGrid(map, tileset);
+    const spawn = findSpawnTile(passability, map.width / 2, map.height / 2);
+    const mover = new GridMover({
+      x: spawn.x,
+      y: spawn.y,
+      speed: PLAYER_SPEED,
+      canMove: (x, y, direction) => passability.canMove(x, y, direction),
+    });
+
+    // Build the spawn surroundings before the first frame renders.
+    tilemap.applyDiff(streamer.update(spawn.x, spawn.y));
+    scene.add(tilemap.group);
+
+    return {
+      map,
+      tilemap,
+      streamer,
+      mover,
+      spawn,
+      dispose() {
+        scene.remove(tilemap.group);
+        tilemap.dispose();
+      },
+    };
+  }
+
+  let session = createMapSession(fixtureMap);
   const walkAnimation = new WalkAnimation();
 
   const character = new CharacterSprite({
@@ -222,25 +284,20 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     characterIndex: CHARACTER_INDEX,
     tileWorldSize: TILE_WORLD_SIZE,
   });
-  character.setTilePosition(mover.renderPosition.x, mover.renderPosition.y, TILE_WORLD_SIZE);
+  character.setTilePosition(
+    session.mover.renderPosition.x,
+    session.mover.renderPosition.y,
+    TILE_WORLD_SIZE,
+  );
   scene.add(character.mesh);
 
   // HD-2D-style tilted perspective: looking down at the map from the south
   // at ~40 degrees. The target starts on the character and smoothly follows
   // it every frame (see the game loop below) instead of a fixed map-center
   // point.
-  const target = new THREE.Vector3(
-    tileCenterToWorld(spawn.x, TILE_WORLD_SIZE),
-    0,
-    tileCenterToWorld(spawn.y, TILE_WORLD_SIZE),
-  );
+  const target = new THREE.Vector3();
+  const offset = new THREE.Vector3();
   const tiltAngle = THREE.MathUtils.degToRad(CAMERA_TILT_DEG);
-  const distance = Math.max(map.width, map.height) * CAMERA_DISTANCE_FACTOR;
-  const offset = new THREE.Vector3(
-    0,
-    distance * Math.sin(tiltAngle),
-    distance * Math.cos(tiltAngle),
-  );
 
   const camera = new THREE.PerspectiveCamera(
     CAMERA_FOV_DEG,
@@ -248,8 +305,23 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     0.1,
     500,
   );
-  camera.position.copy(target).add(offset);
-  camera.lookAt(target);
+
+  /** Re-aims the camera boom at the current session's spawn tile (initial view and map switches). */
+  function focusCameraOnSpawn(): void {
+    const distance = Math.min(
+      Math.max(session.map.width, session.map.height) * CAMERA_DISTANCE_FACTOR,
+      CAMERA_MAX_DISTANCE,
+    );
+    offset.set(0, distance * Math.sin(tiltAngle), distance * Math.cos(tiltAngle));
+    target.set(
+      tileCenterToWorld(session.spawn.x, TILE_WORLD_SIZE),
+      0,
+      tileCenterToWorld(session.spawn.y, TILE_WORLD_SIZE),
+    );
+    camera.position.copy(target).add(offset);
+    camera.lookAt(target);
+  }
+  focusCameraOnSpawn();
 
   const renderer = new THREE.WebGPURenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -260,20 +332,62 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
 
   const hd2d = createHd2dPipeline(renderer, scene, camera);
   let postProcessingEnabled = true;
-  if (import.meta.env.DEV) window.__hd2d = { renderer };
+  if (import.meta.env.DEV) {
+    window.__hd2d = { renderer };
+    window.__threemaker_debug = {
+      get liveChunks() {
+        return session.tilemap.liveChunkCount;
+      },
+      get drawCalls() {
+        return renderer.info.render.drawCalls;
+      },
+      get mapName() {
+        return session.map.displayName;
+      },
+      get tile() {
+        return { x: session.mover.tile.x, y: session.mover.tile.y };
+      },
+    };
+  }
   window.addEventListener('keydown', (event) => {
     if (event.repeat || event.key.toLowerCase() !== 'p') return;
     postProcessingEnabled = !postProcessingEnabled;
     hd2d.setEnabled(postProcessingEnabled);
   });
 
+  // Dev stress toggle: 'g' swaps between the fixture map and a giant
+  // deterministic synthetic map (same tileset, so all textures are reused).
+  if (import.meta.env.DEV) {
+    let giantMap: RpgmMap | undefined;
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat || event.key.toLowerCase() !== 'g') return;
+      const toGiant = session.map === fixtureMap;
+      if (toGiant) {
+        giantMap ??= generateSyntheticMap({
+          width: GIANT_MAP_SIZE,
+          height: GIANT_MAP_SIZE,
+          seed: GIANT_MAP_SEED,
+        });
+      }
+      session.dispose();
+      session = createMapSession(toGiant && giantMap ? giantMap : fixtureMap);
+      focusCameraOnSpawn();
+    });
+  }
+
   // Custom clock, not `THREE.Clock` (deprecated since three r183) -- reuses
   // the engine's own game loop from `@threemaker/core`.
   const gameLoop = new GameLoop({
     onTick(dt) {
+      const { mover, streamer, tilemap } = session;
       const direction = heldDirection.current();
       if (direction) mover.requestMove(direction);
       mover.update(dt);
+
+      // Cheap per-frame streaming check: `update` early-exits with an empty
+      // diff while the character stays inside the same chunk, so geometry
+      // work only happens on chunk-boundary crossings.
+      tilemap.applyDiff(streamer.update(mover.tile.x, mover.tile.y));
 
       if (mover.moving) walkAnimation.update(dt);
       else walkAnimation.reset();

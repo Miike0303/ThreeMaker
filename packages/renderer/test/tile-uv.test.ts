@@ -36,11 +36,47 @@ describe('computeTileUv', () => {
     expect(result?.quads[0]?.v1).toBeCloseTo(1);
   });
 
-  it('maps a tile id at the start of the second row (local index 16) to row 1', () => {
+  it('maps local index 16 to the third row of the left 8-wide block, not a 16-wide row', () => {
+    // RPG Maker B-E sheets are addressed as two side-by-side 8-column
+    // blocks (corescript `Tilemap._addNormalTile`), NOT one 16-column grid:
+    // ids 0-127 fill the left block top-to-bottom, ids 128-255 the right.
+    // Local index 16 = left block, col 0, row 2.
     const result = computeTileUv(16, GRID_SHEET_SIZES);
     expect(result?.sheet).toBe('B');
     expect(result?.quads[0]?.u0).toBeCloseTo(0);
     expect(result?.quads[0]?.u1).toBeCloseTo(48 / 768);
+    expect(result?.quads[0]?.v0).toBeCloseTo(1 - 144 / 768);
+    expect(result?.quads[0]?.v1).toBeCloseTo(1 - 96 / 768);
+  });
+
+  it('maps B tile 77 to corescript cell (240,432) -- the Map007 dark-diamond regression', () => {
+    // Root cause of the "dark diamonds near the Map007 bridges" bug: with a
+    // naive 16-wide grid, id 77 lands on cell (624,192) -- a small, mostly
+    // black decor sprite -- instead of the light pedestal-base art at
+    // (240,432) that RPG Maker draws (sx=((77/128|0)%2*8+77%8)*48=240,
+    // sy=(77/8|0)%16*48=432).
+    const result = computeTileUv(77, GRID_SHEET_SIZES);
+    expect(result?.quads[0]?.u0).toBeCloseTo(240 / 768);
+    expect(result?.quads[0]?.u1).toBeCloseTo(288 / 768);
+    expect(result?.quads[0]?.v0).toBeCloseTo(1 - 480 / 768);
+    expect(result?.quads[0]?.v1).toBeCloseTo(1 - 432 / 768);
+  });
+
+  it('maps ids 128+ into the right 8-wide block of a B-E sheet', () => {
+    // Local index 130 = right block (128+), col 8+2=10, row 0.
+    const result = computeTileUv(130, GRID_SHEET_SIZES);
+    expect(result?.quads[0]?.u0).toBeCloseTo(480 / 768);
+    expect(result?.quads[0]?.u1).toBeCloseTo(528 / 768);
+    expect(result?.quads[0]?.v0).toBeCloseTo(1 - 48 / 768);
+    expect(result?.quads[0]?.v1).toBeCloseTo(1);
+  });
+
+  it('maps A5 tiles onto its single 8-wide block', () => {
+    // A5 ids start at 1536; local index 9 = col 1, row 1 of the 8x16 sheet.
+    const result = computeTileUv(1536 + 9, { A5: { width: 384, height: 768 } });
+    expect(result?.sheet).toBe('A5');
+    expect(result?.quads[0]?.u0).toBeCloseTo(48 / 384);
+    expect(result?.quads[0]?.u1).toBeCloseTo(96 / 384);
     expect(result?.quads[0]?.v0).toBeCloseTo(1 - 96 / 768);
     expect(result?.quads[0]?.v1).toBeCloseTo(1 - 48 / 768);
   });

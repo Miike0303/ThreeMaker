@@ -14,6 +14,23 @@ declare global {
      * `import.meta.env.DEV` (see main.ts); absent in production builds.
      */
     __hd2d?: { renderer: import('three/webgpu').Renderer };
+
+    /**
+     * Dev-only debug counters for the chunk-streaming headless checks. Only
+     * set when `import.meta.env.DEV` (see main.ts); absent in production
+     * builds. Values are read live via getters, so a check can sample them
+     * before and after walking.
+     */
+    __threemaker_debug?: {
+      /** Chunks with live GPU geometry right now. */
+      readonly liveChunks: number;
+      /** Draw calls issued for the last rendered frame. */
+      readonly drawCalls: number;
+      /** Display name of the currently loaded map. */
+      readonly mapName: string;
+      /** The character's current integer tile position. */
+      readonly tile: { readonly x: number; readonly y: number };
+    };
   }
 }
 

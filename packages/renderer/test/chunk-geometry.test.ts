@@ -137,6 +137,113 @@ describe('buildChunks', () => {
     expect(() => buildChunks(makeMap(), makeTileset(), SHEET_SIZES, -4)).toThrow();
   });
 
+  it('emits no shadow data when the shadow layer is all zero', () => {
+    const layer0 = new Array(16).fill(0);
+    layer0[0] = 1;
+    const map = makeMap({
+      layers: {
+        tileLayers: [layer0, new Array(16).fill(0), new Array(16).fill(0), new Array(16).fill(0)],
+        shadows: new Array(16).fill(0),
+        regions: new Array(16).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+
+    expect(chunks[0]?.shadows ?? []).toHaveLength(0);
+  });
+
+  it('emits one shadow entry per tile with a nonzero shadow-pencil bitmask', () => {
+    const layer0 = new Array(16).fill(0);
+    layer0[0] = 1;
+    const shadows = new Array(16).fill(0);
+    shadows[1 * 4 + 1] = 5; // (1,1): upper-left + lower-left quarters
+    const map = makeMap({
+      layers: {
+        tileLayers: [layer0, new Array(16).fill(0), new Array(16).fill(0), new Array(16).fill(0)],
+        shadows,
+        regions: new Array(16).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+
+    expect(chunks[0]?.shadows).toEqual([{ tileX: 1, tileY: 1, mask: 5 }]);
+  });
+
+  it('creates a chunk for a shadow on an area with no tiles at all', () => {
+    const shadows = new Array(16).fill(0);
+    shadows[0] = 15;
+    const map = makeMap({
+      layers: {
+        tileLayers: [
+          new Array(16).fill(0),
+          new Array(16).fill(0),
+          new Array(16).fill(0),
+          new Array(16).fill(0),
+        ],
+        shadows,
+        regions: new Array(16).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]?.tiles).toHaveLength(0);
+    expect(chunks[0]?.shadows).toEqual([{ tileX: 0, tileY: 0, mask: 15 }]);
+  });
+
+  it('assigns shadows to the chunk covering their tile coordinates', () => {
+    const width = 4;
+    const height = 4;
+    const size = width * height;
+    const shadows = new Array(size).fill(0);
+    shadows[2 * width + 3] = 3; // (3,2) -> chunk (1,1) with chunkSize=2
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+        ],
+        shadows,
+        regions: new Array(size).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 2);
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]?.chunkX).toBe(1);
+    expect(chunks[0]?.chunkY).toBe(1);
+    expect(chunks[0]?.shadows).toEqual([{ tileX: 3, tileY: 2, mask: 3 }]);
+  });
+
+  it('masks shadow values down to the 4 defined quarter bits', () => {
+    const shadows = new Array(16).fill(0);
+    shadows[0] = 0x15; // junk above bit 3 must be ignored (-> 5)
+    const map = makeMap({
+      layers: {
+        tileLayers: [
+          new Array(16).fill(0),
+          new Array(16).fill(0),
+          new Array(16).fill(0),
+          new Array(16).fill(0),
+        ],
+        shadows,
+        regions: new Array(16).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+
+    expect(chunks[0]?.shadows).toEqual([{ tileX: 0, tileY: 0, mask: 5 }]);
+  });
+
   it('collects tiles from all 4 tile layers, tagging each with its layerIndex', () => {
     const width = 2;
     const height = 2;

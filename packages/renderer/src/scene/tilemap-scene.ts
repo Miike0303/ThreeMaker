@@ -2,13 +2,15 @@ import type { TileSheetId } from '@threemaker/importer-rpgm';
 import * as THREE from 'three';
 import type { ChunkBuildData } from '../geometry/types.js';
 import { type BuildChunkGroupOptions, buildChunkGroup } from './build-chunk-group.js';
-import { configurePixelArtTexture } from './pixel-art-texture.js';
+import { createShadowMaterial, createSheetMaterials } from './sheet-materials.js';
 
-export type TilemapSceneOptions = BuildChunkGroupOptions;
+export type TilemapSceneOptions = Omit<BuildChunkGroupOptions, 'shadowMaterial'>;
 
 /**
  * Owns the full three.js side of a rendered tilemap: one merged mesh per
  * (chunk, sheet), one material per sheet, and the sheet textures passed in.
+ * Every chunk is built eagerly in the constructor -- for maps large enough
+ * that this hurts, use `StreamingTilemapScene` instead.
  *
  * Three.js does not garbage-collect GPU resources -- geometries, materials,
  * and textures must be disposed explicitly, which is what `dispose()` is
@@ -32,38 +34,13 @@ export class TilemapScene {
     this.group = new THREE.Group();
     this.group.name = 'tilemap';
 
-    const materialsBySheet: Partial<Record<TileSheetId, THREE.Material>> = {};
-    for (const [sheet, texture] of Object.entries(textures) as [TileSheetId, THREE.Texture][]) {
-      configurePixelArtTexture(texture);
-      // Decorative RPG Maker sprites (statues, torches, chests...) are
-      // non-rectangular cutouts on a transparent PNG background, and some of
-      // those exporters leave arbitrary RGB (commonly opaque white) behind
-      // fully-transparent (alpha=0) pixels -- verified in this fixture by
-      // decoding Dungeon_B.png directly: tile id 92's cell contains pixels
-      // like rgba(255,255,255,0). Without `transparent: true`, three.js
-      // ignores alpha and paints that raw white RGB opaquely, which is what
-      // produced the solid white rectangles seen next to statue tiles.
-      // `alphaTest` (not `transparent` blending) keeps hard, unblended tile
-      // edges -- the right call for nearest-filtered pixel art, where soft
-      // alpha blending would fuzz the crisp silhouette.
-      //
-      // `side: DoubleSide` additionally renders the same texture on a quad's
-      // back face: upper-layer ("star") tiles are extruded as single
-      // zero-thickness standing quads (see `build-chunk-group.ts`) with no
-      // back/side geometry of their own, so from an unusual angle their
-      // default-culled back face would otherwise show nothing. Ground quads
-      // are unaffected (always viewed from above).
-      materialsBySheet[sheet as TileSheetId] = new THREE.MeshBasicMaterial({
-        map: texture,
-        side: THREE.DoubleSide,
-        alphaTest: 0.5,
-      });
-    }
-    this.ownedMaterials = Object.values(materialsBySheet);
+    const materialsBySheet = createSheetMaterials(textures);
+    const shadowMaterial = createShadowMaterial();
+    this.ownedMaterials = [...Object.values(materialsBySheet), shadowMaterial];
     this.ownedTextures = Object.values(textures);
 
     for (const chunk of chunks) {
-      const chunkGroup = buildChunkGroup(chunk, materialsBySheet, options);
+      const chunkGroup = buildChunkGroup(chunk, materialsBySheet, { ...options, shadowMaterial });
       for (const child of chunkGroup.children) {
         if (child instanceof THREE.Mesh) this.ownedGeometries.push(child.geometry);
       }

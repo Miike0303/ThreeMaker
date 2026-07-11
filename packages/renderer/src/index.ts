@@ -1,9 +1,18 @@
+export type { SyntheticMapOptions } from './dev/synthetic-map.js';
+export {
+  generateSyntheticMap,
+  ROSELIAM_DUNGEON_DECOR_TILE_ID,
+  ROSELIAM_DUNGEON_GROUND_TILE_ID,
+  ROSELIAM_DUNGEON_TILESET_ID,
+  ROSELIAM_DUNGEON_WALL_TILE_ID,
+} from './dev/synthetic-map.js';
 export { buildChunks } from './geometry/chunk-geometry.js';
 export type { TileUv } from './geometry/tile-uv.js';
 export { computeTileUv } from './geometry/tile-uv.js';
 export type {
   ChunkBuildData,
   ElevationClass,
+  ShadowBuildData,
   SheetPixelSize,
   SheetPixelSizes,
   TileBuildData,
@@ -16,5 +25,12 @@ export {
 export type { BuildChunkGroupOptions } from './scene/build-chunk-group.js';
 export { buildChunkGroup } from './scene/build-chunk-group.js';
 export { configurePixelArtTexture, loadSheetTexture } from './scene/pixel-art-texture.js';
+export type {
+  ChunkSetDiff,
+  StreamingTilemapSceneOptions,
+} from './scene/streaming-tilemap-scene.js';
+export { StreamingTilemapScene } from './scene/streaming-tilemap-scene.js';
 export type { TilemapSceneOptions } from './scene/tilemap-scene.js';
 export { TilemapScene } from './scene/tilemap-scene.js';
+export type { ChunkStreamDiff, ChunkStreamerOptions } from './streaming/chunk-streamer.js';
+export { ChunkStreamer, chunkKey, DEFAULT_BUILD_RADIUS } from './streaming/chunk-streamer.js';

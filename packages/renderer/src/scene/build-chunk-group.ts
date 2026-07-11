@@ -1,13 +1,56 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { ChunkBuildData, TileBuildData, UvRect } from '../geometry/types.js';
+import type { ChunkBuildData, ShadowBuildData, TileBuildData, UvRect } from '../geometry/types.js';
 
 export interface BuildChunkGroupOptions {
   /** World-space size of one tile edge, both on the ground plane and for a wall quad's width. Default 1. */
   readonly tileWorldSize?: number;
   /** World-space height of an extruded "upper layer" wall quad. Default equals `tileWorldSize`. */
   readonly wallHeight?: number;
+  /**
+   * Shared material for the shadow-pencil overlay (typically black,
+   * `transparent`, opacity 0.5, `depthWrite: false`). When omitted, shadow
+   * data on the chunk is skipped -- same contract as a sheet with no
+   * material.
+   */
+  readonly shadowMaterial?: THREE.Material;
+}
+
+/**
+ * Fraction of a tile edge the shadow overlay floats above the ground plane,
+ * so the coplanar translucent quads never z-fight the tiles beneath them.
+ * Small enough to be invisible at the HD-2D camera tilt.
+ */
+const SHADOW_LIFT_FACTOR = 0.01;
+
+/** Full-rect UV for untextured overlay quads (the material has no map, values are irrelevant). */
+const FULL_UV: UvRect = { u0: 0, v0: 0, u1: 1, v1: 1 };
+
+/**
+ * One quarter-size dark quad per set shadow bit, replicating corescript's
+ * `Tilemap._addShadow` bit order: bit 0 = upper-left, 1 = upper-right,
+ * 2 = lower-left, 3 = lower-right ("upper" being map-north / smaller tileY).
+ */
+function buildShadowGeometry(
+  shadow: ShadowBuildData,
+  tileWorldSize: number,
+): THREE.BufferGeometry[] {
+  const half = tileWorldSize / 2;
+  const worldX = shadow.tileX * tileWorldSize;
+  const worldZ = shadow.tileY * tileWorldSize;
+  const lift = tileWorldSize * SHADOW_LIFT_FACTOR;
+
+  const geometries: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 4; i++) {
+    if ((shadow.mask & (1 << i)) === 0) continue;
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const quad = buildGroundQuad(FULL_UV, worldX + col * half, worldZ + row * half, half, half);
+    quad.translate(0, lift, 0);
+    geometries.push(quad);
+  }
+  return geometries;
 }
 
 /** Remaps a fresh `PlaneGeometry`'s default 0-1 UVs to a UV rect in-place. */
@@ -156,6 +199,20 @@ export function buildChunkGroup(
     const mesh = new THREE.Mesh(merged, material);
     mesh.name = `chunk-${chunk.chunkX}-${chunk.chunkY}-${sheet}`;
     group.add(mesh);
+  }
+
+  const shadows = chunk.shadows ?? [];
+  if (options.shadowMaterial && shadows.length > 0) {
+    const shadowGeometries = shadows.flatMap((shadow) =>
+      buildShadowGeometry(shadow, tileWorldSize),
+    );
+    const merged = mergeGeometries(shadowGeometries, false) as THREE.BufferGeometry | null;
+    for (const geometry of shadowGeometries) geometry.dispose();
+    if (merged) {
+      const mesh = new THREE.Mesh(merged, options.shadowMaterial);
+      mesh.name = `chunk-${chunk.chunkX}-${chunk.chunkY}-shadow`;
+      group.add(mesh);
+    }
   }
 
   return group;

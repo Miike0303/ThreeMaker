@@ -189,6 +189,66 @@ describe('buildChunkGroup', () => {
     expect(box.max.z).toBeCloseTo(1);
   });
 
+  it('builds one shadow mesh per chunk with one quarter-quad per set shadow bit', () => {
+    const chunk = makeChunk({
+      shadows: [
+        { tileX: 0, tileY: 0, mask: 5 }, // bits 0+2: upper-left + lower-left
+        { tileX: 1, tileY: 0, mask: 15 }, // all four quarters
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      {},
+      { tileWorldSize: 1, shadowMaterial: new THREE.MeshBasicMaterial() },
+    );
+
+    expect(group.children).toHaveLength(1);
+    const mesh = group.children[0] as THREE.Mesh;
+    expect(mesh.name).toBe('chunk-0-0-shadow');
+    // (2 + 4) quarter-quads * 4 vertices each.
+    expect((mesh.geometry as THREE.BufferGeometry).getAttribute('position').count).toBe(24);
+  });
+
+  it('positions shadow quarters on the tile halves their bits address (TL,TR,BL,BR bit order)', () => {
+    // Mask 5 = bits 0 and 2 = upper-left + lower-left: the tile's west half.
+    const chunk = makeChunk({ shadows: [{ tileX: 2, tileY: 1, mask: 5 }] });
+
+    const group = buildChunkGroup(
+      chunk,
+      {},
+      { tileWorldSize: 1, shadowMaterial: new THREE.MeshBasicMaterial() },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+    // West half of tile (2,1): x in [2, 2.5], z spanning the full tile [1, 2].
+    expect(box.min.x).toBeCloseTo(2);
+    expect(box.max.x).toBeCloseTo(2.5);
+    expect(box.min.z).toBeCloseTo(1);
+    expect(box.max.z).toBeCloseTo(2);
+    // Lifted slightly above the ground plane so it never z-fights the tile.
+    expect(box.min.y).toBeGreaterThan(0);
+  });
+
+  it('builds no shadow mesh without a shadow material or without shadow data', () => {
+    const withDataOnly = buildChunkGroup(
+      makeChunk({ shadows: [{ tileX: 0, tileY: 0, mask: 5 }] }),
+      {},
+    );
+    expect(withDataOnly.children).toHaveLength(0);
+
+    const withMaterialOnly = buildChunkGroup(
+      makeChunk(),
+      {},
+      {
+        shadowMaterial: new THREE.MeshBasicMaterial(),
+      },
+    );
+    expect(withMaterialOnly.children).toHaveLength(0);
+  });
+
   it('expands a 4-quad autotile upper tile into quarters still spanning the full wall footprint and height', () => {
     const fourQuads = [
       { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },

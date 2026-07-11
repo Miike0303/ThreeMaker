@@ -61,6 +61,31 @@ describe('TilemapScene', () => {
     scene.dispose();
   });
 
+  it('renders shadow-pencil data as a translucent black overlay mesh', () => {
+    const chunk: ChunkBuildData = {
+      chunkX: 0,
+      chunkY: 0,
+      tiles: [],
+      shadows: [{ tileX: 0, tileY: 0, mask: 5 }],
+    };
+
+    const scene = new TilemapScene([chunk], {});
+
+    const chunkGroup = scene.group.children[0];
+    const shadowMesh = chunkGroup?.children.find((child) => child.name.endsWith('-shadow')) as
+      | THREE.Mesh
+      | undefined;
+    expect(shadowMesh).toBeDefined();
+    const material = shadowMesh?.material as THREE.MeshBasicMaterial;
+    // Matches RPG Maker's corescript shadow color rgba(0,0,0,0.5); depthWrite
+    // stays off so the translucent overlay never occludes later draws.
+    expect(material.transparent).toBe(true);
+    expect(material.opacity).toBeCloseTo(0.5);
+    expect(material.depthWrite).toBe(false);
+    expect(material.color.getHex()).toBe(0x000000);
+    scene.dispose();
+  });
+
   it('dispose() frees every geometry, material, and texture it owns and is safe to call twice', () => {
     const chunks = [makeChunk(0, 0, 'B'), makeChunk(0, 1, 'C')];
     const textures = { B: new THREE.Texture(), C: new THREE.Texture() };
