@@ -6,7 +6,8 @@
 // exports, since it's a Node-only entry point, not a library API.
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { ingestGame, openCatalog } from './catalog.js';
+import type { IngestGameResult } from './catalog.js';
+import { ingestGame, openCatalog, sumResults } from './catalog.js';
 import { scanGames } from './scanner.js';
 
 const DEFAULT_STORE_DIR = join(homedir(), '.threemaker', 'asset-store');
@@ -89,21 +90,13 @@ function runCatalog(rootDir: string, maxDepth: number | undefined, storeDir: str
       });
     }
 
-    let totalFilesSeen = 0;
-    let totalFilesFailed = 0;
-    let totalObjectsCreated = 0;
-    let totalBytesScanned = 0;
-    let totalBytesStored = 0;
     let gamesFailed = 0;
+    const ingestResults: IngestGameResult[] = [];
 
     const perGame = scanResult.games.map((game) => {
       try {
         const result = ingestGame(catalog, game, { storeDir });
-        totalFilesSeen += result.filesSeen;
-        totalFilesFailed += result.filesFailed;
-        totalObjectsCreated += result.objectsCreated;
-        totalBytesScanned += result.bytesScanned;
-        totalBytesStored += result.bytesStored;
+        ingestResults.push(result);
         return { rootPath: game.rootPath, ok: true as const, ...result };
       } catch (err) {
         gamesFailed++;
@@ -118,6 +111,7 @@ function runCatalog(rootDir: string, maxDepth: number | undefined, storeDir: str
       }
     });
 
+    const totals = sumResults(ingestResults);
     const dedupeStats = catalog.getDedupeStats();
     const durationMs = Date.now() - startedAt;
 
@@ -133,17 +127,17 @@ function runCatalog(rootDir: string, maxDepth: number | undefined, storeDir: str
       gamesScanned: scanResult.games.length,
       gamesFailed,
       scanErrorCount: scanResult.errors.length,
-      filesSeen: totalFilesSeen,
-      filesFailed: totalFilesFailed,
-      uniqueObjectsCreatedThisRun: totalObjectsCreated,
+      filesSeen: totals.filesSeen,
+      filesFailed: totals.filesFailed,
+      uniqueObjectsCreatedThisRun: totals.objectsCreated,
       totalAssetsCataloged: dedupeStats.assetCount,
       totalDistinctObjects: dedupeStats.distinctObjectCount,
       dedupeRatio:
         dedupeStats.assetCount > 0
           ? Number((dedupeStats.distinctObjectCount / dedupeStats.assetCount).toFixed(4))
           : 0,
-      bytesScannedThisRun: totalBytesScanned,
-      bytesStoredThisRun: totalBytesStored,
+      bytesScannedThisRun: totals.bytesScanned,
+      bytesStoredThisRun: totals.bytesStored,
       durationMs,
       failuresByCode: Object.fromEntries(errorsByCode),
       perGame,

@@ -20,6 +20,7 @@ declare module 'node:fs' {
   export function readFileSync(path: string): Uint8Array;
   export function writeFileSync(path: string, data: Uint8Array): void;
   export function mkdirSync(path: string, options?: { recursive?: boolean }): void;
+  export function renameSync(oldPath: string, newPath: string): void;
   export function realpathSync(path: string): string;
   export function statSync(path: string): Stats;
   export function readdirSync(path: string, options: { withFileTypes: true }): Dirent[];
@@ -62,7 +63,7 @@ declare module 'better-sqlite3' {
   }
 
   interface DatabaseInstance {
-    pragma(source: string): unknown;
+    pragma(source: string, options?: { simple?: boolean }): unknown;
     exec(source: string): void;
     prepare<Params extends unknown[] = unknown[], Result = unknown>(
       source: string,
@@ -87,4 +88,5 @@ declare const console: {
 declare const process: {
   argv: string[];
   exitCode?: number;
+  readonly pid: number;
 };

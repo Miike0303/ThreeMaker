@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Catalog } from '../src/catalog.js';
-import { ingestGame, openCatalog } from '../src/catalog.js';
+import type { Catalog, IngestGameResult } from '../src/catalog.js';
+import { ingestGame, openCatalog, sumResults } from '../src/catalog.js';
 import type { GameRecord } from '../src/scanner.js';
 
 // A tiny valid PNG (1x1 transparent pixel) used as "decrypted" content in
@@ -64,6 +64,11 @@ describe('catalog', () => {
         'scan_errors',
       ]),
     );
+  });
+
+  it('opens in WAL journal mode with a busy timeout, for safe concurrent read (editor) + write (CLI) access', () => {
+    expect(catalog.getPragma('journal_mode')).toBe('wal');
+    expect(Number(catalog.getPragma('busy_timeout'))).toBeGreaterThan(0);
   });
 
   it('dedupes identical decrypted content across two games into 1 object + 2 references', () => {
@@ -182,5 +187,46 @@ describe('catalog', () => {
     const assets = catalog.listAssets({ gameId: result.gameId, type: 'bgm' });
     expect(assets).toHaveLength(1);
     expect(assets[0]?.wasEncrypted).toBe(true);
+  });
+});
+
+describe('sumResults', () => {
+  it('sums ingest results across games, field by field', () => {
+    const results: IngestGameResult[] = [
+      {
+        gameId: 1,
+        filesSeen: 10,
+        filesFailed: 1,
+        objectsCreated: 5,
+        bytesScanned: 100,
+        bytesStored: 50,
+      },
+      {
+        gameId: 2,
+        filesSeen: 20,
+        filesFailed: 2,
+        objectsCreated: 15,
+        bytesScanned: 200,
+        bytesStored: 150,
+      },
+    ];
+
+    expect(sumResults(results)).toEqual({
+      filesSeen: 30,
+      filesFailed: 3,
+      objectsCreated: 20,
+      bytesScanned: 300,
+      bytesStored: 200,
+    });
+  });
+
+  it('returns all zeros for an empty list', () => {
+    expect(sumResults([])).toEqual({
+      filesSeen: 0,
+      filesFailed: 0,
+      objectsCreated: 0,
+      bytesScanned: 0,
+      bytesStored: 0,
+    });
   });
 });

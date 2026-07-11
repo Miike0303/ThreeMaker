@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { DecryptError, decryptRpgmv } from './decrypt.js';
-import { hashBytes, storeObject } from './object-store.js';
+import { storeObject } from './object-store.js';
 import type { GameRecord } from './scanner.js';
 
 /**
@@ -180,7 +180,13 @@ export class Catalog {
   constructor(dbPath: string) {
     mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
+    // WAL mode lets the editor (Slice 3, read-only via Tauri IPC) read
+    // concurrently with the CLI writing a bulk-run. `busy_timeout` makes a
+    // writer/reader collision retry for a bit instead of failing immediately
+    // with SQLITE_BUSY, which matters once both sides are real concurrent
+    // processes rather than the single-process usage this slice exercises.
     this.db.pragma('journal_mode = WAL');
+    this.db.pragma('busy_timeout = 5000');
     this.db.exec(SCHEMA_SQL);
   }
 
@@ -196,6 +202,11 @@ export class Catalog {
       )
       .all();
     return rows.map((row) => row.name);
+  }
+
+  /** Introspection helper for concurrency tests — reads a pragma's current value. */
+  getPragma(name: string): unknown {
+    return this.db.pragma(name, { simple: true });
   }
 
   /** Insert-or-update by `root_path` (unique) — re-scanning a game updates it, never duplicates it. */
@@ -410,6 +421,33 @@ export interface IngestGameResult {
   readonly bytesStored: number;
 }
 
+export interface AggregateIngestStats {
+  readonly filesSeen: number;
+  readonly filesFailed: number;
+  readonly objectsCreated: number;
+  readonly bytesScanned: number;
+  readonly bytesStored: number;
+}
+
+/**
+ * Sums the numeric fields of `IngestGameResult` across many games. Extracted
+ * so callers (the bulk-run CLI) don't hand-roll the same five-field
+ * accumulator inline — a single reducer used once beats five separate
+ * `total += result.field` lines repeated per caller.
+ */
+export function sumResults(results: readonly IngestGameResult[]): AggregateIngestStats {
+  return results.reduce<AggregateIngestStats>(
+    (acc, result) => ({
+      filesSeen: acc.filesSeen + result.filesSeen,
+      filesFailed: acc.filesFailed + result.filesFailed,
+      objectsCreated: acc.objectsCreated + result.objectsCreated,
+      bytesScanned: acc.bytesScanned + result.bytesScanned,
+      bytesStored: acc.bytesStored + result.bytesStored,
+    }),
+    { filesSeen: 0, filesFailed: 0, objectsCreated: 0, bytesScanned: 0, bytesStored: 0 },
+  );
+}
+
 /**
  * Ingests one scanned game into the catalog: decrypts (per
  * `hasEncryptedImages`/`hasEncryptedAudio`, NOT per file extension — a
@@ -461,7 +499,6 @@ export function ingestGame(
 
     const needsDecrypt = kind === 'image' ? game.hasEncryptedImages : game.hasEncryptedAudio;
     let decoded: Uint8Array;
-    const wasEncrypted = needsDecrypt;
     if (needsDecrypt) {
       if (!game.encryptionKey) {
         filesFailed++;
@@ -490,7 +527,10 @@ export function ingestGame(
       decoded = raw;
     }
 
-    const sha256 = hashBytes(decoded);
+    // `storeObject` already hashes `decoded` internally to compute the
+    // content-addressed path — reuse `stored.sha256` instead of hashing the
+    // same bytes a second time here. At bulk-run scale (hundreds of
+    // thousands of assets) that redundant hash pass is real time, not style.
     const stored = storeObject(options.storeDir, decoded);
     if (stored.created) {
       objectsCreated++;
@@ -498,7 +538,7 @@ export function ingestGame(
     }
 
     catalog.insertObject({
-      sha256,
+      sha256: stored.sha256,
       bytes: decoded.length,
       kind: classifyObjectKind(kind, relPath),
     });
@@ -506,8 +546,8 @@ export function ingestGame(
       gameId,
       relPath: catalogRelPath,
       type: classifyAssetType(kind, relPath),
-      sha256,
-      wasEncrypted,
+      sha256: stored.sha256,
+      wasEncrypted: needsDecrypt,
     });
   };
 

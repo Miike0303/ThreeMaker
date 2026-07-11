@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -45,7 +45,19 @@ export function storeObject(storeDir: string, bytes: Uint8Array): StoreObjectRes
   }
 
   mkdirSync(join(storeDir, 'objects', sha256.slice(0, FAN_OUT_LEN)), { recursive: true });
-  writeFileSync(path, bytes);
+
+  // Write to a temp file in the same directory first, then atomically
+  // rename it into place. Writing `path` directly would let a mid-write
+  // crash leave a truncated/corrupt file exactly at the content-addressed
+  // path — and because dedupe trusts `existsSync(path)` as "valid content
+  // already stored" (by design, to avoid re-hashing every object on every
+  // dedupe check), that corrupt file would be silently treated as good
+  // forever after. A same-directory, same-volume rename is atomic on both
+  // POSIX and NTFS, so `path` only ever becomes visible once the full
+  // content is safely on disk.
+  const tmpPath = `${path}.tmp-${process.pid}-${Math.random().toString(36).slice(2)}`;
+  writeFileSync(tmpPath, bytes);
+  renameSync(tmpPath, path);
 
   return { sha256, path, created: true };
 }
