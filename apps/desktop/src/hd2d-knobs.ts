@@ -1,3 +1,5 @@
+import { clampRange } from './clamp.js';
+
 /** Tuning knobs for the HD-2D post-processing chain (see `hd2d-pipeline.ts`). */
 export interface Hd2dKnobs {
   readonly bloom: {
@@ -68,13 +70,10 @@ export function resolveKnobs(override?: Hd2dKnobsOverride): Hd2dKnobs {
 }
 
 /**
- * Clamps `distance` into `[min, max]`. Normalizes an inverted range (`min >
- * max`) instead of throwing, and treats `NaN` as the range's lower bound so
- * a bad camera-distance read never propagates into the DoF uniform.
+ * Clamps `distance` into `[min, max]` (see `clampRange` for the defensive
+ * contract) so a bad camera-distance read never propagates into the DoF
+ * uniform.
  */
 export function clampFocusDistance(distance: number, min: number, max: number): number {
-  const lower = Math.min(min, max);
-  const upper = Math.max(min, max);
-  if (Number.isNaN(distance)) return lower;
-  return Math.min(Math.max(distance, lower), upper);
+  return clampRange(distance, min, max);
 }

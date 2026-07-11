@@ -4,6 +4,9 @@
     "app.title": "ThreeMaker",
     "map.loading": "Loading map…",
     "map.fixtureNotFound": "Fixture not found — see fixtures/README.md",
-    "locale.selectorLabel": "Language"
+    "locale.selectorLabel": "Language",
+    "camera.mode.hd2d": "HD-2D",
+    "camera.mode.topDown": "Top-down",
+    "camera.mode.firstPerson": "First-person"
   }
 }

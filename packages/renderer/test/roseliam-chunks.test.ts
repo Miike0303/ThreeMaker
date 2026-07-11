@@ -93,4 +93,51 @@ describe('buildChunks on the real Roseliam fixture (Map007)', () => {
       expect(shadow.mask).toBeLessThanOrEqual(15);
     }
   });
+
+  it('anchors Map007\'s crystal/pillar star tiles one row south, on their ground base (the "crystal glitch" fix)', async () => {
+    const mapJson = await readJson('Map007.json');
+    const tilesetsJson = await readJson('Tilesets.json');
+
+    const map = parseMap(mapJson, 7);
+    const tilesets = parseTilesets(tilesetsJson);
+    const tileset = tilesets.find((entry) => entry.id === map.tilesetId);
+    expect(tileset).toBeDefined();
+    if (!tileset) return;
+
+    const sheetPixelSizes = await loadSheetPixelSizes(tileset);
+    const chunks = buildChunks(map, tileset, sheetPixelSizes);
+    const allTiles = chunks.flatMap((chunk) => chunk.tiles);
+
+    // Ground truth decoded straight from the fixture: 4 crystal star tiles
+    // (id 69, tileset flag 0x10) each sitting one row north of a plain
+    // ground decor tile (id 77) at the same column, and 4 pillar-top star
+    // tiles (id 84) similarly paired with a ground tile (id 92) south of
+    // them. Map007 is flat (no region elevation on any of these cells), so
+    // every one of them should resolve to the same flat, unstacked base.
+    const crystalStarCoords: ReadonlyArray<readonly [number, number]> = [
+      [8, 6],
+      [10, 6],
+      [7, 8],
+      [11, 8],
+    ];
+    const pillarStarCoords: ReadonlyArray<readonly [number, number]> = [
+      [8, 15],
+      [10, 15],
+      [8, 18],
+      [10, 18],
+    ];
+
+    for (const [x, y] of [...crystalStarCoords, ...pillarStarCoords]) {
+      const star = allTiles.find(
+        (tile) => tile.tileX === x && tile.tileY === y && tile.elevation === 'upper',
+      );
+      expect(star, `(${x},${y}) should have an upper/star tile entry`).toBeDefined();
+      expect(star?.starStack, `(${x},${y}) should carry a starStack`).toEqual({
+        baseTileY: y + 1,
+        level: 0,
+        baseHeight: 0,
+        baseIsWall: false,
+      });
+    }
+  });
 });

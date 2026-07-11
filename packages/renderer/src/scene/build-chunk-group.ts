@@ -262,10 +262,12 @@ function buildWallPrismGeometry(
 /**
  * Builds one tile's quad geometry/geometries, positioned in world space.
  *
- * - Star-bit "upper layer" tiles (`tile.elevation === 'upper'`) keep the
- *   original standing-quad behavior regardless of sheet: a single-sided
- *   vertical quad (or 4 quarter-quads for an autotile), lifted by the
- *   tile's own region elevation.
+ * - Star-bit "upper layer" tiles (`tile.elevation === 'upper'`) render as a
+ *   single-sided vertical quad (or 4 quarter-quads for an autotile), but
+ *   anchored at `tile.starStack`'s base tile/level (MV3D's "tileoffset"
+ *   convention -- see `StarStackData`'s doc comment), not the tile's own
+ *   cell: a star tile at `(x, y)` stands on the tile south of it, stacked
+ *   above any other star tiles already sitting on that same base.
  * - A3/A4 wall-autotile tiles become 3D prisms (`buildWallPrismGeometry`).
  * - Everything else is a flat ground quad at `y = tile.height * heightUnit`,
  *   plus any cliff side faces the tile's elevation needs.
@@ -295,19 +297,32 @@ function buildTileGeometry(
   const elevationLift = (tile.height ?? 0) * heightUnit;
 
   if (tile.elevation === 'upper') {
+    // Anchor at the star tile's stack base (MV3D "tileoffset" convention --
+    // see `StarStackData`'s doc comment) when `chunk-geometry.ts` computed
+    // one; otherwise (hand-built `TileBuildData` fixtures with no
+    // `starStack`) fall back to the tile's own cell, matching this
+    // function's pre-fix behavior.
+    const stack = tile.starStack;
+    const standWorldZ = stack ? stack.baseTileY * tileWorldSize : worldZ;
+    const standCenterZ = standWorldZ + tileWorldSize / 2;
+    const standBaseLift = stack
+      ? stack.baseHeight * heightUnit +
+        (stack.baseIsWall ? wallPrismHeight : 0) +
+        stack.level * wallHeight
+      : elevationLift;
+
     if (tile.quads.length === 4) {
       const half = tileWorldSize / 2;
       const halfWallHeight = wallHeight / 2;
-      const centerZ = worldZ + tileWorldSize / 2;
       const geometries: THREE.BufferGeometry[] = [];
       for (let i = 0; i < 4; i++) {
         const uv = tile.quads[i];
         if (!uv) continue;
         const col = i % 2; // 0 = west/left, 1 = east/right
         const row = Math.floor(i / 2); // 0 = north/image-top, 1 = south/image-bottom
-        const baseY = (row === 0 ? halfWallHeight : 0) + elevationLift;
+        const baseY = (row === 0 ? halfWallHeight : 0) + standBaseLift;
         geometries.push(
-          buildWallQuad(uv, worldX + col * half, baseY, centerZ, half, halfWallHeight),
+          buildWallQuad(uv, worldX + col * half, baseY, standCenterZ, half, halfWallHeight),
         );
       }
       return geometries;
@@ -315,16 +330,7 @@ function buildTileGeometry(
 
     const uv = tile.quads[0];
     if (!uv) return [];
-    return [
-      buildWallQuad(
-        uv,
-        worldX,
-        elevationLift,
-        worldZ + tileWorldSize / 2,
-        tileWorldSize,
-        wallHeight,
-      ),
-    ];
+    return [buildWallQuad(uv, worldX, standBaseLift, standCenterZ, tileWorldSize, wallHeight)];
   }
 
   if (isWallSheet(tile.sheet)) {

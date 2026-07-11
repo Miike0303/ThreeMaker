@@ -58,6 +58,46 @@ export interface TileBuildData {
    * whatever else got painted on higher editable layers at the same spot.
    */
   readonly cliffEdges?: readonly CliffEdgeData[];
+  /**
+   * Only present for `elevation === 'upper'` (star-bit) tiles: where and how
+   * high this tile's standing quad should actually be anchored, per MV3D's
+   * documented "tileoffset" convention (its star tiles default to
+   * `tileOffset(y:1)` -- a one-cell southward shift; see
+   * https://cutievirus.itch.io/mv3d/devlog/467498). RPG Maker map authors
+   * draw a tall object's overhanging top portion as a star tile one cell
+   * NORTH of its ground/base tile, because the 2D renderer's row-major
+   * draw order then makes that overhang read as sitting on top of the tile
+   * below. Rendering the star tile as a standing quad at its OWN cell (the
+   * pre-fix behavior) instead leaves it floating one tile north of where it
+   * visually belongs -- see `computeStarStack` in `chunk-geometry.ts`.
+   */
+  readonly starStack?: StarStackData;
+}
+
+/**
+ * Where a star-bit tile's standing quad anchors, computed by
+ * `computeStarStack` in `chunk-geometry.ts`.
+ */
+export interface StarStackData {
+  /**
+   * Map row (tileY) of the base tile this star tile's quad stands on --
+   * always `> ` the star tile's own `tileY` (south of it). May equal
+   * `map.height` when the star tile sits on the southern map edge with no
+   * tile below it; the map edge is then treated as ground level 0, matching
+   * `computeCliffEdges`'s off-map convention.
+   */
+  readonly baseTileY: number;
+  /**
+   * How many other star tiles sit between this one and the base (0 = this
+   * tile is the bottommost of the stack, standing directly on the base).
+   * The quad spans `[level, level + 1] * wallHeight` above the base's own
+   * top.
+   */
+  readonly level: number;
+  /** Region-derived floor elevation of the base tile (tile-height units), or 0 if the base is off-map. */
+  readonly baseHeight: number;
+  /** Whether the base tile's ground layer is an A3/A4 wall-autotile prism -- the star quad then stacks on top of the prism, not the bare floor. */
+  readonly baseIsWall: boolean;
 }
 
 /**

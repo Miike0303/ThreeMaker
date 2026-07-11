@@ -14,7 +14,10 @@ import {
 } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
+import type { CameraMode } from './camera-rig.js';
+import { clampTiltDeg, computeCameraPose, cycleCameraMode } from './camera-rig.js';
 import { CharacterSprite, tileCenterToWorld } from './character-sprite.js';
+import { clampRange } from './clamp.js';
 import {
   fixtureCharacterUrl,
   fixtureImageUrl,
@@ -226,13 +229,30 @@ const PLAYER_SPEED = 4;
 // Framerate-independent exponential smoothing (see `renderFixtureMap`).
 const CAMERA_FOLLOW_SPEED = 6;
 
-// HD-2D camera tuning knobs.
+// HD-2D camera tuning knobs -- these seed the CameraRig's runtime-adjustable
+// state (see `cameraTiltDeg`/`cameraDistance` below); they're no longer read
+// directly by the render loop itself, only as the defaults `[`/`]` and
+// `-`/`=` start from (and what a map switch's `focusCameraOnSpawn` resets
+// distance to).
 const CAMERA_TILT_DEG = 40;
 const CAMERA_DISTANCE_FACTOR = 0.9; // distance = max(map width, height) * factor
 // Cap the camera boom so a giant map cannot push the camera into the far
-// plane; fixture-sized maps stay below the cap and are unaffected.
+// plane; fixture-sized maps stay below the cap and are unaffected. Also the
+// upper clamp for manual zoom-out (`-` key).
 const CAMERA_MAX_DISTANCE = 24;
+// Lower clamp for manual zoom-in (`=` key) -- close enough to read detail
+// without clipping into the character/ground geometry.
+const CAMERA_MIN_DISTANCE = 3;
 const CAMERA_FOV_DEG = 45;
+// Per-keypress adjustment step for the `[`/`]` (tilt) and `-`/`=` (zoom) keys.
+const CAMERA_TILT_STEP_DEG = 5;
+const CAMERA_ZOOM_STEP = 1;
+
+const CAMERA_MODE_LOCALE_KEY: Record<CameraMode, string> = {
+  hd2d: 'camera.mode.hd2d',
+  'top-down': 'camera.mode.topDown',
+  'first-person': 'camera.mode.firstPerson',
+};
 
 // Chunk streaming: only chunks within `STREAM_BUILD_RADIUS` chunks of the
 // character keep live GPU geometry; the extra dispose-radius chunk is
@@ -398,13 +418,10 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   );
   scene.add(character.mesh);
 
-  // HD-2D-style tilted perspective: looking down at the map from the south
-  // at ~40 degrees. The target starts on the character and smoothly follows
-  // it every frame (see the game loop below) instead of a fixed map-center
-  // point.
+  // The follow target: starts on the character and smoothly chases its world
+  // position every frame (see the game loop below) instead of snapping,
+  // regardless of which CameraRig mode is active.
   const target = new THREE.Vector3();
-  const offset = new THREE.Vector3();
-  const tiltAngle = THREE.MathUtils.degToRad(CAMERA_TILT_DEG);
 
   const camera = new THREE.PerspectiveCamera(
     CAMERA_FOV_DEG,
@@ -413,26 +430,66 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     500,
   );
 
-  /** Re-aims the camera boom at the current session's spawn tile (initial view and map switches). */
+  const heldDirection = createMostRecentHeldDirection();
+
+  // Declared before the CameraRig state below on purpose: applyCameraPose()
+  // closes over `hd2d`, so the pipeline must exist before any pose is applied.
+  const hd2d = createHd2dPipeline(renderer, scene, camera);
+
+  // CameraRig runtime state: HD-2D's tilt/distance are adjustable with
+  // `[`/`]` and `-`/`=`; `cameraMode` cycles with `c`. See camera-rig.ts.
+  let cameraMode: CameraMode = 'hd2d';
+  let cameraTiltDeg = CAMERA_TILT_DEG;
+  // Placeholder in the same unit (world-space boom distance); the real value
+  // is computed from the map size by focusCameraOnSpawn() before first render.
+  let cameraDistance = CAMERA_MAX_DISTANCE;
+
+  /** Applies the CameraRig's pose for the current mode/target to the real THREE camera + character visibility + DoF focus. */
+  function applyCameraPose(): void {
+    const pose = computeCameraPose(
+      cameraMode,
+      { tiltDeg: cameraTiltDeg, distance: cameraDistance, fovDeg: CAMERA_FOV_DEG },
+      { x: target.x, y: target.y, z: target.z, facing: session.mover.facing },
+    );
+    camera.position.set(pose.position.x, pose.position.y, pose.position.z);
+    camera.lookAt(pose.lookAt.x, pose.lookAt.y, pose.lookAt.z);
+    character.mesh.visible = !pose.hideCharacter;
+    hd2d.setFocusDistance(
+      pose.focusFar
+        ? Number.POSITIVE_INFINITY
+        : camera.position.distanceTo(character.mesh.position),
+    );
+  }
+
+  /** Re-aims the camera boom at the current session's spawn tile (initial view and map switches). Resets the manual zoom back to the map's auto-fit distance. */
   function focusCameraOnSpawn(): void {
-    const distance = Math.min(
+    cameraDistance = Math.min(
       Math.max(session.map.width, session.map.height) * CAMERA_DISTANCE_FACTOR,
       CAMERA_MAX_DISTANCE,
     );
-    offset.set(0, distance * Math.sin(tiltAngle), distance * Math.cos(tiltAngle));
     target.set(
       tileCenterToWorld(session.spawn.x, TILE_WORLD_SIZE),
       groundYAt(session, session.spawn.x, session.spawn.y),
       tileCenterToWorld(session.spawn.y, TILE_WORLD_SIZE),
     );
-    camera.position.copy(target).add(offset);
-    camera.lookAt(target);
+    applyCameraPose();
   }
+
   focusCameraOnSpawn();
 
-  const heldDirection = createMostRecentHeldDirection();
+  // ponytail: only refreshed on a mode change ('c'), not on locale switch
+  // (buildLocaleSelector's change handler lives in a separate closure in
+  // `main()`, built before this one exists) -- an acceptable gap for an
+  // optional indicator; re-open the language dropdown or press 'c' to see
+  // the new locale's label.
+  const cameraModeIndicator = document.createElement('div');
+  cameraModeIndicator.className = 'camera-mode-indicator';
+  function updateCameraModeIndicator(): void {
+    cameraModeIndicator.textContent = i18n.t(CAMERA_MODE_LOCALE_KEY[cameraMode]);
+  }
+  updateCameraModeIndicator();
+  container.appendChild(cameraModeIndicator);
 
-  const hd2d = createHd2dPipeline(renderer, scene, camera);
   let postProcessingEnabled = true;
   if (import.meta.env.DEV) {
     window.__hd2d = { renderer };
@@ -452,9 +509,43 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     };
   }
   window.addEventListener('keydown', (event) => {
-    if (event.repeat || event.key.toLowerCase() !== 'p') return;
-    postProcessingEnabled = !postProcessingEnabled;
-    hd2d.setEnabled(postProcessingEnabled);
+    if (event.repeat) return;
+    switch (event.key.toLowerCase()) {
+      case 'p':
+        postProcessingEnabled = !postProcessingEnabled;
+        hd2d.setEnabled(postProcessingEnabled);
+        return;
+      case 'c':
+        // Real engine feature (camera mode), not a dev toggle -- available
+        // in production builds, unlike the 'g' dev map-cycle below.
+        cameraMode = cycleCameraMode(cameraMode);
+        updateCameraModeIndicator();
+        return;
+      case '[':
+        cameraTiltDeg = clampTiltDeg(cameraTiltDeg - CAMERA_TILT_STEP_DEG);
+        return;
+      case ']':
+        cameraTiltDeg = clampTiltDeg(cameraTiltDeg + CAMERA_TILT_STEP_DEG);
+        return;
+      case '-':
+      case '_':
+        cameraDistance = clampRange(
+          cameraDistance + CAMERA_ZOOM_STEP,
+          CAMERA_MIN_DISTANCE,
+          CAMERA_MAX_DISTANCE,
+        );
+        return;
+      case '=':
+      case '+':
+        cameraDistance = clampRange(
+          cameraDistance - CAMERA_ZOOM_STEP,
+          CAMERA_MIN_DISTANCE,
+          CAMERA_MAX_DISTANCE,
+        );
+        return;
+      default:
+        return;
+    }
   });
 
   // Dev map-cycle toggle: 'g' cycles the fixture map -> a giant deterministic
@@ -555,8 +646,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       target.x += (desiredX - target.x) * followAmount;
       target.y += (groundY - target.y) * followAmount;
       target.z += (desiredZ - target.z) * followAmount;
-      camera.position.copy(target).add(offset);
-      camera.lookAt(target);
+      applyCameraPose();
     },
   });
 
@@ -574,7 +664,6 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   renderer.setAnimationLoop(() => {
     stats.begin();
     gameLoop.tick();
-    hd2d.setFocusDistance(camera.position.distanceTo(character.mesh.position));
     hd2d.render();
     stats.end();
     stats.update();

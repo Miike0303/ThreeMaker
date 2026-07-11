@@ -131,6 +131,126 @@ describe('buildChunks elevation (region-derived height)', () => {
   });
 });
 
+describe('buildChunks star-tile stacking (MV3D "tileoffset" fix)', () => {
+  it('anchors an isolated star tile one row south of it, at level 0', () => {
+    // tile id 2 is the flagged star tile; id 1 is a plain ground tile.
+    const width = 1;
+    const height = 2;
+    const layer0 = [2, 1]; // (0,0) star, (0,1) ground base
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [layer0, new Array(2).fill(0), new Array(2).fill(0), new Array(2).fill(0)],
+        shadows: new Array(2).fill(0),
+        regions: new Array(2).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+    const star = chunks[0]?.tiles.find((tile) => tile.tileY === 0);
+
+    expect(star?.elevation).toBe('upper');
+    expect(star?.starStack).toEqual({
+      baseTileY: 1,
+      level: 0,
+      baseHeight: 0,
+      baseIsWall: false,
+    });
+  });
+
+  it('stacks two consecutive star tiles onto the same base, incrementing level going north', () => {
+    const width = 1;
+    const height = 3;
+    const layer0 = [2, 2, 1]; // (0,0) and (0,1) star, (0,2) ground base
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [layer0, new Array(3).fill(0), new Array(3).fill(0), new Array(3).fill(0)],
+        shadows: new Array(3).fill(0),
+        regions: new Array(3).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+    const tiles = chunks[0]?.tiles ?? [];
+    const top = tiles.find((tile) => tile.tileY === 0);
+    const middle = tiles.find((tile) => tile.tileY === 1);
+
+    expect(top?.starStack).toEqual({ baseTileY: 2, level: 1, baseHeight: 0, baseIsWall: false });
+    expect(middle?.starStack).toEqual({ baseTileY: 2, level: 0, baseHeight: 0, baseIsWall: false });
+  });
+
+  it('reports the base tile as a wall and picks up its region height when the base is an A3/A4 autotile', () => {
+    const width = 1;
+    const height = 2;
+    const wallTileId = 5888; // first A3 id -- an autotile kind/shape, but getTileSheet only cares about the id range
+    const layer0 = [2, wallTileId];
+    const regions = [0, 3];
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [layer0, new Array(2).fill(0), new Array(2).fill(0), new Array(2).fill(0)],
+        shadows: new Array(2).fill(0),
+        regions,
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+    const star = chunks[0]?.tiles.find((tile) => tile.tileY === 0);
+
+    expect(star?.starStack).toEqual({
+      baseTileY: 1,
+      level: 0,
+      baseHeight: 3,
+      baseIsWall: true,
+    });
+  });
+
+  it('treats the southern map edge as a level-0, height-0 base when a star tile has no tile below it', () => {
+    const width = 1;
+    const height = 1;
+    const layer0 = [2];
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [layer0, new Array(1).fill(0), new Array(1).fill(0), new Array(1).fill(0)],
+        shadows: new Array(1).fill(0),
+        regions: new Array(1).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+    const star = chunks[0]?.tiles[0];
+
+    expect(star?.starStack).toEqual({
+      baseTileY: 1, // == map.height: off-map
+      level: 0,
+      baseHeight: 0,
+      baseIsWall: false,
+    });
+  });
+
+  it('does not attach starStack to a ground tile', () => {
+    const layer0 = new Array(16).fill(0);
+    layer0[0] = 1; // plain ground, not the flagged star id
+    const map = makeMap({
+      layers: {
+        tileLayers: [layer0, new Array(16).fill(0), new Array(16).fill(0), new Array(16).fill(0)],
+        shadows: new Array(16).fill(0),
+        regions: new Array(16).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+
+    expect(chunks[0]?.tiles[0]?.starStack).toBeUndefined();
+  });
+});
+
 describe('buildChunks', () => {
   it('returns no chunks for an all-empty map', () => {
     const chunks = buildChunks(makeMap(), makeTileset(), SHEET_SIZES);

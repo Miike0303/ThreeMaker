@@ -250,6 +250,133 @@ describe('buildChunkGroup', () => {
     expect(withMaterialOnly.children).toHaveLength(0);
   });
 
+  it('stands a star tile\'s quad on its stack base tile, south of its own cell (MV3D "tileoffset" fix)', () => {
+    // Star tile authored at (0,0) (e.g. a crystal's overhanging top half),
+    // stacked on a ground base one row south -- matches Map007's real
+    // crystal/pillar decor: a star tile at (x,y) with a plain ground tile at
+    // (x,y+1). Its standing quad must render AT the base's cell, not its own.
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 5,
+          tileY: 2,
+          layerIndex: 3,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'upper',
+          starStack: { baseTileY: 3, level: 0, baseHeight: 0, baseIsWall: false },
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+
+    // Anchored at tileX=5 (unchanged) but tileY=3 (the base, one south of
+    // the star tile's own tileY=2), standing from y=0 to y=1. A star quad is
+    // a single-sided billboard (zero Z-thickness, like the pre-fix
+    // behavior) centered on the base tile's depth, i.e. z=3.5, not spanning
+    // the full [3,4] footprint.
+    expect(box.min.x).toBeCloseTo(5);
+    expect(box.max.x).toBeCloseTo(6);
+    expect(box.min.z).toBeCloseTo(3.5);
+    expect(box.max.z).toBeCloseTo(3.5);
+    expect(box.min.y).toBeCloseTo(0);
+    expect(box.max.y).toBeCloseTo(1);
+  });
+
+  it('stacks a taller star tile above the ones already standing on the same base (level > 0)', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 3,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'upper',
+          starStack: { baseTileY: 2, level: 1, baseHeight: 0, baseIsWall: false },
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+
+    // level 1 -> spans [1, 2] above the base, not [0, 1].
+    expect(box.min.y).toBeCloseTo(1);
+    expect(box.max.y).toBeCloseTo(2);
+  });
+
+  it('stacks a star tile above the wall-prism height when its base is an A3/A4 wall tile', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 3,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'upper',
+          starStack: { baseTileY: 1, level: 0, baseHeight: 0, baseIsWall: true },
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, wallPrismHeight: 2 },
+    );
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+
+    // The wall prism's cap sits at y=2 (default wallPrismHeight); the star
+    // quad stacks on top of it, from y=2 to y=3.
+    expect(box.min.y).toBeCloseTo(2);
+    expect(box.max.y).toBeCloseTo(3);
+  });
+
+  it("falls back to the tile's own cell when starStack is absent (hand-built fixtures, pre-fix behavior)", () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 4,
+          tileY: 4,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'upper',
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+
+    expect(box.min.z).toBeCloseTo(4.5);
+    expect(box.max.z).toBeCloseTo(4.5);
+  });
+
   it('expands a 4-quad autotile upper tile into quarters still spanning the full wall footprint and height', () => {
     const fourQuads = [
       { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
