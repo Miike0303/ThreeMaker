@@ -1,4 +1,4 @@
-import type { TileSheetId } from '@threemaker/importer-rpgm';
+import type { RampDirection, TileSheetId } from '@threemaker/importer-rpgm';
 import type { MapDocument, SemanticClass, TileDiff } from '@threemaker/map-format';
 import type { ChunkBuildData, SheetPixelSizes } from '@threemaker/renderer';
 import {
@@ -14,9 +14,15 @@ import { computeDirtyChunkKeys } from './dirty-region.js';
 import { toRenderableMap, toRenderableTileset } from './map-compose.js';
 import type { PainterState } from './painter-store.js';
 import * as painter from './painter-store.js';
+import { computeRampGlyphCells } from './ramp-glyph.js';
 import type { TilePoint, ToolId } from './tool-sm.js';
 import { resolveToolShortcut } from './tool-sm.js';
-import { computeOverviewCameraDistance, computeOverviewCameraPose } from './viewer-camera.js';
+import type { OverviewCameraPose } from './viewer-camera.js';
+import {
+  computeOverviewCameraDistance,
+  computeOverviewCameraPose,
+  projectToScreenFraction,
+} from './viewer-camera.js';
 
 /** Loads a texture (+ its pixel size) for every composed slot that has a resolved object hash. Thin IO glue, untested per this module's convention. */
 export async function loadSlotTextures(doc: MapDocument): Promise<{
@@ -45,11 +51,22 @@ const OVERVIEW_DISTANCE_FACTOR = 1.6;
 const OVERVIEW_MAX_DISTANCE = 60;
 const OVERVIEW_FOV_DEG = 45;
 
+/** One ramp cell's display-only direction glyph, already projected to a screen-space fraction (see `viewer-camera.ts`'s `projectToScreenFraction`) for the surrounding UI to position a DOM label with, no camera object needed. */
+export interface RampGlyphOverlayItem {
+  readonly x: number;
+  readonly y: number;
+  readonly direction: RampDirection;
+  readonly xFrac: number;
+  readonly yFrac: number;
+}
+
 export interface PainterViewportCallbacks {
   /** Fired after every painter-store transition (tool switch, stroke commit, undo/redo, semantic assignment...) so the surrounding UI can re-render its toolbar/inspector. */
   readonly onStateChange?: (state: PainterState) => void;
   /** Fired when the eyedropper picks a tile id, so the UI can update the active fill tile display. */
   readonly onPicked?: (tileId: number) => void;
+  /** Fired whenever the set (or screen position) of ramp-direction glyphs changes: on map load, after a semantic-mode stroke commits, and on resize (see `recomputeRampGlyphs`). */
+  readonly onRampGlyphsChange?: (glyphs: readonly RampGlyphOverlayItem[]) => void;
 }
 
 /**
@@ -82,6 +99,8 @@ export class PainterViewport {
   private doc: MapDocument | undefined;
   private sheetPixelSizes: SheetPixelSizes = {};
   private state: PainterState | undefined;
+  /** Set by `frameCamera`; the overview camera never pans/zooms afterward, so this stays valid for the whole session (see `recomputeRampGlyphs`). */
+  private cameraPose: OverviewCameraPose | undefined;
 
   constructor(container: HTMLElement, callbacks: PainterViewportCallbacks = {}) {
     this.container = container;
@@ -144,6 +163,7 @@ export class PainterViewport {
     this.frameCamera(doc.width, doc.height);
     this.startRenderLoop();
     this.emitState();
+    this.recomputeRampGlyphs();
   }
 
   setTool(tool: ToolId): void {
@@ -243,6 +263,7 @@ export class PainterViewport {
     const result = painter.pointerUp(this.state);
     this.state = result.state;
     if (result.diff) this.applyDiffLiveUpdate(result.diff);
+    if (result.semanticTileIds) this.recomputeRampGlyphs();
     this.emitState();
   }
 
@@ -292,8 +313,39 @@ export class PainterViewport {
     const centerX = (mapWidth * TILE_WORLD_SIZE) / 2;
     const centerZ = (mapHeight * TILE_WORLD_SIZE) / 2;
     const pose = computeOverviewCameraPose(centerX, centerZ, OVERVIEW_TILT_DEG, distance);
+    this.cameraPose = pose;
     this.camera.position.set(pose.position.x, pose.position.y, pose.position.z);
     this.camera.lookAt(pose.lookAt.x, pose.lookAt.y, pose.lookAt.z);
+  }
+
+  /**
+   * Recomputes the display-only ramp-direction glyph overlay (design:
+   * "Painter" -- glyph reflects auto/overridden direction, no picker input)
+   * and pushes it to `onRampGlyphsChange`. Cheap: painter maps are small,
+   * bounded authoring maps, never the streamed-world scale `main.ts` deals
+   * with.
+   */
+  private recomputeRampGlyphs(): void {
+    if (!this.doc || !this.state || !this.cameraPose) return;
+    const cells = computeRampGlyphCells(
+      this.state.layers,
+      this.doc.layers.regions,
+      this.state.semantics,
+      this.doc.width,
+      this.doc.height,
+    );
+    const glyphs: RampGlyphOverlayItem[] = [];
+    for (const cell of cells) {
+      const projected = projectToScreenFraction(
+        { x: cell.x + 0.5, y: 0, z: cell.y + 0.5 },
+        this.cameraPose,
+        OVERVIEW_FOV_DEG,
+        this.camera.aspect,
+      );
+      if (!projected) continue;
+      glyphs.push({ ...cell, xFrac: projected.xFrac, yFrac: projected.yFrac });
+    }
+    this.callbacks.onRampGlyphsChange?.(glyphs);
   }
 
   private startRenderLoop(): void {
@@ -311,6 +363,7 @@ export class PainterViewport {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    this.recomputeRampGlyphs();
   }
 
   dispose(): void {

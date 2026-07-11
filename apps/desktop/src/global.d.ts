@@ -44,6 +44,8 @@ declare global {
       readonly moving: boolean;
       /** The character's fractional (mid-step) render position, in tile units. */
       readonly renderPosition: { readonly x: number; readonly y: number };
+      /** Interpolated surface height (tile-height units) at the character's current render position -- see `ElevationField.surfaceHeightAt`. Constant on flat ground; changes continuously across a ramp step. */
+      readonly elevation: number;
       /** The live `THREE.PerspectiveCamera`'s current world position. */
       readonly cameraPosition: { readonly x: number; readonly y: number; readonly z: number };
       /** The camera rig's smoothed follow target, in world units. */

@@ -9,7 +9,7 @@ import {
   PassabilityGrid,
   TriggerIndex,
 } from '@threemaker/gameplay';
-import type { RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
+import type { RampCellInput, RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
 import { bindStoryToWorld, compileInk, InkDialogueProvider } from '@threemaker/narrative';
 import type { SheetPixelSizes } from '@threemaker/renderer';
@@ -59,6 +59,49 @@ const FIXTURE_MAP_FILE = 'Map007.json';
 // map-cycle toggle to exercise region-based elevation end-to-end.
 const MZ_FIXTURE_MAP_ID = 1;
 const MZ_FIXTURE_MAP_FILE = 'Map001.json';
+
+/**
+ * Slice 4 exit-criterion demo semantics (design: "Demo semantics" -- the
+ * desktop harness hardcodes the mz-project1 hill's ramp tile ids; runtime
+ * `.tmmap` loading, where the painter's own semantics would apply instead,
+ * is out of scope this change). The fixture's Map001 paints a symmetric
+ * region pyramid centered on column x=11 (region 0 ground -> 1 -> 2 -> 3
+ * peak -> back down to 2 -> 1 -> 0, one height level per ring -- see
+ * fixtures/mz-project1/data/Map001.json's region layer). This is a single
+ * straight north-south corridor of ramp cells through the hill's center,
+ * one per height transition on each side, so the character can climb from
+ * ground to the region-3 peak and back down the same way.
+ *
+ * `(11, 4)` (the north-side entry onto the 2-tile peak) needs an explicit
+ * `rampDirection` override: its two height-2 neighbors (north at (11,3) and
+ * west at (10,4)) tie, and `computeRampGrid`'s deterministic tie-break
+ * (south > east > west > north) would otherwise resolve to 'west' --
+ * breaking the intended north-south corridor. Every other cell here has a
+ * single unique lower neighbor and needs no override.
+ *
+ * `(9, 7)` is an extra ramp cell OUTSIDE that corridor: the passability
+ * rule's edge-profile check only authorizes crossing a ramp cell ALONG its
+ * own slope axis (design: "Perpendicular entry blocked"), never laterally
+ * from a same-height ring neighbor -- so the ring1 band surrounding the
+ * hill (region 1, height 1) has no route down to ground except through a
+ * ramp cell approached from directly outside it. `findSpawnTile` happens to
+ * place the player's spawn ON that ring1 band (nearest standable tile to
+ * the mz map's center), which would otherwise strand them there with no
+ * legitimate move able to reach ground at all. Tagging the spawn tile
+ * itself resolves this (auto-derives 'south': its two height-0 neighbors,
+ * west and south, tie, and the tie-break prefers south) -- from there,
+ * ground (region 0) is flat and freely walkable over to the corridor's
+ * `(11, 8)` entrance.
+ */
+const DEMO_RAMP_SEMANTICS: readonly RampCellInput[] = [
+  { x: 9, y: 7 }, // spawn-adjacent descent, ring1 -> ground (auto: south)
+  { x: 11, y: 2 }, // ring0 -> ring1 (auto: north)
+  { x: 11, y: 3 }, // ring1 -> ring2 (auto: north)
+  { x: 11, y: 4, rampDirection: 'north' }, // ring2 -> peak (override: tie-break would pick west)
+  { x: 11, y: 5 }, // peak -> ring2, south side (auto: south)
+  { x: 11, y: 6 }, // ring2 -> ring1, south side (auto: south)
+  { x: 11, y: 7 }, // ring1 -> ring0, south side (auto: south)
+];
 
 // See fixtures/README.md: `Actor1.png` is the standard MV/MZ naming
 // convention for a playable-party-member sheet (8 characters, 4x2 grid);
@@ -388,8 +431,16 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     mapTileset: RpgmTileset,
     mapTextures: Partial<Record<TileSheetId, THREE.Texture>>,
     mapSheetPixelSizes: SheetPixelSizes,
+    rampCells: readonly RampCellInput[] = [],
   ): MapSession {
-    const chunks = buildChunks(map, mapTileset, mapSheetPixelSizes);
+    const chunks = buildChunks(
+      map,
+      mapTileset,
+      mapSheetPixelSizes,
+      DEFAULT_CHUNK_SIZE,
+      undefined,
+      rampCells,
+    );
     const tilemap = new StreamingTilemapScene(chunks, mapTextures, {
       tileWorldSize: TILE_WORLD_SIZE,
       ownsTextures: false,
@@ -407,15 +458,16 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       disposeRadius: STREAM_DISPOSE_RADIUS,
     });
 
-    // No ramp semantics resolution exists yet (painter authoring + demo
-    // wiring is Slice 4's job -- see design doc "Ramps y Escaleras"): built
-    // with no ramp cells, every ramp lookup degenerates to "no ramp" (an
-    // all-zero rampGrid), so passability/height sampling stay byte-identical
-    // to pre-ramp behavior on every map today. Shared between `passability`
-    // and the session's own height sampling (`groundYAt`) so both can never
-    // disagree about where a ramp's surface sits, once Slice 4 wires real
-    // ramp cells in.
-    const elevation = new ElevationField(map);
+    // `rampCells` defaults to `[]` for every map except the mz-project1 dev
+    // map-cycle map (see `DEMO_RAMP_SEMANTICS` above, passed in by this
+    // function's only 'mz'-mode caller below) -- an empty list degenerates
+    // every ramp lookup to "no ramp" (an all-zero rampGrid), so passability/
+    // height sampling/geometry stay byte-identical to pre-ramp behavior on
+    // every other map. Shared between `passability` and the session's own
+    // height sampling (`groundYAt`) so both can never disagree about where a
+    // ramp's surface sits; `buildChunks` above receives the SAME list so the
+    // rendered slope and the walkable slope always agree.
+    const elevation = new ElevationField(map, rampCells);
     const passability = new PassabilityGrid(map, mapTileset, elevation);
     const spawn = findSpawnTile(passability, map.width / 2, map.height / 2);
     const mover = new GridMover({
@@ -609,6 +661,17 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       },
       get renderPosition() {
         return { x: session.mover.renderPosition.x, y: session.mover.renderPosition.y };
+      },
+      // Continuous (interpolated) surface height at the character's current
+      // fractional render position, tile-height units -- see
+      // `ElevationField.surfaceHeightAt` -- so a headless check can assert
+      // smooth height progress across a ramp step (Slice 4 exit criterion),
+      // not just the discrete `tile`/`elevation` step values.
+      get elevation() {
+        return session.elevation.surfaceHeightAt(
+          session.mover.renderPosition.x,
+          session.mover.renderPosition.y,
+        );
       },
       get cameraPosition() {
         return { x: camera.position.x, y: camera.position.y, z: camera.position.z };
@@ -880,6 +943,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
               mzData.tileset,
               mzData.textures,
               mzData.sheetPixelSizes,
+              DEMO_RAMP_SEMANTICS,
             );
           } else {
             session.dispose();

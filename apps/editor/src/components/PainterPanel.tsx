@@ -8,7 +8,9 @@ import { formatTemplate } from '../format-template.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, seedDemoTiles } from '../map-compose.js';
 import type { PainterState } from '../painter-store.js';
+import type { RampGlyphOverlayItem } from '../painter-viewport.js';
 import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
+import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
 import type { ToolId } from '../tool-sm.js';
 import { GameTilesetPicker } from './GameTilesetPicker.js';
 import { TilePalette } from './TilePalette.js';
@@ -24,7 +26,14 @@ const TOOLS: readonly { readonly id: ToolId; readonly shortcut: string }[] = [
   { id: 'eyedropper', shortcut: 'I' },
 ];
 
-const SEMANTIC_CLASSES: readonly SemanticClass[] = ['none', 'wall', 'door', 'window', 'furniture'];
+const SEMANTIC_CLASSES: readonly SemanticClass[] = [
+  'none',
+  'wall',
+  'door',
+  'window',
+  'furniture',
+  'ramp',
+];
 
 const DEMO_MAP_WIDTH = 20;
 const DEMO_MAP_HEIGHT = 15;
@@ -88,6 +97,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [paletteSlots, setPaletteSlots] = useState<readonly PaletteSlotInfo[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [rampGlyphs, setRampGlyphs] = useState<readonly RampGlyphOverlayItem[]>([]);
 
   useEffect(() => {
     listGames()
@@ -101,6 +111,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     const viewport = new PainterViewport(container, {
       onStateChange: setPainterState,
       onPicked: (tileId) => viewport.setFillTileId(tileId),
+      onRampGlyphsChange: setRampGlyphs,
     });
     viewportRef.current = viewport;
     return () => {
@@ -328,7 +339,34 @@ export function PainterPanel({ t }: PainterPanelProps) {
 
       {statusMessage && <p className="painter-status">{statusMessage}</p>}
 
-      <div ref={containerRef} className="painter-viewport-canvas" />
+      <div className="painter-viewport-wrapper" style={{ position: 'relative' }}>
+        <div ref={containerRef} className="painter-viewport-canvas" />
+        {rampGlyphs.length > 0 && (
+          <div
+            className="painter-ramp-glyphs"
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+          >
+            {rampGlyphs.map((glyph) => (
+              <span
+                key={`${glyph.x},${glyph.y}`}
+                className="painter-ramp-glyph"
+                role="img"
+                style={{
+                  position: 'absolute',
+                  left: `${glyph.xFrac * 100}%`,
+                  top: `${glyph.yFrac * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+                aria-label={formatTemplate(t('painter.rampGlyphLabel'), {
+                  direction: t(`painter.rampDirection.${glyph.direction}`),
+                })}
+              >
+                {RAMP_DIRECTION_ARROW[glyph.direction]}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

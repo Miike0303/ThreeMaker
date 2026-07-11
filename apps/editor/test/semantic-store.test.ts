@@ -61,4 +61,27 @@ describe('assignSemanticClass / getSemanticClass', () => {
     semantics = assignSemanticClass(semantics, new Set([1]), 'window');
     expect(getSemanticClass(semantics, 1)).toBe('window');
   });
+
+  it('assigns the ramp class to every touched tile id (spec: "Assign ramp class")', () => {
+    const semantics = assignSemanticClass({}, new Set([42]), 'ramp');
+    expect(getSemanticClass(semantics, 42)).toBe('ramp');
+  });
+
+  it("preserves an unrelated ramp entry's rampDirection override across a save/load roundtrip (spec: Save/load roundtrip)", () => {
+    const semantics: SemanticOverrides = {
+      '5': { class: 'ramp', rampDirection: 'north' },
+    };
+    // A save/load cycle round-trips SemanticOverrides through
+    // JSON.stringify/JSON.parse (see @threemaker/map-format's
+    // serializeMapDocument/parseMapDocument) before the painter ever touches
+    // it again -- this simulates that cycle at the store's own level, then
+    // confirms a subsequent assignment to a DIFFERENT tile id still leaves
+    // the ramp entry (class + override) fully intact.
+    const roundTripped = JSON.parse(JSON.stringify(semantics)) as SemanticOverrides;
+    const next = assignSemanticClass(roundTripped, new Set([9]), 'wall');
+
+    expect(getSemanticClass(next, 5)).toBe('ramp');
+    expect(next['5']?.rampDirection).toBe('north');
+    expect(getSemanticClass(next, 9)).toBe('wall');
+  });
 });
