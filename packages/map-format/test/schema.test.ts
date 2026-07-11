@@ -4,6 +4,7 @@ import {
   MAP_FORMAT_MAGIC,
   MapFormatError,
   serializeMapDocument,
+  type TileSemanticEntry,
   validateCurrentVersionShape,
 } from '../src/schema.js';
 
@@ -94,5 +95,44 @@ describe('validateCurrentVersionShape', () => {
     const json = serializeMapDocument(doc);
     const reparsed = validateCurrentVersionShape(JSON.parse(json));
     expect(reparsed).toEqual(doc);
+  });
+
+  it('accepts and round-trips a "ramp" semantic class with an explicit rampDirection override', () => {
+    const input = makeValidDocInput({
+      tileset: {
+        slots: { A1: { object: 'sha-a1' } },
+        flags: [0],
+        semantics: {
+          '5': { class: 'ramp', rampDirection: 'south' },
+        },
+      },
+    });
+
+    const doc = validateCurrentVersionShape(input);
+    expect(doc.tileset.semantics['5']).toEqual({ class: 'ramp', rampDirection: 'south' });
+
+    const json = serializeMapDocument(doc);
+    const reparsed = validateCurrentVersionShape(JSON.parse(json));
+    expect(reparsed).toEqual(doc);
+  });
+
+  it('TileSemanticEntry type accepts "ramp" class with an optional rampDirection', () => {
+    const withOverride: TileSemanticEntry = { class: 'ramp', rampDirection: 'south' };
+    const withoutOverride: TileSemanticEntry = { class: 'ramp' };
+    expect(withOverride.rampDirection).toBe('south');
+    expect(withoutOverride.rampDirection).toBeUndefined();
+  });
+
+  it('accepts a "ramp" semantic class with no rampDirection override (auto-derived at runtime)', () => {
+    const doc = validateCurrentVersionShape(
+      makeValidDocInput({
+        tileset: {
+          slots: {},
+          flags: [0],
+          semantics: { '5': { class: 'ramp' } },
+        },
+      }),
+    );
+    expect(doc.tileset.semantics['5']).toEqual({ class: 'ramp' });
   });
 });

@@ -40,10 +40,23 @@ export interface SlotSource {
 export type SlotComposition = Partial<Record<TileSheetSlot, SlotSource>>;
 
 /** Semantic classes a tile id can carry, independent of its visual sheet/shape reference. */
-export type SemanticClass = 'wall' | 'door' | 'window' | 'furniture' | 'none';
+export type SemanticClass = 'wall' | 'door' | 'window' | 'furniture' | 'ramp' | 'none';
+
+/**
+ * Explicit downhill-direction override for a `'ramp'`-classed tile id
+ * (ramps-y-escaleras design: "Direction derivation" table). When present and
+ * valid (the neighbor in that direction sits exactly one height level below
+ * the ramp cell), it wins over the auto-derived direction; otherwise it is
+ * ignored and derivation falls back to the unique-candidate / tie-break /
+ * inert rule. Additive to v1 -- no schema version bump (an unset field on
+ * older documents simply means "no override", matching non-ramp behavior).
+ */
+export type RampDirection = 'north' | 'south' | 'east' | 'west';
 
 export interface TileSemanticEntry {
   readonly class: SemanticClass;
+  /** Only meaningful when `class` is `'ramp'`; ignored otherwise. See `RampDirection`. */
+  readonly rampDirection?: RampDirection;
   /** Reserved extension bag for future semantic metadata; not interpreted by this package. */
   readonly ext?: Readonly<Record<string, unknown>>;
 }

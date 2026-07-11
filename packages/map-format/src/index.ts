@@ -5,6 +5,7 @@ export type {
   MapFormatErrorCode,
   MapLayers,
   MapTilesetDocument,
+  RampDirection,
   SemanticClass,
   SemanticOverrides,
   SlotComposition,
