@@ -12,4 +12,11 @@ export { parseNpcs } from './parse-npcs.js';
 export type { TriggerDefinition, TriggerEvent, TriggerFile } from './parse-triggers.js';
 export { parseTriggers } from './parse-triggers.js';
 export { PassabilityGrid } from './passability-grid.js';
+export type {
+  StairTraversalFloor,
+  StairTraversalFrame,
+  StairTraversalOptions,
+  StairTraversalWaypoint,
+} from './stair-traversal.js';
+export { StairTraversal } from './stair-traversal.js';
 export { TriggerIndex } from './trigger-index.js';
