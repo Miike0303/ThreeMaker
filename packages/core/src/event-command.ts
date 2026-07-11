@@ -130,7 +130,14 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
       const { entityId, direction, steps } = value;
       if (typeof entityId !== 'string') fail(`${label} requires a string "entityId".`);
       const parsedDirection = parseCardinalDirection(direction, label, 'direction');
-      if (typeof steps !== 'number') fail(`${label} requires a number "steps".`);
+      // Must be a positive integer: 0/negative/fractional is a content bug
+      // (a moveEntity that requests zero or a partial tile of movement isn't
+      // meaningful), and also closes a latent extra-tile edge in the desktop
+      // EventHost, whose per-tick driver always issues one `requestMove` for
+      // an active moveEntity before checking its remaining step count.
+      if (typeof steps !== 'number' || !Number.isInteger(steps) || steps < 1) {
+        fail(`${label} "steps" must be an integer >= 1, got ${JSON.stringify(steps)}.`);
+      }
       return { type: 'moveEntity', entityId, direction: parsedDirection, steps };
     }
     case 'showDialogue': {

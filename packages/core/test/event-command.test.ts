@@ -110,7 +110,48 @@ describe('parseEventScript', () => {
           intro: [{ type: 'moveEntity', entityId: 'hero', direction: 'up', steps: '2' }],
         },
       }),
-    ).toThrow('Invalid Event Script: events.intro[0] (moveEntity) requires a number "steps".');
+    ).toThrow(
+      'Invalid Event Script: events.intro[0] (moveEntity) "steps" must be an integer >= 1, got "2".',
+    );
+  });
+
+  it('throws on moveEntity with a "steps" of 0', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: {
+          intro: [{ type: 'moveEntity', entityId: 'hero', direction: 'up', steps: 0 }],
+        },
+      }),
+    ).toThrow(
+      'Invalid Event Script: events.intro[0] (moveEntity) "steps" must be an integer >= 1, got 0.',
+    );
+  });
+
+  it('throws on moveEntity with a negative "steps"', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: {
+          intro: [{ type: 'moveEntity', entityId: 'hero', direction: 'up', steps: -1 }],
+        },
+      }),
+    ).toThrow(
+      'Invalid Event Script: events.intro[0] (moveEntity) "steps" must be an integer >= 1, got -1.',
+    );
+  });
+
+  it('throws on moveEntity with a fractional "steps"', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: {
+          intro: [{ type: 'moveEntity', entityId: 'hero', direction: 'up', steps: 1.5 }],
+        },
+      }),
+    ).toThrow(
+      'Invalid Event Script: events.intro[0] (moveEntity) "steps" must be an integer >= 1, got 1.5.',
+    );
   });
 
   it('throws on showDialogue missing "source"', () => {

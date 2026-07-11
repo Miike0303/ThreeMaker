@@ -293,7 +293,20 @@ const MOVE_KEYS: Record<string, Direction> = {
 };
 
 /** Tracks currently-held movement keys in press order; the most recently pressed one (still held) wins when several are held at once. */
-function createMostRecentHeldDirection(): { current(): Direction | undefined } {
+function createMostRecentHeldDirection(): {
+  current(): Direction | undefined;
+  /**
+   * Clears every held direction without touching the keydown/keyup
+   * listeners. Movement keys (arrows/WASD) double as dialogue
+   * navigation/advance keys -- if the player holds an arrow to walk into an
+   * NPC, the keydown that opens dialogue never fires a matching keyup, so
+   * the arrow stays "held" for movement purposes. Call this when a script
+   * ends (`script:finished`/`script:failed`) so that stale entry doesn't
+   * immediately auto-walk the player the next idle frame; any key still
+   * physically held re-registers on its next keydown/repeat.
+   */
+  clear(): void;
+} {
   const held: Direction[] = [];
 
   window.addEventListener('keydown', (event) => {
@@ -310,7 +323,12 @@ function createMostRecentHeldDirection(): { current(): Direction | undefined } {
     if (index !== -1) held.splice(index, 1);
   });
 
-  return { current: () => held[held.length - 1] };
+  return {
+    current: () => held[held.length - 1],
+    clear: () => {
+      held.length = 0;
+    },
+  };
 }
 
 /** Everything owned by one loaded map: streamed tilemap, passability, and the character's mover. */
@@ -702,12 +720,17 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       interpreter.signals.on('script:finished', () => {
         pendingChoiceCount = 0;
         dialogueOverlay.hide();
+        // See createMostRecentHeldDirection's clear() doc: drops any stale
+        // held-arrow entry left over from dialogue navigation so the player
+        // doesn't auto-walk the instant control returns to them.
+        heldDirection.clear();
       });
       interpreter.signals.on('script:failed', (event) => {
         pendingChoiceCount = 0;
         const message = event.error instanceof Error ? event.error.message : String(event.error);
         console.error('Event script failed:', event.error);
         dialogueOverlay.showError(message);
+        heldDirection.clear();
       });
 
       window.addEventListener('keydown', (event) => {
@@ -812,6 +835,17 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
 
     window.addEventListener('keydown', (event) => {
       if (event.repeat || event.key.toLowerCase() !== 'g' || cycling) return;
+      // Block map switching while a script is running/blocked: disposing
+      // `session` mid-script would strand an in-flight moveEntity (its
+      // `mover` reference goes stale, so the host's `done()` never fires
+      // and the interpreter never returns to idle) and the dialogue overlay
+      // would keep showing over a session it no longer belongs to (its
+      // keydown handler also gates on `demoMapActive`, which this same
+      // switch would flip, freezing advance/choose forever). Scripts always
+      // run on the fixture map only, so simply refusing the cycle here --
+      // not attempting to cancel the running script -- is consistent with
+      // how the player's own movement is already paused during a script.
+      if (interpreter && interpreter.state !== 'idle') return;
       cycling = true;
       void (async () => {
         try {

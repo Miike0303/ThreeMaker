@@ -155,6 +155,16 @@ describe('assembleDemoContent', () => {
     expect(() => assembleDemoContent(modules(), new Map())).toThrow(/world_get/);
   });
 
+  it('fails loudly when world seeds are non-empty but missing a key an ink source reads via world_get', () => {
+    expect(() => assembleDemoContent(modules(), new Map([['unrelated_key', true]]))).toThrow(
+      /map007\.guard\.ink.*"secret_revealed"/,
+    );
+  });
+
+  it('passes when every world_get key an ink source reads has a matching world seed', () => {
+    expect(() => assembleDemoContent(modules(), WORLD_SEEDS)).not.toThrow();
+  });
+
   it('fails loudly when zero or multiple npcs/triggers/events files are found', () => {
     expect(() => assembleDemoContent(modules({ npcsModules: {} }), WORLD_SEEDS)).toThrow(
       /npcs.*file/i,

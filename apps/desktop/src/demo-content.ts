@@ -71,6 +71,9 @@ function storyIdFromPath(path: string): string {
   return storyId;
 }
 
+/** Matches an ink `world_get("key")` external call, capturing the key. */
+const WORLD_GET_CALL_PATTERN = /world_get\(\s*"([^"]+)"\s*\)/g;
+
 /** Recursively collects every `showDialogue` command's `source`, including branches nested inside `conditional` commands. */
 function collectDialogueSources(commands: readonly EventCommand[]): EventCommand[] {
   const result: EventCommand[] = [];
@@ -95,11 +98,13 @@ function collectDialogueSources(commands: readonly EventCommand[]): EventCommand
  *   `conditional` branches) must have a matching `.ink` source;
  * - every NPC's `onInteract` and every trigger's `event` must name a real
  *   event id;
- * - if any `.ink` source text calls `world_get(`, `worldSeeds` must be
- *   non-empty (the exact keys aren't parsed out of the ink source -- that
- *   would require compiling it -- this is the simplest honest check that a
- *   story author didn't forget to seed *anything*; the per-key guard is
- *   `story-runtime.ts`'s own `world_get` runtime check).
+ * - every `world_get("key")` call in any `.ink` source text (extracted via
+ *   regex, not by compiling the story) must name a key present in
+ *   `worldSeeds` -- a mismatched-but-non-empty seed set fails just as
+ *   loudly as an empty one, naming the offending `.ink` file and key.
+ *   `story-runtime.ts`'s own runtime `world_get` check remains a second,
+ *   independent defense (this static check cannot see keys built from
+ *   dynamic ink expressions rather than a literal string argument).
  */
 export function assembleDemoContent(
   modules: DemoContentModules,
@@ -141,11 +146,15 @@ export function assembleDemoContent(
     }
   }
 
-  const usesWorldGet = [...inkSources.values()].some((source) => source.includes('world_get('));
-  if (usesWorldGet && worldSeeds.size === 0) {
-    fail(
-      'one or more .ink sources call world_get(...), but no world-seed defaults were declared -- seed every key those stories read before running them.',
-    );
+  for (const [path, source] of Object.entries(modules.inkModules)) {
+    for (const match of source.matchAll(WORLD_GET_CALL_PATTERN)) {
+      const key = match[1];
+      if (key !== undefined && !worldSeeds.has(key)) {
+        fail(
+          `ink source "${path}" calls world_get("${key}"), but no world seed exists for "${key}" -- seed it in worldSeeds before running this content.`,
+        );
+      }
+    }
   }
 
   return { npcs, triggers, events, inkSources, worldSeeds };
