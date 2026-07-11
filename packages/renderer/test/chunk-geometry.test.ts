@@ -455,6 +455,11 @@ describe('buildChunks', () => {
     expect(chunks[0]?.shadows).toEqual([{ tileX: 0, tileY: 0, mask: 5 }]);
   });
 
+  it('rejects a stale/out-of-range onlyChunks key by simply producing no chunk for it (never throws)', () => {
+    const chunks = buildChunks(makeMap(), makeTileset(), SHEET_SIZES, 16, new Set(['99,99']));
+    expect(chunks).toEqual([]);
+  });
+
   it('collects tiles from all 4 tile layers, tagging each with its layerIndex', () => {
     const width = 2;
     const height = 2;
@@ -478,5 +483,68 @@ describe('buildChunks', () => {
     expect(chunks[0]?.tiles).toHaveLength(2);
     const layerIndices = chunks[0]?.tiles.map((tile) => tile.layerIndex).sort();
     expect(layerIndices).toEqual([0, 3]);
+  });
+});
+
+describe('buildChunks onlyChunks (property: onlyChunks output === full output filtered to those keys)', () => {
+  const CHUNK_SIZE = 4;
+
+  function makeVariedMap(width: number, height: number): RpgmMap {
+    const size = width * height;
+    // Deterministic pseudo-random-ish scatter across all 4 layers, shadows,
+    // and regions -- exercises ground/upper/cliff/star-stack/shadow paths
+    // spread across many chunks, not just one hand-picked tile.
+    const layer0 = new Array(size).fill(0).map((_, i) => (i % 5 === 0 ? 1 : 0));
+    const layer1 = new Array(size).fill(0).map((_, i) => (i % 7 === 0 ? 2 : 0)); // star tile id
+    const layer2 = new Array(size).fill(0).map((_, i) => (i % 11 === 0 ? 1 : 0));
+    const layer3 = new Array(size).fill(0);
+    const shadows = new Array(size).fill(0).map((_, i) => (i % 13 === 0 ? 5 : 0));
+    const regions = new Array(size).fill(0).map((_, i) => (i % 3 === 0 ? 2 : 0));
+    return makeMap({
+      width,
+      height,
+      layers: { tileLayers: [layer0, layer1, layer2, layer3], shadows, regions },
+    });
+  }
+
+  it('matches a full build filtered to the requested keys, for a scattered multi-chunk map', () => {
+    const width = 12;
+    const height = 9; // deliberately not a multiple of CHUNK_SIZE, to exercise clipped edge chunks
+    const map = makeVariedMap(width, height);
+    const tileset = makeTileset();
+
+    const fullChunks = buildChunks(map, tileset, SHEET_SIZES, CHUNK_SIZE);
+    const requestedKeys = new Set(['0,0', '2,1', '1,2']);
+
+    const scopedChunks = buildChunks(map, tileset, SHEET_SIZES, CHUNK_SIZE, requestedKeys);
+
+    const expected = fullChunks
+      .filter((chunk) => requestedKeys.has(`${chunk.chunkX},${chunk.chunkY}`))
+      .sort((a, b) => a.chunkY - b.chunkY || a.chunkX - b.chunkX);
+    const actual = [...scopedChunks].sort((a, b) => a.chunkY - b.chunkY || a.chunkX - b.chunkX);
+
+    expect(actual).toEqual(expected);
+  });
+
+  it('requesting every chunk key individually reproduces the exact full build', () => {
+    const width = 9;
+    const height = 9;
+    const map = makeVariedMap(width, height);
+    const tileset = makeTileset();
+
+    const fullChunks = buildChunks(map, tileset, SHEET_SIZES, CHUNK_SIZE);
+    const allKeys = new Set(fullChunks.map((chunk) => `${chunk.chunkX},${chunk.chunkY}`));
+
+    const scopedChunks = buildChunks(map, tileset, SHEET_SIZES, CHUNK_SIZE, allKeys);
+
+    expect([...scopedChunks].sort((a, b) => a.chunkY - b.chunkY || a.chunkX - b.chunkX)).toEqual(
+      [...fullChunks].sort((a, b) => a.chunkY - b.chunkY || a.chunkX - b.chunkX),
+    );
+  });
+
+  it('requesting an empty set of chunks produces no chunks', () => {
+    const map = makeVariedMap(9, 9);
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, CHUNK_SIZE, new Set());
+    expect(chunks).toEqual([]);
   });
 });

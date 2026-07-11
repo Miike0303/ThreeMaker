@@ -52,7 +52,7 @@ export class StreamingTilemapScene {
   private readonly shadowMaterial: THREE.Material;
   private readonly ownedTextures: THREE.Texture[];
   private readonly buildOptions: Omit<BuildChunkGroupOptions, 'shadowMaterial'>;
-  private readonly wallTileKeys: ReadonlySet<string>;
+  private wallTileKeys: ReadonlySet<string>;
   private disposed = false;
 
   constructor(
@@ -118,6 +118,57 @@ export class StreamingTilemapScene {
   applyDiff(diff: ChunkSetDiff): void {
     for (const key of diff.toDispose) this.disposeChunk(key);
     for (const key of diff.toBuild) this.buildChunk(key);
+  }
+
+  /**
+   * Live-edit path for painting: replaces the stored `ChunkBuildData` for
+   * every chunk in `chunks` (matching `buildChunks(..., onlyChunks)`'s
+   * output for those keys), recomputes the whole-map `wallTileKeys`
+   * occupancy from the updated data (a painted wall tile can change which
+   * cross-chunk interior faces should cull, same as at initial load), and
+   * rebuilds only the chunks that are both patched AND currently live --
+   * chunks outside the streamed radius stay un-built, exactly like initial
+   * load never builds them up front.
+   *
+   * ponytail: `wallTileKeys` is recomputed from the FULL updated chunk set,
+   * so a patched chunk's OWN rebuilt geometry culls correctly against any
+   * neighbor -- but a neighbor chunk NOT included in this call keeps its
+   * stale (un-rebuilt) geometry even if the new wallTileKeys would now cull
+   * one of its faces differently. Callers whose edit could affect a
+   * neighbor's culling (e.g. painting a wall tile on a chunk's border) must
+   * include that neighbor chunk's `ChunkBuildData` in the same `patchChunks`
+   * call for its geometry to actually refresh -- this is exactly what the
+   * editor paint pipeline's dirty-region expansion is for.
+   *
+   * To fully CLEAR a chunk that became empty (every tile on it erased),
+   * the caller must still pass an entry for that key with an empty `tiles`
+   * array (and no `shadows`) -- omitting the key entirely leaves its old
+   * (now stale) data in place, since this method has no way to distinguish
+   * "not touched" from "not passed".
+   */
+  patchChunks(chunks: readonly ChunkBuildData[]): void {
+    if (this.disposed || chunks.length === 0) return;
+
+    const patchedKeys: string[] = [];
+    for (const chunk of chunks) {
+      const key = chunkKey(chunk.chunkX, chunk.chunkY);
+      this.chunkData.set(key, chunk);
+      patchedKeys.push(key);
+    }
+
+    // Recomputed from the FULL, now-updated chunk data set -- not just the
+    // patched chunks -- so a wall tile painted in one chunk still culls its
+    // shared interior face against an already-live neighbor chunk, and vice
+    // versa (matches the constructor's whole-map computation exactly).
+    this.wallTileKeys = computeWallTileKeys(
+      [...this.chunkData.values()].flatMap((chunk) => chunk.tiles),
+    );
+
+    for (const key of patchedKeys) {
+      if (!this.liveChunks.has(key)) continue;
+      this.disposeChunk(key);
+      this.buildChunk(key);
+    }
   }
 
   /** Frees everything: live chunk geometries, shared materials, and owned textures. */

@@ -83,6 +83,38 @@ function computeStarStack(
   };
 }
 
+/** A rectangular tile-space region, `[xStart, xEnd)` x `[yStart, yEnd)`. */
+interface TileRegion {
+  readonly xStart: number;
+  readonly yStart: number;
+  readonly xEnd: number;
+  readonly yEnd: number;
+}
+
+/** Parses a `"chunkX,chunkY"` key (see `chunkKey` in `streaming/chunk-streamer.ts`) back into numbers. */
+function parseChunkKey(key: string): { readonly chunkX: number; readonly chunkY: number } {
+  const [xPart, yPart] = key.split(',');
+  return { chunkX: Number(xPart), chunkY: Number(yPart) };
+}
+
+/** The tile-space rectangle one chunk covers, clipped to the map's actual bounds (edge chunks are often partial). */
+function chunkTileRegion(
+  chunkX: number,
+  chunkY: number,
+  chunkSize: number,
+  mapWidth: number,
+  mapHeight: number,
+): TileRegion {
+  const xStart = chunkX * chunkSize;
+  const yStart = chunkY * chunkSize;
+  return {
+    xStart,
+    yStart,
+    xEnd: Math.min(xStart + chunkSize, mapWidth),
+    yEnd: Math.min(yStart + chunkSize, mapHeight),
+  };
+}
+
 /**
  * Splits a map's 4 tile layers into `chunkSize` x `chunkSize` chunks of
  * render-ready tile data: which sheet each tile belongs to, its UV rect, and
@@ -95,12 +127,25 @@ function computeStarStack(
  * (id 0) and tiles whose sheet has no known pixel size (not loaded, or
  * genuinely unused by this tileset) are skipped rather than throwing, since
  * both are routine, expected conditions in real map data.
+ *
+ * `onlyChunks`, when given, scopes the tile/shadow scan to ONLY the
+ * tile-space rectangles those chunk keys cover -- the output is exactly
+ * equivalent to a full build filtered down to those keys (see
+ * `chunk-geometry.test.ts`'s "onlyChunks" property test), but at a fraction
+ * of the cost on a large map, since cells outside the requested chunks are
+ * never even visited. The region-derived grids (`heightGrid`/`upperGrid`/
+ * `wallGrid`) are still computed over the WHOLE map regardless -- they are
+ * cheap flat typed-array passes, and cliff/star-stack lookups need
+ * whole-map neighbor data to stay correct at a scoped chunk's own edges
+ * (benchmarked as a small fraction of full `buildChunks` cost; see the
+ * decision-gate benchmark in `test/build-chunks-benchmark.test.ts`).
  */
 export function buildChunks(
   map: RpgmMap,
   tileset: RpgmTileset,
   sheetPixelSizes: SheetPixelSizes,
   chunkSize: number = DEFAULT_CHUNK_SIZE,
+  onlyChunks?: ReadonlySet<string>,
 ): ChunkBuildData[] {
   if (chunkSize <= 0) {
     throw new Error(`chunkSize must be a positive number, got ${chunkSize}.`);
@@ -116,90 +161,107 @@ export function buildChunks(
 
   const chunkTiles = new Map<string, TileBuildData[]>();
 
+  // Scan regions: the whole map (full rebuild), or just the tile-space
+  // rectangles the requested chunk keys cover (scoped rebuild). Chunk keys
+  // outside the map's actual chunk grid clip to an empty (zero-area)
+  // region rather than throwing -- callers requesting a stale/out-of-range
+  // key just get nothing back for it, matching "ignores chunk keys the map
+  // has no data for" elsewhere in this pipeline.
+  const regions: readonly TileRegion[] = onlyChunks
+    ? [...onlyChunks].map((key) => {
+        const { chunkX, chunkY } = parseChunkKey(key);
+        return chunkTileRegion(chunkX, chunkY, chunkSize, map.width, map.height);
+      })
+    : [{ xStart: 0, yStart: 0, xEnd: map.width, yEnd: map.height }];
+
   const layers = map.layers.tileLayers;
   for (let layerIndex = 0; layerIndex < layers.length; layerIndex++) {
     const layer = layers[layerIndex];
     if (!layer) continue;
 
-    for (let y = 0; y < map.height; y++) {
-      for (let x = 0; x < map.width; x++) {
-        const tileId = layer[y * map.width + x] ?? 0;
-        if (tileId === 0) continue;
+    for (const region of regions) {
+      for (let y = region.yStart; y < region.yEnd; y++) {
+        for (let x = region.xStart; x < region.xEnd; x++) {
+          const tileId = layer[y * map.width + x] ?? 0;
+          if (tileId === 0) continue;
 
-        const tileUv = computeTileUv(tileId, sheetPixelSizes);
-        if (!tileUv) continue;
+          const tileUv = computeTileUv(tileId, sheetPixelSizes);
+          if (!tileUv) continue;
 
-        const flags = decodeTileFlags(tileset.flags[tileId] ?? 0);
-        const elevation = flags.isUpperLayer ? 'upper' : 'ground';
-        const height = heightGrid[y * map.width + x] ?? 0;
+          const flags = decodeTileFlags(tileset.flags[tileId] ?? 0);
+          const elevation = flags.isUpperLayer ? 'upper' : 'ground';
+          const height = heightGrid[y * map.width + x] ?? 0;
 
-        const chunkX = Math.floor(x / chunkSize);
-        const chunkY = Math.floor(y / chunkSize);
-        const key = `${chunkX},${chunkY}`;
-        let tiles = chunkTiles.get(key);
-        if (!tiles) {
-          tiles = [];
-          chunkTiles.set(key, tiles);
+          const chunkX = Math.floor(x / chunkSize);
+          const chunkY = Math.floor(y / chunkSize);
+          const key = `${chunkX},${chunkY}`;
+          let tiles = chunkTiles.get(key);
+          if (!tiles) {
+            tiles = [];
+            chunkTiles.set(key, tiles);
+          }
+
+          // Cliff faces are derived once per map cell, from that cell's
+          // layer-0 ground tile only -- ponytail: a ground tile painted on a
+          // higher editable layer over an empty layer-0 at the same spot
+          // won't get cliff faces this slice (real maps always paint their
+          // base floor on layer 0, so this doesn't bite the fixtures here).
+          const cliffEdges =
+            layerIndex === 0 && elevation === 'ground'
+              ? computeCliffEdges(heightGrid, map.width, map.height, x, y)
+              : undefined;
+
+          // ponytail: chunk assignment below still keys off this tile's own
+          // (x, y), not its shifted `starStack.baseTileY` -- a star tile right
+          // at a chunk's southern edge can therefore land in the chunk one row
+          // north of where it visually renders. Harmless in practice (the
+          // shift is at most a few tiles, bounded by object height) and not
+          // worth the extra bookkeeping this slice.
+          const starStack =
+            elevation === 'upper'
+              ? computeStarStack(x, y, map, upperGrid, heightGrid, wallGrid)
+              : undefined;
+
+          tiles.push({
+            tileX: x,
+            tileY: y,
+            layerIndex: layerIndex as 0 | 1 | 2 | 3,
+            sheet: tileUv.sheet,
+            quads: tileUv.quads,
+            elevation,
+            ...(height !== 0 ? { height } : {}),
+            ...(cliffEdges && cliffEdges.length > 0 ? { cliffEdges } : {}),
+            ...(starStack ? { starStack } : {}),
+          });
         }
-
-        // Cliff faces are derived once per map cell, from that cell's
-        // layer-0 ground tile only -- ponytail: a ground tile painted on a
-        // higher editable layer over an empty layer-0 at the same spot
-        // won't get cliff faces this slice (real maps always paint their
-        // base floor on layer 0, so this doesn't bite the fixtures here).
-        const cliffEdges =
-          layerIndex === 0 && elevation === 'ground'
-            ? computeCliffEdges(heightGrid, map.width, map.height, x, y)
-            : undefined;
-
-        // ponytail: chunk assignment below still keys off this tile's own
-        // (x, y), not its shifted `starStack.baseTileY` -- a star tile right
-        // at a chunk's southern edge can therefore land in the chunk one row
-        // north of where it visually renders. Harmless in practice (the
-        // shift is at most a few tiles, bounded by object height) and not
-        // worth the extra bookkeeping this slice.
-        const starStack =
-          elevation === 'upper'
-            ? computeStarStack(x, y, map, upperGrid, heightGrid, wallGrid)
-            : undefined;
-
-        tiles.push({
-          tileX: x,
-          tileY: y,
-          layerIndex: layerIndex as 0 | 1 | 2 | 3,
-          sheet: tileUv.sheet,
-          quads: tileUv.quads,
-          elevation,
-          ...(height !== 0 ? { height } : {}),
-          ...(cliffEdges && cliffEdges.length > 0 ? { cliffEdges } : {}),
-          ...(starStack ? { starStack } : {}),
-        });
       }
     }
   }
 
   const chunkShadows = new Map<string, ShadowBuildData[]>();
-  for (let y = 0; y < map.height; y++) {
-    for (let x = 0; x < map.width; x++) {
-      // Only bits 0-3 are defined (one per tile quarter); mask off anything
-      // above them defensively -- real editors never write more, but the
-      // renderer should not amplify corrupt data into surprise quads.
-      const mask = (map.layers.shadows[y * map.width + x] ?? 0) & 0xf;
-      if (mask === 0) continue;
+  for (const region of regions) {
+    for (let y = region.yStart; y < region.yEnd; y++) {
+      for (let x = region.xStart; x < region.xEnd; x++) {
+        // Only bits 0-3 are defined (one per tile quarter); mask off anything
+        // above them defensively -- real editors never write more, but the
+        // renderer should not amplify corrupt data into surprise quads.
+        const mask = (map.layers.shadows[y * map.width + x] ?? 0) & 0xf;
+        if (mask === 0) continue;
 
-      const key = `${Math.floor(x / chunkSize)},${Math.floor(y / chunkSize)}`;
-      let shadows = chunkShadows.get(key);
-      if (!shadows) {
-        shadows = [];
-        chunkShadows.set(key, shadows);
+        const key = `${Math.floor(x / chunkSize)},${Math.floor(y / chunkSize)}`;
+        let shadows = chunkShadows.get(key);
+        if (!shadows) {
+          shadows = [];
+          chunkShadows.set(key, shadows);
+        }
+        const shadowHeight = heightGrid[y * map.width + x] ?? 0;
+        shadows.push({
+          tileX: x,
+          tileY: y,
+          mask,
+          ...(shadowHeight !== 0 ? { height: shadowHeight } : {}),
+        });
       }
-      const shadowHeight = heightGrid[y * map.width + x] ?? 0;
-      shadows.push({
-        tileX: x,
-        tileY: y,
-        mask,
-        ...(shadowHeight !== 0 ? { height: shadowHeight } : {}),
-      });
     }
   }
 
