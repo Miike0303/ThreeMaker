@@ -1,14 +1,7 @@
 import type { EventHost, EventScript } from '@threemaker/core';
 import { EventInterpreter, GameLoop, WorldState } from '@threemaker/core';
 import type { Direction } from '@threemaker/gameplay';
-import {
-  DIRECTION_DELTA,
-  ElevationField,
-  GridMover,
-  NpcRegistry,
-  PassabilityGrid,
-  TriggerIndex,
-} from '@threemaker/gameplay';
+import { DIRECTION_DELTA, GridMover, NpcRegistry, TriggerIndex } from '@threemaker/gameplay';
 import type { RampCellInput, RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
 import { bindStoryToWorld, compileInk, InkDialogueProvider } from '@threemaker/narrative';
@@ -41,6 +34,8 @@ import {
   fixtureJsonUrl,
   mzFixtureJsonUrl,
 } from './fixture-paths.js';
+import type { FloorRouter } from './floor-runtime.js';
+import { buildFloorGameplay, createFloorRouter } from './floor-runtime.js';
 import { groundYAt } from './ground-y.js';
 import { createHd2dPipeline } from './hd2d-pipeline.js';
 import type { Locale } from './i18n.js';
@@ -384,13 +379,19 @@ interface MapSession {
   readonly mover: GridMover;
   readonly spawn: { readonly x: number; readonly y: number };
   /**
-   * Region-derived elevation + ramp slope data (see `@threemaker/gameplay`'s
-   * `ElevationField`), shared with this session's `PassabilityGrid` so both
-   * agree on where a ramp's surface sits. Sampled via `groundYAt` (see
-   * `ground-y.ts`) to lift the character/NPC/camera onto elevated ground,
-   * continuously across a ramp step.
+   * Per-floor gameplay containers (design "Plantas Apiladas": "each floor is
+   * a map") -- `floorRouter.floors` holds one `{floorId, baseElevation,
+   * elevation, passability}` entry per floor, and `floorRouter.currentFloor`
+   * selects which one gameplay queries route to. This slice always builds
+   * exactly one entry (`floor-0`), matching the single `RpgmMap` this
+   * session loads, and `currentFloor` stays `0` at runtime (no stair
+   * traversal yet -- that's a later slice) -- but the array/index shape is
+   * already floor-ready. `floorRouter.elevation`/`.passability` transparently
+   * route to the active floor's container; every call site below that used
+   * to read a plain `session.elevation` field now reads
+   * `session.floorRouter.elevation` instead (see `groundYAt` call sites).
    */
-  readonly elevation: ElevationField;
+  readonly floorRouter: FloorRouter;
   dispose(): void;
 }
 
@@ -467,9 +468,16 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     // height sampling (`groundYAt`) so both can never disagree about where a
     // ramp's surface sits; `buildChunks` above receives the SAME list so the
     // rendered slope and the walkable slope always agree.
-    const elevation = new ElevationField(map, rampCells);
-    const passability = new PassabilityGrid(map, mapTileset, elevation);
-    const spawn = findSpawnTile(passability, map.width / 2, map.height / 2);
+    //
+    // Floor-aware (this slice): this session always loads exactly one
+    // `RpgmMap`, so `floors` always has exactly one entry (`floor-0`,
+    // `baseElevation: 0`) -- built via the SAME unchanged single-map
+    // constructors as before (`buildFloorGameplay`, see floor-runtime.ts),
+    // just wrapped in the floor-indexed shape a later slice will populate
+    // with more than one entry.
+    const floors = [buildFloorGameplay('floor-0', 0, map, mapTileset, rampCells)];
+    const floorRouter = createFloorRouter(floors);
+    const spawn = findSpawnTile(floorRouter.passability, map.width / 2, map.height / 2);
     const mover = new GridMover({
       x: spawn.x,
       y: spawn.y,
@@ -482,9 +490,10 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       // invoked (first call happens from the game loop, well after setup
       // completes) -- `demoMapActive` also scopes the check to the fixture
       // map, since the demo NPCs' tiles are meaningless on the dev map-cycle's
-      // other maps.
+      // other maps. `floorRouter.passability` routes to the mover's
+      // `currentFloor` (stays 0 this slice, see `FloorRouter`'s doc).
       canMove: (x, y, direction) => {
-        if (!passability.canMove(x, y, direction)) return false;
+        if (!floorRouter.passability.canMove(x, y, direction)) return false;
         if (!demoMapActive || !npcRegistry) return true;
         const delta = DIRECTION_DELTA[direction];
         return !npcRegistry.occupies(x + delta.x, y + delta.y);
@@ -501,7 +510,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       streamer,
       mover,
       spawn,
-      elevation,
+      floorRouter,
       dispose() {
         scene.remove(tilemap.group);
         tilemap.dispose();
@@ -523,7 +532,12 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     session.mover.renderPosition.x,
     session.mover.renderPosition.y,
     TILE_WORLD_SIZE,
-    groundYAt(session.elevation, session.mover.tile.x, session.mover.tile.y, HEIGHT_UNIT),
+    groundYAt(
+      session.floorRouter.elevation,
+      session.mover.tile.x,
+      session.mover.tile.y,
+      HEIGHT_UNIT,
+    ),
   );
   scene.add(character.mesh);
 
@@ -578,7 +592,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     );
     target.set(
       tileCenterToWorld(session.spawn.x, TILE_WORLD_SIZE),
-      groundYAt(session.elevation, session.spawn.x, session.spawn.y, HEIGHT_UNIT),
+      groundYAt(session.floorRouter.elevation, session.spawn.x, session.spawn.y, HEIGHT_UNIT),
       tileCenterToWorld(session.spawn.y, TILE_WORLD_SIZE),
     );
     applyCameraPose();
@@ -623,7 +637,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       liveChunks: session.tilemap.liveChunkCount,
       drawCalls: renderer.info.render.drawCalls,
       tile: { x: session.mover.tile.x, y: session.mover.tile.y },
-      elevation: session.elevation.heightAt(session.mover.tile.x, session.mover.tile.y),
+      elevation: session.floorRouter.elevation.heightAt(session.mover.tile.x, session.mover.tile.y),
     };
   }
   debugPanel.update(buildDebugSnapshot());
@@ -668,7 +682,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       // smooth height progress across a ramp step (Slice 4 exit criterion),
       // not just the discrete `tile`/`elevation` step values.
       get elevation() {
-        return session.elevation.surfaceHeightAt(
+        return session.floorRouter.elevation.surfaceHeightAt(
           session.mover.renderPosition.x,
           session.mover.renderPosition.y,
         );
@@ -771,7 +785,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
           npc.x,
           npc.y,
           TILE_WORLD_SIZE,
-          groundYAt(session.elevation, npc.x, npc.y, HEIGHT_UNIT),
+          groundYAt(session.floorRouter.elevation, npc.x, npc.y, HEIGHT_UNIT),
         );
         scene.add(sprite.mesh);
         npcSprites.set(npc.id, sprite);
@@ -1036,7 +1050,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       // to one constant height throughout, since source and destination
       // heights are equal there -- interpolation is a no-op in that case.
       const groundY = groundYAt(
-        session.elevation,
+        session.floorRouter.elevation,
         mover.renderPosition.x,
         mover.renderPosition.y,
         HEIGHT_UNIT,

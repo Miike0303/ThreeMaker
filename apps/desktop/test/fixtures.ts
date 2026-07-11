@@ -1,4 +1,4 @@
-import type { RpgmMap, RpgmMapLayers, TileLayer } from '@threemaker/importer-rpgm';
+import type { RpgmMap, RpgmMapLayers, RpgmTileset, TileLayer } from '@threemaker/importer-rpgm';
 
 /**
  * Builds a minimal synthetic `RpgmMap`. `regions` defaults to all-zero
@@ -26,5 +26,23 @@ export function buildMap(width: number, height: number, regions?: TileLayer): Rp
     tilesetId: 1,
     scrollType: 0,
     layers: { tileLayers, shadows: zeros, regions: regions ?? zeros },
+  };
+}
+
+/**
+ * Builds a minimal synthetic `RpgmTileset` with no directional-passage
+ * flags set (every tile decisively open) -- see
+ * `packages/gameplay/test/fixtures.ts`'s `buildTileset` for the fuller
+ * flag-bearing version; this app's tests only ever need the empty-flags
+ * form (floor-container tests block movement via elevation/edge-profile,
+ * not tileset flags), kept local for the same cross-package reason as
+ * `buildMap` above.
+ */
+export function buildTileset(): RpgmTileset {
+  return {
+    id: 1,
+    name: 'synthetic',
+    sheetNames: { A1: '', A2: '', A3: '', A4: '', A5: '', B: '', C: '', D: '', E: '' },
+    flags: [],
   };
 }
