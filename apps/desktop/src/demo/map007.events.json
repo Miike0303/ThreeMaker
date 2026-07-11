@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "events": {
+    "welcome_message": [
+      { "type": "showDialogue", "source": { "kind": "ink", "storyId": "welcome", "knot": "start" } }
+    ],
+    "elder_intro": [
+      { "type": "showDialogue", "source": { "kind": "ink", "storyId": "elder", "knot": "start" } }
+    ],
+    "guard_check": [
+      { "type": "showDialogue", "source": { "kind": "ink", "storyId": "guard", "knot": "start" } }
+    ]
+  }
+}

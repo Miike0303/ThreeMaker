@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "npcs": [
+    {
+      "id": "elder",
+      "x": 10,
+      "y": 10,
+      "facing": "down",
+      "sprite": { "sheet": "Actor1", "index": 1 },
+      "onInteract": "elder_intro"
+    },
+    {
+      "id": "guard",
+      "x": 8,
+      "y": 12,
+      "facing": "right",
+      "sprite": { "sheet": "Actor1", "index": 2 },
+      "onInteract": "guard_check"
+    }
+  ]
+}
