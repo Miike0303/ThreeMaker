@@ -4,6 +4,7 @@
     { "path": "./packages/core" },
     { "path": "./packages/narrative" },
     { "path": "./packages/importer-rpgm" },
+    { "path": "./packages/assets" },
     { "path": "./packages/renderer" },
     { "path": "./packages/gameplay" },
     { "path": "./apps/desktop" }
