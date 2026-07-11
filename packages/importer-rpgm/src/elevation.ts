@@ -32,7 +32,8 @@ export function computeHeightGrid(map: RpgmMap): Uint8Array {
 
 /*
  * -------------------------------------------------------------------------
- * Ramps y Escaleras (design: "edge height profile") -- pure primitives.
+ * Design doc "Ramps y Escaleras" (section: "edge height profile") -- pure
+ * primitives.
  *
  * Single source of truth so gameplay (`ElevationField`/`PassabilityGrid`,
  * added in a later slice) and the renderer (`buildChunks`, added in a later
@@ -67,6 +68,37 @@ const DIRECTION_DELTA: Record<EdgeDirection, { readonly dx: number; readonly dy:
 
 /** Deterministic ambiguity resolution order (design: "Direction derivation"), highest priority first. */
 const TIE_BREAK_ORDER: readonly RampDirection[] = ['south', 'east', 'west', 'north'];
+
+/**
+ * Map-wide read-only context shared by every height primitive in this
+ * module: this map's per-cell height grid and its dimensions. Passing this
+ * as one named object -- instead of separate `heightGrid`/`mapWidth`/
+ * `mapHeight` positional args, which previously appeared in inconsistent
+ * per-function order -- removes the risk of a call site silently
+ * transposing same-typed scalars (a swapped `mapWidth`/`mapHeight`, or
+ * `heightGrid`/`rampGrid`, compiles cleanly since both sides of each swap
+ * share a type).
+ */
+export interface HeightGridContext {
+  readonly heightGrid: Uint8Array;
+  readonly mapWidth: number;
+  readonly mapHeight: number;
+}
+
+/**
+ * `HeightGridContext` plus the derived `rampGrid` (see `computeRampGrid`).
+ * `edgeProfileAt`/`surfaceHeightAt` need both grids to read a cell's slope;
+ * `computeRampGrid` produces `rampGrid` in the first place, so it only takes
+ * `HeightGridContext`.
+ */
+export interface GridContext extends HeightGridContext {
+  readonly rampGrid: Uint8Array;
+}
+
+/** True iff `(x,y)` is within `[0,mapWidth) x [0,mapHeight)`. Shared by every off-map/off-grid check in this module. */
+function isInBounds(x: number, y: number, mapWidth: number, mapHeight: number): boolean {
+  return x >= 0 && y >= 0 && x < mapWidth && y < mapHeight;
+}
 
 /** `rampGrid` cell encoding: 0 = no ramp, 1-4 = downhill direction (design: "rampGrid: 0 = none, 1-4 encode N/S/E/W"). */
 const RAMP_DIRECTION_CODE: Record<RampDirection, number> = { north: 1, south: 2, east: 3, west: 4 };
@@ -147,14 +179,21 @@ function cornerHeight(
 ): number {
   if (rampDir === undefined) return ownHeight;
 
-  const isDownhillCorner =
-    rampDir === 'north'
-      ? cornerY === cellY
-      : rampDir === 'south'
-        ? cornerY === cellY + 1
-        : rampDir === 'west'
-          ? cornerX === cellX
-          : cornerX === cellX + 1;
+  let isDownhillCorner: boolean;
+  switch (rampDir) {
+    case 'north':
+      isDownhillCorner = cornerY === cellY;
+      break;
+    case 'south':
+      isDownhillCorner = cornerY === cellY + 1;
+      break;
+    case 'west':
+      isDownhillCorner = cornerX === cellX;
+      break;
+    case 'east':
+      isDownhillCorner = cornerX === cellX + 1;
+      break;
+  }
 
   return isDownhillCorner ? ownHeight - 1 : ownHeight;
 }
@@ -166,16 +205,13 @@ function cornerHeight(
  * existing off-map-is-ground-level convention.
  */
 export function edgeProfileAt(
-  heightGrid: Uint8Array,
-  rampGrid: Uint8Array,
-  mapWidth: number,
-  mapHeight: number,
+  ctx: GridContext,
   x: number,
   y: number,
   edge: EdgeDirection,
 ): EdgeProfile {
-  const inBounds = x >= 0 && y >= 0 && x < mapWidth && y < mapHeight;
-  if (!inBounds) return [0, 0];
+  const { heightGrid, rampGrid, mapWidth, mapHeight } = ctx;
+  if (!isInBounds(x, y, mapWidth, mapHeight)) return [0, 0];
 
   const index = y * mapWidth + x;
   const ownHeight = heightGrid[index] ?? 0;
@@ -215,14 +251,8 @@ function clamp01(value: number): number {
  * in-map cell rather than treated as ground -- callers are expected to only
  * sample positions a mover/camera can actually occupy.
  */
-export function surfaceHeightAt(
-  heightGrid: Uint8Array,
-  rampGrid: Uint8Array,
-  mapWidth: number,
-  mapHeight: number,
-  fx: number,
-  fy: number,
-): number {
+export function surfaceHeightAt(ctx: GridContext, fx: number, fy: number): number {
+  const { heightGrid, rampGrid, mapWidth, mapHeight } = ctx;
   const cellX = Math.min(Math.max(Math.floor(fx), 0), mapWidth - 1);
   const cellY = Math.min(Math.max(Math.floor(fy), 0), mapHeight - 1);
   const u = clamp01(fx - cellX);
@@ -293,19 +323,17 @@ export interface RampCellInput {
  * neighbors count as ground (height 0), matching `computeCliffEdges`.
  */
 export function computeRampGrid(
-  mapWidth: number,
-  mapHeight: number,
-  heightGrid: Uint8Array,
+  ctx: HeightGridContext,
   rampCells: readonly RampCellInput[],
 ): Uint8Array {
+  const { heightGrid, mapWidth, mapHeight } = ctx;
   const grid = new Uint8Array(mapWidth * mapHeight);
 
   const neighborHeight = (x: number, y: number, direction: RampDirection): number => {
     const delta = DIRECTION_DELTA[direction];
     const nx = x + delta.dx;
     const ny = y + delta.dy;
-    const inBounds = nx >= 0 && ny >= 0 && nx < mapWidth && ny < mapHeight;
-    return inBounds ? (heightGrid[ny * mapWidth + nx] ?? 0) : 0;
+    return isInBounds(nx, ny, mapWidth, mapHeight) ? (heightGrid[ny * mapWidth + nx] ?? 0) : 0;
   };
 
   for (const cell of rampCells) {

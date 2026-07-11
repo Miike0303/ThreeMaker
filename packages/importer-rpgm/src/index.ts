@@ -1,7 +1,14 @@
 // Browser-safe entry: pure parsers only. The Node-only project loader
 // (which reads from the filesystem) lives at the `./node` subpath export so
 // importing this package never drags `node:fs` into a browser bundle.
-export type { EdgeDirection, EdgeProfile, RampCellInput, RampDirection } from './elevation.js';
+export type {
+  EdgeDirection,
+  EdgeProfile,
+  GridContext,
+  HeightGridContext,
+  RampCellInput,
+  RampDirection,
+} from './elevation.js';
 export {
   computeHeightGrid,
   computeRampGrid,

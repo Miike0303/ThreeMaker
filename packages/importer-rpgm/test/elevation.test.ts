@@ -5,9 +5,12 @@ import {
   computeHeightGrid,
   computeRampGrid,
   edgeProfileAt,
+  type GridContext,
+  type HeightGridContext,
   heightForRegion,
   profilesEqual,
   type RampCellInput,
+  type RampDirection,
   surfaceHeightAt,
 } from '../src/elevation.js';
 import { parseMap } from '../src/parse-map.js';
@@ -104,7 +107,7 @@ describe('computeRampGrid', () => {
     const heightGrid = new Uint8Array([2, 2, 1]);
     const rampCells: readonly RampCellInput[] = [{ x: 0, y: 1 }];
 
-    const rampGrid = computeRampGrid(mapWidth, mapHeight, heightGrid, rampCells);
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth, mapHeight }, rampCells);
 
     expect(Array.from(rampGrid)).toEqual([0, 2 /* south */, 0]);
   });
@@ -128,14 +131,17 @@ describe('computeRampGrid', () => {
       return grid;
     }
     const rampCells: readonly RampCellInput[] = [{ x: 1, y: 1 }];
+    const ctx = (heightGrid: Uint8Array): HeightGridContext => ({
+      heightGrid,
+      mapWidth: 3,
+      mapHeight: 3,
+    });
 
     // south + east + west + north all candidates -> south wins.
     expect(
       Array.from(
         computeRampGrid(
-          3,
-          3,
-          heightsWithCenter({ north: true, south: true, east: true, west: true }),
+          ctx(heightsWithCenter({ north: true, south: true, east: true, west: true })),
           rampCells,
         ),
       )[4],
@@ -144,21 +150,52 @@ describe('computeRampGrid', () => {
     // east + west + north (no south) -> east wins.
     expect(
       Array.from(
-        computeRampGrid(
-          3,
-          3,
-          heightsWithCenter({ north: true, east: true, west: true }),
-          rampCells,
-        ),
+        computeRampGrid(ctx(heightsWithCenter({ north: true, east: true, west: true })), rampCells),
       )[4],
     ).toBe(3); // east
 
     // west + north (no south, no east) -> west wins.
     expect(
       Array.from(
-        computeRampGrid(3, 3, heightsWithCenter({ north: true, west: true }), rampCells),
+        computeRampGrid(ctx(heightsWithCenter({ north: true, west: true })), rampCells),
       )[4],
     ).toBe(4); // west
+  });
+
+  it('exhaustively resolves every ambiguous 2+/3+/4-candidate combination to the documented south > east > west > north winner', () => {
+    // 3x3 grid, center (1,1) at height 2; every in-bounds 4-neighbor is
+    // available as a candidate slot. For every non-empty subset of
+    // {north,south,east,west} with 2+ members, set exactly those neighbors
+    // to height 1 (candidates) and confirm the resolved direction is the
+    // FIRST one (in south > east > west > north priority) present in the
+    // subset -- exhaustive over all C(4,2)+C(4,3)+C(4,4) = 11 combinations.
+    const DIRECTIONS: readonly RampDirection[] = ['north', 'south', 'east', 'west'];
+    const PRIORITY: readonly RampDirection[] = ['south', 'east', 'west', 'north'];
+    const OFFSET: Record<RampDirection, { x: number; y: number }> = {
+      north: { x: 1, y: 0 },
+      south: { x: 1, y: 2 },
+      east: { x: 2, y: 1 },
+      west: { x: 0, y: 1 },
+    };
+    const rampCells: readonly RampCellInput[] = [{ x: 1, y: 1 }];
+
+    for (let mask = 0b0011; mask <= 0b1111; mask++) {
+      const subset = DIRECTIONS.filter((_, i) => (mask & (1 << i)) !== 0);
+      if (subset.length < 2) continue; // only ambiguous (2+) combinations exercise the tie-break
+
+      const heightGrid = new Uint8Array(9).fill(2);
+      for (const direction of subset) {
+        const { x, y } = OFFSET[direction];
+        heightGrid[y * 3 + x] = 1;
+      }
+
+      const expected = PRIORITY.find((direction) => subset.includes(direction));
+      const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, rampCells);
+
+      expect(rampGrid[4], `subset=[${subset.join(',')}]`).toBe(
+        expected === undefined ? 0 : { north: 1, south: 2, east: 3, west: 4 }[expected],
+      );
+    }
   });
 
   it('honors an explicit rampDirection override over the tie-break result', () => {
@@ -168,9 +205,46 @@ describe('computeRampGrid', () => {
     const heightGrid = new Uint8Array([2, 2, 2, 1, 2, 1, 2, 2, 2]);
     const rampCells: readonly RampCellInput[] = [{ x: 1, y: 1, rampDirection: 'west' }];
 
-    const rampGrid = computeRampGrid(3, 3, heightGrid, rampCells);
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, rampCells);
 
     expect(rampGrid[4]).toBe(4); // west, not the tie-break's 'east'
+  });
+
+  it('falls through an INVALID override (wrong height diff) to the unique auto-derived candidate, per design precedence "valid override > unique candidate > tie-break > inert"', () => {
+    // Center (1,1) height 2. Override points 'north', but north sits at
+    // height 2 (diff 0, not exactly one level below) -- an invalid
+    // override. South is the only valid (diff===1) candidate.
+    const heightGrid = new Uint8Array([2, 2, 2, 2, 2, 2, 2, 1, 2]);
+    const rampCells: readonly RampCellInput[] = [{ x: 1, y: 1, rampDirection: 'north' }];
+
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, rampCells);
+
+    expect(rampGrid[4]).toBe(2); // south, auto-derived -- override ignored, not treated as inert
+  });
+
+  it('falls through an INVALID override (too-steep diff) to the unique auto-derived candidate', () => {
+    // Center (1,1) height 3. Override points 'south', but south drops 2
+    // levels to height 1 (invalid: diff must be exactly 1). North is the
+    // only valid candidate (height 2, diff 1).
+    const heightGrid = new Uint8Array([3, 2, 3, 3, 3, 3, 3, 1, 3]);
+    const rampCells: readonly RampCellInput[] = [{ x: 1, y: 1, rampDirection: 'south' }];
+
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, rampCells);
+
+    expect(rampGrid[4]).toBe(1); // north, auto-derived
+  });
+
+  it('falls through an INVALID override to the tie-break winner when 2+ valid candidates remain ambiguous', () => {
+    // Center (1,1) height 2. Override 'north' is invalid (diff 0). South
+    // and east both qualify (diff 1) -- south must win the tie-break, not
+    // east, even though east comes second only to south by coincidence of
+    // this layout.
+    const heightGrid = new Uint8Array([2, 2, 2, 2, 2, 1, 2, 1, 2]);
+    const rampCells: readonly RampCellInput[] = [{ x: 1, y: 1, rampDirection: 'north' }];
+
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, rampCells);
+
+    expect(rampGrid[4]).toBe(2); // south wins the tie-break among the valid candidates
   });
 
   it('treats a multi-level-span ramp cell as inert (not rejected) and logs a dev warning', () => {
@@ -180,9 +254,26 @@ describe('computeRampGrid', () => {
     const heightGrid = new Uint8Array([3, 0]);
     const rampCells: readonly RampCellInput[] = [{ x: 0, y: 0, rampDirection: 'south' }];
 
-    const rampGrid = computeRampGrid(1, 2, heightGrid, rampCells);
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 1, mapHeight: 2 }, rampCells);
 
     expect(rampGrid[0]).toBe(0); // inert, not rejected -- computeRampGrid never throws
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toMatch(/multi-level span/i);
+  });
+
+  it('treats an auto-derive (no override) multi-level span as inert with a dev warning, without any rampDirection input', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Center (1,1) height 3, no override. North is off-map (ground=0, a
+    // 3-level drop); every in-bounds neighbor sits at the SAME height
+    // (diff 0, not a candidate). No exact H-1 neighbor exists anywhere, so
+    // the cell is inert -- but since a neighbor (off-map ground) is MORE
+    // than 1 level below, this must warn (not silently go inert).
+    const heightGrid = new Uint8Array([3, 3, 3, 3, 3, 3, 3, 3, 3]);
+    const rampCells: readonly RampCellInput[] = [{ x: 1, y: 0 }]; // (1,0): north is off-map
+
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, rampCells);
+
+    expect(rampGrid[1]).toBe(0); // inert
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0]?.[0]).toMatch(/multi-level span/i);
   });
@@ -194,7 +285,7 @@ describe('computeRampGrid', () => {
     const heightGrid = new Uint8Array(9).fill(2);
     const rampCells: readonly RampCellInput[] = [{ x: 1, y: 1 }];
 
-    const rampGrid = computeRampGrid(3, 3, heightGrid, rampCells);
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, rampCells);
 
     expect(rampGrid[4]).toBe(0);
     expect(warnSpy).not.toHaveBeenCalled();
@@ -203,21 +294,29 @@ describe('computeRampGrid', () => {
 
 describe('edgeProfileAt', () => {
   it('returns [H,H] for every edge of a flat (non-ramp) cell', () => {
-    const heightGrid = new Uint8Array([2]);
-    const rampGrid = new Uint8Array([0]);
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2]),
+      rampGrid: new Uint8Array([0]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
 
     for (const edge of ['north', 'south', 'east', 'west'] as const) {
-      expect(edgeProfileAt(heightGrid, rampGrid, 1, 1, 0, 0, edge)).toEqual([2, 2]);
+      expect(edgeProfileAt(ctx, 0, 0, edge)).toEqual([2, 2]);
     }
   });
 
   it('returns ground ([0,0]) for out-of-bounds coordinates', () => {
-    const heightGrid = new Uint8Array([5]);
-    const rampGrid = new Uint8Array([0]);
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([5]),
+      rampGrid: new Uint8Array([0]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
 
-    expect(edgeProfileAt(heightGrid, rampGrid, 1, 1, -1, 0, 'east')).toEqual([0, 0]);
-    expect(edgeProfileAt(heightGrid, rampGrid, 1, 1, 1, 0, 'west')).toEqual([0, 0]);
-    expect(edgeProfileAt(heightGrid, rampGrid, 1, 1, 0, 5, 'north')).toEqual([0, 0]);
+    expect(edgeProfileAt(ctx, -1, 0, 'east')).toEqual([0, 0]);
+    expect(edgeProfileAt(ctx, 1, 0, 'west')).toEqual([0, 0]);
+    expect(edgeProfileAt(ctx, 0, 5, 'north')).toEqual([0, 0]);
   });
 
   it('gives a ramp cell canonical-order profiles that match its flat neighbor from both perspectives (profilesEqual symmetric)', () => {
@@ -226,38 +325,112 @@ describe('edgeProfileAt', () => {
     const mapWidth = 1;
     const mapHeight = 2;
     const heightGrid = new Uint8Array([2, 1]);
-    const rampGrid = computeRampGrid(mapWidth, mapHeight, heightGrid, [{ x: 0, y: 0 }]);
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth, mapHeight }, [{ x: 0, y: 0 }]);
     expect(rampGrid[0]).toBe(2); // south, auto-derived (unique candidate)
+    const ctx: GridContext = { heightGrid, rampGrid, mapWidth, mapHeight };
 
     // Ramp cell's own south edge (its downhill edge) sits at H-1 = 1.
-    const rampSouthEdge = edgeProfileAt(heightGrid, rampGrid, mapWidth, mapHeight, 0, 0, 'south');
+    const rampSouthEdge = edgeProfileAt(ctx, 0, 0, 'south');
     expect(rampSouthEdge).toEqual([1, 1]);
 
     // Neighbor's north edge, from ITS OWN perspective (flat, height 1).
-    const neighborNorthEdge = edgeProfileAt(
-      heightGrid,
-      rampGrid,
-      mapWidth,
-      mapHeight,
-      0,
-      1,
-      'north',
-    );
+    const neighborNorthEdge = edgeProfileAt(ctx, 0, 1, 'north');
     expect(neighborNorthEdge).toEqual([1, 1]);
 
     // Same shared edge, computed from both sides: equal -> the step is open.
     expect(profilesEqual(rampSouthEdge, neighborNorthEdge)).toBe(true);
 
     // The ramp's own north (uphill, opposite) edge stays at its own height.
-    const rampNorthEdge = edgeProfileAt(heightGrid, rampGrid, mapWidth, mapHeight, 0, 0, 'north');
+    const rampNorthEdge = edgeProfileAt(ctx, 0, 0, 'north');
     expect(rampNorthEdge).toEqual([2, 2]);
 
     // The perpendicular edges slope linearly between the two heights, and
     // (since direction is north/south) both perpendicular edges match.
-    const eastEdge = edgeProfileAt(heightGrid, rampGrid, mapWidth, mapHeight, 0, 0, 'east');
-    const westEdge = edgeProfileAt(heightGrid, rampGrid, mapWidth, mapHeight, 0, 0, 'west');
+    const eastEdge = edgeProfileAt(ctx, 0, 0, 'east');
+    const westEdge = edgeProfileAt(ctx, 0, 0, 'west');
     expect(eastEdge).toEqual([2, 1]);
     expect(westEdge).toEqual([2, 1]);
+  });
+});
+
+describe('EdgeProfile symmetry (canonical corner ordering) across neighboring cells', () => {
+  it('flat map: every east/west and north/south edge pair matches from both adjacent cells, across a range of positions', () => {
+    const mapWidth = 5;
+    const mapHeight = 5;
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array(mapWidth * mapHeight).fill(3),
+      rampGrid: new Uint8Array(mapWidth * mapHeight),
+      mapWidth,
+      mapHeight,
+    };
+
+    for (let x = 0; x < mapWidth - 1; x++) {
+      for (let y = 0; y < mapHeight; y++) {
+        expect(
+          profilesEqual(edgeProfileAt(ctx, x, y, 'east'), edgeProfileAt(ctx, x + 1, y, 'west')),
+        ).toBe(true);
+      }
+    }
+    for (let x = 0; x < mapWidth; x++) {
+      for (let y = 0; y < mapHeight - 1; y++) {
+        expect(
+          profilesEqual(edgeProfileAt(ctx, x, y, 'south'), edgeProfileAt(ctx, x, y + 1, 'north')),
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('a ramp cell and its downhill flat neighbor agree on the shared edge from an off-origin position (both directions)', () => {
+    const mapWidth = 5;
+    const mapHeight = 5;
+    const heightGrid = new Uint8Array(mapWidth * mapHeight).fill(2);
+    heightGrid[3 * mapWidth + 2] = 1; // (2,3), one level below (2,2)
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth, mapHeight }, [{ x: 2, y: 2 }]);
+    expect(rampGrid[2 * mapWidth + 2]).toBe(2); // south, auto-derived
+    const ctx: GridContext = { heightGrid, rampGrid, mapWidth, mapHeight };
+
+    const rampSouth = edgeProfileAt(ctx, 2, 2, 'south');
+    const neighborNorth = edgeProfileAt(ctx, 2, 3, 'north');
+    expect(profilesEqual(rampSouth, neighborNorth)).toBe(true);
+    expect(rampSouth).toEqual(neighborNorth);
+
+    // Same physical setup rotated 90 degrees: an east-ramping cell and its
+    // downhill flat neighbor to the east must also agree on their shared
+    // (east/west) edge from an off-origin position.
+    const heightGrid2 = new Uint8Array(mapWidth * mapHeight).fill(2);
+    heightGrid2[1 * mapWidth + 3] = 1; // (3,1), one level below (2,1)
+    const rampGrid2 = computeRampGrid({ heightGrid: heightGrid2, mapWidth, mapHeight }, [
+      { x: 2, y: 1 },
+    ]);
+    expect(rampGrid2[1 * mapWidth + 2]).toBe(3); // east, auto-derived
+    const ctx2: GridContext = { heightGrid: heightGrid2, rampGrid: rampGrid2, mapWidth, mapHeight };
+
+    const rampEast = edgeProfileAt(ctx2, 2, 1, 'east');
+    const neighborWest = edgeProfileAt(ctx2, 3, 1, 'west');
+    expect(profilesEqual(rampEast, neighborWest)).toBe(true);
+    expect(rampEast).toEqual(neighborWest);
+  });
+
+  it('parallel identical ramps (wide stairs) share a matching perpendicular edge', () => {
+    // Two side-by-side cells, both ramping south at the same own height --
+    // their shared east/west edge (the slope's perpendicular boundary)
+    // must match exactly, since both compute an identical [H,H-1] slope
+    // along that shared edge from either side.
+    const mapWidth = 2;
+    const mapHeight = 2;
+    const heightGrid = new Uint8Array([2, 2, 1, 1]);
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth, mapHeight }, [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ]);
+    expect(rampGrid[0]).toBe(2); // south
+    expect(rampGrid[1]).toBe(2); // south
+    const ctx: GridContext = { heightGrid, rampGrid, mapWidth, mapHeight };
+
+    const eastEdge = edgeProfileAt(ctx, 0, 0, 'east');
+    const westEdge = edgeProfileAt(ctx, 1, 0, 'west');
+    expect(profilesEqual(eastEdge, westEdge)).toBe(true);
+    expect(eastEdge).toEqual(westEdge);
   });
 });
 
@@ -275,12 +448,37 @@ describe('profilesEqual', () => {
 
 describe('surfaceHeightAt', () => {
   it('returns the constant integer height for a flat map regardless of fractional position', () => {
-    const heightGrid = new Uint8Array([3]);
-    const rampGrid = new Uint8Array([0]);
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([3]),
+      rampGrid: new Uint8Array([0]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
 
-    expect(surfaceHeightAt(heightGrid, rampGrid, 1, 1, 0, 0)).toBe(3);
-    expect(surfaceHeightAt(heightGrid, rampGrid, 1, 1, 0.25, 0.75)).toBe(3);
-    expect(surfaceHeightAt(heightGrid, rampGrid, 1, 1, 0.999, 0.001)).toBe(3);
+    expect(surfaceHeightAt(ctx, 0, 0)).toBe(3);
+    expect(surfaceHeightAt(ctx, 0.25, 0.75)).toBe(3);
+    expect(surfaceHeightAt(ctx, 0.999, 0.001)).toBe(3);
+  });
+
+  it('returns the EXACT integer height (no float drift) off-ramp, at both integer and fractional positions on a bigger flat map', () => {
+    const mapWidth = 4;
+    const mapHeight = 4;
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array(mapWidth * mapHeight).fill(5),
+      rampGrid: new Uint8Array(mapWidth * mapHeight),
+      mapWidth,
+      mapHeight,
+    };
+
+    for (const [fx, fy] of [
+      [0, 0],
+      [2, 2],
+      [3.999, 3.999],
+      [1.5, 2.25],
+      [0.0001, 3.9999],
+    ] as const) {
+      expect(surfaceHeightAt(ctx, fx, fy)).toBe(5);
+    }
   });
 
   it("interpolates linearly across a ramp cell's slope", () => {
@@ -288,20 +486,40 @@ describe('surfaceHeightAt', () => {
     const mapWidth = 2;
     const mapHeight = 1;
     const heightGrid = new Uint8Array([2, 1]);
-    const rampGrid = computeRampGrid(mapWidth, mapHeight, heightGrid, [{ x: 0, y: 0 }]);
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth, mapHeight }, [{ x: 0, y: 0 }]);
     expect(rampGrid[0]).toBe(3); // east, auto-derived
+    const ctx: GridContext = { heightGrid, rampGrid, mapWidth, mapHeight };
 
     // Along the ramp's own cell (x in [0,1)): height = 2 - u (u = fx - 0).
-    expect(surfaceHeightAt(heightGrid, rampGrid, mapWidth, mapHeight, 0, 0.5)).toBeCloseTo(2);
-    expect(surfaceHeightAt(heightGrid, rampGrid, mapWidth, mapHeight, 0.25, 0.5)).toBeCloseTo(1.75);
-    expect(surfaceHeightAt(heightGrid, rampGrid, mapWidth, mapHeight, 0.5, 0.1)).toBeCloseTo(1.5);
-    expect(surfaceHeightAt(heightGrid, rampGrid, mapWidth, mapHeight, 0.999, 0.9)).toBeCloseTo(
-      1.001,
-    );
+    expect(surfaceHeightAt(ctx, 0, 0.5)).toBeCloseTo(2);
+    expect(surfaceHeightAt(ctx, 0.25, 0.5)).toBeCloseTo(1.75);
+    expect(surfaceHeightAt(ctx, 0.5, 0.1)).toBeCloseTo(1.5);
+    expect(surfaceHeightAt(ctx, 0.999, 0.9)).toBeCloseTo(1.001);
 
     // The value at the shared edge (fx=1, the ramp's downhill boundary)
     // matches the flat neighbor's constant height exactly -- no seam.
-    expect(surfaceHeightAt(heightGrid, rampGrid, mapWidth, mapHeight, 1, 0.5)).toBeCloseTo(1);
+    expect(surfaceHeightAt(ctx, 1, 0.5)).toBeCloseTo(1);
+  });
+
+  it('samples height in the CORRECT direction across a south-downhill ramp (rising south->north, i.e. toward smaller y): never flipped to downhill-north', () => {
+    // Single ramp cell, height 2, downhill direction south: its own north
+    // edge (uphill, opposite of downhill) stays at 2; its south edge
+    // (downhill) sits at 1. Walking from fy=0 (north boundary) to fy=1
+    // (south boundary) must monotonically DECREASE -- i.e. going north
+    // (toward smaller y) the surface RISES, matching "rising south->north".
+    const mapWidth = 1;
+    const mapHeight = 1;
+    const heightGrid = new Uint8Array([2]);
+    const rampGrid = new Uint8Array([2]); // south downhill (RAMP_DIRECTION_CODE.south)
+    const ctx: GridContext = { heightGrid, rampGrid, mapWidth, mapHeight };
+
+    const samples = [0, 0.25, 0.5, 0.75, 1].map((fy) => surfaceHeightAt(ctx, 0.5, fy));
+
+    expect(samples[0]).toBeCloseTo(2); // north edge: uphill, own height
+    expect(samples[samples.length - 1]).toBeCloseTo(1); // south edge: downhill, H-1
+    for (let i = 1; i < samples.length; i++) {
+      expect(samples[i]).toBeLessThan(samples[i - 1]); // strictly decreasing southward -- not flipped
+    }
   });
 });
 
@@ -313,33 +531,31 @@ describe('regression guard: an all-zero rampGrid degenerates to pre-change heigh
     const mapHeight = 1;
     const heightGrid = new Uint8Array([0, 1, 1, 2]);
     const rampGrid = new Uint8Array(mapWidth * mapHeight); // all zero -- no ramp semantics painted
+    const ctx: GridContext = { heightGrid, rampGrid, mapWidth, mapHeight };
 
     // Every cell degenerates to [H,H] on every edge (no slope anywhere).
     for (let x = 0; x < mapWidth; x++) {
       const h = heightGrid[x];
       for (const edge of ['north', 'south', 'east', 'west'] as const) {
-        expect(edgeProfileAt(heightGrid, rampGrid, mapWidth, mapHeight, x, 0, edge)).toEqual([
-          h,
-          h,
-        ]);
+        expect(edgeProfileAt(ctx, x, 0, edge)).toEqual([h, h]);
       }
     }
 
     // Cross-height boundary (0|1): profiles differ -> blocked, matching the
     // pre-change `sourceHeight !== destHeight` rule in PassabilityGrid.
-    const cell0East = edgeProfileAt(heightGrid, rampGrid, mapWidth, mapHeight, 0, 0, 'east');
-    const cell1West = edgeProfileAt(heightGrid, rampGrid, mapWidth, mapHeight, 1, 0, 'west');
+    const cell0East = edgeProfileAt(ctx, 0, 0, 'east');
+    const cell1West = edgeProfileAt(ctx, 1, 0, 'west');
     expect(profilesEqual(cell0East, cell1West)).toBe(false);
 
     // Same-height boundary (1|2, both height 1): profiles match -> open,
     // matching the pre-change behavior for two equal-height neighbors.
-    const cell1East = edgeProfileAt(heightGrid, rampGrid, mapWidth, mapHeight, 1, 0, 'east');
-    const cell2West = edgeProfileAt(heightGrid, rampGrid, mapWidth, mapHeight, 2, 0, 'west');
+    const cell1East = edgeProfileAt(ctx, 1, 0, 'east');
+    const cell2West = edgeProfileAt(ctx, 2, 0, 'west');
     expect(profilesEqual(cell1East, cell2West)).toBe(true);
 
     // computeRampGrid on a fully non-ramp cell list produces the exact same
     // all-zero array shape/content as constructing it directly.
-    expect(Array.from(computeRampGrid(mapWidth, mapHeight, heightGrid, []))).toEqual(
+    expect(Array.from(computeRampGrid({ heightGrid, mapWidth, mapHeight }, []))).toEqual(
       Array.from(rampGrid),
     );
   });
