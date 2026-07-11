@@ -46,6 +46,12 @@ declare global {
       readonly renderPosition: { readonly x: number; readonly y: number };
       /** Interpolated surface height (tile-height units) at the character's current render position -- see `ElevationField.surfaceHeightAt`. Constant on flat ground; changes continuously across a ramp step. */
       readonly elevation: number;
+      /** The active floor index (Plantas Apiladas Slice 5) -- flips exactly once per stair-link traversal, at the completion frame, never mid-climb. */
+      readonly currentFloor: number;
+      /** The composed world Y actually rendered this frame -- `(baseElevation + surfaceHeightAt) * heightUnit`, the same formula on flat ground and mid-traversal. Rises/falls continuously across a stair-link climb/descent. */
+      readonly worldY: number;
+      /** Whether a stair-link traversal (Slice 5's `activeTraversal`) is in progress this frame. */
+      readonly traversing: boolean;
       /** The live `THREE.PerspectiveCamera`'s current world position. */
       readonly cameraPosition: { readonly x: number; readonly y: number; readonly z: number };
       /** The camera rig's smoothed follow target, in world units. */
