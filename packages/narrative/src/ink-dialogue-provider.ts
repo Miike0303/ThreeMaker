@@ -74,9 +74,17 @@ export class InkDialogueProvider implements DialogueProvider {
     return { kind: 'end' };
   }
 
-  /** Select choice `index` from the most recently emitted `choices` step. */
+  /**
+   * Select choice `index` from the most recently emitted `choices` step.
+   * Throws a precise error if the story currently has no pending choices,
+   * instead of delegating straight to inkjs's `ChooseChoiceIndex` (which
+   * throws its own opaque "out of range" assertion).
+   */
   choose(index: number): void {
     const story = this.requireActiveStory('choose()');
+    if (story.currentChoices.length === 0) {
+      throw new Error('InkDialogueProvider: choose() called with no pending choices.');
+    }
     story.ChooseChoiceIndex(index);
   }
 

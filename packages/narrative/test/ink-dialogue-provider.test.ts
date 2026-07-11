@@ -79,4 +79,13 @@ describe('InkDialogueProvider', () => {
 
     expect(() => provider.choose(0)).toThrow(/before open\(\)/);
   });
+
+  it('choose() throws when there are no pending choices', () => {
+    const provider = makeProvider();
+    provider.open({ kind: 'ink', storyId: 'elder', knot: 'start' });
+
+    expect(() => provider.choose(0)).toThrow(
+      'InkDialogueProvider: choose() called with no pending choices.',
+    );
+  });
 });

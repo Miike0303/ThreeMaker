@@ -8,6 +8,7 @@ import { bindStoryToWorld } from '../src/story-runtime.js';
 
 const inkFixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ink');
 const worldBridgeSource = readFileSync(path.join(inkFixturesDir, 'world-bridge.ink'), 'utf-8');
+const unseededGetSource = readFileSync(path.join(inkFixturesDir, 'unseeded-get.ink'), 'utf-8');
 
 function runToEnd(story: ReturnType<typeof compileInk>): string {
   let output = '';
@@ -50,6 +51,17 @@ describe('bindStoryToWorld', () => {
     runToEnd(story);
 
     expect(world.has('ink.demo.mood')).toBe(false);
+  });
+
+  it("throws a precise error (not inkjs's opaque StoryException) when world_get reads a key that was never set", () => {
+    const world = new WorldState();
+    const story = compileInk(unseededGetSource);
+
+    bindStoryToWorld(story, { storyId: 'demo', world });
+
+    expect(() => runToEnd(story)).toThrow(
+      'story-runtime: world_get("never_set") read a key that was never set — seed it in WorldState before running the story.',
+    );
   });
 
   it('throws when the observed ink variable changes to a non-primitive value (e.g. an ink LIST)', () => {
