@@ -178,6 +178,68 @@ describe('validateCurrentVersionShape', () => {
     expect(doc.stairLinks[0]).toMatchObject({ fromFloor: 'floor-0', toFloor: 'floor-1' });
   });
 
+  it('rejects two floors sharing the same id (ambiguous stair-link floor refs)', () => {
+    const input = makeValidDocInput({
+      floors: [
+        { id: 'floor-0', baseElevation: 0, layers: makeLayers(4) },
+        { id: 'floor-0', baseElevation: 3, layers: makeLayers(4) },
+      ],
+    });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+    try {
+      validateCurrentVersionShape(input);
+    } catch (err) {
+      expect((err as MapFormatError).code).toBe('malformed');
+      expect((err as MapFormatError).message).toContain('floor-0');
+      expect((err as MapFormatError).message).toContain('floors[0]');
+      expect((err as MapFormatError).message).toContain('floors[1]');
+    }
+  });
+
+  it('rejects a stair-link whose first waypoint floor does not match fromFloor', () => {
+    const input = makeValidDocInput({
+      floors: [
+        { id: 'floor-0', baseElevation: 0, layers: makeLayers(4) },
+        { id: 'floor-1', baseElevation: 3, layers: makeLayers(4) },
+      ],
+      stairLinks: [
+        {
+          id: 'link-1',
+          fromFloor: 'floor-0',
+          toFloor: 'floor-1',
+          bidirectional: false,
+          waypoints: [
+            { x: 0, y: 0, floor: 'floor-1' }, // WRONG: should be 'floor-0' (fromFloor)
+            { x: 0, y: 0, floor: 'floor-1' },
+          ],
+        },
+      ],
+    });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects a stair-link whose last waypoint floor does not match toFloor', () => {
+    const input = makeValidDocInput({
+      floors: [
+        { id: 'floor-0', baseElevation: 0, layers: makeLayers(4) },
+        { id: 'floor-1', baseElevation: 3, layers: makeLayers(4) },
+      ],
+      stairLinks: [
+        {
+          id: 'link-1',
+          fromFloor: 'floor-0',
+          toFloor: 'floor-1',
+          bidirectional: false,
+          waypoints: [
+            { x: 0, y: 0, floor: 'floor-0' },
+            { x: 0, y: 0, floor: 'floor-0' }, // WRONG: should be 'floor-1' (toFloor)
+          ],
+        },
+      ],
+    });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
   it('rejects a non-object input', () => {
     expect(() => validateCurrentVersionShape(null)).toThrow(MapFormatError);
     expect(() => validateCurrentVersionShape('nope')).toThrow(MapFormatError);

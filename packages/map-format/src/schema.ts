@@ -215,7 +215,24 @@ function validateFloors(input: unknown, width: number, height: number): readonly
   if (!Array.isArray(input) || input.length === 0) {
     throw new MapFormatError('malformed', '"floors" must be a non-empty array.');
   }
-  return input.map((entry, index) => validateFloor(entry, index, width, height));
+  const floors = input.map((entry, index) => validateFloor(entry, index, width, height));
+
+  // Stair-links reference floors by id (see `validateStairLink`); a duplicate
+  // id makes every `fromFloor`/`toFloor`/`waypoints[].floor` referencing it
+  // ambiguous, with nothing able to disambiguate which floor was meant.
+  const firstIndexById = new Map<string, number>();
+  for (const [index, floor] of floors.entries()) {
+    const firstIndex = firstIndexById.get(floor.id);
+    if (firstIndex !== undefined) {
+      throw new MapFormatError(
+        'malformed',
+        `"floors[${index}].id" duplicates "floors[${firstIndex}].id" (both are ${JSON.stringify(floor.id)}); floor ids must be unique.`,
+      );
+    }
+    firstIndexById.set(floor.id, index);
+  }
+
+  return floors;
 }
 
 function validateFloor(
@@ -290,6 +307,26 @@ function validateStairLink(
     );
   }
   const waypoints = validateWaypoints(raw.waypoints, index, floorIds);
+
+  // Doc comment contract: waypoints[0] is the entry point ON fromFloor, the
+  // last is the landing ON toFloor -- enforce it here so an authoring bug
+  // (endpoint floor mismatch) is caught at validation time, not at traversal
+  // time (Slice 5).
+  const firstWaypoint = waypoints[0];
+  const lastWaypoint = waypoints[waypoints.length - 1];
+  if (firstWaypoint && firstWaypoint.floor !== raw.fromFloor) {
+    throw new MapFormatError(
+      'malformed',
+      `"stairLinks[${index}].waypoints[0].floor" (${JSON.stringify(firstWaypoint.floor)}) must match "stairLinks[${index}].fromFloor" (${JSON.stringify(raw.fromFloor)}).`,
+    );
+  }
+  if (lastWaypoint && lastWaypoint.floor !== raw.toFloor) {
+    throw new MapFormatError(
+      'malformed',
+      `"stairLinks[${index}].waypoints[${waypoints.length - 1}].floor" (${JSON.stringify(lastWaypoint.floor)}) must match "stairLinks[${index}].toFloor" (${JSON.stringify(raw.toFloor)}).`,
+    );
+  }
+
   return {
     id: raw.id,
     fromFloor: raw.fromFloor,
