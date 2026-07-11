@@ -27,16 +27,23 @@ function makeDoc(name: string): MapDocument {
     width,
     height,
     tileset: { slots: {}, flags: new Array(FLAGS_LENGTH).fill(0), semantics: {} },
-    layers: {
-      tiles: [
-        new Array(size).fill(0),
-        new Array(size).fill(0),
-        new Array(size).fill(0),
-        new Array(size).fill(0),
-      ],
-      shadows: new Array(size).fill(0),
-      regions: new Array(size).fill(0),
-    },
+    floors: [
+      {
+        id: 'floor-0',
+        baseElevation: 0,
+        layers: {
+          tiles: [
+            new Array(size).fill(0),
+            new Array(size).fill(0),
+            new Array(size).fill(0),
+            new Array(size).fill(0),
+          ],
+          shadows: new Array(size).fill(0),
+          regions: new Array(size).fill(0),
+        },
+      },
+    ],
+    stairLinks: [],
   };
 }
 

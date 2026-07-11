@@ -1,5 +1,6 @@
 import type { RampDirection, TileSheetId } from '@threemaker/importer-rpgm';
 import type { MapDocument, SemanticClass, TileDiff } from '@threemaker/map-format';
+import { primaryFloorLayers, withPrimaryFloorLayers } from '@threemaker/map-format';
 import type { ChunkBuildData, SheetPixelSizes } from '@threemaker/renderer';
 import {
   buildChunks,
@@ -144,7 +145,7 @@ export class PainterViewport {
     this.doc = doc;
     this.sheetPixelSizes = sheetPixelSizes;
     this.state = painter.createPainterState({
-      layers: doc.layers.tiles,
+      layers: primaryFloorLayers(doc).tiles,
       width: doc.width,
       height: doc.height,
       fillTileId,
@@ -215,10 +216,13 @@ export class PainterViewport {
   /** The current map state (layers + semantics), for saving. `undefined` if no map is loaded. */
   currentDocument(): MapDocument | undefined {
     if (!this.doc || !this.state) return undefined;
+    const withLayers = withPrimaryFloorLayers(this.doc, {
+      ...primaryFloorLayers(this.doc),
+      tiles: this.state.layers,
+    });
     return {
-      ...this.doc,
-      layers: { ...this.doc.layers, tiles: this.state.layers },
-      tileset: { ...this.doc.tileset, semantics: this.state.semantics },
+      ...withLayers,
+      tileset: { ...withLayers.tileset, semantics: this.state.semantics },
     };
   }
 
@@ -276,10 +280,12 @@ export class PainterViewport {
   /** Scoped live update: dirty-region -> buildChunks(onlyChunks) -> patchChunks, plus explicit buildChunk for any dirty chunk not yet live (a from-scratch blank map starts with zero live chunks). */
   private applyDiffLiveUpdate(diff: TileDiff): void {
     if (!this.doc || !this.state || !this.tilemap) return;
-    const map = toRenderableMap({
-      ...this.doc,
-      layers: { ...this.doc.layers, tiles: this.state.layers },
-    });
+    const map = toRenderableMap(
+      withPrimaryFloorLayers(this.doc, {
+        ...primaryFloorLayers(this.doc),
+        tiles: this.state.layers,
+      }),
+    );
     const tileset = toRenderableTileset(this.doc);
 
     const dirtyKeys = computeDirtyChunkKeys(diff.cells, map, tileset, DEFAULT_CHUNK_SIZE);
@@ -329,7 +335,7 @@ export class PainterViewport {
     if (!this.doc || !this.state || !this.cameraPose) return;
     const cells = computeRampGlyphCells(
       this.state.layers,
-      this.doc.layers.regions,
+      primaryFloorLayers(this.doc).regions,
       this.state.semantics,
       this.doc.width,
       this.doc.height,

@@ -16,7 +16,7 @@
  */
 
 import type { MapDocument, TileSheetSlot } from '@threemaker/map-format';
-import { TILE_SHEET_SLOTS } from '@threemaker/map-format';
+import { primaryFloorLayers, TILE_SHEET_SLOTS } from '@threemaker/map-format';
 
 const SHEET_FILE_NAME_HASH_LENGTH = 12;
 
@@ -94,10 +94,13 @@ const AUDIO_SILENT = { name: '', pan: 0, pitch: 100, volume: 90 } as const;
 
 /** Builds `MapXXX.json`. All non-tile fields use MZ's own blank-template defaults (see `newdata/data/Map001.json`) since ThreeMaker's `MapDocument` doesn't model events/audio/parallax yet -- those are simply not lossy because there's nothing on the ThreeMaker side to lose. */
 export function buildMapJson(doc: MapDocument, tilesetId: number): Record<string, unknown> {
+  // Transitional (plantas-apiladas Slice 1): exports the primary floor's
+  // layers only -- multi-floor export is out of scope until a later slice.
+  const layers = primaryFloorLayers(doc);
   const data: number[] = [];
-  for (const layer of doc.layers.tiles) data.push(...layer);
-  data.push(...doc.layers.shadows);
-  data.push(...doc.layers.regions);
+  for (const layer of layers.tiles) data.push(...layer);
+  data.push(...layers.shadows);
+  data.push(...layers.regions);
 
   return {
     autoplayBgm: false,

@@ -11,7 +11,7 @@
  * error rather than silently truncated/misread.
  */
 
-import type { MapDocument } from './schema.js';
+import type { FloorDocument, MapDocument, MapLayers } from './schema.js';
 import {
   CURRENT_MAP_FORMAT_VERSION,
   MAP_FORMAT_MAGIC,
@@ -29,10 +29,34 @@ export function registerMigration(fromVersion: number, migration: MapMigration):
   migrations.set(fromVersion, migration);
 }
 
-/** Test/introspection helper: clears all registered migrations. Production code never needs this (there are no registered migrations yet at version 1). */
+/**
+ * Test/introspection helper: clears all registered migrations, INCLUDING the
+ * built-in ones registered below (e.g. `migrateV1ToV2`). Callers that clear
+ * migrations to test the generic dispatch/registry mechanism in isolation
+ * MUST re-register any built-in migration they still depend on afterward
+ * (see `migrate.test.ts`'s `afterEach`).
+ */
 export function clearMigrations(): void {
   migrations.clear();
 }
+
+/**
+ * v1 -> v2 lossless wrap (plantas-apiladas schema v2 design): the whole v1
+ * document's single `layers` group becomes floor 0's layers, unmodified --
+ * no data is dropped, no key is lost. A migrated v1 document has no
+ * stair-links (there was only ever one floor to link).
+ */
+export function migrateV1ToV2(doc: Record<string, unknown>): Record<string, unknown> {
+  const { layers, ...rest } = doc;
+  const floor: FloorDocument = {
+    id: 'floor-0',
+    baseElevation: 0,
+    layers: layers as MapLayers,
+  };
+  return { ...rest, version: 2, floors: [floor], stairLinks: [] };
+}
+
+registerMigration(1, migrateV1ToV2);
 
 function readVersion(raw: Record<string, unknown>): number {
   if (typeof raw.version !== 'number' || !Number.isInteger(raw.version)) {

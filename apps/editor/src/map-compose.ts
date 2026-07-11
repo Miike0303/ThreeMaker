@@ -6,7 +6,12 @@
 
 import type { RpgmMap, RpgmTileset, TileSheetNames } from '@threemaker/importer-rpgm';
 import type { MapDocument, SlotComposition, TileSheetSlot } from '@threemaker/map-format';
-import { CURRENT_MAP_FORMAT_VERSION, MAP_FORMAT_MAGIC } from '@threemaker/map-format';
+import {
+  CURRENT_MAP_FORMAT_VERSION,
+  MAP_FORMAT_MAGIC,
+  primaryFloorLayers,
+  withPrimaryFloorLayers,
+} from '@threemaker/map-format';
 
 /**
  * RPGM tile-id range `[start, end)` per sheet slot -- duplicates
@@ -58,7 +63,13 @@ export interface CreateBlankMapDocumentOptions {
   readonly flags: readonly number[];
 }
 
-/** A blank (all-zero) map at the current format version, with the given slot composition already set. */
+/**
+ * A blank (all-zero) map at the current format version, with the given slot
+ * composition already set. Schema v2 (plantas-apiladas Slice 1): this
+ * package is not yet floor-aware -- the blank map is a single floor
+ * (`floor-0`, `baseElevation: 0`) with no stair-links, matching how a v1
+ * document migrates. Multi-floor authoring lands in Slice 4.
+ */
 export function createBlankMapDocument(options: CreateBlankMapDocumentOptions): MapDocument {
   const size = options.width * options.height;
   const emptyLayer = (): number[] => new Array(size).fill(0);
@@ -70,11 +81,18 @@ export function createBlankMapDocument(options: CreateBlankMapDocumentOptions): 
     width: options.width,
     height: options.height,
     tileset: { slots: options.slots, flags: options.flags, semantics: {} },
-    layers: {
-      tiles: [emptyLayer(), emptyLayer(), emptyLayer(), emptyLayer()],
-      shadows: emptyLayer(),
-      regions: emptyLayer(),
-    },
+    floors: [
+      {
+        id: 'floor-0',
+        baseElevation: 0,
+        layers: {
+          tiles: [emptyLayer(), emptyLayer(), emptyLayer(), emptyLayer()],
+          shadows: emptyLayer(),
+          regions: emptyLayer(),
+        },
+      },
+    ],
+    stairLinks: [],
   };
 }
 
@@ -90,7 +108,8 @@ export function seedDemoTiles(
   groundTileId: number,
   decorTileId: number,
 ): MapDocument {
-  const tiles = doc.layers.tiles.map((layer) => layer.slice()) as [
+  const layers = primaryFloorLayers(doc);
+  const tiles = layers.tiles.map((layer) => layer.slice()) as [
     number[],
     number[],
     number[],
@@ -100,7 +119,7 @@ export function seedDemoTiles(
   for (let i = 0; i < groundLayer.length; i++) groundLayer[i] = groundTileId;
   const decorLayer = tiles[2];
   for (let i = 0; i < decorLayer.length; i += DECOR_SPACING) decorLayer[i] = decorTileId;
-  return { ...doc, layers: { ...doc.layers, tiles } };
+  return withPrimaryFloorLayers(doc, { ...layers, tiles });
 }
 
 const EMPTY_SHEET_NAMES: TileSheetNames = {
@@ -115,8 +134,9 @@ const EMPTY_SHEET_NAMES: TileSheetNames = {
   E: '',
 };
 
-/** Bridges a `MapDocument`'s layers to the `RpgmMap` shape `buildChunks` expects -- both use the same 4-tile-layer + shadows + regions structure. */
+/** Bridges a `MapDocument`'s (transitionally, its primary floor's) layers to the `RpgmMap` shape `buildChunks` expects -- both use the same 4-tile-layer + shadows + regions structure. */
 export function toRenderableMap(doc: MapDocument): RpgmMap {
+  const layers = primaryFloorLayers(doc);
   return {
     id: null,
     displayName: doc.name,
@@ -125,9 +145,9 @@ export function toRenderableMap(doc: MapDocument): RpgmMap {
     tilesetId: 0,
     scrollType: 0,
     layers: {
-      tileLayers: doc.layers.tiles,
-      shadows: doc.layers.shadows,
-      regions: doc.layers.regions,
+      tileLayers: layers.tiles,
+      shadows: layers.shadows,
+      regions: layers.regions,
     },
   };
 }

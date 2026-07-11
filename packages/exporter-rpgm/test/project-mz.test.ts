@@ -33,16 +33,23 @@ function makeDoc(overrides: Partial<MapDocument> = {}): MapDocument {
         '2816': { class: 'wall' },
       },
     },
-    layers: {
-      tiles: [
-        new Array(size).fill(2816),
-        new Array(size).fill(0),
-        new Array(size).fill(5),
-        new Array(size).fill(0),
-      ],
-      shadows: new Array(size).fill(0),
-      regions: new Array(size).fill(0),
-    },
+    floors: [
+      {
+        id: 'floor-0',
+        baseElevation: 0,
+        layers: {
+          tiles: [
+            new Array(size).fill(2816),
+            new Array(size).fill(0),
+            new Array(size).fill(5),
+            new Array(size).fill(0),
+          ],
+          shadows: new Array(size).fill(0),
+          regions: new Array(size).fill(0),
+        },
+      },
+    ],
+    stairLinks: [],
     ...overrides,
   };
 }

@@ -1,3 +1,4 @@
+import { primaryFloorLayers } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import {
   composeMapFromTilesets,
@@ -55,8 +56,12 @@ describe('createBlankMapDocument', () => {
     expect(doc.width).toBe(3);
     expect(doc.height).toBe(2);
     expect(doc.tileset.slots.A2).toEqual({ object: 'sha-a', sourceTilesetId: 1, sourceGameId: 1 });
-    expect(doc.layers.tiles).toHaveLength(4);
-    for (const layer of doc.layers.tiles) {
+    expect(doc.floors).toHaveLength(1);
+    expect(doc.floors[0]).toMatchObject({ id: 'floor-0', baseElevation: 0 });
+    expect(doc.stairLinks).toEqual([]);
+    const layers = primaryFloorLayers(doc);
+    expect(layers.tiles).toHaveLength(4);
+    for (const layer of layers.tiles) {
       expect(layer).toEqual([0, 0, 0, 0, 0, 0]);
     }
   });
@@ -75,10 +80,10 @@ describe('seedDemoTiles', () => {
 
     const seeded = seedDemoTiles(doc, 2816, 0);
 
-    expect(seeded.layers.tiles[0]).toEqual([2816, 2816, 2816, 2816, 2816, 2816, 2816]);
-    expect(seeded.layers.tiles[2][0]).toBe(0);
+    expect(primaryFloorLayers(seeded).tiles[0]).toEqual([2816, 2816, 2816, 2816, 2816, 2816, 2816]);
+    expect(primaryFloorLayers(seeded).tiles[2][0]).toBe(0);
     // Original doc is untouched (pure function).
-    expect(doc.layers.tiles[0][0]).toBe(0);
+    expect(primaryFloorLayers(doc).tiles[0][0]).toBe(0);
   });
 });
 
@@ -97,8 +102,8 @@ describe('toRenderableMap / toRenderableTileset', () => {
     const map = toRenderableMap(seeded);
     expect(map.width).toBe(4);
     expect(map.height).toBe(4);
-    expect(map.layers.tileLayers[0]).toBe(seeded.layers.tiles[0]);
-    expect(map.layers.shadows).toBe(seeded.layers.shadows);
+    expect(map.layers.tileLayers[0]).toBe(primaryFloorLayers(seeded).tiles[0]);
+    expect(map.layers.shadows).toBe(primaryFloorLayers(seeded).shadows);
 
     const tileset = toRenderableTileset(seeded);
     expect(tileset.flags).toBe(seeded.tileset.flags);

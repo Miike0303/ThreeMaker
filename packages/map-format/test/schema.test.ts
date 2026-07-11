@@ -8,6 +8,19 @@ import {
   validateCurrentVersionShape,
 } from '../src/schema.js';
 
+function makeLayers(size: number): Record<string, unknown> {
+  return {
+    tiles: [
+      new Array(size).fill(0),
+      new Array(size).fill(0),
+      new Array(size).fill(0),
+      new Array(size).fill(0),
+    ],
+    shadows: new Array(size).fill(0),
+    regions: new Array(size).fill(0),
+  };
+}
+
 function makeValidDocInput(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   const size = 2 * 2;
   return {
@@ -22,16 +35,8 @@ function makeValidDocInput(overrides: Record<string, unknown> = {}): Record<stri
       flags: [0],
       semantics: {},
     },
-    layers: {
-      tiles: [
-        new Array(size).fill(0),
-        new Array(size).fill(0),
-        new Array(size).fill(0),
-        new Array(size).fill(0),
-      ],
-      shadows: new Array(size).fill(0),
-      regions: new Array(size).fill(0),
-    },
+    floors: [{ id: 'floor-0', baseElevation: 0, layers: makeLayers(size) }],
+    stairLinks: [],
     ...overrides,
   };
 }
@@ -43,6 +48,9 @@ describe('validateCurrentVersionShape', () => {
     expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
     expect(doc.width).toBe(2);
     expect(doc.tileset.slots.A1).toEqual({ object: 'sha-a1' });
+    expect(doc.floors).toHaveLength(1);
+    expect(doc.floors[0]).toMatchObject({ id: 'floor-0', baseElevation: 0 });
+    expect(doc.stairLinks).toEqual([]);
   });
 
   it('rejects a document with the wrong magic', () => {
@@ -57,7 +65,7 @@ describe('validateCurrentVersionShape', () => {
   });
 
   it('rejects a document at the wrong version for this function', () => {
-    expect(() => validateCurrentVersionShape(makeValidDocInput({ version: 0 }))).toThrow(
+    expect(() => validateCurrentVersionShape(makeValidDocInput({ version: 1 }))).toThrow(
       MapFormatError,
     );
   });
@@ -81,8 +89,93 @@ describe('validateCurrentVersionShape', () => {
 
   it('rejects a tile layer whose length does not match width * height', () => {
     const input = makeValidDocInput();
-    (input.layers as Record<string, unknown>).tiles = [[0], [], [], []];
+    (input.floors as Record<string, unknown>[])[0].layers = {
+      ...makeLayers(4),
+      tiles: [[0], [], [], []],
+    };
     expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects a missing "floors" field', () => {
+    const input = makeValidDocInput();
+    delete (input as Record<string, unknown>).floors;
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects an empty "floors" array', () => {
+    expect(() => validateCurrentVersionShape(makeValidDocInput({ floors: [] }))).toThrow(
+      MapFormatError,
+    );
+  });
+
+  it('rejects a floor missing an id', () => {
+    const input = makeValidDocInput({
+      floors: [{ baseElevation: 0, layers: makeLayers(4) }],
+    });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects a missing "stairLinks" field', () => {
+    const input = makeValidDocInput();
+    delete (input as Record<string, unknown>).stairLinks;
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects a stair-link whose fromFloor/toFloor does not resolve to a known floor id', () => {
+    const badFrom = makeValidDocInput({
+      stairLinks: [
+        {
+          id: 'link-1',
+          fromFloor: 'does-not-exist',
+          toFloor: 'floor-0',
+          bidirectional: false,
+          waypoints: [
+            { x: 0, y: 0, floor: 'floor-0' },
+            { x: 1, y: 0, floor: 'floor-0' },
+          ],
+        },
+      ],
+    });
+    expect(() => validateCurrentVersionShape(badFrom)).toThrow(MapFormatError);
+  });
+
+  it('rejects a stair-link with fewer than 2 waypoints', () => {
+    const input = makeValidDocInput({
+      stairLinks: [
+        {
+          id: 'link-1',
+          fromFloor: 'floor-0',
+          toFloor: 'floor-0',
+          bidirectional: false,
+          waypoints: [{ x: 0, y: 0, floor: 'floor-0' }],
+        },
+      ],
+    });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('accepts a well-formed stair-link referencing two known floors', () => {
+    const input = makeValidDocInput({
+      floors: [
+        { id: 'floor-0', baseElevation: 0, layers: makeLayers(4) },
+        { id: 'floor-1', baseElevation: 3, layers: makeLayers(4) },
+      ],
+      stairLinks: [
+        {
+          id: 'link-1',
+          fromFloor: 'floor-0',
+          toFloor: 'floor-1',
+          bidirectional: true,
+          waypoints: [
+            { x: 0, y: 0, floor: 'floor-0' },
+            { x: 0, y: 0, floor: 'floor-1' },
+          ],
+        },
+      ],
+    });
+    const doc = validateCurrentVersionShape(input);
+    expect(doc.stairLinks).toHaveLength(1);
+    expect(doc.stairLinks[0]).toMatchObject({ fromFloor: 'floor-0', toFloor: 'floor-1' });
   });
 
   it('rejects a non-object input', () => {
