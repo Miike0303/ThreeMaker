@@ -11,6 +11,17 @@ export interface PixelArtTextureOptions {
    * perspective minification while walking, while *character* sprites stay
    * fully crisp (nearest, no mipmaps) so they read as flat pixel art.
    * Default `false` (the sprite behavior) -- opt in per texture use.
+   *
+   * ponytail: `generateMipmaps` box-filters the *whole shared atlas image*
+   * per mip level, with no concept of the per-tile boundaries `tile-uv.ts`
+   * carves out of it -- at a coarse enough mip level, a texel is already an
+   * average that blended across two unrelated tiles, and no runtime UV
+   * inset (see `TILE_UV_INSET_PX` in `tile-uv.ts`) can undo that after the
+   * fact. Bumping that inset is today's cheap mitigation (real margin at the
+   * mip levels this app's camera distances actually reach); the full fix is
+   * padding a duplicated-edge border around each tile in the source atlas
+   * before mip generation (or hand-building a shorter, tile-aware mip
+   * chain) -- a texture-pipeline change, out of scope for this slice.
    */
   readonly mipmaps?: boolean;
   /**

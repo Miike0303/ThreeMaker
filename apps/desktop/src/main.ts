@@ -18,6 +18,8 @@ import type { CameraMode } from './camera-rig.js';
 import { clampTiltDeg, computeCameraPose, cycleCameraMode } from './camera-rig.js';
 import { CharacterSprite, tileCenterToWorld } from './character-sprite.js';
 import { clampRange } from './clamp.js';
+import type { DebugSnapshot } from './debug-panel.js';
+import { createDebugPanel } from './debug-panel.js';
 import {
   fixtureCharacterUrl,
   fixtureImageUrl,
@@ -490,6 +492,39 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   updateCameraModeIndicator();
   container.appendChild(cameraModeIndicator);
 
+  // Debug/controls overlay (top-right, below the locale selector): live
+  // engine values + the key cheat-sheet. Available in production too (every
+  // control row except the dev-only map-cycle one is a real engine feature,
+  // same call already made for the camera-mode indicator above) -- see
+  // `debug-panel.ts` for the collapsed-state persistence and row formatting.
+  const debugPanel = createDebugPanel(i18n.t, {
+    collapsedStorage: localStorage,
+    devMode: import.meta.env.DEV,
+  });
+  container.appendChild(debugPanel.element);
+  function buildDebugSnapshot(): DebugSnapshot {
+    // Real RPG Maker maps commonly ship an empty `displayName` (it's the
+    // in-game display name, distinct from the editor's map-tree name, which
+    // this importer doesn't parse) -- Map007 in the Roseliam fixture is one
+    // of them. Fall back to the numeric map id so the row is never blank.
+    const mapName = session.map.displayName || `Map #${session.map.id ?? '?'}`;
+    return {
+      mapName,
+      cameraModeLabel: i18n.t(CAMERA_MODE_LOCALE_KEY[cameraMode]),
+      tiltDeg: cameraTiltDeg,
+      distance: cameraDistance,
+      liveChunks: session.tilemap.liveChunkCount,
+      drawCalls: renderer.info.render.drawCalls,
+      tile: { x: session.mover.tile.x, y: session.mover.tile.y },
+      elevation:
+        session.heightGrid[session.mover.tile.y * session.map.width + session.mover.tile.x] ?? 0,
+    };
+  }
+  debugPanel.update(buildDebugSnapshot());
+  // Low rate (4 Hz), not per rendered frame -- these are diagnostic reads, not
+  // anything that needs to track the 60 FPS game loop.
+  setInterval(() => debugPanel.update(buildDebugSnapshot()), 250);
+
   let postProcessingEnabled = true;
   if (import.meta.env.DEV) {
     window.__hd2d = { renderer };
@@ -505,6 +540,27 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       },
       get tile() {
         return { x: session.mover.tile.x, y: session.mover.tile.y };
+      },
+      get cameraMode() {
+        return cameraMode;
+      },
+      get tiltDeg() {
+        return cameraTiltDeg;
+      },
+      get distance() {
+        return cameraDistance;
+      },
+      get moving() {
+        return session.mover.moving;
+      },
+      get renderPosition() {
+        return { x: session.mover.renderPosition.x, y: session.mover.renderPosition.y };
+      },
+      get cameraPosition() {
+        return { x: camera.position.x, y: camera.position.y, z: camera.position.z };
+      },
+      get targetPosition() {
+        return { x: target.x, y: target.y, z: target.z };
       },
     };
   }

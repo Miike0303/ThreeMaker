@@ -59,6 +59,73 @@
         backdrop-filter: blur(4px);
         pointer-events: none;
       }
+      .debug-panel {
+        /* Top-right, below the locale selector (which sits at top:12px and is
+           roughly 34px tall including padding). */
+        position: fixed;
+        top: 54px;
+        right: 12px;
+        z-index: 10;
+        font-family: system-ui, sans-serif;
+        font-size: 12px;
+        color: #e6e6f0;
+        background: rgba(20, 20, 32, 0.7);
+        border-radius: 6px;
+        backdrop-filter: blur(4px);
+        min-width: 190px;
+        max-width: 260px;
+      }
+      .debug-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 10px;
+      }
+      .debug-panel-title {
+        font-weight: 600;
+      }
+      .debug-panel-toggle {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0 2px;
+        line-height: 1;
+      }
+      .debug-panel-body {
+        padding: 0 10px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .debug-panel-collapsed .debug-panel-body {
+        display: none;
+      }
+      .debug-panel-values,
+      .debug-panel-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .debug-panel-controls-title {
+        font-weight: 600;
+        margin-top: 2px;
+        opacity: 0.85;
+      }
+      .debug-panel-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .debug-panel-label {
+        opacity: 0.75;
+      }
+      .debug-panel-keys {
+        font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+        opacity: 0.9;
+      }
       .status-message {
         position: absolute;
         inset: 0;

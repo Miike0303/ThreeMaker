@@ -54,6 +54,19 @@ export function createSheetMaterials(
  * The shared shadow-pencil overlay material: RPG Maker corescript paints
  * shadow quarters as rgba(0,0,0,0.5). `depthWrite: false` keeps the
  * translucent overlay from occluding anything drawn after it.
+ *
+ * `polygonOffset` (negative factor/units, i.e. "pull toward the camera" in
+ * clip space) is the actual fix for z-fighting flicker between this overlay
+ * and the ground quad it sits just above: `build-chunk-group.ts` also lifts
+ * the shadow geometry by a small world-space offset (`SHADOW_LIFT_FACTOR`),
+ * but a *world-space* lift's effectiveness against z-fighting shrinks as
+ * camera distance grows (depth-buffer precision is non-linear in view-space
+ * Z), so a fixed small lift can still flicker at zoomed-out/steep angles.
+ * `polygonOffset` biases the rasterized depth directly, in clip space, so it
+ * stays effective regardless of camera distance -- confirmed supported by
+ * three@0.184's WebGPU backend (`WebGPUPipelineUtils` maps
+ * `polygonOffsetUnits`/`polygonOffsetFactor` to `depthBias`/
+ * `depthBiasSlopeScale`), not just the legacy WebGL path.
  */
 export function createShadowMaterial(): THREE.Material {
   return new THREE.MeshBasicMaterial({
@@ -61,5 +74,8 @@ export function createShadowMaterial(): THREE.Material {
     transparent: true,
     opacity: 0.5,
     depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
   });
 }

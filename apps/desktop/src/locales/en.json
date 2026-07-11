@@ -7,6 +7,23 @@
     "locale.selectorLabel": "Language",
     "camera.mode.hd2d": "HD-2D",
     "camera.mode.topDown": "Top-down",
-    "camera.mode.firstPerson": "First-person"
+    "camera.mode.firstPerson": "First-person",
+    "debug.title": "Debug",
+    "debug.toggle": "Toggle debug panel",
+    "debug.map": "Map",
+    "debug.cameraMode": "Camera",
+    "debug.tilt": "Tilt",
+    "debug.zoom": "Zoom",
+    "debug.chunks": "Chunks",
+    "debug.drawCalls": "Draw calls",
+    "debug.tile": "Tile",
+    "debug.elevation": "Elevation",
+    "debug.controls.title": "Controls",
+    "debug.controls.move": "Move",
+    "debug.controls.camera": "Camera mode",
+    "debug.controls.tilt": "Tilt",
+    "debug.controls.zoom": "Zoom",
+    "debug.controls.postfx": "Post-processing",
+    "debug.controls.mapCycle": "Cycle map (dev)"
   }
 }

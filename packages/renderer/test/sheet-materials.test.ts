@@ -45,4 +45,12 @@ describe('createShadowMaterial', () => {
     expect(material.opacity).toBeCloseTo(0.5);
     expect(material.depthWrite).toBe(false);
   });
+
+  it('biases depth toward the camera (polygonOffset) so it never z-fights the ground it floats above regardless of camera distance', () => {
+    const material = createShadowMaterial() as THREE.MeshBasicMaterial;
+
+    expect(material.polygonOffset).toBe(true);
+    expect(material.polygonOffsetFactor).toBeLessThan(0);
+    expect(material.polygonOffsetUnits).toBeLessThan(0);
+  });
 });

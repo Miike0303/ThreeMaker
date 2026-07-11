@@ -13,16 +13,41 @@ function isAutotileSheet(sheet: TileSheetId): sheet is AutotileSheetId {
 }
 
 /**
- * Half a source-image texel, in pixels: every rect this module produces gets
- * inset by this much on all 4 sides before converting to UV space. Nearest
- * quads share a texture (all tiles of a sheet live on the one bound
- * texture), so without an inset, bilinear/mip sampling right at a shared UV
- * boundary can pick up a sliver of the *neighboring* tile's pixels -- visible
- * as a thin seam line between tiles, especially once the environment texture
- * gets mipmapped (see `pixel-art-texture.ts`). Insetting by half a texel
- * keeps every sample point strictly inside its own tile's pixels.
+ * Inset, in source-image pixels, applied to all 4 sides of every UV rect
+ * this module produces before converting to UV space. Nearest quads share a
+ * texture (all tiles of a sheet live on the one bound texture), so without
+ * an inset, sampling right at a shared UV boundary can pick up a sliver of
+ * the *neighboring* tile's pixels -- visible as a thin seam line between
+ * tiles.
+ *
+ * A plain (non-mipmapped) texture only ever samples the base level, where
+ * half a texel of margin is already enough headroom. The mipmapped
+ * "environment" configuration (`pixel-art-texture.ts`'s `mipmaps: true`,
+ * used for the HD-2D tileset look) is the harder case this constant is
+ * actually sized for: anisotropic sampling at grazing camera angles (this
+ * app's HD-2D tilt goes as low as 15 degrees, see `MIN_TILT_DEG` in
+ * `camera-rig.ts`) stretches its sampling footprint along the view
+ * direction, and that footprint can span past a half-texel margin into the
+ * next tile even while still resolving mostly at the base mip level. A
+ * bigger inset buys real headroom against that footprint overflow at the
+ * mip levels this renderer's camera distances (3-24 world units) actually
+ * use in practice.
+ *
+ * This does NOT fix bleeding baked into *coarser* mip levels: three.js's
+ * `generateMipmaps` box-filters the whole shared atlas image per level,
+ * unaware of per-tile boundaries, so at a high enough mip level a texel is
+ * already an average that crossed into a neighboring tile's pixels -- no
+ * runtime UV inset can undo that after the fact. The full fix is padding a
+ * border of duplicated edge pixels around each tile in the source atlas
+ * before mip generation (or hand-building a shorter, tile-aware mip chain);
+ * out of scope for this slice -- see the ponytail note on
+ * `PixelArtTextureOptions.mipmaps` in `pixel-art-texture.ts`.
  */
-const HALF_TEXEL_PX = 0.5;
+// Trade-off: the inset is flat per rect, so 24px autotile quarter-rects lose
+// twice the proportional edge content of 48px full tiles (22/24 vs 46/48
+// visible). Acceptable at current art scale; a per-rect-size inset is the
+// refinement if quarter edges ever look visibly cropped.
+const TILE_UV_INSET_PX = 1;
 
 function pixelRectToUv(
   x: number,
@@ -34,10 +59,10 @@ function pixelRectToUv(
   // Image space has Y growing downward; three.js texture UV space has V
   // growing upward. Flip once here so every caller gets ready-to-use UVs.
   return {
-    u0: (x + HALF_TEXEL_PX) / pixelSize.width,
-    u1: (x + w - HALF_TEXEL_PX) / pixelSize.width,
-    v0: 1 - (y + h - HALF_TEXEL_PX) / pixelSize.height,
-    v1: 1 - (y + HALF_TEXEL_PX) / pixelSize.height,
+    u0: (x + TILE_UV_INSET_PX) / pixelSize.width,
+    u1: (x + w - TILE_UV_INSET_PX) / pixelSize.width,
+    v0: 1 - (y + h - TILE_UV_INSET_PX) / pixelSize.height,
+    v1: 1 - (y + TILE_UV_INSET_PX) / pixelSize.height,
   };
 }
 

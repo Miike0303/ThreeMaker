@@ -34,6 +34,20 @@ declare global {
       readonly mapName: string;
       /** The character's current integer tile position. */
       readonly tile: { readonly x: number; readonly y: number };
+      /** The active `CameraMode` (see camera-rig.ts), as its raw string id. */
+      readonly cameraMode: string;
+      /** Current HD-2D tilt angle in degrees (only meaningful in 'hd2d' mode). */
+      readonly tiltDeg: number;
+      /** Current camera boom distance, in world units. */
+      readonly distance: number;
+      /** Whether the character is mid-step. */
+      readonly moving: boolean;
+      /** The character's fractional (mid-step) render position, in tile units. */
+      readonly renderPosition: { readonly x: number; readonly y: number };
+      /** The live `THREE.PerspectiveCamera`'s current world position. */
+      readonly cameraPosition: { readonly x: number; readonly y: number; readonly z: number };
+      /** The camera rig's smoothed follow target, in world units. */
+      readonly targetPosition: { readonly x: number; readonly y: number; readonly z: number };
     };
   }
 }

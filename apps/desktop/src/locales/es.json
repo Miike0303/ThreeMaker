@@ -7,6 +7,23 @@
     "locale.selectorLabel": "Idioma",
     "camera.mode.hd2d": "HD-2D",
     "camera.mode.topDown": "Cenital",
-    "camera.mode.firstPerson": "Primera persona"
+    "camera.mode.firstPerson": "Primera persona",
+    "debug.title": "Depuración",
+    "debug.toggle": "Alternar panel de depuración",
+    "debug.map": "Mapa",
+    "debug.cameraMode": "Cámara",
+    "debug.tilt": "Inclinación",
+    "debug.zoom": "Zoom",
+    "debug.chunks": "Fragmentos",
+    "debug.drawCalls": "Llamadas de dibujo",
+    "debug.tile": "Celda",
+    "debug.elevation": "Elevación",
+    "debug.controls.title": "Controles",
+    "debug.controls.move": "Mover",
+    "debug.controls.camera": "Modo de cámara",
+    "debug.controls.tilt": "Inclinación",
+    "debug.controls.zoom": "Zoom",
+    "debug.controls.postfx": "Posprocesado",
+    "debug.controls.mapCycle": "Cambiar mapa (dev)"
   }
 }
