@@ -244,6 +244,34 @@ export function PainterPanel({ t }: PainterPanelProps) {
       </div>
 
       {mapReady && painterState && (
+        <div className="painter-floor-switcher">
+          <label>
+            {t('painter.floors')}
+            <select
+              value={painterState.activeFloor}
+              onChange={(event) => viewportRef.current?.selectFloor(Number(event.target.value))}
+            >
+              {painterState.floors.map((floor, index) => (
+                <option key={floor.id} value={index}>
+                  {floor.label ?? formatTemplate(t('painter.floorOption'), { index })}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" onClick={() => viewportRef.current?.addFloor(crypto.randomUUID())}>
+            {t('painter.addFloor')}
+          </button>
+          <button
+            type="button"
+            disabled={painterState.floors.length <= 1}
+            onClick={() => viewportRef.current?.removeFloor(painterState.activeFloor)}
+          >
+            {t('painter.removeFloor')}
+          </button>
+        </div>
+      )}
+
+      {mapReady && painterState && (
         <div className="painter-toolbar">
           {TOOLS.map((tool) => (
             <button
