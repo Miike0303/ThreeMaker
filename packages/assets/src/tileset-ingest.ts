@@ -6,6 +6,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseTilesets } from '@threemaker/importer-rpgm';
+import { assetRootForGame } from './asset-root.js';
 import type { Catalog, GameRow, TilesetSlot } from './catalog.js';
 
 export interface TilesetIngestResult {
@@ -13,11 +14,6 @@ export interface TilesetIngestResult {
   readonly sheetsLinked: number;
   /** A sheet slot was named in Tilesets.json but its asset wasn't found in the catalog (e.g. an unused slot, or the game wasn't fully cataloged). Logged, never fatal. */
   readonly sheetsSkipped: number;
-}
-
-/** RPG Maker MV nests its data folder under `www/`; MZ does not (same convention as `catalog.ts`'s ingestion pipeline). */
-function assetRootForGameRow(game: GameRow): string {
-  return game.engine === 'mv' ? join(game.rootPath, 'www') : game.rootPath;
 }
 
 /**
@@ -50,7 +46,7 @@ function resolveSheetAsset(
  * multi-game run.
  */
 export function ingestTilesetsForGame(catalog: Catalog, game: GameRow): TilesetIngestResult {
-  const tilesetsPath = join(assetRootForGameRow(game), 'data', 'Tilesets.json');
+  const tilesetsPath = join(assetRootForGame(game), 'data', 'Tilesets.json');
   if (!existsSync(tilesetsPath)) {
     return { tilesetsProcessed: 0, sheetsLinked: 0, sheetsSkipped: 0 };
   }

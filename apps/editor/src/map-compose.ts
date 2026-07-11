@@ -28,6 +28,9 @@ const SLOT_ID_RANGES: Readonly<Record<TileSheetSlot, readonly [number, number]>>
 
 const FLAGS_LENGTH = 8192;
 
+/** Every Nth cell of the demo decor layer gets a decor tile -- an arbitrary sparse pattern (not derived from any tileset data) that just needs to look scattered, not uniform, for a first paintable demo map. */
+const DECOR_SPACING = 7;
+
 export interface SlotSourceFlags {
   readonly slot: TileSheetSlot;
   /** The full flags array of the source tileset this slot is composed from (only its own id range is actually used). */
@@ -96,7 +99,7 @@ export function seedDemoTiles(
   const groundLayer = tiles[0];
   for (let i = 0; i < groundLayer.length; i++) groundLayer[i] = groundTileId;
   const decorLayer = tiles[2];
-  for (let i = 0; i < decorLayer.length; i += 7) decorLayer[i] = decorTileId;
+  for (let i = 0; i < decorLayer.length; i += DECOR_SPACING) decorLayer[i] = decorTileId;
   return { ...doc, layers: { ...doc.layers, tiles } };
 }
 
@@ -152,14 +155,17 @@ export interface SlotTilesetSource {
   readonly tileset: CatalogTilesetSource;
 }
 
-/** Composes a blank multi-tileset map from already-fetched catalog tileset rows -- one real source per slot, each contributing its own id-range's flags (see `mergeSlotFlags`). A slot whose tileset has no sheet for that slot is silently skipped (not every tileset populates every slot). */
-export function composeMapFromTilesets(
-  id: string,
-  name: string,
-  width: number,
-  height: number,
-  sources: readonly SlotTilesetSource[],
-): MapDocument {
+export interface ComposeMapFromTilesetsOptions {
+  readonly id: string;
+  readonly name: string;
+  readonly width: number;
+  readonly height: number;
+  readonly sources: readonly SlotTilesetSource[];
+}
+
+/** Composes a blank multi-tileset map from already-fetched catalog tileset rows -- one real source per slot, each contributing its own id-range's flags (see `mergeSlotFlags`). A slot whose tileset has no sheet for that slot is silently skipped (not every tileset populates every slot). Adjacent same-typed `width`/`height` args are grouped into one options object -- see the gate-review "parameter objects" suggestion. */
+export function composeMapFromTilesets(options: ComposeMapFromTilesetsOptions): MapDocument {
+  const { id, name, width, height, sources } = options;
   const slots: Record<string, { object: string; sourceTilesetId: number; sourceGameId: number }> =
     {};
   const flagSources: SlotSourceFlags[] = [];

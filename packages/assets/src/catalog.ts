@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import Database from 'better-sqlite3';
+import { assetRootForGame } from './asset-root.js';
 import { DecryptError, decryptRpgmv } from './decrypt.js';
 import { storeObject } from './object-store.js';
 import type { GameRecord } from './scanner.js';
@@ -598,11 +599,6 @@ function classifyObjectKind(kind: 'image' | 'audio', relPath: string): InsertObj
   return 'other';
 }
 
-/** RPG Maker MV nests assets under `www/`; MZ does not. */
-function assetRootFor(game: GameRecord): string {
-  return game.engine === 'mv' ? join(game.rootPath, 'www') : game.rootPath;
-}
-
 export interface IngestGameOptions {
   readonly storeDir: string;
 }
@@ -665,7 +661,7 @@ export function ingestGame(
     scannedAt: new Date().toISOString(),
   });
 
-  const assetRoot = assetRootFor(game);
+  const assetRoot = assetRootForGame(game);
   let filesSeen = 0;
   let filesFailed = 0;
   let objectsCreated = 0;

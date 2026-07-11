@@ -112,26 +112,32 @@ describe('composeMapFromTilesets', () => {
     const flagsB = new Array(8192).fill(0);
     flagsB[1] = 0x20;
 
-    const doc = composeMapFromTilesets('map-1', 'Two Games', 5, 5, [
-      {
-        slot: 'A2',
-        tileset: {
-          id: 10,
-          gameId: 1,
-          flags: JSON.stringify(flagsA),
-          sheets: [{ slot: 'A2', sha256: 'sha-a2' }],
+    const doc = composeMapFromTilesets({
+      id: 'map-1',
+      name: 'Two Games',
+      width: 5,
+      height: 5,
+      sources: [
+        {
+          slot: 'A2',
+          tileset: {
+            id: 10,
+            gameId: 1,
+            flags: JSON.stringify(flagsA),
+            sheets: [{ slot: 'A2', sha256: 'sha-a2' }],
+          },
         },
-      },
-      {
-        slot: 'B',
-        tileset: {
-          id: 20,
-          gameId: 2,
-          flags: JSON.stringify(flagsB),
-          sheets: [{ slot: 'B', sha256: 'sha-b' }],
+        {
+          slot: 'B',
+          tileset: {
+            id: 20,
+            gameId: 2,
+            flags: JSON.stringify(flagsB),
+            sheets: [{ slot: 'B', sha256: 'sha-b' }],
+          },
         },
-      },
-    ]);
+      ],
+    });
 
     expect(doc.tileset.slots.A2).toEqual({
       object: 'sha-a2',
@@ -144,9 +150,13 @@ describe('composeMapFromTilesets', () => {
   });
 
   it('skips a slot whose tileset has no sheet for it, instead of throwing', () => {
-    const doc = composeMapFromTilesets('map-1', 'Partial', 3, 3, [
-      { slot: 'A2', tileset: { id: 1, gameId: 1, flags: null, sheets: [] } },
-    ]);
+    const doc = composeMapFromTilesets({
+      id: 'map-1',
+      name: 'Partial',
+      width: 3,
+      height: 3,
+      sources: [{ slot: 'A2', tileset: { id: 1, gameId: 1, flags: null, sheets: [] } }],
+    });
     expect(doc.tileset.slots.A2).toBeUndefined();
   });
 });

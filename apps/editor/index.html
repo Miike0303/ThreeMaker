@@ -201,6 +201,41 @@
         flex: 1;
         min-height: 200px;
       }
+      .painter-advanced-fill {
+        opacity: 0.7;
+      }
+      .painter-palettes {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .tile-palette-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .tile-palette-label {
+        margin: 0;
+        font-size: 12px;
+      }
+      .tile-palette {
+        display: grid;
+        gap: 2px;
+        max-height: 140px;
+        overflow-y: auto;
+        border: 1px solid #2c2c3d;
+        padding: 4px;
+        background: #0e0e16;
+      }
+      .tile-palette-cell {
+        padding: 0;
+        border: 1px solid transparent;
+        image-rendering: pixelated;
+        cursor: pointer;
+      }
+      .tile-palette-cell-selected {
+        border-color: #6c7dff;
+      }
     </style>
   </head>
   <body>

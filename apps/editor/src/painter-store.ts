@@ -45,13 +45,17 @@ export interface PainterState {
   readonly semantics: SemanticOverrides;
 }
 
-export function createPainterState(
-  layers: TileLayerSet,
-  width: number,
-  height: number,
-  fillTileId = 0,
-  semantics: SemanticOverrides = {},
-): PainterState {
+export interface CreatePainterStateOptions {
+  readonly layers: TileLayerSet;
+  readonly width: number;
+  readonly height: number;
+  readonly fillTileId?: number;
+  readonly semantics?: SemanticOverrides;
+}
+
+/** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. */
+export function createPainterState(options: CreatePainterStateOptions): PainterState {
+  const { layers, width, height, fillTileId = 0, semantics = {} } = options;
   return {
     layers,
     width,
@@ -212,6 +216,11 @@ function dedupeCells(points: readonly TilePoint[]): TilePoint[] {
   return result;
 }
 
+// Left as plain positional params (not a parameter object, unlike
+// `createPainterState`/`composeMapFromTilesets`): both `rectCells` and
+// `floodFillCells` below are private, single-caller helpers local to this
+// module -- the object-literal ceremony isn't worth it for call sites that
+// never move or get re-ordered.
 function rectCells(
   x0: number,
   y0: number,

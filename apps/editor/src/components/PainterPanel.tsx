@@ -1,19 +1,19 @@
-import type { SemanticClass } from '@threemaker/map-format';
+import type { TileSheetId } from '@threemaker/importer-rpgm';
+import type { MapDocument, SemanticClass } from '@threemaker/map-format';
+import type { SheetPixelSize } from '@threemaker/renderer';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type GameRow, getTileset, listGames, listTilesetsForGame } from '../catalog-client.js';
+import { type GameRow, getTileset, listGames, objectPreviewUrl } from '../catalog-client.js';
+import { formatTemplate } from '../format-template.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, seedDemoTiles } from '../map-compose.js';
 import type { PainterState } from '../painter-store.js';
 import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
 import type { ToolId } from '../tool-sm.js';
+import { GameTilesetPicker } from './GameTilesetPicker.js';
+import { TilePalette } from './TilePalette.js';
 
 export interface PainterPanelProps {
   readonly t: (key: string) => string;
-}
-
-interface TilesetOption {
-  readonly id: number;
-  readonly label: string;
 }
 
 const TOOLS: readonly { readonly id: ToolId; readonly shortcut: string }[] = [
@@ -32,13 +32,45 @@ const GROUND_TILE_ID = 2816;
 /** B-sheet local index 1 (id 0 on the B sheet is treated as "empty" everywhere in this codebase, so the demo seed uses id 1 instead). */
 const DECOR_TILE_ID = 1;
 
+interface PaletteSlotInfo {
+  readonly slot: TileSheetId;
+  readonly imageUrl: string;
+  readonly pixelSize: SheetPixelSize;
+}
+
 /**
- * Painter: compose a map from two different games' tilesets (one slot each),
- * then paint it with brush/box-fill/flood-fill/eyedropper, undo/redo, and
- * semantic-class mode. All catalog IO goes through `catalog-client.ts`; all
- * painting logic goes through `painter-viewport.ts` (imperative,
- * untested) -> `painter-store.ts` (pure, tested). This component owns only
- * UI/selection state, left untested per this repo's convention.
+ * Resolves a preview URL + real pixel size for every composed slot that
+ * has a resolved object hash and a loaded texture, for the visual tile
+ * palette (`TilePalette`). Shared by `handleCreateMap`/`handleLoad` so the
+ * palette-building logic isn't duplicated across both entry points.
+ */
+async function buildPaletteSlots(
+  doc: MapDocument,
+  sheetPixelSizes: Partial<Record<TileSheetId, SheetPixelSize>>,
+): Promise<readonly PaletteSlotInfo[]> {
+  const entries = Object.entries(doc.tileset.slots) as [
+    TileSheetId,
+    { object: string } | undefined,
+  ][];
+  const slots: PaletteSlotInfo[] = [];
+  for (const [slot, source] of entries) {
+    if (!source?.object) continue;
+    const pixelSize = sheetPixelSizes[slot];
+    if (!pixelSize) continue;
+    const imageUrl = await objectPreviewUrl(source.object, 'png');
+    slots.push({ slot, imageUrl, pixelSize });
+  }
+  return slots;
+}
+
+/**
+ * Painter: compose a map from two different games' tilesets (one slot
+ * each), then paint it with brush/box-fill/flood-fill/eyedropper, undo/
+ * redo, and semantic-class mode. All catalog IO goes through
+ * `catalog-client.ts`; all painting logic goes through
+ * `painter-viewport.ts` (imperative, untested) -> `painter-store.ts` (pure,
+ * tested). This component owns only UI/selection state, left untested per
+ * this repo's convention.
  */
 export function PainterPanel({ t }: PainterPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -47,13 +79,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [games, setGames] = useState<readonly GameRow[]>([]);
   const [gameAId, setGameAId] = useState<number | undefined>(undefined);
   const [gameBId, setGameBId] = useState<number | undefined>(undefined);
-  const [tilesetsA, setTilesetsA] = useState<readonly TilesetOption[]>([]);
-  const [tilesetsB, setTilesetsB] = useState<readonly TilesetOption[]>([]);
   const [tilesetAId, setTilesetAId] = useState<number | undefined>(undefined);
   const [tilesetBId, setTilesetBId] = useState<number | undefined>(undefined);
 
   const [mapReady, setMapReady] = useState(false);
   const [painterState, setPainterState] = useState<PainterState | undefined>(undefined);
+  const [paletteSlots, setPaletteSlots] = useState<readonly PaletteSlotInfo[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,30 +92,6 @@ export function PainterPanel({ t }: PainterPanelProps) {
       .then(setGames)
       .catch((err) => console.error('Failed to load games for the painter:', err));
   }, []);
-
-  useEffect(() => {
-    if (gameAId === undefined) {
-      setTilesetsA([]);
-      return;
-    }
-    listTilesetsForGame(gameAId)
-      .then((rows) =>
-        setTilesetsA(rows.map((row) => ({ id: row.id, label: row.name ?? `#${row.id}` }))),
-      )
-      .catch((err) => console.error('Failed to load tilesets for game A:', err));
-  }, [gameAId]);
-
-  useEffect(() => {
-    if (gameBId === undefined) {
-      setTilesetsB([]);
-      return;
-    }
-    listTilesetsForGame(gameBId)
-      .then((rows) =>
-        setTilesetsB(rows.map((row) => ({ id: row.id, label: row.name ?? `#${row.id}` }))),
-      )
-      .catch((err) => console.error('Failed to load tilesets for game B:', err));
-  }, [gameBId]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -113,15 +120,22 @@ export function PainterPanel({ t }: PainterPanelProps) {
         return;
       }
       const doc = seedDemoTiles(
-        composeMapFromTilesets(crypto.randomUUID(), 'Demo Map', DEMO_MAP_WIDTH, DEMO_MAP_HEIGHT, [
-          { slot: 'A2', tileset: tilesetA },
-          { slot: 'B', tileset: tilesetB },
-        ]),
+        composeMapFromTilesets({
+          id: crypto.randomUUID(),
+          name: 'Demo Map',
+          width: DEMO_MAP_WIDTH,
+          height: DEMO_MAP_HEIGHT,
+          sources: [
+            { slot: 'A2', tileset: tilesetA },
+            { slot: 'B', tileset: tilesetB },
+          ],
+        }),
         GROUND_TILE_ID,
         DECOR_TILE_ID,
       );
       const { textures, sheetPixelSizes } = await loadSlotTextures(doc);
       viewportRef.current?.loadMap(doc, textures, sheetPixelSizes, GROUND_TILE_ID);
+      setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
       setMapReady(true);
     } catch (err) {
       console.error('Failed to create the painter demo map:', err);
@@ -150,6 +164,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       }
       const { textures, sheetPixelSizes } = await loadSlotTextures(doc);
       viewportRef.current?.loadMap(doc, textures, sheetPixelSizes, GROUND_TILE_ID);
+      setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
       setMapReady(true);
       setStatusMessage(t('painter.loadSuccess'));
     } catch (err) {
@@ -161,66 +176,26 @@ export function PainterPanel({ t }: PainterPanelProps) {
   return (
     <div className="painter-panel">
       <div className="painter-setup">
-        <label>
-          {t('painter.gameA')}
-          <select
-            value={gameAId ?? ''}
-            onChange={(event) =>
-              setGameAId(event.target.value ? Number(event.target.value) : undefined)
-            }
-          >
-            <option value="">{t('painter.selectGame')}</option>
-            {games.map((game) => (
-              <option key={game.id} value={game.id}>
-                {game.title ?? game.rootPath}
-              </option>
-            ))}
-          </select>
-          <select
-            value={tilesetAId ?? ''}
-            onChange={(event) =>
-              setTilesetAId(event.target.value ? Number(event.target.value) : undefined)
-            }
-            disabled={tilesetsA.length === 0}
-          >
-            <option value="">{t('painter.selectTileset')}</option>
-            {tilesetsA.map((tileset) => (
-              <option key={tileset.id} value={tileset.id}>
-                {tileset.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t('painter.gameB')}
-          <select
-            value={gameBId ?? ''}
-            onChange={(event) =>
-              setGameBId(event.target.value ? Number(event.target.value) : undefined)
-            }
-          >
-            <option value="">{t('painter.selectGame')}</option>
-            {games.map((game) => (
-              <option key={game.id} value={game.id}>
-                {game.title ?? game.rootPath}
-              </option>
-            ))}
-          </select>
-          <select
-            value={tilesetBId ?? ''}
-            onChange={(event) =>
-              setTilesetBId(event.target.value ? Number(event.target.value) : undefined)
-            }
-            disabled={tilesetsB.length === 0}
-          >
-            <option value="">{t('painter.selectTileset')}</option>
-            {tilesetsB.map((tileset) => (
-              <option key={tileset.id} value={tileset.id}>
-                {tileset.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <GameTilesetPicker
+          label={t('painter.gameA')}
+          games={games}
+          gameId={gameAId}
+          onGameChange={setGameAId}
+          tilesetId={tilesetAId}
+          onTilesetChange={setTilesetAId}
+          selectGameLabel={t('painter.selectGame')}
+          selectTilesetLabel={t('painter.selectTileset')}
+        />
+        <GameTilesetPicker
+          label={t('painter.gameB')}
+          games={games}
+          gameId={gameBId}
+          onGameChange={setGameBId}
+          tilesetId={tilesetBId}
+          onTilesetChange={setTilesetBId}
+          selectGameLabel={t('painter.selectGame')}
+          selectTilesetLabel={t('painter.selectTileset')}
+        />
         <button
           type="button"
           disabled={tilesetAId === undefined || tilesetBId === undefined}
@@ -262,8 +237,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
             </select>
           </label>
 
-          <label>
-            {t('painter.fillTileId')}
+          <label className="painter-advanced-fill">
+            {t('painter.advancedFillTileId')}
             <input
               type="number"
               value={painterState.fillTileId}
@@ -304,6 +279,23 @@ export function PainterPanel({ t }: PainterPanelProps) {
           <button type="button" onClick={handleSave}>
             {t('painter.save')}
           </button>
+        </div>
+      )}
+
+      {mapReady && painterState && paletteSlots.length > 0 && (
+        <div className="painter-palettes">
+          {paletteSlots.map((paletteSlot) => (
+            <TilePalette
+              key={paletteSlot.slot}
+              label={formatTemplate(t('painter.paletteFor'), { slot: paletteSlot.slot })}
+              sheet={paletteSlot.slot}
+              imageUrl={paletteSlot.imageUrl}
+              pixelSize={paletteSlot.pixelSize}
+              selectedTileId={painterState.fillTileId}
+              onSelect={(tileId) => viewportRef.current?.setFillTileId(tileId)}
+              tileAriaLabel={(tileId) => formatTemplate(t('painter.paletteTile'), { id: tileId })}
+            />
+          ))}
         </div>
       )}
 

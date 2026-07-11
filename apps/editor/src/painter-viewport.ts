@@ -124,13 +124,13 @@ export class PainterViewport {
   ): void {
     this.doc = doc;
     this.sheetPixelSizes = sheetPixelSizes;
-    this.state = painter.createPainterState(
-      doc.layers.tiles,
-      doc.width,
-      doc.height,
+    this.state = painter.createPainterState({
+      layers: doc.layers.tiles,
+      width: doc.width,
+      height: doc.height,
       fillTileId,
-      doc.tileset.semantics,
-    );
+      semantics: doc.tileset.semantics,
+    });
 
     const map = toRenderableMap(doc);
     const tileset = toRenderableTileset(doc);

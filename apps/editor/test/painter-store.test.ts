@@ -26,7 +26,12 @@ function makeLayers(width: number, height: number): TileLayerSet {
 
 describe('painter-store: brush', () => {
   it('paints a single cell on pointerdown + pointerup with no movement', () => {
-    let state = createPainterState(makeLayers(4, 4), 4, 4, 7);
+    let state = createPainterState({
+      layers: makeLayers(4, 4),
+      width: 4,
+      height: 4,
+      fillTileId: 7,
+    });
     ({ state } = pointerDown(state, { x: 1, y: 1 }));
     const result = pointerUp(state);
 
@@ -36,7 +41,12 @@ describe('painter-store: brush', () => {
   });
 
   it('paints every distinct cell dragged over in one stroke', () => {
-    let state = createPainterState(makeLayers(4, 4), 4, 4, 5);
+    let state = createPainterState({
+      layers: makeLayers(4, 4),
+      width: 4,
+      height: 4,
+      fillTileId: 5,
+    });
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
     state = pointerMove(state, { x: 1, y: 0 });
     state = pointerMove(state, { x: 2, y: 0 });
@@ -47,7 +57,12 @@ describe('painter-store: brush', () => {
   });
 
   it('produces no diff (and no undo entry) when filling with the value already there', () => {
-    let state = createPainterState(makeLayers(2, 2), 2, 2, 0); // fillTileId 0, cells already 0
+    let state = createPainterState({
+      layers: makeLayers(2, 2),
+      width: 2,
+      height: 2,
+      fillTileId: 0,
+    }); // fillTileId 0, cells already 0
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
     const result = pointerUp(state);
 
@@ -56,7 +71,12 @@ describe('painter-store: brush', () => {
   });
 
   it('pointerup while idle is a safe no-op', () => {
-    const state = createPainterState(makeLayers(2, 2), 2, 2, 1);
+    const state = createPainterState({
+      layers: makeLayers(2, 2),
+      width: 2,
+      height: 2,
+      fillTileId: 1,
+    });
     const result = pointerUp(state);
     expect(result.diff).toBeUndefined();
     expect(result.state).toBe(state);
@@ -65,7 +85,12 @@ describe('painter-store: brush', () => {
 
 describe('painter-store: box-fill', () => {
   it('fills the rectangle between the start and end points, inclusive', () => {
-    let state = createPainterState(makeLayers(5, 5), 5, 5, 9);
+    let state = createPainterState({
+      layers: makeLayers(5, 5),
+      width: 5,
+      height: 5,
+      fillTileId: 9,
+    });
     state = setTool(state, 'box-fill');
     ({ state } = pointerDown(state, { x: 1, y: 1 }));
     state = pointerMove(state, { x: 3, y: 2 });
@@ -82,7 +107,12 @@ describe('painter-store: box-fill', () => {
   });
 
   it('handles a box drawn in any drag direction (end above/left of start)', () => {
-    let state = createPainterState(makeLayers(5, 5), 5, 5, 3);
+    let state = createPainterState({
+      layers: makeLayers(5, 5),
+      width: 5,
+      height: 5,
+      fillTileId: 3,
+    });
     state = setTool(state, 'box-fill');
     ({ state } = pointerDown(state, { x: 3, y: 3 }));
     state = pointerMove(state, { x: 1, y: 1 });
@@ -103,7 +133,7 @@ describe('painter-store: flood-fill', () => {
     layer0[6] = 1;
     const seeded: TileLayerSet = [layer0, layers[1], layers[2], layers[3]];
 
-    let state = createPainterState(seeded, 5, 5, 8);
+    let state = createPainterState({ layers: seeded, width: 5, height: 5, fillTileId: 8 });
     state = setTool(state, 'flood-fill');
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
     const result = pointerUp(state);
@@ -120,7 +150,7 @@ describe('painter-store: flood-fill', () => {
     const layer0 = [1, 2, 1];
     const seeded: TileLayerSet = [layer0, layers[1], layers[2], layers[3]];
 
-    let state = createPainterState(seeded, 3, 1, 9);
+    let state = createPainterState({ layers: seeded, width: 3, height: 1, fillTileId: 9 });
     state = setTool(state, 'flood-fill');
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
     const result = pointerUp(state);
@@ -136,7 +166,7 @@ describe('painter-store: eyedropper', () => {
     layer0[3] = 42;
     const seeded: TileLayerSet = [layer0, layers[1], layers[2], layers[3]];
 
-    let state = createPainterState(seeded, 2, 2, 0);
+    let state = createPainterState({ layers: seeded, width: 2, height: 2, fillTileId: 0 });
     state = setTool(state, 'eyedropper');
     const { state: nextState, pickedTileId } = pointerDown(state, { x: 1, y: 1 });
 
@@ -147,14 +177,24 @@ describe('painter-store: eyedropper', () => {
 
 describe('painter-store: setTool/setActiveLayer guard mid-stroke', () => {
   it('ignores a tool switch while a stroke is in progress', () => {
-    let state = createPainterState(makeLayers(3, 3), 3, 3, 1);
+    let state = createPainterState({
+      layers: makeLayers(3, 3),
+      width: 3,
+      height: 3,
+      fillTileId: 1,
+    });
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
     const switched = setTool(state, 'flood-fill');
     expect(switched).toBe(state);
   });
 
   it('ignores an active-layer switch while a stroke is in progress', () => {
-    let state = createPainterState(makeLayers(3, 3), 3, 3, 1);
+    let state = createPainterState({
+      layers: makeLayers(3, 3),
+      width: 3,
+      height: 3,
+      fillTileId: 1,
+    });
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
     const switched = setActiveLayer(state, 2);
     expect(switched).toBe(state);
@@ -163,7 +203,12 @@ describe('painter-store: setTool/setActiveLayer guard mid-stroke', () => {
 
 describe('painter-store: undo/redo integration', () => {
   it('undo reverts the most recent stroke; redo re-applies it', () => {
-    let state = createPainterState(makeLayers(2, 2), 2, 2, 6);
+    let state = createPainterState({
+      layers: makeLayers(2, 2),
+      width: 2,
+      height: 2,
+      fillTileId: 6,
+    });
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
     ({ state } = pointerUp(state));
     expect(state.layers[0]?.[0]).toBe(6);
@@ -177,7 +222,12 @@ describe('painter-store: undo/redo integration', () => {
   });
 
   it('paint 5, undo 3 -> layer reflects only the first 2 paints (spec scenario)', () => {
-    let state = createPainterState(makeLayers(1, 1), 1, 1, 0);
+    let state = createPainterState({
+      layers: makeLayers(1, 1),
+      width: 1,
+      height: 1,
+      fillTileId: 0,
+    });
     for (const value of [1, 2, 3, 4, 5]) {
       state = setFillTileId(state, value);
       ({ state } = pointerDown(state, { x: 0, y: 0 }));
@@ -192,7 +242,12 @@ describe('painter-store: undo/redo integration', () => {
   });
 
   it('undo/redo on a fresh store with no history is a safe no-op', () => {
-    const state = createPainterState(makeLayers(2, 2), 2, 2, 1);
+    const state = createPainterState({
+      layers: makeLayers(2, 2),
+      width: 2,
+      height: 2,
+      fillTileId: 1,
+    });
     expect(undo(state).diff).toBeUndefined();
     expect(redo(state).diff).toBeUndefined();
   });
@@ -205,7 +260,7 @@ describe('painter-store: semantic-class mode (spec: "Semantic-only edit")', () =
     layer0[0] = 5; // some existing painted tile
     const seeded: TileLayerSet = [layer0, layers[1], layers[2], layers[3]];
 
-    let state = createPainterState(seeded, 2, 2, 9); // fillTileId=9 must be IGNORED in semantic mode
+    let state = createPainterState({ layers: seeded, width: 2, height: 2, fillTileId: 9 }); // fillTileId=9 must be IGNORED in semantic mode
     state = setSemanticMode(state, true);
     state = setSemanticClass(state, 'door');
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
@@ -219,7 +274,12 @@ describe('painter-store: semantic-class mode (spec: "Semantic-only edit")', () =
   });
 
   it('produces no assignment when the stroke only touches empty (id 0) cells', () => {
-    let state = createPainterState(makeLayers(2, 2), 2, 2, 1);
+    let state = createPainterState({
+      layers: makeLayers(2, 2),
+      width: 2,
+      height: 2,
+      fillTileId: 1,
+    });
     state = setSemanticMode(state, true);
     state = setSemanticClass(state, 'wall');
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
@@ -230,7 +290,12 @@ describe('painter-store: semantic-class mode (spec: "Semantic-only edit")', () =
   });
 
   it('setSemanticMode/setSemanticClass are ignored mid-stroke, same as setTool', () => {
-    let state = createPainterState(makeLayers(3, 3), 3, 3, 1);
+    let state = createPainterState({
+      layers: makeLayers(3, 3),
+      width: 3,
+      height: 3,
+      fillTileId: 1,
+    });
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
     const switched = setSemanticMode(state, true);
     expect(switched).toBe(state);

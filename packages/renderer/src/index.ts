@@ -6,6 +6,8 @@ export {
   ROSELIAM_DUNGEON_TILESET_ID,
   ROSELIAM_DUNGEON_WALL_TILE_ID,
 } from './dev/synthetic-map.js';
+export type { AutotileSheetId, QuarterOrigin, QuarterOrigins } from './geometry/autotile-tables.js';
+export { computeAutotileQuarterOrigins } from './geometry/autotile-tables.js';
 export { buildChunks } from './geometry/chunk-geometry.js';
 export type { CliffEdgeData, EdgeDirection } from './geometry/elevation.js';
 export {
