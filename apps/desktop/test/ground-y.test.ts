@@ -55,4 +55,25 @@ describe('groundYAt', () => {
     // height outright, with no lerp toward the previous tile.
     expect(groundYAt(elevation, 1, 0, HEIGHT_UNIT)).toBe(5);
   });
+
+  it('composes the active floor baseElevation into the returned world Y (design: worldY = (baseElevation + surfaceHeight) * HEIGHT_UNIT)', () => {
+    const map = buildMap(1, 1, [2]);
+    const elevation = new ElevationField(map);
+
+    // Floor 1 (baseElevation 3): surfaceHeight(2) + baseElevation(3), scaled
+    // by heightUnit -- this is the composition the character sprite/camera
+    // must use so they sit ON the active floor's render group, which is
+    // itself offset by `baseElevation * HEIGHT_UNIT` (see main.ts's
+    // `buildFloorRender`).
+    expect(groundYAt(elevation, 0, 0, 1, 3)).toBe(5);
+    expect(groundYAt(elevation, 0, 0, 4, 3)).toBe(20);
+  });
+
+  it('defaults baseElevation to 0, matching floor 0 / pre-existing callers unchanged', () => {
+    const map = buildMap(1, 1, [2]);
+    const elevation = new ElevationField(map);
+
+    expect(groundYAt(elevation, 0, 0, HEIGHT_UNIT, 0)).toBe(2);
+    expect(groundYAt(elevation, 0, 0, HEIGHT_UNIT)).toBe(2);
+  });
 });

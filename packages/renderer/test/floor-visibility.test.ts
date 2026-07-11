@@ -24,6 +24,10 @@ describe('WindowedFloorPolicy', () => {
     expect(policy.visibleFloors(1, 2)).toEqual([0, 1]);
   });
 
+  it('renders floor 1 and floor 2 when current floor is 2 in a 3-floor building', () => {
+    expect(policy.visibleFloors(2, 3)).toEqual([1, 2]);
+  });
+
   it('never renders currentFloor + 1, even when it exists', () => {
     expect(policy.visibleFloors(0, 3)).toEqual([0]);
     expect(policy.visibleFloors(1, 3)).toEqual([0, 1]);
@@ -81,7 +85,7 @@ describe('floor-rendering-window streaming-budget guard', () => {
     const policy = new WindowedFloorPolicy();
     const floorCount = 2;
     const floors = [buildFloorRender(1), buildFloorRender(2)];
-    const singleFloorBound = (2 * 3 + 1) ** 2; // (2*buildRadius+1 .. disposeRadius=3) squared ceiling
+    const singleFloorBound = (2 * 3 + 1) ** 2; // (2*disposeRadius+1)**2, disposeRadius=3
 
     function applyWindow(currentFloor: number, focusX: number, focusY: number): void {
       const visible = new Set(policy.visibleFloors(currentFloor, floorCount));

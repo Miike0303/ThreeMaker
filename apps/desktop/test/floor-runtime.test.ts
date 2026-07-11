@@ -64,6 +64,14 @@ describe('createFloorRouter', () => {
     expect(router.elevation.heightAt(1, 0)).toBe(0);
   });
 
+  it('routes baseElevation to whichever floor is set as current', () => {
+    const router = buildTwoFloorRouter();
+
+    expect(router.baseElevation).toBe(0);
+    router.currentFloor = 1;
+    expect(router.baseElevation).toBe(3);
+  });
+
   it("floor A's own results are unaffected by having queried floor B in between (independent containers)", () => {
     const router = buildTwoFloorRouter();
 

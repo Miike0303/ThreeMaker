@@ -41,20 +41,24 @@ export function buildFloorGameplay(
 }
 
 /**
- * Routes gameplay queries (`.passability`/`.elevation`) to whichever floor
- * is currently active. `currentFloor` is a plain mutable field (not a
- * getter/setter pair) so a future slice can flip floors with a single
- * assignment (design: "session owns `currentFloor` and routes"). This
- * slice's runtime never mutates it after construction (stays 0, per the
- * design note "currentFloor stays 0 this slice's runtime; the machinery
- * just becomes floor-indexed and ready") -- the tests above exercise
- * switching it directly, since the routing itself must already work.
+ * Routes gameplay queries (`.passability`/`.elevation`/`.baseElevation`) to
+ * whichever floor is currently active. `currentFloor` is a plain mutable
+ * field (not a getter/setter pair) so a single assignment flips floors
+ * (design: "session owns `currentFloor` and routes"). `currentFloor` DOES
+ * mutate at runtime: the dev-only 'floors' map-cycle mode in `main.ts`
+ * forces it to `1` to drive the stacked-floors visual check, and Slice 5's
+ * `StairTraversal` handoff will flip it for real gameplay on traversal
+ * completion (design's "Render-position handoff" section) -- this router's
+ * `.elevation`/`.passability`/`.baseElevation` getters are exactly what
+ * makes a `currentFloor` reassignment take effect everywhere without any
+ * other code needing to know a floor change happened.
  */
 export interface FloorRouter {
   readonly floors: readonly FloorGameplay[];
   currentFloor: number;
   readonly elevation: ElevationField;
   readonly passability: PassabilityGrid;
+  readonly baseElevation: number;
 }
 
 function activeFloor(router: Pick<FloorRouter, 'floors' | 'currentFloor'>): FloorGameplay {
@@ -77,6 +81,9 @@ export function createFloorRouter(floors: readonly FloorGameplay[], initialFloor
     },
     get passability(): PassabilityGrid {
       return activeFloor(router).passability;
+    },
+    get baseElevation(): number {
+      return activeFloor(router).baseElevation;
     },
   };
   return router;

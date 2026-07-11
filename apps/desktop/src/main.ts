@@ -640,6 +640,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       session.mover.tile.x,
       session.mover.tile.y,
       HEIGHT_UNIT,
+      session.floorRouter.baseElevation,
     ),
   );
   scene.add(character.mesh);
@@ -695,7 +696,13 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     );
     target.set(
       tileCenterToWorld(session.spawn.x, TILE_WORLD_SIZE),
-      groundYAt(session.floorRouter.elevation, session.spawn.x, session.spawn.y, HEIGHT_UNIT),
+      groundYAt(
+        session.floorRouter.elevation,
+        session.spawn.x,
+        session.spawn.y,
+        HEIGHT_UNIT,
+        session.floorRouter.baseElevation,
+      ),
       tileCenterToWorld(session.spawn.y, TILE_WORLD_SIZE),
     );
     applyCameraPose();
@@ -1226,6 +1233,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
         mover.renderPosition.x,
         mover.renderPosition.y,
         HEIGHT_UNIT,
+        session.floorRouter.baseElevation,
       );
 
       character.setFrame(mover.facing, walkAnimation.frameColumn(mover.moving));
