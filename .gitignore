@@ -24,6 +24,8 @@ Thumbs.db
 # Tauri
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
+apps/editor/src-tauri/target/
+apps/editor/src-tauri/gen/
 
 # Test / coverage
 coverage/

@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the editor's main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:webview:allow-create-webview-window",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$HOME/.threemaker/asset-store/**" }]
+    },
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "$HOME/.threemaker/**" }]
+    }
+  ]
+}
