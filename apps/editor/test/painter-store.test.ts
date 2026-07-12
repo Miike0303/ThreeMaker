@@ -17,6 +17,7 @@ import {
   renameRoom,
   selectFloor,
   setActiveLayer,
+  setActiveRoomId,
   setFillTileId,
   setSemanticClass,
   setSemanticMode,
@@ -660,5 +661,121 @@ describe('painter-store: room CRUD + per-floor undo (Slice 5a -- techos-y-oclusi
       { id: 'room-1', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
       { id: 'room-1', floor: 'floor-1', rects: [{ x: 1, y: 1, width: 1, height: 1 }] },
     ]);
+  });
+});
+
+describe('painter-store: room-box tool (Slice 5b -- techos-y-oclusion-interiores)', () => {
+  it('setActiveRoomId sets/clears the room the next room-box stroke extends', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    expect(state.activeRoomId).toBeUndefined();
+
+    state = setActiveRoomId(state, 'room-1');
+    expect(state.activeRoomId).toBe('room-1');
+
+    state = setActiveRoomId(state, undefined);
+    expect(state.activeRoomId).toBeUndefined();
+  });
+
+  it('setActiveRoomId is ignored mid-stroke, same as setTool', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = setActiveRoomId(state, 'room-1');
+    expect(result).toBe(state);
+  });
+
+  it('pointerUp on a room-box stroke creates a new room from the drag bounds using the caller-supplied newRoomId', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setTool(state, 'room-box');
+    ({ state } = pointerDown(state, { x: 1, y: 1 }));
+    state = pointerMove(state, { x: 3, y: 3 });
+    const result = pointerUp(state, { newRoomId: 'room-1' });
+
+    expect(result.state.rooms).toEqual([
+      { id: 'room-1', floor: 'floor-0', rects: [{ x: 1, y: 1, width: 3, height: 3 }] },
+    ]);
+    expect(result.state.stroke).toEqual({ status: 'idle' });
+    // Continuous authoring: the newly created room becomes the active room,
+    // so the NEXT room-box drag extends it instead of creating another one.
+    expect(result.state.activeRoomId).toBe('room-1');
+  });
+
+  it('pointerUp on a room-box stroke with no movement still creates a 1x1 room rect', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setTool(state, 'room-box');
+    ({ state } = pointerDown(state, { x: 2, y: 2 }));
+    const result = pointerUp(state, { newRoomId: 'room-1' });
+    expect(result.state.rooms[0]?.rects).toEqual([{ x: 2, y: 2, width: 1, height: 1 }]);
+  });
+
+  it('pointerUp on a room-box stroke with no active room and no newRoomId is a safe no-op', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setTool(state, 'room-box');
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = pointerUp(state);
+    expect(result.state.rooms).toEqual([]);
+    expect(result.state.stroke).toEqual({ status: 'idle' });
+  });
+
+  it('pointerUp on a room-box stroke while an existing room is active extends it via addRoomRect, ignoring newRoomId', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] });
+    state = setActiveRoomId(state, 'room-1');
+    state = setTool(state, 'room-box');
+    ({ state } = pointerDown(state, { x: 2, y: 2 }));
+    const result = pointerUp(state, { newRoomId: 'room-should-be-ignored' });
+
+    expect(result.state.rooms).toEqual([
+      {
+        id: 'room-1',
+        floor: 'floor-0',
+        rects: [
+          { x: 0, y: 0, width: 1, height: 1 },
+          { x: 2, y: 2, width: 1, height: 1 },
+        ],
+      },
+    ]);
+  });
+
+  it('pointerUp on a room-box stroke ignores an activeRoomId that does not exist on the active floor and creates a new room instead', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setActiveRoomId(state, 'ghost-room');
+    state = setTool(state, 'room-box');
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = pointerUp(state, { newRoomId: 'room-1' });
+
+    expect(result.state.rooms).toEqual([
+      { id: 'room-1', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
+    ]);
+  });
+
+  it('a room op and a tile paint on the same floor keep fully separate undo histories (5a-gate follow-up)', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4, fillTileId: 5 });
+
+    // Tile paint first.
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    ({ state } = pointerUp(state));
+    expect(activeFloorState(state).commandStack.undoStack).toHaveLength(1);
+    expect(activeFloorState(state).roomCommandStack.undoStack).toHaveLength(0);
+
+    // Room op.
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 1, y: 1, width: 1, height: 1 }] });
+    expect(activeFloorState(state).roomCommandStack.undoStack).toHaveLength(1);
+    expect(activeFloorState(state).commandStack.undoStack).toHaveLength(1);
+
+    // undoRoom must revert only the room, leaving the tile commandStack (and the painted tile) alone.
+    state = undoRoom(state).state;
+    expect(state.rooms).toEqual([]);
+    expect(activeFloorState(state).commandStack.undoStack).toHaveLength(1);
+    expect(activeFloorState(state).layers[0]?.[0]).toBe(5);
+
+    // Redo the room back so the next assertion has both a room and a painted tile again.
+    state = redoRoom(state).state;
+    expect(state.rooms).toHaveLength(1);
+
+    // undo (tile) must revert only the tile paint, leaving the roomCommandStack (and the room) alone.
+    ({ state } = undo(state));
+    expect(activeFloorState(state).layers[0]?.[0]).toBe(0);
+    expect(activeFloorState(state).roomCommandStack.undoStack).toHaveLength(1);
+    expect(state.rooms).toHaveLength(1);
   });
 });

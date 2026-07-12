@@ -11,6 +11,7 @@ import {
   toRenderableMap,
   toRenderableTileset,
 } from '../src/map-compose.js';
+import { addRoom, createPainterState } from '../src/painter-store.js';
 
 describe('mergeSlotFlags', () => {
   it('copies only the given slot own id range from its source flags, leaving everything else 0', () => {
@@ -436,5 +437,55 @@ describe('composeDocumentFromPainterFloors: rooms (Slice 5a -- map-format v3 nat
     expect(afterRemoval.rooms).toEqual([
       { id: 'ground-room', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
     ]);
+  });
+});
+
+describe('painter-viewport room wiring recipe (Slice 5b -- closes the 5a-gate MUST-FIX gap)', () => {
+  it('a room authored via the store round-trips through compose to the saved MapDocument.rooms', () => {
+    // Load path: a document with an existing room must reach the painter
+    // store's `state.rooms` (`createPainterState({ ..., rooms: doc.rooms })`
+    // -- the first of `painter-viewport.ts`'s two MUST-FIX call sites).
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 4,
+      height: 4,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const existingRoom: RoomDocument = {
+      id: 'existing-room',
+      floor: 'floor-0',
+      rects: [{ x: 0, y: 0, width: 1, height: 1 }],
+    };
+    const docWithRoom = { ...doc, rooms: [existingRoom] };
+
+    let state = createPainterState({
+      floors: painterFloorsFromDocument(docWithRoom),
+      width: docWithRoom.width,
+      height: docWithRoom.height,
+      rooms: docWithRoom.rooms,
+    });
+    expect(state.rooms).toEqual([existingRoom]); // loaded room reached the store
+
+    // Author path: a NEW room added via the store must reach the saved
+    // document (`composeDocumentFromPainterFloors(doc, floors, state.rooms)`
+    // -- the second MUST-FIX call site, used at all 3 call sites in
+    // `painter-viewport.ts`: `currentDocument`, `renderableSnapshot`,
+    // `recomputeRampGlyphs`).
+    state = addRoom(state, { id: 'new-room', rects: [{ x: 2, y: 2, width: 2, height: 2 }] });
+
+    const saved = composeDocumentFromPainterFloors(docWithRoom, state.floors, state.rooms);
+    expect(saved.rooms).toEqual([
+      existingRoom,
+      { id: 'new-room', floor: 'floor-0', rects: [{ x: 2, y: 2, width: 2, height: 2 }] },
+    ]);
+
+    // Regression guard for the bug this test closes: composing with the
+    // OLD 2-arg call (defaulting to `docWithRoom.rooms`) would silently
+    // drop the newly-authored room -- proving the 3rd-arg wiring is load-bearing.
+    const withoutRoomsArg = composeDocumentFromPainterFloors(docWithRoom, state.floors);
+    expect(withoutRoomsArg.rooms).toEqual([existingRoom]);
+    expect(withoutRoomsArg.rooms).not.toEqual(saved.rooms);
   });
 });

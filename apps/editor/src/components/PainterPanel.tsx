@@ -8,7 +8,7 @@ import { formatTemplate } from '../format-template.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, seedDemoTiles } from '../map-compose.js';
 import type { PainterState } from '../painter-store.js';
-import type { RampGlyphOverlayItem } from '../painter-viewport.js';
+import type { RampGlyphOverlayItem, RoomOverlayItem } from '../painter-viewport.js';
 import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
 import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
 import type { ToolId } from '../tool-sm.js';
@@ -24,6 +24,7 @@ const TOOLS: readonly { readonly id: ToolId; readonly shortcut: string }[] = [
   { id: 'box-fill', shortcut: 'U' },
   { id: 'flood-fill', shortcut: 'G' },
   { id: 'eyedropper', shortcut: 'I' },
+  { id: 'room-box', shortcut: 'R' },
 ];
 
 const SEMANTIC_CLASSES: readonly SemanticClass[] = [
@@ -98,6 +99,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [rampGlyphs, setRampGlyphs] = useState<readonly RampGlyphOverlayItem[]>([]);
+  const [roomOverlay, setRoomOverlay] = useState<readonly RoomOverlayItem[]>([]);
 
   useEffect(() => {
     listGames()
@@ -112,6 +114,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       onStateChange: setPainterState,
       onPicked: (tileId) => viewport.setFillTileId(tileId),
       onRampGlyphsChange: setRampGlyphs,
+      onRoomOverlayChange: setRoomOverlay,
     });
     viewportRef.current = viewport;
     return () => {
@@ -348,6 +351,67 @@ export function PainterPanel({ t }: PainterPanelProps) {
         </div>
       )}
 
+      {mapReady && painterState && (
+        <div className="painter-rooms">
+          <div className="painter-rooms-toolbar">
+            <span className="painter-rooms-heading">{t('painter.rooms')}</span>
+            <button
+              type="button"
+              onClick={() => {
+                viewportRef.current?.setActiveRoomId(undefined);
+                viewportRef.current?.setTool('room-box');
+              }}
+            >
+              {t('painter.room.new')}
+            </button>
+            <button type="button" onClick={() => viewportRef.current?.undoRoom()}>
+              {t('painter.room.undo')}
+            </button>
+            <button type="button" onClick={() => viewportRef.current?.redoRoom()}>
+              {t('painter.room.redo')}
+            </button>
+          </div>
+          <ul className="painter-room-list">
+            {painterState.rooms
+              .filter((room) => room.floor === painterState.floors[painterState.activeFloor]?.id)
+              .map((room) => (
+                <li
+                  key={room.id}
+                  className={
+                    painterState.activeRoomId === room.id ? 'painter-room-active' : undefined
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      viewportRef.current?.setActiveRoomId(room.id);
+                      viewportRef.current?.setTool('room-box');
+                    }}
+                  >
+                    {room.name ?? formatTemplate(t('painter.room.unnamed'), { id: room.id })}
+                  </button>
+                  <input
+                    type="text"
+                    aria-label={t('painter.room.renamePlaceholder')}
+                    placeholder={t('painter.room.renamePlaceholder')}
+                    defaultValue={room.name ?? ''}
+                    onBlur={(event) => {
+                      const value = event.target.value.trim();
+                      viewportRef.current?.renameRoom(
+                        room.id,
+                        value.length > 0 ? value : undefined,
+                      );
+                    }}
+                  />
+                  <button type="button" onClick={() => viewportRef.current?.removeRoom(room.id)}>
+                    {t('painter.room.remove')}
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+
       {mapReady && painterState && paletteSlots.length > 0 && (
         <div className="painter-palettes">
           {paletteSlots.map((paletteSlot) => (
@@ -391,6 +455,32 @@ export function PainterPanel({ t }: PainterPanelProps) {
               >
                 {RAMP_DIRECTION_ARROW[glyph.direction]}
               </span>
+            ))}
+          </div>
+        )}
+        {roomOverlay.length > 0 && (
+          <div
+            className="painter-room-overlay"
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+          >
+            {roomOverlay.map((room) => (
+              <div
+                key={`${room.roomId}-${room.leftFrac}-${room.topFrac}`}
+                className="painter-room-rect"
+                role="img"
+                style={{
+                  position: 'absolute',
+                  left: `${room.leftFrac * 100}%`,
+                  top: `${room.topFrac * 100}%`,
+                  width: `${room.widthFrac * 100}%`,
+                  height: `${room.heightFrac * 100}%`,
+                  border: '2px solid #4fc3f7',
+                  boxSizing: 'border-box',
+                }}
+                aria-label={formatTemplate(t('painter.room.overlayLabel'), {
+                  name: room.roomName ?? room.roomId,
+                })}
+              />
             ))}
           </div>
         )}

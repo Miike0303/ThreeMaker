@@ -111,6 +111,15 @@ export interface PainterState {
   readonly semantics: SemanticOverrides;
   /** Every authored room across every floor (Slice 5a), mirroring `MapDocument.rooms` exactly -- flat, top-level, each entry referencing its floor by stable id. */
   readonly rooms: readonly RoomDocument[];
+  /**
+   * The room id the next 'room-box' stroke extends (via `addRoomRect`)
+   * instead of creating a brand-new room (Slice 5b: `commitRoomBoxStroke`).
+   * `undefined` means the next stroke authors a brand-new room. Caller-set
+   * only via `setActiveRoomId` -- mirrors `addFloor`'s caller-supplied id,
+   * the store never invents room ids itself. Cleared automatically by
+   * `removeRoom` when it targets the currently active room.
+   */
+  readonly activeRoomId?: string;
 }
 
 export interface CreatePainterStateOptions {
@@ -266,6 +275,21 @@ export function setFillTileId(state: PainterState, tileId: number): PainterState
   return { ...state, fillTileId: tileId };
 }
 
+/**
+ * Sets (or, with `undefined`, clears) the room the next 'room-box' stroke
+ * extends (Slice 5b). Ignored mid-stroke, same as `setTool`.
+ * `exactOptionalPropertyTypes` requires actually OMITTING the key to clear
+ * it (assigning `activeRoomId: undefined` is a type error), hence the
+ * destructure-to-omit branch below rather than a plain spread.
+ */
+export function setActiveRoomId(state: PainterState, id: string | undefined): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (id !== undefined) return { ...state, activeRoomId: id };
+  if (state.activeRoomId === undefined) return state;
+  const { activeRoomId: _activeRoomId, ...rest } = state;
+  return rest;
+}
+
 export interface PointerDownResult {
   readonly state: PainterState;
   /** Set only for the eyedropper tool, which picks immediately and never enters "stroking". */
@@ -297,12 +321,29 @@ export interface PointerUpResult {
   readonly semanticTileIds?: ReadonlySet<number>;
 }
 
-/** `pointerup`: commits the in-progress stroke onto the ACTIVE floor only (spec: "editing the active floor only"). In semantic mode, assigns the active semantic class to every distinct tile id touched (no layer/diff change, and NOT part of the per-floor tile undo history). Otherwise computes the stroke's touched cells, builds a `TileDiff`, applies it to the active floor's layers, and pushes it onto the active floor's OWN command stack. No-op while idle. */
-export function pointerUp(state: PainterState): PointerUpResult {
+export interface PointerUpOptions {
+  /**
+   * Room id a 'room-box' stroke authors into when no room is currently
+   * active (`state.activeRoomId === undefined`) -- i.e. a brand-new room
+   * (Slice 5b). Caller-supplied (mirrors `addFloor`'s caller-supplied id:
+   * the store stays pure/deterministic and never invents ids itself).
+   * Ignored for every other tool, and ignored when an active room already
+   * exists on the active floor (the stroke extends it via `addRoomRect`
+   * instead -- see `commitRoomBoxStroke`).
+   */
+  readonly newRoomId?: string;
+}
+
+/** `pointerup`: commits the in-progress stroke onto the ACTIVE floor only (spec: "editing the active floor only"). A 'room-box' stroke authors/extends a room instead of painting tiles (see `commitRoomBoxStroke`). In semantic mode, assigns the active semantic class to every distinct tile id touched (no layer/diff change, and NOT part of the per-floor tile undo history). Otherwise computes the stroke's touched cells, builds a `TileDiff`, applies it to the active floor's layers, and pushes it onto the active floor's OWN command stack. No-op while idle. */
+export function pointerUp(state: PainterState, options: PointerUpOptions = {}): PointerUpResult {
   if (state.stroke.status !== 'stroking') return { state };
 
   const stroke = state.stroke;
   const idleState: PainterState = { ...state, stroke: endStroke(state.stroke) };
+
+  if (stroke.tool === 'room-box') {
+    return commitRoomBoxStroke(idleState, stroke, options.newRoomId);
+  }
 
   const floor = activeFloorState(state);
   const cells = computeStrokeTouchedCells(stroke, floor.layers, state.width, state.height);
@@ -402,7 +443,7 @@ export function addRoom(state: PainterState, options: AddRoomOptions): PainterSt
   return applyRoomMutation(state, rooms, { floor: floor.id, id: options.id, after: room });
 }
 
-/** Removes the room `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no room with that id exists on the active floor. */
+/** Removes the room `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no room with that id exists on the active floor. Also clears `activeRoomId` (Slice 5b) when it pointed at the removed room -- otherwise the next room-box stroke would silently try to extend a room that no longer exists. */
 export function removeRoom(state: PainterState, id: string): PainterState {
   if (state.stroke.status === 'stroking') return state;
   const floor = activeFloorState(state);
@@ -410,7 +451,8 @@ export function removeRoom(state: PainterState, id: string): PainterState {
   if (!existing) return state;
 
   const rooms = upsertRoom(state.rooms, floor.id, id, undefined);
-  return applyRoomMutation(state, rooms, { floor: floor.id, id, before: existing });
+  const mutated = applyRoomMutation(state, rooms, { floor: floor.id, id, before: existing });
+  return mutated.activeRoomId === id ? setActiveRoomId(mutated, undefined) : mutated;
 }
 
 /** Renames the room `id` on the ACTIVE floor (`name: undefined` clears an existing name), leaving its `rects` untouched. Ignored mid-stroke. A safe no-op if no room with that id exists on the active floor. */
@@ -457,6 +499,51 @@ export function removeRoomRect(state: PainterState, id: string, rectIndex: numbe
   const updated: RoomDocument = { ...existing, rects };
   const rooms = upsertRoom(state.rooms, floor.id, id, updated);
   return applyRoomMutation(state, rooms, { floor: floor.id, id, before: existing, after: updated });
+}
+
+/** The single `RoomRect` a 'room-box' stroke authors (Slice 5b): the inclusive bounding box between the stroke's start point and its last point, clamped to the map bounds -- the exact same inclusive-bounds convention as `rectCells`, the box-fill tool's own bounding-box resolution below. A stroke with no movement (pointerdown immediately followed by pointerup) still yields a valid 1x1 rect. */
+function resolveRoomBoxRect(stroke: ToolSMStrokingState, width: number, height: number): RoomRect {
+  const last = stroke.points[stroke.points.length - 1] ?? { x: stroke.startX, y: stroke.startY };
+  const minX = Math.max(0, Math.min(stroke.startX, last.x));
+  const maxX = Math.min(width - 1, Math.max(stroke.startX, last.x));
+  const minY = Math.max(0, Math.min(stroke.startY, last.y));
+  const maxY = Math.min(height - 1, Math.max(stroke.startY, last.y));
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+}
+
+/**
+ * Commits a 'room-box' stroke (Slice 5b). `idleState` already has the
+ * stroke ended (`endStroke`, done by the caller, `pointerUp`). Extends
+ * `idleState.activeRoomId`'s rects via `addRoomRect` when that room still
+ * exists on the active floor; otherwise authors a brand-new room via
+ * `addRoom` using the caller-supplied `newRoomId` (a safe no-op if
+ * `newRoomId` is absent -- there is nothing to create). Either way, the
+ * resulting room becomes the new active room, so consecutive drags extend
+ * the SAME room by default (continuous multi-rect authoring, e.g. an
+ * L-shaped footprint) until the panel's "new room" action clears
+ * `activeRoomId` again.
+ */
+function commitRoomBoxStroke(
+  idleState: PainterState,
+  stroke: ToolSMStrokingState,
+  newRoomId: string | undefined,
+): PointerUpResult {
+  const rect = resolveRoomBoxRect(stroke, idleState.width, idleState.height);
+  const floor = activeFloorState(idleState);
+  const existing =
+    idleState.activeRoomId !== undefined
+      ? idleState.rooms.find(
+          (room) => room.floor === floor.id && room.id === idleState.activeRoomId,
+        )
+      : undefined;
+
+  if (existing) {
+    return { state: addRoomRect(idleState, existing.id, rect) };
+  }
+  if (!newRoomId) return { state: idleState };
+
+  const added = addRoom(idleState, { id: newRoomId, rects: [rect] });
+  return { state: setActiveRoomId(added, newRoomId) };
 }
 
 export interface RoomCommandStepOutcome {
@@ -515,6 +602,11 @@ function computeStrokeTouchedCells(
     case 'eyedropper':
       // Eyedropper never reaches here: `pointerDown` short-circuits it
       // before a stroke is ever begun (see this module's doc comment).
+      return [];
+    case 'room-box':
+      // Never reached: `pointerUp` short-circuits a 'room-box' stroke into
+      // `commitRoomBoxStroke` before this function is ever called (see
+      // this module's Room CRUD section).
       return [];
   }
 }

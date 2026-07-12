@@ -86,3 +86,32 @@ describe('ToolSM idle -> stroking -> idle', () => {
     expect(endStroke(TOOL_SM_IDLE)).toEqual({ status: 'idle' });
   });
 });
+
+describe('ToolSM: room-box tool (Slice 5b -- techos-y-oclusion-interiores)', () => {
+  it('resolves "R" (case-insensitive) to the room-box tool', () => {
+    expect(resolveToolShortcut('r')).toBe('room-box');
+    expect(resolveToolShortcut('R')).toBe('room-box');
+  });
+
+  it('drags a room-box stroke idle -> stroking -> idle exactly like box-fill', () => {
+    let state = beginStroke(TOOL_SM_IDLE, 'room-box', 0, { x: 2, y: 3 });
+    expect(state).toEqual({
+      status: 'stroking',
+      tool: 'room-box',
+      layer: 0,
+      startX: 2,
+      startY: 3,
+      points: [{ x: 2, y: 3 }],
+    });
+
+    state = continueStroke(state, { x: 5, y: 6 });
+    expect(state).toMatchObject({
+      points: [
+        { x: 2, y: 3 },
+        { x: 5, y: 6 },
+      ],
+    });
+
+    expect(endStroke(state)).toEqual({ status: 'idle' });
+  });
+});

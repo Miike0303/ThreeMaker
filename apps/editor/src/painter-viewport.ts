@@ -20,6 +20,7 @@ import {
 import type { PainterState } from './painter-store.js';
 import * as painter from './painter-store.js';
 import { computeRampGlyphCells } from './ramp-glyph.js';
+import { computeRoomOverlayRects, roomRectCorners } from './room-overlay.js';
 import type { TilePoint, ToolId } from './tool-sm.js';
 import { resolveToolShortcut } from './tool-sm.js';
 import type { OverviewCameraPose } from './viewer-camera.js';
@@ -65,6 +66,16 @@ export interface RampGlyphOverlayItem {
   readonly yFrac: number;
 }
 
+/** One authored room rect's display-only overlay outline (Slice 5b design: "viewport overlay outlines rooms on the active floor"), an axis-aligned screen-space bounding box of the rect's 4 tile-space corners (`room-overlay.ts`'s `roomRectCorners`), each individually projected via `projectToScreenFraction` -- an approximation of the (generally quadrilateral, given the tilted overview camera) true projected footprint, acceptable for a display-only "there is a room here" outline. Distinct from `RampGlyphOverlayItem`: rooms render as an outlined box, not a point glyph. */
+export interface RoomOverlayItem {
+  readonly roomId: string;
+  readonly roomName?: string;
+  readonly leftFrac: number;
+  readonly topFrac: number;
+  readonly widthFrac: number;
+  readonly heightFrac: number;
+}
+
 export interface PainterViewportCallbacks {
   /** Fired after every painter-store transition (tool switch, stroke commit, undo/redo, semantic assignment...) so the surrounding UI can re-render its toolbar/inspector. */
   readonly onStateChange?: (state: PainterState) => void;
@@ -72,6 +83,8 @@ export interface PainterViewportCallbacks {
   readonly onPicked?: (tileId: number) => void;
   /** Fired whenever the set (or screen position) of ramp-direction glyphs changes: on map load, after a semantic-mode stroke commits, and on resize (see `recomputeRampGlyphs`). */
   readonly onRampGlyphsChange?: (glyphs: readonly RampGlyphOverlayItem[]) => void;
+  /** Fired whenever the active floor's authored room overlay changes: on map load, floor switch, resize, and after any room-box stroke/room CRUD op commits (see `recomputeRoomOverlay`). */
+  readonly onRoomOverlayChange?: (rooms: readonly RoomOverlayItem[]) => void;
 }
 
 /**
@@ -156,6 +169,7 @@ export class PainterViewport {
       height: doc.height,
       fillTileId,
       semantics: doc.tileset.semantics,
+      rooms: doc.rooms,
     });
 
     this.rebuildActiveFloorScene();
@@ -163,6 +177,7 @@ export class PainterViewport {
     this.startRenderLoop();
     this.emitState();
     this.recomputeRampGlyphs();
+    this.recomputeRoomOverlay();
   }
 
   /** Adds a new blank floor on top of the stack and makes it active (spec: "adding a floor"). No-op if no map is loaded. */
@@ -204,6 +219,7 @@ export class PainterViewport {
     this.rebuildActiveFloorScene();
     this.emitState();
     this.recomputeRampGlyphs();
+    this.recomputeRoomOverlay();
   }
 
   setTool(tool: ToolId): void {
@@ -236,6 +252,42 @@ export class PainterViewport {
     this.emitState();
   }
 
+  /** Sets (or, with `undefined`, clears) the room the next 'room-box' stroke extends (Slice 5b). */
+  setActiveRoomId(id: string | undefined): void {
+    if (!this.state) return;
+    this.state = painter.setActiveRoomId(this.state, id);
+    this.emitState();
+  }
+
+  renameRoom(id: string, name: string | undefined): void {
+    if (!this.state) return;
+    this.state = painter.renameRoom(this.state, id, name);
+    this.emitState();
+    this.recomputeRoomOverlay();
+  }
+
+  removeRoom(id: string): void {
+    if (!this.state) return;
+    this.state = painter.removeRoom(this.state, id);
+    this.emitState();
+    this.recomputeRoomOverlay();
+  }
+
+  /** Undoes the most recent room command on the active floor's OWN room-command stack (spec: "per-floor undo isolation") -- a separate Ctrl+Z namespace from tile edits, see `undo`/`redo` above. */
+  undoRoom(): void {
+    if (!this.state) return;
+    this.state = painter.undoRoom(this.state).state;
+    this.emitState();
+    this.recomputeRoomOverlay();
+  }
+
+  redoRoom(): void {
+    if (!this.state) return;
+    this.state = painter.redoRoom(this.state).state;
+    this.emitState();
+    this.recomputeRoomOverlay();
+  }
+
   undo(): void {
     if (!this.state) return;
     const result = painter.undo(this.state);
@@ -255,7 +307,11 @@ export class PainterViewport {
   /** The current map state (ALL floors' layers + semantics), for saving -- not just the active floor. `undefined` if no map is loaded. */
   currentDocument(): MapDocument | undefined {
     if (!this.doc || !this.state) return undefined;
-    const composed = composeDocumentFromPainterFloors(this.doc, this.state.floors);
+    const composed = composeDocumentFromPainterFloors(
+      this.doc,
+      this.state.floors,
+      this.state.rooms,
+    );
     return {
       ...composed,
       tileset: { ...composed.tileset, semantics: this.state.semantics },
@@ -300,10 +356,16 @@ export class PainterViewport {
 
   private handlePointerUp(): void {
     if (!this.state) return;
-    const result = painter.pointerUp(this.state);
+    const isRoomBoxCommit =
+      this.state.stroke.status === 'stroking' && this.state.stroke.tool === 'room-box';
+    const result = painter.pointerUp(
+      this.state,
+      isRoomBoxCommit ? { newRoomId: crypto.randomUUID() } : undefined,
+    );
     this.state = result.state;
     if (result.diff) this.applyDiffLiveUpdate(result.diff);
     if (result.semanticTileIds) this.recomputeRampGlyphs();
+    if (isRoomBoxCommit) this.recomputeRoomOverlay();
     this.emitState();
   }
 
@@ -321,7 +383,7 @@ export class PainterViewport {
    * `buildChunks`.
    */
   private renderableSnapshot(doc: MapDocument, state: PainterState) {
-    const composed = composeDocumentFromPainterFloors(doc, state.floors);
+    const composed = composeDocumentFromPainterFloors(doc, state.floors, state.rooms);
     const map = toRenderableMap(composed, state.activeFloor);
     const tileset = toRenderableTileset(composed);
     return { composed, map, tileset };
@@ -398,7 +460,11 @@ export class PainterViewport {
    */
   private recomputeRampGlyphs(): void {
     if (!this.doc || !this.state || !this.cameraPose) return;
-    const composed = composeDocumentFromPainterFloors(this.doc, this.state.floors);
+    const composed = composeDocumentFromPainterFloors(
+      this.doc,
+      this.state.floors,
+      this.state.rooms,
+    );
     const activeFloor = composed.floors[this.state.activeFloor];
     if (!activeFloor) return;
     const cells = computeRampGlyphCells(
@@ -422,6 +488,50 @@ export class PainterViewport {
     this.callbacks.onRampGlyphsChange?.(glyphs);
   }
 
+  /**
+   * Recomputes the active floor's authored room-box overlay (Slice 5b
+   * design: "viewport overlay outlines rooms on the active floor") and
+   * pushes it to `onRoomOverlayChange`. Each room rect's 4 tile-space
+   * corners (`room-overlay.ts`'s `roomRectCorners`) are individually
+   * projected via `projectToScreenFraction` and reduced to their enclosing
+   * screen-space bounding box -- see `RoomOverlayItem`'s doc comment for why
+   * that's an approximation, not an exact polygon.
+   */
+  private recomputeRoomOverlay(): void {
+    if (!this.doc || !this.state || !this.cameraPose) return;
+    const activeFloorId = painter.activeFloorState(this.state).id;
+    const rects = computeRoomOverlayRects(this.state.rooms, activeFloorId);
+
+    const items: RoomOverlayItem[] = [];
+    for (const entry of rects) {
+      const xs: number[] = [];
+      const ys: number[] = [];
+      for (const corner of roomRectCorners(entry.rect)) {
+        const projected = projectToScreenFraction(
+          { x: corner.x, y: 0, z: corner.y },
+          this.cameraPose,
+          OVERVIEW_FOV_DEG,
+          this.camera.aspect,
+        );
+        if (!projected) continue;
+        xs.push(projected.xFrac);
+        ys.push(projected.yFrac);
+      }
+      if (xs.length === 0) continue;
+      const left = Math.min(...xs);
+      const top = Math.min(...ys);
+      items.push({
+        roomId: entry.roomId,
+        ...(entry.roomName !== undefined ? { roomName: entry.roomName } : {}),
+        leftFrac: left,
+        topFrac: top,
+        widthFrac: Math.max(...xs) - left,
+        heightFrac: Math.max(...ys) - top,
+      });
+    }
+    this.callbacks.onRoomOverlayChange?.(items);
+  }
+
   private startRenderLoop(): void {
     if (this.animationHandle !== undefined) return;
     const renderFrame = () => {
@@ -438,6 +548,7 @@ export class PainterViewport {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
     this.recomputeRampGlyphs();
+    this.recomputeRoomOverlay();
   }
 
   dispose(): void {
