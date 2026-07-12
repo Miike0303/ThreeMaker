@@ -28,9 +28,14 @@ const DEV_CATALOG_DB_PATH =
     'catalog.db',
   );
 const DEV_ASSET_STORE_DIR = resolve(dirname(DEV_CATALOG_DB_PATH));
-// Single working map file (Slice 4 dev-fallback save/load), kept in the same
-// never-committed asset-store directory as the catalog db/objects.
-const DEV_MAP_FILE_PATH = resolve(DEV_ASSET_STORE_DIR, 'editor-map.tmmap.json');
+// Single working map file (Slice 3: "Tauri fs wiring"), kept at the same
+// shared path the real Tauri host uses (`BaseDirectory.Home` +
+// `.threemaker/maps/current.tmmap.json`, see `map-client.ts`) so a map
+// saved under plain `vite dev` and one saved from the real Tauri webview
+// interoperate through the same file. `saveMapFile` creates this directory
+// on first save (see `dev-server/map-api.ts`).
+const DEV_HOME_DIR = process.env.USERPROFILE ?? process.env.HOME ?? '.';
+const DEV_MAP_FILE_PATH = resolve(DEV_HOME_DIR, '.threemaker', 'maps', 'current.tmmap.json');
 
 // Mirrors apps/editor/src-tauri/src/catalog_ipc.rs's PAGE_SIZE (100) -- no
 // cross-language sharing needed for a single fixed constant; keep both in

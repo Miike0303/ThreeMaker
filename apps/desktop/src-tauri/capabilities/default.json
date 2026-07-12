@@ -3,5 +3,23 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$HOME/.threemaker/maps/**" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "$HOME/.threemaker/maps/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$HOME/.threemaker/asset-store/**" }]
+    },
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "$HOME/.threemaker/**" }]
+    }
+  ]
 }

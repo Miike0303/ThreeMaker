@@ -11,6 +11,22 @@
       "allow": [{ "path": "$HOME/.threemaker/asset-store/**" }]
     },
     {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$HOME/.threemaker/maps/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$HOME/.threemaker/maps/**" }]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "$HOME/.threemaker/maps/**" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "$HOME/.threemaker/maps/**" }]
+    },
+    {
       "identifier": "fs:scope",
       "allow": [{ "path": "$HOME/.threemaker/**" }]
     }
