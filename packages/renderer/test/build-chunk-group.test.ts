@@ -994,3 +994,139 @@ describe('buildChunkGroup golden regression guard (no ramps, gate-fix hardening)
     ]);
   });
 });
+
+describe('buildChunkGroup ceiling carve buckets (Slice 3a)', () => {
+  function meshByName(group: THREE.Group): Record<string, THREE.Mesh> {
+    return Object.fromEntries(group.children.map((child) => [child.name, child as THREE.Mesh]));
+  }
+
+  it('routes a tile with a non-zero roomId into a separate (sheet, roomId) bucket mesh named chunk-x-y-{sheet}-room-{id}', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+        {
+          tileX: 1,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0.1, v0: 0, u1: 0.2, v1: 0.1 }],
+          elevation: 'ground',
+        },
+      ],
+    });
+    // Tile (0,0) belongs to room 1; tile (1,0) is unauthored (0).
+    const roomIdGrid = new Uint16Array([1, 0]);
+    const materials = { B: new THREE.MeshBasicMaterial() };
+
+    const group = buildChunkGroup(chunk, materials, {
+      tileWorldSize: 1,
+      ceilingCarve: { roomIdGrid, mapWidth: 2 },
+    });
+
+    const names = group.children.map((child) => child.name).sort();
+    expect(names).toEqual(['chunk-0-0-B', 'chunk-0-0-B-room-1']);
+
+    const byName = meshByName(group);
+    const carvedGeometry = byName['chunk-0-0-B-room-1']?.geometry as THREE.BufferGeometry;
+    const normalGeometry = byName['chunk-0-0-B']?.geometry as THREE.BufferGeometry;
+    // The carved bucket holds only the room-1 tile's single quad (4 vertices),
+    // not both tiles merged together.
+    expect(carvedGeometry.getAttribute('position').count).toBe(4);
+    // The normal per-sheet mesh holds only the unauthored (roomId 0) tile.
+    expect(normalGeometry.getAttribute('position').count).toBe(4);
+  });
+
+  it('excludes roomId-0 (unauthored) tiles from carving entirely, producing output byte-identical to no ceilingCarve option at all', () => {
+    const tiles: TileBuildData[] = [
+      {
+        tileX: 0,
+        tileY: 0,
+        layerIndex: 0,
+        sheet: 'B',
+        quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+        elevation: 'ground',
+        height: 2,
+        cliffEdges: [{ edge: 'west', neighborHeight: 0 }],
+      },
+      {
+        tileX: 1,
+        tileY: 0,
+        layerIndex: 0,
+        sheet: 'A4',
+        quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+        elevation: 'ground',
+      },
+    ];
+    const chunk = makeChunk({ tiles });
+    const materials = { B: new THREE.MeshBasicMaterial(), A4: new THREE.MeshBasicMaterial() };
+
+    const baseline = buildChunkGroup(chunk, materials, { tileWorldSize: 1, heightUnit: 1 });
+    // All-zero roomIdGrid -- a map with no rooms authored -- must carve nothing.
+    const roomIdGrid = new Uint16Array(2);
+    const carved = buildChunkGroup(chunk, materials, {
+      tileWorldSize: 1,
+      heightUnit: 1,
+      ceilingCarve: { roomIdGrid, mapWidth: 2 },
+    });
+
+    const baselineNames = baseline.children.map((child) => child.name).sort();
+    const carvedNames = carved.children.map((child) => child.name).sort();
+    // Zero carve buckets created -- same mesh set as the baseline.
+    expect(carvedNames).toEqual(baselineNames);
+    expect(carvedNames.some((name) => name.includes('-room-'))).toBe(false);
+
+    const baselineByName = meshByName(baseline);
+    const carvedByName = meshByName(carved);
+    for (const name of baselineNames) {
+      const baseGeometry = baselineByName[name]?.geometry as THREE.BufferGeometry;
+      const carvedGeometry = carvedByName[name]?.geometry as THREE.BufferGeometry;
+      expect(Array.from(carvedGeometry.getAttribute('position').array)).toEqual(
+        Array.from(baseGeometry.getAttribute('position').array),
+      );
+      expect(Array.from(carvedGeometry.getAttribute('uv').array)).toEqual(
+        Array.from(baseGeometry.getAttribute('uv').array),
+      );
+    }
+  });
+
+  it('never carves upper-layer or wall-sheet (A3/A4) tiles even when their cell has a non-zero roomId', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 3,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'upper',
+        },
+        {
+          tileX: 1,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'A4',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+      ],
+    });
+    // Both cells authored as room 1 -- but upper/wall tiles must never carve.
+    const roomIdGrid = new Uint16Array([1, 1]);
+    const materials = { B: new THREE.MeshBasicMaterial(), A4: new THREE.MeshBasicMaterial() };
+
+    const group = buildChunkGroup(chunk, materials, {
+      tileWorldSize: 1,
+      ceilingCarve: { roomIdGrid, mapWidth: 2 },
+    });
+
+    const names = group.children.map((child) => child.name).sort();
+    expect(names).toEqual(['chunk-0-0-A4', 'chunk-0-0-B']);
+  });
+});

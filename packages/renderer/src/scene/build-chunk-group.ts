@@ -40,6 +40,41 @@ export interface BuildChunkGroupOptions {
    * (`TilemapScene`, `StreamingTilemapScene`) always pass this.
    */
   readonly wallTileKeys?: ReadonlySet<string>;
+  /**
+   * Carves this chunk's ground-quad tiles (flat floor + their cliff/skirt
+   * geometry) that fall inside a room's footprint into their own bucket mesh,
+   * one per `(sheet, roomId)` pair -- the geometry half of the ceiling-carve
+   * feature (design: "carve floor-above's ground-quad tiles over rooms-below
+   * footprint into separate meshes per (chunk, sheet, roomId)"). `roomIdGrid`
+   * is typically the FLOOR BELOW's room grid, passed to the floor ABOVE's
+   * `buildChunkGroup` call, so the floor above gets carved into per-room
+   * ceiling pieces.
+   *
+   * `roomIdGrid` value 0 means "no room" -- those cells are NEVER carved and
+   * stay part of the normal per-sheet chunk mesh, unmodified (the
+   * "unauthored areas never occlude" invariant, enforced here at the
+   * geometry level). Only non-`upper`, non-wall-sheet (A3/A4) tiles are
+   * carve-eligible; star-bit "upper layer" quads and wall prisms are never
+   * carved regardless of their cell's room id, since the design scopes
+   * ceiling carving to flat floor geometry only.
+   *
+   * This slice (3a) only buckets the GEOMETRY into separate meshes; each
+   * bucket mesh still uses the SAME material instance as that sheet's normal
+   * mesh (`materials[sheet]`). Per-room material cloning + fade is Slice 3b.
+   */
+  readonly ceilingCarve?: {
+    /** Uint16Array, one entry per map cell (row-major, `y * mapWidth + x`); 0 = no room, else a 1-based room ordinal (see `computeRoomIdGrid`). */
+    readonly roomIdGrid: Uint16Array;
+    /** Full map width in tiles -- needed to index `roomIdGrid` from a tile's `(tileX, tileY)`. */
+    readonly mapWidth: number;
+  };
+}
+
+/** One (sheet, roomId) ceiling-carve bucket's accumulated (not-yet-merged) geometry, keyed by `${sheet}|${roomId}`. */
+interface CarveBucket {
+  readonly sheet: TileSheetId;
+  readonly roomId: number;
+  readonly geometries: THREE.BufferGeometry[];
 }
 
 /**
@@ -594,16 +629,44 @@ export function buildChunkGroup(
   // to this chunk's own tiles only.
   const wallTileKeys = options.wallTileKeys ?? computeWallTileKeys(chunk.tiles);
 
+  const ceilingCarve = options.ceilingCarve;
   const geometriesBySheet = new Map<TileSheetId, THREE.BufferGeometry[]>();
+  const carveBuckets = new Map<string, CarveBucket>();
   for (const tile of chunk.tiles) {
     const isWallTile = tile.elevation !== 'upper' && isWallSheet(tile.sheet);
     const openEdges = isWallTile ? computeOpenEdges(wallTileKeys, tile.tileX, tile.tileY) : [];
 
-    const geometries = geometriesBySheet.get(tile.sheet) ?? [];
-    geometries.push(
-      ...buildTileGeometry(tile, tileWorldSize, wallHeight, heightUnit, wallPrismHeight, openEdges),
+    const geometries = buildTileGeometry(
+      tile,
+      tileWorldSize,
+      wallHeight,
+      heightUnit,
+      wallPrismHeight,
+      openEdges,
     );
-    geometriesBySheet.set(tile.sheet, geometries);
+
+    // Carve-eligible: flat ground-quad tiles only (plus their cliff/skirt
+    // faces) -- never star-bit "upper layer" quads or wall-autotile (A3/A4)
+    // prisms, regardless of what room id their cell carries.
+    const carveEligible = !isWallTile && tile.elevation !== 'upper';
+    const roomId =
+      carveEligible && ceilingCarve
+        ? (ceilingCarve.roomIdGrid[tile.tileY * ceilingCarve.mapWidth + tile.tileX] ?? 0)
+        : 0;
+
+    if (roomId !== 0) {
+      const key = `${tile.sheet}|${roomId}`;
+      let bucket = carveBuckets.get(key);
+      if (!bucket) {
+        bucket = { sheet: tile.sheet, roomId, geometries: [] };
+        carveBuckets.set(key, bucket);
+      }
+      bucket.geometries.push(...geometries);
+    } else {
+      const sheetGeometries = geometriesBySheet.get(tile.sheet) ?? [];
+      sheetGeometries.push(...geometries);
+      geometriesBySheet.set(tile.sheet, sheetGeometries);
+    }
   }
 
   const group = new THREE.Group();
@@ -622,6 +685,24 @@ export function buildChunkGroup(
 
     const mesh = new THREE.Mesh(merged, material);
     mesh.name = `chunk-${chunk.chunkX}-${chunk.chunkY}-${sheet}`;
+    group.add(mesh);
+  }
+
+  // Ceiling-carve buckets: same material as the sheet's normal mesh (Slice
+  // 3a is geometry-only -- per-room material cloning is Slice 3b).
+  for (const bucket of carveBuckets.values()) {
+    const material = materials[bucket.sheet];
+    if (!material) {
+      for (const geometry of bucket.geometries) geometry.dispose();
+      continue;
+    }
+
+    const merged = mergeGeometries(bucket.geometries, false) as THREE.BufferGeometry | null;
+    for (const geometry of bucket.geometries) geometry.dispose();
+    if (!merged) continue;
+
+    const mesh = new THREE.Mesh(merged, material);
+    mesh.name = `chunk-${chunk.chunkX}-${chunk.chunkY}-${bucket.sheet}-room-${bucket.roomId}`;
     group.add(mesh);
   }
 
