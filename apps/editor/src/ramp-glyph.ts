@@ -8,7 +8,11 @@
  *
  * A cell counts as ramp-classed when ANY of its 4 tile layers carries a tile
  * id whose `semantics` entry has `class: 'ramp'` -- semantic classes are
- * assigned per tile id, not per cell position (see `semantic-store.ts`).
+ * assigned per tile id, not per cell position (see `semantic-store.ts`). The
+ * tile-id-scan itself (loop-crear-jugar Slice 1) is now delegated to
+ * `@threemaker/map-format`'s `deriveRampCells`, so this module and the
+ * desktop runtime translator can never diverge on which cells are
+ * ramp-classed -- only direction resolution stays local to this file.
  */
 
 import type { RampCellInput, RampDirection } from '@threemaker/importer-rpgm';
@@ -18,6 +22,7 @@ import {
   RAMP_DIRECTION_BY_CODE,
 } from '@threemaker/importer-rpgm';
 import type { SemanticOverrides, TileLayerData } from '@threemaker/map-format';
+import { deriveRampCells } from '@threemaker/map-format';
 
 export interface RampGlyphCell {
   readonly x: number;
@@ -45,25 +50,12 @@ export function computeRampGlyphCells(
   const heightGrid = new Uint8Array(size);
   for (let i = 0; i < size; i++) heightGrid[i] = heightForRegion(regions[i] ?? 0);
 
-  const rampCells: RampCellInput[] = [];
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const index = y * width + x;
-      for (const layer of layers) {
-        const tileId = layer[index] ?? 0;
-        if (tileId === 0) continue;
-        const entry = semantics[String(tileId)];
-        if (entry?.class === 'ramp') {
-          rampCells.push(
-            entry.rampDirection === undefined
-              ? { x, y }
-              : { x, y, rampDirection: entry.rampDirection },
-          );
-          break;
-        }
-      }
-    }
-  }
+  // loop-crear-jugar Slice 1: the tile-id-scan derivation loop is lifted into
+  // `@threemaker/map-format`'s `deriveRampCells` (single source of truth
+  // shared with the future runtime translator) -- this function now only
+  // does the direction resolution (`computeRampGrid`/`RAMP_DIRECTION_BY_CODE`),
+  // which stays consumer-side since map-format has zero runtime deps.
+  const rampCells: readonly RampCellInput[] = deriveRampCells(layers, semantics, width, height);
   if (rampCells.length === 0) return [];
 
   const rampGrid = computeRampGrid({ heightGrid, mapWidth: width, mapHeight: height }, rampCells);

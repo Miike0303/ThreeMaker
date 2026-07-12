@@ -7,11 +7,14 @@ export {
   registerMigration,
 } from './migrate.js';
 export { computeRoomIdGrid } from './rooms.js';
+export type { RampCellInput } from './runtime-bridge.js';
+export { deriveRampCells } from './runtime-bridge.js';
 export type {
   FloorDocument,
   MapDocument,
   MapFormatErrorCode,
   MapLayers,
+  MapSpawn,
   MapTilesetDocument,
   RampDirection,
   RoomDocument,

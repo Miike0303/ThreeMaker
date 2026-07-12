@@ -162,6 +162,21 @@ export interface RoomDocument {
   readonly rects: readonly RoomRect[];
 }
 
+/**
+ * Authored player-spawn point (loop-crear-jugar design, "Spawn schema" --
+ * additive, no version bump, same pattern as `rampDirection`). References its
+ * floor by stable `FloorDocument.id`, matching `StairLinkWaypoint`'s
+ * floor-reference convention. The runtime honors it when the referenced tile
+ * is standable on that floor, else falls back to `findSpawnTile` silently
+ * (design: "Runtime spawn" -- authored docs may go stale vs. layers, the test
+ * loop must never brick on a bad spawn).
+ */
+export interface MapSpawn {
+  readonly x: number;
+  readonly y: number;
+  readonly floor: string;
+}
+
 export interface MapDocument {
   readonly format: typeof MAP_FORMAT_MAGIC;
   readonly version: number;
@@ -176,6 +191,8 @@ export interface MapDocument {
   readonly stairLinks: readonly StairLinkDocument[];
   /** Stable-floor-id-referencing room footprints (schema v3, additive). Empty for a document with no authored rooms. */
   readonly rooms: readonly RoomDocument[];
+  /** Authored player-spawn point (loop-crear-jugar, additive). Omitted entirely when unauthored -- never emitted as an `undefined`-valued key, matching `label`'s optional-field convention. */
+  readonly spawn?: MapSpawn;
 }
 
 export type MapFormatErrorCode = 'bad-magic' | 'unsupported-version' | 'malformed';
@@ -233,19 +250,34 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
   const floorIds = new Set(floors.map((floor) => floor.id));
   const stairLinks = validateStairLinks(raw.stairLinks, floorIds);
   const rooms = validateRooms(raw.rooms, floorIds, raw.width as number, raw.height as number);
+  const spawn = validateSpawn(raw.spawn, floorIds, raw.width as number, raw.height as number);
 
-  return {
-    format: MAP_FORMAT_MAGIC,
-    version: CURRENT_MAP_FORMAT_VERSION,
-    id: raw.id,
-    name: raw.name,
-    width: raw.width as number,
-    height: raw.height as number,
-    tileset,
-    floors,
-    stairLinks,
-    rooms,
-  };
+  return spawn === undefined
+    ? {
+        format: MAP_FORMAT_MAGIC,
+        version: CURRENT_MAP_FORMAT_VERSION,
+        id: raw.id,
+        name: raw.name,
+        width: raw.width as number,
+        height: raw.height as number,
+        tileset,
+        floors,
+        stairLinks,
+        rooms,
+      }
+    : {
+        format: MAP_FORMAT_MAGIC,
+        version: CURRENT_MAP_FORMAT_VERSION,
+        id: raw.id,
+        name: raw.name,
+        width: raw.width as number,
+        height: raw.height as number,
+        tileset,
+        floors,
+        stairLinks,
+        rooms,
+        spawn,
+      };
 }
 
 function validateFloors(input: unknown, width: number, height: number): readonly FloorDocument[] {
@@ -534,6 +566,34 @@ function validateRoomRect(
     );
   }
   return { x, y, width, height };
+}
+
+/**
+ * Optional -- `undefined` input (unauthored spawn, the common case for every
+ * pre-loop-crear-jugar document) short-circuits to `undefined` with no error,
+ * matching `label`'s optional-field validation shape.
+ */
+function validateSpawn(
+  input: unknown,
+  floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): MapSpawn | undefined {
+  if (input === undefined) return undefined;
+  if (typeof input !== 'object' || input === null) {
+    throw new MapFormatError('malformed', '"spawn" must be an object when present.');
+  }
+  const raw = input as Record<string, unknown>;
+  if (!Number.isInteger(raw.x) || (raw.x as number) < 0 || (raw.x as number) >= mapWidth) {
+    throw new MapFormatError('malformed', `"spawn.x" must be an integer within [0, ${mapWidth}).`);
+  }
+  if (!Number.isInteger(raw.y) || (raw.y as number) < 0 || (raw.y as number) >= mapHeight) {
+    throw new MapFormatError('malformed', `"spawn.y" must be an integer within [0, ${mapHeight}).`);
+  }
+  if (typeof raw.floor !== 'string' || !floorIds.has(raw.floor)) {
+    throw new MapFormatError('malformed', '"spawn.floor" must reference an existing floor id.');
+  }
+  return { x: raw.x as number, y: raw.y as number, floor: raw.floor };
 }
 
 function validateTileset(input: unknown): MapTilesetDocument {

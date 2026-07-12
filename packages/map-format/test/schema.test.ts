@@ -414,3 +414,45 @@ describe('validateCurrentVersionShape: rooms (schema v3)', () => {
     expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
   });
 });
+
+// loop-crear-jugar Slice 1: additive optional player-spawn field, no version
+// bump (design: "v1/v2/v3 docs simply have spawn: undefined").
+describe('validateCurrentVersionShape: spawn (additive, schema v3)', () => {
+  it('accepts a document with no "spawn" field (omitted key, not undefined-valued)', () => {
+    const doc = validateCurrentVersionShape(makeValidDocInput());
+    expect(doc.spawn).toBeUndefined();
+    expect(Object.hasOwn(doc, 'spawn')).toBe(false);
+  });
+
+  it('accepts a well-formed spawn and round-trips it through serialize/parse', () => {
+    const input = makeValidDocInput({ spawn: { x: 1, y: 1, floor: 'floor-0' } });
+    const doc = validateCurrentVersionShape(input);
+    expect(doc.spawn).toEqual({ x: 1, y: 1, floor: 'floor-0' });
+
+    const json = serializeMapDocument(doc);
+    const reparsed = validateCurrentVersionShape(JSON.parse(json));
+    expect(reparsed).toEqual(doc);
+  });
+
+  it('rejects a spawn whose "floor" does not reference an existing floor id', () => {
+    const input = makeValidDocInput({ spawn: { x: 0, y: 0, floor: 'does-not-exist' } });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects a spawn with non-integer coordinates', () => {
+    const input = makeValidDocInput({ spawn: { x: 0.5, y: 0, floor: 'floor-0' } });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects a spawn whose coordinates fall outside the map bounds', () => {
+    const outOfBoundsX = makeValidDocInput({ spawn: { x: 2, y: 0, floor: 'floor-0' } });
+    expect(() => validateCurrentVersionShape(outOfBoundsX)).toThrow(MapFormatError);
+    const negativeY = makeValidDocInput({ spawn: { x: 0, y: -1, floor: 'floor-0' } });
+    expect(() => validateCurrentVersionShape(negativeY)).toThrow(MapFormatError);
+  });
+
+  it('rejects a non-object spawn value', () => {
+    const input = makeValidDocInput({ spawn: 'nope' });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+});
