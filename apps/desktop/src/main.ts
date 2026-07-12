@@ -34,7 +34,13 @@ import * as THREE from 'three/webgpu';
 import { loadAuthoredMap } from './authored-map.js';
 import type { CameraMode } from './camera-rig.js';
 import { clampTiltDeg, computeCameraPose, cycleCameraMode } from './camera-rig.js';
-import { CharacterSprite, tileCenterToWorld } from './character-sprite.js';
+import {
+  CharacterSprite,
+  DEFAULT_SHEET_COLUMNS,
+  DEFAULT_SHEET_ROWS,
+  tileCenterToWorld,
+} from './character-sprite.js';
+import { buildPlaceholderCharacterTexture } from './character-sprite-placeholder.js';
 import { clampRange } from './clamp.js';
 import type { DebugSnapshot } from './debug-panel.js';
 import { createDebugPanel } from './debug-panel.js';
@@ -127,8 +133,12 @@ const DEMO_RAMP_SEMANTICS: readonly RampCellInput[] = [
 // character block 0 (top-left) is used as the player.
 const CHARACTER_SHEET_FILE = 'Actor1';
 const CHARACTER_INDEX = 0;
-const CHARACTER_SHEET_COLUMNS = 4;
-const CHARACTER_SHEET_ROWS = 2;
+// Single source of truth for the sheet's block grid: `character-sprite.ts`'s
+// `DEFAULT_SHEET_COLUMNS`/`DEFAULT_SHEET_ROWS` (both the DEV-fixture sheet
+// and Slice 4b's canvas-generated placeholder sheet match this same 4x2
+// block grid -- see `character-sprite-placeholder.ts`).
+const CHARACTER_SHEET_COLUMNS = DEFAULT_SHEET_COLUMNS;
+const CHARACTER_SHEET_ROWS = DEFAULT_SHEET_ROWS;
 
 const LOCALE_STORAGE_KEY = 'threemaker:locale';
 
@@ -1709,24 +1719,23 @@ async function main(): Promise<void> {
   statusEl.textContent = i18n.t('map.loading');
   container.appendChild(statusEl);
 
-  // Authored-load path (loop-crear-jugar, Slice 4a): gated on the real
+  // Authored-load path (loop-crear-jugar, Slice 4a/4b): gated on the real
   // Tauri host being present (both `tauri dev` and a production build), NOT
   // on `import.meta.env.DEV` -- an authored map renders the same way in
   // either. `loadAuthoredMap` returns `null` (after logging why) for "no
   // file saved yet"/parse failure/read failure, all of which fall through
   // to the DEV demos/fixture path below, unchanged (spec: "DEV demos remain
-  // fallback"). The player-sprite character sheet is still loaded from the
-  // DEV-only Roseliam fixture for now -- a production-safe canvas-generated
-  // placeholder is Slice 4b's job, not this one's.
+  // fallback"). The player-sprite character sheet is `character-sprite-
+  // placeholder.ts`'s canvas-generated (in-memory, no fs/network) sheet --
+  // Slice 4b replaced the DEV-only Roseliam fixture 4a used here, so this
+  // branch no longer depends on `/@fs/`/`__FIXTURES_DIR__` at all.
   if (isTauriAvailable()) {
     const authored = await loadAuthoredMap();
     if (authored) {
       const primaryFloor = authored.floorSources[0];
       if (!primaryFloor) throw new Error('loadAuthoredMap returned no floors.');
       try {
-        const characterTexture = await loadSheetTexture(
-          fixtureCharacterUrl(__FIXTURES_DIR__, CHARACTER_SHEET_FILE),
-        );
+        const characterTexture = buildPlaceholderCharacterTexture();
         statusEl.remove();
         await renderFixtureMap(
           container,
@@ -1754,10 +1763,12 @@ async function main(): Promise<void> {
 
   // `/@fs/` and `server.fs.allow` (vite.config.ts) only exist under `vite
   // dev` -- a production build has no dev server to serve the (git-ignored,
-  // never-shipped) fixture from, so show the same message a missing fixture
-  // would produce instead of attempting a request that cannot succeed.
+  // never-shipped) DEV-demo fixture from. At this point no authored map was
+  // found either (the branch above already returned if one was), so the
+  // accurate message is "no authored map found", not "fixture not found" --
+  // production has no fixture concept at all.
   if (!import.meta.env.DEV) {
-    statusEl.textContent = i18n.t('map.fixtureNotFound');
+    statusEl.textContent = i18n.t('map.noAuthoredMap');
     return;
   }
 

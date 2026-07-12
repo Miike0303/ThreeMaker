@@ -3,15 +3,25 @@ import * as THREE from 'three/webgpu';
 import type { WalkFrameColumn } from './walk-animation.js';
 
 // RPG Maker MV/MZ standard character-sheet row order: down, left, right, up.
-const DIRECTION_ROW: Record<Direction, number> = {
+// Exported so `character-sprite-placeholder.ts` can paint one distinct color
+// per facing row without duplicating (and risking desync with) this mapping.
+export const DIRECTION_ROW: Record<Direction, number> = {
   down: 0,
   left: 1,
   right: 2,
   up: 3,
 };
 
-const FRAME_COLUMNS = 3; // walk frames per character block
-const FRAME_ROWS = 4; // facing directions per character block
+// Exported for the same reason as `DIRECTION_ROW`: the placeholder sprite
+// generator needs the exact frame grid this class assumes, not a duplicated
+// guess at it.
+export const FRAME_COLUMNS = 3; // walk frames per character block
+export const FRAME_ROWS = 4; // facing directions per character block
+
+/** Character blocks across a standard 8-character MV/MZ sheet -- `CharacterSpriteOptions.sheetColumns`'s default, and the single source of truth `main.ts` and the placeholder sprite generator both build against. */
+export const DEFAULT_SHEET_COLUMNS = 4;
+/** Character blocks down a standard 8-character MV/MZ sheet -- `CharacterSpriteOptions.sheetRows`'s default, see `DEFAULT_SHEET_COLUMNS`. */
+export const DEFAULT_SHEET_ROWS = 2;
 
 /** World-space center of a tile coordinate. The single source of the tile-origin convention: change it here and every consumer (sprite, camera) stays in lockstep. */
 export function tileCenterToWorld(tileCoord: number, tileWorldSize = 1): number {
@@ -67,8 +77,8 @@ export class CharacterSprite {
   constructor(options: CharacterSpriteOptions) {
     const {
       texture,
-      sheetColumns = 4,
-      sheetRows = 2,
+      sheetColumns = DEFAULT_SHEET_COLUMNS,
+      sheetRows = DEFAULT_SHEET_ROWS,
       characterIndex = 0,
       tileWorldSize = 1,
       heightTiles = 1,

@@ -4,6 +4,7 @@
     "app.title": "ThreeMaker",
     "map.loading": "Cargando mapa…",
     "map.fixtureNotFound": "No se encontró el fixture — ver fixtures/README.md",
+    "map.noAuthoredMap": "No se encontró un mapa creado — crear uno en el editor primero.",
     "locale.selectorLabel": "Idioma",
     "camera.mode.hd2d": "HD-2D",
     "camera.mode.topDown": "Cenital",
