@@ -47,4 +47,4 @@ export { TilemapScene } from './scene/tilemap-scene.js';
 export type { ChunkStreamDiff, ChunkStreamerOptions } from './streaming/chunk-streamer.js';
 export { ChunkStreamer, chunkKey, DEFAULT_BUILD_RADIUS } from './streaming/chunk-streamer.js';
 export type { FloorVisibilityPolicy } from './streaming/floor-visibility.js';
-export { WindowedFloorPolicy } from './streaming/floor-visibility.js';
+export { OcclusionFloorPolicy, WindowedFloorPolicy } from './streaming/floor-visibility.js';

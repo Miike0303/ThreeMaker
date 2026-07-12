@@ -35,3 +35,30 @@ export class WindowedFloorPolicy implements FloorVisibilityPolicy {
     return floors;
   }
 }
+
+/**
+ * Occlusion-aware render window (design "Ceilings and Interior Occlusion"):
+ * renders `[currentFloor - 1, currentFloor, currentFloor + 1]`, clamped to
+ * `[0, floorCount)`, so the floor ABOVE the player is present and rendered
+ * OPAQUE (not omitted) -- the floor above's own geometry is what occludes
+ * the exterior/upper interior from the HD-2D/top-down camera. This replaces
+ * `WindowedFloorPolicy`'s never-render-`currentFloor+1` rule; that class is
+ * kept in place (not deleted) purely for rollback -- swapping the concrete
+ * policy in `main.ts`'s `applyFloorWindow` is the entire migration path.
+ *
+ * Traversal pinning (`pinnedFloor = max(fromFloor, toFloor)`) still holds:
+ * `[pinnedFloor - 1, pinnedFloor, pinnedFloor + 1]` always includes
+ * `pinnedFloor - 1`, so an adjacent-floor stair link's source floor never
+ * disposes mid-climb. Non-adjacent links remain uncovered, exactly as
+ * before this change -- a pre-existing, documented assumption that this
+ * policy does not widen.
+ */
+export class OcclusionFloorPolicy implements FloorVisibilityPolicy {
+  visibleFloors(currentFloor: number, floorCount: number): readonly number[] {
+    const floors: number[] = [];
+    for (const candidate of [currentFloor - 1, currentFloor, currentFloor + 1]) {
+      if (candidate >= 0 && candidate < floorCount) floors.push(candidate);
+    }
+    return floors;
+  }
+}

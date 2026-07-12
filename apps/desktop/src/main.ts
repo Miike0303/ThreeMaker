@@ -24,8 +24,8 @@ import {
   DEFAULT_CHUNK_SIZE,
   generateSyntheticMap,
   loadSheetTexture,
+  OcclusionFloorPolicy,
   StreamingTilemapScene,
-  WindowedFloorPolicy,
 } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
@@ -651,16 +651,21 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     const floorRouter = createFloorRouter(floors);
 
     // Renderer containers (this slice): one StreamingTilemapScene +
-    // ChunkStreamer PER floor. `WindowedFloorPolicy` (design "Render
-    // policy") governs which floors have live render state at all -- a
-    // floor outside the window is fully disposed (`render` is `undefined`),
-    // not merely hidden, and is rebuilt fresh the next time it enters the
-    // window (design: "re-window on swap = dispose + fresh streamer.update").
+    // ChunkStreamer PER floor. `OcclusionFloorPolicy` (design "Ceilings and
+    // Interior Occlusion") governs which floors have live render state at
+    // all -- a floor outside the window is fully disposed (`render` is
+    // `undefined`), not merely hidden, and is rebuilt fresh the next time it
+    // enters the window (design: "re-window on swap = dispose + fresh
+    // streamer.update"). Unlike the prior `WindowedFloorPolicy`, this policy
+    // also includes `currentFloor + 1` (when it exists) so the floor above
+    // renders opaque and occludes the exterior/upper interior; swapping back
+    // to `WindowedFloorPolicy` (kept in `@threemaker/renderer` for rollback)
+    // is the entire revert path.
     const floorSlots: FloorRenderSlot[] = floorSources.map((source) => ({
       source,
       render: undefined,
     }));
-    const visibilityPolicy: FloorVisibilityPolicy = new WindowedFloorPolicy();
+    const visibilityPolicy: FloorVisibilityPolicy = new OcclusionFloorPolicy();
 
     function applyFloorWindow(focusX: number, focusY: number, floorOverride?: number): void {
       const visible = new Set(
@@ -1215,8 +1220,9 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   // mz-project1 fixture's Map001 (a different tileset/texture set, carrying
   // a painted region hill to exercise elevation) -> a 2-floor synthetic demo
   // (Plantas Apiladas slice 3: visually verifies the per-floor Y-offset and
-  // WindowedFloorPolicy ahead of a real authored multi-floor `.tmmap`) ->
-  // back to the fixture map.
+  // the active floor-render window policy -- OcclusionFloorPolicy as of
+  // "Ceilings and Interior Occlusion" -- ahead of a real authored
+  // multi-floor `.tmmap`) -> back to the fixture map.
   if (import.meta.env.DEV) {
     type MapCycleMode = 'fixture' | 'giant' | 'mz' | 'floors';
     const CYCLE_ORDER: readonly MapCycleMode[] = ['fixture', 'giant', 'mz', 'floors'];
