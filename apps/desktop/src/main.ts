@@ -49,7 +49,7 @@ import {
   fixtureJsonUrl,
   mzFixtureJsonUrl,
 } from './fixture-paths.js';
-import type { FloorRouter } from './floor-runtime.js';
+import type { FloorRouter, FloorSource, StairLinkRuntime } from './floor-runtime.js';
 import { buildFloorGameplay, createFloorRouter } from './floor-runtime.js';
 import { groundYAt } from './ground-y.js';
 import { createHd2dPipeline } from './hd2d-pipeline.js';
@@ -481,35 +481,6 @@ function createMostRecentHeldDirection(): {
 }
 
 /**
- * One floor's render-side inputs (Plantas Apiladas design: "each floor is a
- * map" -- the renderer half of that; see `FloorGameplay` in floor-runtime.ts
- * for the gameplay half). `floorId`/`baseElevation` mirror the matching
- * `FloorGameplay` entry built from the same source.
- */
-interface FloorSource {
-  readonly floorId: string;
-  readonly baseElevation: number;
-  readonly map: RpgmMap;
-  readonly tileset: RpgmTileset;
-  readonly textures: Partial<Record<TileSheetId, THREE.Texture>>;
-  readonly sheetPixelSizes: SheetPixelSizes;
-  readonly rampCells?: readonly RampCellInput[];
-  /**
-   * This floor's own room-id grid (design "Ceilings and Interior Occlusion",
-   * obs #117 gotcha), e.g. `@threemaker/map-format`'s `computeRoomIdGrid`
-   * output -- 0 = no room. Consumed TWO ways: (1) `session.roomTracker`
-   * reads it to resolve which room the player stands on THIS floor, and (2)
-   * `buildFloorRender` passes the floor BELOW's grid as the `ceilingCarve`
-   * option when building THIS floor's scene, so this floor's ground-quad
-   * tiles get carved into per-room ceiling meshes over the floor below's
-   * rooms. `undefined` on a floor with no authored rooms, mirroring
-   * `rampCells`'s "no ramp" default -- no carving, `roomTracker.roomAt`
-   * always resolves to 0 for this floor.
-   */
-  readonly roomIdGrid?: Uint16Array;
-}
-
-/**
  * One floor's renderer-side state: a `StreamingTilemapScene` + `ChunkStreamer`
  * pair, or `undefined` while this floor is outside the visibility window.
  * Kept in main.ts rather than folded into `FloorGameplay`/floor-runtime.ts --
@@ -523,26 +494,6 @@ interface FloorSource {
 interface FloorRenderSlot {
   readonly source: FloorSource;
   render: { readonly tilemap: StreamingTilemapScene; readonly streamer: ChunkStreamer } | undefined;
-}
-
-/**
- * A stair-link resolved to numeric `floors` array indices (Plantas Apiladas
- * Slice 5, design "Render-position handoff"). Mirrors
- * `@threemaker/map-format`'s `StairLinkDocument`, except `fromFloor`/
- * `toFloor`/`waypoints[].floor` are plain array indices here rather than
- * stable string ids -- `@threemaker/gameplay`'s `StairTraversal` stays
- * map-format-agnostic (see its own doc comment), so resolving a document's
- * string floor ids to numeric indices is this app's job. This slice's demo
- * data is authored directly in index form (see `buildDevDemoStairLinks`);
- * a real `.tmmap` loader would resolve `StairLinkDocument`'s string ids
- * against its own `floors` array order the same way.
- */
-interface StairLinkRuntime {
-  readonly id: string;
-  readonly fromFloor: number;
-  readonly toFloor: number;
-  readonly bidirectional: boolean;
-  readonly waypoints: readonly StairTraversalWaypoint[];
 }
 
 /** Everything owned by one loaded map: per-floor streamed tilemaps, passability, and the character's mover. */
