@@ -16,6 +16,8 @@ import {
 } from '@threemaker/gameplay';
 import type { RampCellInput, RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
+import type { RoomDocument } from '@threemaker/map-format';
+import { computeRoomIdGrid } from '@threemaker/map-format';
 import { bindStoryToWorld, compileInk, InkDialogueProvider } from '@threemaker/narrative';
 import type { FloorVisibilityPolicy, SheetPixelSizes } from '@threemaker/renderer';
 import {
@@ -53,6 +55,12 @@ import { groundYAt } from './ground-y.js';
 import { createHd2dPipeline } from './hd2d-pipeline.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
+import {
+  aboveFloorTilemap,
+  createRoomTracker,
+  driveRoomFade,
+  resolveFadedRoomId,
+} from './room-state.js';
 import { findSpawnTile } from './spawn.js';
 import { WalkAnimation } from './walk-animation.js';
 
@@ -337,8 +345,8 @@ const GIANT_MAP_SEED = 20260710;
 // below), used to visually verify the render window/Y-offset ahead of a real
 // authored multi-floor `.tmmap`. Mirrors the design's `DEFAULT_FLOOR_HEIGHT`
 // (packages/map-format/src/schema.ts) -- kept as a local constant rather than
-// a cross-package import since apps/desktop has no other dependency on
-// @threemaker/map-format yet.
+// importing it, since this demo's floor size/height are its own fixed
+// dev-only values, independent of whatever a real `.tmmap` document declares.
 const DEV_DEMO_FLOOR_HEIGHT = 3;
 const DEV_DEMO_FLOOR_SIZE = 32;
 
@@ -367,6 +375,32 @@ const DEV_DEMO_FLOOR_SIZE = 32;
 const DEV_DEMO_STAIR_ROW = Math.floor(DEV_DEMO_FLOOR_SIZE / 2);
 const DEV_DEMO_STAIR_ENTRY_X = DEV_DEMO_STAIR_ROW + 1;
 const DEV_DEMO_STAIR_LANDING_X = DEV_DEMO_STAIR_ROW + 2;
+
+/**
+ * Dev-only demo room (Ceilings and Interior Occlusion, design
+ * "Player-current-room runtime": "DEV floors demo gets hardcoded
+ * RoomDocuments, same DEV-gated pattern as the stair demo"). A single
+ * rectangular "library" room on floor 0, well clear of
+ * `DEV_DEMO_STAIR_ROW`'s corridor so the room and the stair demo never
+ * overlap. Its `computeRoomIdGrid` output is passed as floor 0's
+ * `FloorSource.roomIdGrid`, which floor 1's scene carves into a per-room
+ * ceiling mesh (see `buildFloorRender`'s `ceilingCarve` wiring) -- walking
+ * into this rect while on floor 0 should fade floor 1's ceiling directly
+ * above it toward ~0.15 opacity (hd2d/top-down only, obs #110 locked
+ * decision).
+ */
+const DEV_DEMO_ROOM_ID = 'demo-library';
+
+function buildDevDemoRooms(): readonly RoomDocument[] {
+  return [
+    {
+      id: DEV_DEMO_ROOM_ID,
+      name: 'Demo Library',
+      floor: 'floor-0',
+      rects: [{ x: 2, y: 2, width: 10, height: 10 }],
+    },
+  ];
+}
 
 function buildDevDemoStairLinks(): readonly StairLinkRuntime[] {
   return [
@@ -460,6 +494,19 @@ interface FloorSource {
   readonly textures: Partial<Record<TileSheetId, THREE.Texture>>;
   readonly sheetPixelSizes: SheetPixelSizes;
   readonly rampCells?: readonly RampCellInput[];
+  /**
+   * This floor's own room-id grid (design "Ceilings and Interior Occlusion",
+   * obs #117 gotcha), e.g. `@threemaker/map-format`'s `computeRoomIdGrid`
+   * output -- 0 = no room. Consumed TWO ways: (1) `session.roomTracker`
+   * reads it to resolve which room the player stands on THIS floor, and (2)
+   * `buildFloorRender` passes the floor BELOW's grid as the `ceilingCarve`
+   * option when building THIS floor's scene, so this floor's ground-quad
+   * tiles get carved into per-room ceiling meshes over the floor below's
+   * rooms. `undefined` on a floor with no authored rooms, mirroring
+   * `rampCells`'s "no ramp" default -- no carving, `roomTracker.roomAt`
+   * always resolves to 0 for this floor.
+   */
+  readonly roomIdGrid?: Uint16Array;
 }
 
 /**
@@ -533,6 +580,23 @@ interface MapSession {
    */
   applyFloorWindow(focusX: number, focusY: number, floorOverride?: number): void;
   /**
+   * Resolves which authored room (if any) the player currently stands in on
+   * `floorIndex` (design "Player-current-room runtime") -- 0 = unauthored.
+   * Thin pass-through to `room-state.ts`'s `RoomTracker.roomAt`.
+   */
+  roomIdAt(floorIndex: number, x: number, y: number): number;
+  /**
+   * Drives the ceiling fade for the floor whose scene represents
+   * `floorIndex`'s rooms -- i.e. `floorIndex + 1` (design gotcha, obs #117:
+   * floor i's ceiling is carved from floor (i-1)'s room grid, so fading
+   * "the room the player stands in on floor i" means driving floor i+1's
+   * scene). `roomId` must already be resolved through the camera-mode gate
+   * (`resolveFadedRoomId`) by the caller, or forced to `null` during stair
+   * traversal (design branch (b): "During traversal: setFadedRoom(null)").
+   * A no-op when there is no floor above (top floor / single-floor maps).
+   */
+  driveCeilingFade(floorIndex: number, roomId: number | null, dt: number): void;
+  /**
    * Looks up a stair-link waypoint path that starts at `(x, y)` on
    * `floorIndex` (Slice 5's auto-on-step trigger, design "Stair trigger:
    * Auto-on-step onto an entry waypoint"). Returns the waypoints in
@@ -588,7 +652,10 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
    * (`ownsTextures: false`), so cycling back to a previously-seen map (or
    * building a second floor from the same tileset) never reloads them.
    */
-  function buildFloorRender(source: FloorSource): {
+  function buildFloorRender(
+    source: FloorSource,
+    belowRoomIdGrid: Uint16Array | undefined,
+  ): {
     readonly tilemap: StreamingTilemapScene;
     readonly streamer: ChunkStreamer;
   } {
@@ -608,6 +675,17 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       // minification while walking; the character sprite (loaded separately,
       // see `loadFixtureMapData`) keeps the crisp nearest/no-mipmap default.
       textureOptions: { mipmaps: true, maxAnisotropy },
+      // Ceiling carve (design gotcha, obs #117): the floor BELOW's room grid
+      // carves THIS floor's ground-quad tiles into per-room ceiling meshes,
+      // so THIS floor's scene is the one `session.driveCeilingFade` targets
+      // when the player stands in one of those rooms one floor down.
+      // Constructor-only option -- there is no live "recarve" API, so a
+      // change to which rooms carve a floor's ceiling requires rebuilding
+      // that floor's scene from scratch (already what re-entering the
+      // visibility window does).
+      ...(belowRoomIdGrid
+        ? { ceilingCarve: { roomIdGrid: belowRoomIdGrid, mapWidth: source.map.width } }
+        : {}),
     });
     tilemap.group.position.y = source.baseElevation * HEIGHT_UNIT;
     const streamer = new ChunkStreamer({
@@ -679,7 +757,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
         if (!slot) continue;
         if (visible.has(i)) {
           if (!slot.render) {
-            slot.render = buildFloorRender(slot.source);
+            slot.render = buildFloorRender(slot.source, floorSlots[i - 1]?.source.roomIdGrid);
             scene.add(slot.render.tilemap.group);
           }
           slot.render.tilemap.applyDiff(slot.render.streamer.update(focusX, focusY));
@@ -693,6 +771,24 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
 
     function liveChunkCount(): number {
       return floorSlots.reduce((sum, slot) => sum + (slot.render?.tilemap.liveChunkCount ?? 0), 0);
+    }
+
+    // Player-current-room lookup (design "Player-current-room runtime"): one
+    // grid per floor, `undefined` for a floor with no authored rooms.
+    // Floors share the document's width (design: "floors share the
+    // document's width/height"), so the primary floor's own width indexes
+    // every floor's grid.
+    const roomTracker = createRoomTracker(
+      floorSources.map((source) => source.roomIdGrid),
+      primary.map.width,
+    );
+
+    function roomIdAt(floorIndex: number, x: number, y: number): number {
+      return roomTracker.roomAt(floorIndex, x, y);
+    }
+
+    function driveCeilingFade(floorIndex: number, roomId: number | null, dt: number): void {
+      driveRoomFade(aboveFloorTilemap(floorSlots, floorIndex), roomId, dt);
     }
 
     // Stair-link trigger dedup: extracted to `@threemaker/gameplay`'s
@@ -766,6 +862,8 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       floorRouter,
       liveChunkCount,
       applyFloorWindow,
+      roomIdAt,
+      driveCeilingFade,
       stairTriggerAt,
       markStairArrival,
       dispose() {
@@ -1312,6 +1410,14 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
                   tileset,
                   textures,
                   sheetPixelSizes,
+                  // Carves floor 1's ceiling over this room's footprint (see
+                  // `buildDevDemoRooms`'s doc comment).
+                  roomIdGrid: computeRoomIdGrid(
+                    buildDevDemoRooms(),
+                    'floor-0',
+                    DEV_DEMO_FLOOR_SIZE,
+                    DEV_DEMO_FLOOR_SIZE,
+                  ),
                 },
                 {
                   floorId: 'floor-1',
@@ -1420,6 +1526,11 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
         const last = waypoints[waypoints.length - 1];
         const pinnedFloor = Math.max(first?.floor ?? 0, last?.floor ?? 0);
         session.applyFloorWindow(frame.x, frame.y, pinnedFloor);
+        // (design branch (b): "During traversal: setFadedRoom(null)") -- no
+        // room reads as "current" mid-climb, so the pinned floor's ceiling
+        // (if any) fades back to opaque instead of holding whatever room was
+        // faded the instant the climb started.
+        session.driveCeilingFade(pinnedFloor, null, dt);
 
         walkAnimation.update(dt);
         renderCharacterAt(frame, mover.facing, true, dt);
@@ -1532,6 +1643,23 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       // same chunk, so geometry work only happens on chunk-boundary
       // crossings; floors outside the current window are skipped entirely.
       session.applyFloorWindow(mover.tile.x, mover.tile.y);
+
+      // Ceiling fade drive (design "Player-current-room runtime"): resolves
+      // the room under the player's just-settled tile, gates it through the
+      // camera mode (`resolveFadedRoomId` -- 'first-person' always fades
+      // nothing, the player is under the ceiling and it must stay solid),
+      // then drives the floor-ABOVE's scene, whose carved ceiling meshes
+      // represent this floor's rooms (obs #117 gotcha).
+      const currentRoomId = session.roomIdAt(
+        session.floorRouter.currentFloor,
+        mover.tile.x,
+        mover.tile.y,
+      );
+      session.driveCeilingFade(
+        session.floorRouter.currentFloor,
+        resolveFadedRoomId(cameraMode, currentRoomId),
+        dt,
+      );
 
       if (mover.moving) walkAnimation.update(dt);
       else walkAnimation.reset();

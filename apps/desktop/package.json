@@ -13,6 +13,7 @@
     "@threemaker/core": "workspace:*",
     "@threemaker/gameplay": "workspace:*",
     "@threemaker/importer-rpgm": "workspace:*",
+    "@threemaker/map-format": "workspace:*",
     "@threemaker/narrative": "workspace:*",
     "@threemaker/renderer": "workspace:*",
     "stats-gl": "4.2.2",
