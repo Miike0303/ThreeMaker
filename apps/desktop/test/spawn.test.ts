@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StandabilityQuery } from '../src/spawn.js';
-import { findSpawnTile } from '../src/spawn.js';
+import { findSpawnTile, resolveInitialSpawn } from '../src/spawn.js';
 
 /** Builds a fake grid from an ASCII map: '.' standable, '#' blocked. */
 function fakeGrid(rows: readonly string[]): StandabilityQuery {
@@ -48,5 +48,31 @@ describe('findSpawnTile', () => {
   it('throws when the entire map has no standable tile', () => {
     const grid = fakeGrid(['##', '##']);
     expect(() => findSpawnTile(grid, 0, 0)).toThrow(/no standable tile/i);
+  });
+});
+
+describe('resolveInitialSpawn', () => {
+  const floor0 = fakeGrid(['...', '...', '.#.']);
+  const floor1 = fakeGrid(['...', '.#.', '...']);
+
+  it('honors an authored spawn when its floor exists and the tile is standable there', () => {
+    const result = resolveInitialSpawn([floor0, floor1], { x: 0, y: 1, floorIndex: 1 }, 1, 1);
+    expect(result).toEqual({ x: 0, y: 1, floorIndex: 1 });
+  });
+
+  it('falls back to findSpawnTile on the SAME authored floor when the authored tile is not standable', () => {
+    // (1,1) is blocked on floor1; nearest standable ring-1 tile is (0,0).
+    const result = resolveInitialSpawn([floor0, floor1], { x: 1, y: 1, floorIndex: 1 }, 1, 1);
+    expect(result).toEqual({ x: 0, y: 0, floorIndex: 1 });
+  });
+
+  it('falls back to floor 0 when the authored floorIndex does not exist', () => {
+    const result = resolveInitialSpawn([floor0, floor1], { x: 0, y: 0, floorIndex: 7 }, 1, 1);
+    expect(result).toEqual({ x: 1, y: 1, floorIndex: 0 });
+  });
+
+  it('falls back to floor 0 when no spawn was authored at all', () => {
+    const result = resolveInitialSpawn([floor0, floor1], undefined, 1, 1);
+    expect(result).toEqual({ x: 1, y: 1, floorIndex: 0 });
   });
 });

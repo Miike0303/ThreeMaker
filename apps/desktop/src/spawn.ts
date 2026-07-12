@@ -7,6 +7,52 @@ export interface StandabilityQuery {
   isStandable(x: number, y: number): boolean;
 }
 
+/** A resolved spawn: a tile position plus which floor it's on (design "Runtime spawn"). Structurally matches `map-document-runtime.ts`'s `TranslatedSpawn` -- no import needed, both are `{x, y, floorIndex}`. */
+export interface FloorSpawn extends GridPosition {
+  readonly floorIndex: number;
+}
+
+/**
+ * Resolves a session's initial spawn (loop-crear-jugar design, "Runtime
+ * spawn"): an authored spawn wins when its `floorIndex` exists among
+ * `floors` and its tile is standable there; otherwise falls back to
+ * `findSpawnTile`'s nearest-standable search -- on the authored floor when
+ * that floor exists but the tile itself isn't standable (a stale authored
+ * doc vs. its own layers), or on `floors[0]` when no authored spawn was
+ * given at all or its `floorIndex` doesn't exist. Never throws over a bad
+ * authored spawn (spec: "missing spawn falls back silently") -- only
+ * `findSpawnTile` itself can still throw, and only when a floor has no
+ * standable tile anywhere.
+ */
+export function resolveInitialSpawn(
+  floors: readonly StandabilityQuery[],
+  authoredSpawn: FloorSpawn | undefined,
+  fallbackOriginX: number,
+  fallbackOriginY: number,
+): FloorSpawn {
+  const floorIndex =
+    authoredSpawn !== undefined && floors[authoredSpawn.floorIndex] !== undefined
+      ? authoredSpawn.floorIndex
+      : 0;
+  const floor = floors[floorIndex];
+  if (!floor) {
+    throw new Error(
+      `resolveInitialSpawn: no floor at index ${floorIndex} (have ${floors.length}).`,
+    );
+  }
+
+  if (
+    authoredSpawn !== undefined &&
+    floorIndex === authoredSpawn.floorIndex &&
+    floor.isStandable(authoredSpawn.x, authoredSpawn.y)
+  ) {
+    return authoredSpawn;
+  }
+
+  const position = findSpawnTile(floor, fallbackOriginX, fallbackOriginY);
+  return { x: position.x, y: position.y, floorIndex };
+}
+
 /**
  * Finds the nearest standable tile to `(originX, originY)` (typically the
  * map's center), so the player never spawns hardcoded on top of a wall.

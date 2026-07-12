@@ -31,6 +31,7 @@ import {
 } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
+import { loadAuthoredMap } from './authored-map.js';
 import type { CameraMode } from './camera-rig.js';
 import { clampTiltDeg, computeCameraPose, cycleCameraMode } from './camera-rig.js';
 import { CharacterSprite, tileCenterToWorld } from './character-sprite.js';
@@ -61,7 +62,9 @@ import {
   driveRoomFade,
   resolveFadedRoomId,
 } from './room-state.js';
-import { findSpawnTile } from './spawn.js';
+import type { FloorSpawn } from './spawn.js';
+import { resolveInitialSpawn } from './spawn.js';
+import { isTauriAvailable } from './tauri-env.js';
 import { WalkAnimation } from './walk-animation.js';
 
 // The Roseliam fixture (see fixtures/README.md) ships 3 sample maps; Map007
@@ -572,7 +575,26 @@ interface MapSession {
   dispose(): void;
 }
 
-async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): Promise<void> {
+/**
+ * Multi-floor session inputs that override the single-fixture-floor default
+ * built from `data` below -- the authored-load path's shape
+ * (`AuthoredMapResult`, see `authored-map.ts`). `data` itself still supplies
+ * the PRIMARY floor's map/tileset/textures/sheetPixelSizes for scene-setup
+ * concerns that only ever look at one floor (initial light positioning) plus
+ * the (still DEV-fixture, per this slice's scope) `characterTexture` -- only
+ * `createMapSession`'s own floor/stair/spawn arguments come from here.
+ */
+interface SessionOverride {
+  readonly floorSources: readonly FloorSource[];
+  readonly stairLinks: readonly StairLinkRuntime[];
+  readonly spawn: FloorSpawn | undefined;
+}
+
+async function renderFixtureMap(
+  container: HTMLElement,
+  data: FixtureMapData,
+  sessionOverride?: SessionOverride,
+): Promise<void> {
   const { map: fixtureMap, tileset, sheetPixelSizes, textures, characterTexture } = data;
 
   const scene = new THREE.Scene();
@@ -662,6 +684,7 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
   function createMapSession(
     floorSources: readonly FloorSource[],
     stairLinks: readonly StairLinkRuntime[] = [],
+    options?: { readonly spawn?: FloorSpawn },
   ): MapSession {
     const primary = floorSources[0];
     if (!primary) throw new Error('createMapSession requires at least one floor source.');
@@ -771,11 +794,20 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
       stairTriggerTracker.mark({ floor: floorIndex, x, y });
     }
 
-    const spawn = findSpawnTile(
-      floorRouter.passability,
+    // Runtime spawn (loop-crear-jugar design): an authored spawn wins when
+    // its floor is standable there; otherwise `resolveInitialSpawn` falls
+    // back to `findSpawnTile`'s nearest-standable search, exactly as before
+    // this option existed. `floorRouter.currentFloor` must be set to the
+    // resolved floor BEFORE anything below reads it (stair-arrival marking,
+    // the mover's `canMove` closure, the initial render window).
+    const floorSpawn = resolveInitialSpawn(
+      floors.map((floor) => floor.passability),
+      options?.spawn,
       primary.map.width / 2,
       primary.map.height / 2,
     );
+    floorRouter.currentFloor = floorSpawn.floorIndex;
+    const spawn = { x: floorSpawn.x, y: floorSpawn.y };
     // Spawning exactly on a stair-link waypoint (unlikely, but possible on a
     // hand-authored map) should not immediately trigger a traversal --
     // matches `TriggerIndex`'s own initialTile convention.
@@ -828,9 +860,13 @@ async function renderFixtureMap(container: HTMLElement, data: FixtureMapData): P
     };
   }
 
-  let session = createMapSession([
-    { floorId: 'floor-0', baseElevation: 0, map: fixtureMap, tileset, textures, sheetPixelSizes },
-  ]);
+  let session = createMapSession(
+    sessionOverride?.floorSources ?? [
+      { floorId: 'floor-0', baseElevation: 0, map: fixtureMap, tileset, textures, sheetPixelSizes },
+    ],
+    sessionOverride?.stairLinks ?? [],
+    sessionOverride?.spawn ? { spawn: sessionOverride.spawn } : undefined,
+  );
   const walkAnimation = new WalkAnimation();
 
   // The render-position handoff selector (design "Render-position handoff"):
@@ -1672,6 +1708,49 @@ async function main(): Promise<void> {
   statusEl.className = 'status-message';
   statusEl.textContent = i18n.t('map.loading');
   container.appendChild(statusEl);
+
+  // Authored-load path (loop-crear-jugar, Slice 4a): gated on the real
+  // Tauri host being present (both `tauri dev` and a production build), NOT
+  // on `import.meta.env.DEV` -- an authored map renders the same way in
+  // either. `loadAuthoredMap` returns `null` (after logging why) for "no
+  // file saved yet"/parse failure/read failure, all of which fall through
+  // to the DEV demos/fixture path below, unchanged (spec: "DEV demos remain
+  // fallback"). The player-sprite character sheet is still loaded from the
+  // DEV-only Roseliam fixture for now -- a production-safe canvas-generated
+  // placeholder is Slice 4b's job, not this one's.
+  if (isTauriAvailable()) {
+    const authored = await loadAuthoredMap();
+    if (authored) {
+      const primaryFloor = authored.floorSources[0];
+      if (!primaryFloor) throw new Error('loadAuthoredMap returned no floors.');
+      try {
+        const characterTexture = await loadSheetTexture(
+          fixtureCharacterUrl(__FIXTURES_DIR__, CHARACTER_SHEET_FILE),
+        );
+        statusEl.remove();
+        await renderFixtureMap(
+          container,
+          {
+            map: primaryFloor.map,
+            tileset: primaryFloor.tileset,
+            sheetPixelSizes: primaryFloor.sheetPixelSizes,
+            textures: primaryFloor.textures,
+            characterTexture,
+          },
+          {
+            floorSources: authored.floorSources,
+            stairLinks: authored.stairLinks,
+            spawn: authored.spawn,
+          },
+        );
+        return;
+      } catch (error) {
+        console.error('Authored map loaded, but rendering it failed:', error);
+        statusEl.textContent = i18n.t('map.fixtureNotFound');
+        return;
+      }
+    }
+  }
 
   // `/@fs/` and `server.fs.allow` (vite.config.ts) only exist under `vite
   // dev` -- a production build has no dev server to serve the (git-ignored,

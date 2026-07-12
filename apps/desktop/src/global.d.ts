@@ -13,6 +13,14 @@ declare global {
 
   interface Window {
     /**
+     * Set when running inside the real Tauri webview host (injected by the
+     * Tauri runtime itself, not by this app). Absent under plain `vite dev`
+     * (see `tauri-env.ts`'s `isTauriAvailable`, a copy of the editor's
+     * `catalog-client.ts` check).
+     */
+    __TAURI_INTERNALS__?: unknown;
+
+    /**
      * Dev-only hook exposing the renderer, so a headless visual check can
      * inspect which backend (WebGPU/WebGL2) actually got used. Only set when
      * `import.meta.env.DEV` (see main.ts); absent in production builds.
