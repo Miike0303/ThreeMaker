@@ -64,10 +64,6 @@
     "painter.rampDirection.north": "norte",
     "painter.rampDirection.south": "sur",
     "painter.rampDirection.east": "este",
-    "painter.rampDirection.west": "oeste",
-    "painter.export": "Exportar a RPG Maker MZ",
-    "painter.exportRunning": "Exportando…",
-    "painter.exportSuccess": "Exportado a {outDir} (marcador: {marker}).",
-    "painter.exportFailed": "Falló la exportación: {message}"
+    "painter.rampDirection.west": "oeste"
   }
 }

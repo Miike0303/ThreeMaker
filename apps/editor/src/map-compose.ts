@@ -9,8 +9,7 @@
  * state, and `toRenderableMap` takes an explicit floor index. This
  * replaces Slice 1's transitional `primaryFloorLayers`/
  * `withPrimaryFloorLayers` single-floor accessors (still exported from
- * `@threemaker/map-format` for other, not-yet-floor-aware consumers, e.g.
- * `packages/exporter-rpgm`).
+ * `@threemaker/map-format` for other, not-yet-floor-aware consumers).
  */
 
 import type { RpgmMap, RpgmTileset, TileSheetNames } from '@threemaker/importer-rpgm';

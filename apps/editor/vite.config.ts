@@ -8,7 +8,6 @@ import {
   isValidSha256,
   SchemaVersionMismatchError,
 } from './dev-server/catalog-api.js';
-import { runDevExport } from './dev-server/export-api.js';
 import { loadMapFile, saveMapFile } from './dev-server/map-api.js';
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
@@ -32,18 +31,6 @@ const DEV_ASSET_STORE_DIR = resolve(dirname(DEV_CATALOG_DB_PATH));
 // Single working map file (Slice 4 dev-fallback save/load), kept in the same
 // never-committed asset-store directory as the catalog db/objects.
 const DEV_MAP_FILE_PATH = resolve(DEV_ASSET_STORE_DIR, 'editor-map.tmmap.json');
-
-// Slice 5 export config -- every path here is machine-specific and MUST stay
-// outside the repo/version control: the MZ blank-project template lives
-// inside a real RPG Maker MZ install, exported projects land in their own
-// out-of-repo folder, and the (optional) engine dir is only used for the
-// "cheaply detected" marker-value resolution path (see
-// `@threemaker/exporter-rpgm`'s `resolveMarkerValue`).
-const DEV_MZ_TEMPLATE_DIR = process.env.THREEMAKER_MZ_TEMPLATE_DIR;
-const DEV_MZ_ENGINE_DIR = process.env.THREEMAKER_MZ_ENGINE_DIR;
-const DEV_EXPORT_OUT_BASE_DIR =
-  process.env.THREEMAKER_EXPORT_OUT_DIR ??
-  resolve(process.env.USERPROFILE ?? process.env.HOME ?? '.', '.threemaker', 'exports');
 
 // Mirrors apps/editor/src-tauri/src/catalog_ipc.rs's PAGE_SIZE (100) -- no
 // cross-language sharing needed for a single fixed constant; keep both in
@@ -229,82 +216,13 @@ function devMapApiPlugin(): Plugin {
   };
 }
 
-/**
- * Dev-only fallback for RPGM export (Slice 5: "rpgm-export"). Real Tauri
- * host export (plugin-fs + Rust copy_dir, per design) is NOT wired this
- * slice -- see `export-client.ts`'s doc comment for the documented known
- * gap (same shape as Slice 4's map save/load deferral). Requires
- * `THREEMAKER_MZ_TEMPLATE_DIR` to be set to a real installed MZ project's
- * blank-template directory (e.g. `<engine>/newdata`) -- returns a clear 400
- * instead of silently failing when it isn't configured.
- */
-function devExportApiPlugin(): Plugin {
-  return {
-    name: 'threemaker-dev-export-api',
-    configureServer(server) {
-      server.middlewares.use('/api/dev-export', (req, res) => {
-        const url = new URL(req.url ?? '/', 'http://localhost');
-        const segments = url.pathname.split('/').filter(Boolean);
-
-        if (segments.length === 1 && segments[0] === 'run' && req.method === 'POST') {
-          if (!DEV_MZ_TEMPLATE_DIR) {
-            res.statusCode = 400;
-            res.setHeader('content-type', 'application/json');
-            res.end(
-              JSON.stringify({
-                code: 'TemplateNotConfigured',
-                message:
-                  'THREEMAKER_MZ_TEMPLATE_DIR is not set -- point it at an installed RPG Maker MZ blank-project template directory (e.g. "<engine>/newdata") to enable export.',
-              }),
-            );
-            return;
-          }
-
-          let body = '';
-          req.setEncoding('utf8');
-          req.on('data', (chunk: string) => {
-            body += chunk;
-          });
-          req.on('end', () => {
-            try {
-              const map = JSON.parse(body);
-              const result = runDevExport({
-                map,
-                templateDir: DEV_MZ_TEMPLATE_DIR as string,
-                storeDir: DEV_ASSET_STORE_DIR,
-                outBaseDir: DEV_EXPORT_OUT_BASE_DIR,
-                ...(DEV_MZ_ENGINE_DIR ? { engineDir: DEV_MZ_ENGINE_DIR } : {}),
-              });
-              res.setHeader('content-type', 'application/json');
-              res.end(JSON.stringify(result));
-            } catch (err) {
-              res.statusCode = 500;
-              res.setHeader('content-type', 'application/json');
-              res.end(
-                JSON.stringify({
-                  code: 'ExportFailed',
-                  message: err instanceof Error ? err.message : String(err),
-                }),
-              );
-            }
-          });
-          return;
-        }
-
-        res.statusCode = 404;
-        res.end();
-      });
-    },
-  };
-}
-
 // Tauri expects a fixed dev server port and a relative frontend build so the
 // generated app can load assets correctly regardless of host origin. Port
 // 1421 (not 1420) so the editor's dev server never collides with
 // apps/desktop's.
 export default defineConfig({
   clearScreen: false,
-  plugins: [react(), devCatalogApiPlugin(), devMapApiPlugin(), devExportApiPlugin()],
+  plugins: [react(), devCatalogApiPlugin(), devMapApiPlugin()],
   server: {
     port: 1421,
     strictPort: true,
