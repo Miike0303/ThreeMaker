@@ -27,14 +27,29 @@
  * alongside `commandStack` (tile edits and room edits are undone via two
  * separate stacks/functions, `undo`/`redo` vs. `undoRoom`/`redoRoom`; this
  * slice does not unify them into one history).
+ *
+ * Stair-link + spawn authoring (Slice 5a, loop-crear-jugar): `PainterState.
+ * stairLinks` mirrors `MapDocument.stairLinks` exactly (flat, top-level,
+ * unlike rooms/tiles it is NOT floor-scoped -- a `StairLinkDocument`
+ * inherently spans two floors via `fromFloor`/`toFloor`). Deliberately NO
+ * command-stack undo for stair-links or spawn, unlike rooms/tiles: a
+ * stair-link references TWO floors at once, so there is no single "active
+ * floor's own stack" to push it onto without breaking the "per-floor undo
+ * isolation" invariant the rest of this module enforces (see `undo`/
+ * `undoRoom`'s doc comments) -- deleting a link (`removeStairLink`) or
+ * overwriting the single `spawn` value (`setSpawn`/`clearSpawn`) IS the
+ * undo, mirroring `activeRoomId`'s plain caller-driven state, not
+ * `roomCommandStack`'s push/pop history.
  */
 
 import type {
   CommandStackState,
+  MapSpawn,
   RoomDocument,
   RoomRect,
   SemanticClass,
   SemanticOverrides,
+  StairLinkDocument,
   TileCellDiff,
   TileDiff,
   TileLayerSet,
@@ -120,6 +135,17 @@ export interface PainterState {
    * `removeRoom` when it targets the currently active room.
    */
   readonly activeRoomId?: string;
+  /** Every authored stair-link (Slice 5a), mirroring `MapDocument.stairLinks` exactly -- flat, top-level, NOT floor-scoped (a link inherently spans two floors). */
+  readonly stairLinks: readonly StairLinkDocument[];
+  /**
+   * The first click's entry point in the 2-click stair-link authoring flow
+   * (Slice 5b tool drives this; the store only holds/clears the value --
+   * see this module's doc comment). `undefined` means no click is pending.
+   * Caller-set only via `setPendingStairEntry`, mirroring `activeRoomId`.
+   */
+  readonly pendingStairEntry?: { readonly floor: string; readonly x: number; readonly y: number };
+  /** The single authored player-spawn point (Slice 5a), mirroring `MapDocument.spawn` exactly. `undefined` means unauthored (runtime falls back to `findSpawnTile`). */
+  readonly spawn?: MapSpawn;
 }
 
 export interface CreatePainterStateOptions {
@@ -133,6 +159,10 @@ export interface CreatePainterStateOptions {
   readonly activeFloor?: number;
   /** Initial rooms (map load path), matching `MapDocument.rooms`; defaults to none authored. */
   readonly rooms?: readonly RoomDocument[];
+  /** Initial stair-links (map load path), matching `MapDocument.stairLinks`; defaults to none authored. */
+  readonly stairLinks?: readonly StairLinkDocument[];
+  /** Initial spawn (map load path), matching `MapDocument.spawn`; defaults to unauthored. */
+  readonly spawn?: MapSpawn;
 }
 
 /** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. Every floor gets a fresh, empty command stack AND room-command stack: undo/redo history is session-local, never carried over from a saved document. */
@@ -145,8 +175,10 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     semantics = {},
     activeFloor = 0,
     rooms = [],
+    stairLinks = [],
+    spawn,
   } = options;
-  return {
+  const base: PainterState = {
     floors: floors.map((floor) => ({
       ...floor,
       commandStack: EMPTY_COMMAND_STACK,
@@ -163,7 +195,9 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     semanticClass: 'none',
     semantics,
     rooms,
+    stairLinks,
   };
+  return spawn === undefined ? base : { ...base, spawn };
 }
 
 /** The floor currently being edited/rendered. Throws if `activeFloor` is out of range -- an internal-invariant violation, never user-reachable (every mutator below keeps `activeFloor` in range). */
@@ -575,6 +609,98 @@ export function redoRoom(state: PainterState): RoomCommandStepOutcome {
   const undoStack = [...floor.roomCommandStack.undoStack, last].slice(-COMMAND_STACK_CAP);
   const withStack = replaceActiveFloor(state, { roomCommandStack: { undoStack, redoStack } });
   return { state: { ...withStack, rooms }, command: last };
+}
+
+// --- Stair-link authoring (Slice 5a) -------------------------------------
+
+export interface AddStairLinkOptions {
+  readonly id: string;
+  readonly fromFloor: string;
+  readonly toFloor: string;
+  /** The entry point, on `fromFloor`. Becomes `waypoints[0]`. */
+  readonly entry: { readonly x: number; readonly y: number };
+  /** The landing point, on `toFloor`. Becomes the last waypoint. */
+  readonly exit: { readonly x: number; readonly y: number };
+  /** Defaults to `true` (design: "bidirectional: true default"). */
+  readonly bidirectional?: boolean;
+}
+
+/**
+ * Adds a new 2-waypoint `StairLinkDocument` connecting `fromFloor`'s `entry`
+ * tile to `toFloor`'s `exit` tile (design: "waypoints[0] is the entry point
+ * on fromFloor, the last is the landing on toFloor"). Ignored mid-stroke,
+ * same as `setTool`. A no-op if a link with `options.id` already exists --
+ * stair-link ids are store-level unique (schema itself does not enforce
+ * this, unlike floor/room ids, but CRUD-by-id requires it); use
+ * `removeStairLink` + `addStairLink` to replace one instead. NOT part of
+ * any command-stack undo history -- see this module's doc comment.
+ */
+export function addStairLink(state: PainterState, options: AddStairLinkOptions): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (state.stairLinks.some((link) => link.id === options.id)) return state;
+
+  const link: StairLinkDocument = {
+    id: options.id,
+    fromFloor: options.fromFloor,
+    toFloor: options.toFloor,
+    bidirectional: options.bidirectional ?? true,
+    waypoints: [
+      { x: options.entry.x, y: options.entry.y, floor: options.fromFloor },
+      { x: options.exit.x, y: options.exit.y, floor: options.toFloor },
+    ],
+  };
+  return { ...state, stairLinks: [...state.stairLinks, link] };
+}
+
+/** Removes the stair-link `id`. Ignored mid-stroke. A safe no-op if no link with that id exists -- this IS the undo for stair-link authoring (see this module's doc comment). */
+export function removeStairLink(state: PainterState, id: string): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (!state.stairLinks.some((link) => link.id === id)) return state;
+  return { ...state, stairLinks: state.stairLinks.filter((link) => link.id !== id) };
+}
+
+/** Flips the `bidirectional` flag on the stair-link `id`. Ignored mid-stroke. A safe no-op if no link with that id exists. */
+export function toggleStairLinkBidirectional(state: PainterState, id: string): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (!state.stairLinks.some((link) => link.id === id)) return state;
+  const stairLinks = state.stairLinks.map((link) =>
+    link.id === id ? { ...link, bidirectional: !link.bidirectional } : link,
+  );
+  return { ...state, stairLinks };
+}
+
+/**
+ * Sets (or, with `undefined`, clears) the pending entry point in the 2-click
+ * stair-link authoring flow (Slice 5b's tool drives the actual clicks; this
+ * store op only holds/clears the value). Ignored mid-stroke, same as
+ * `setTool`. Mirrors `setActiveRoomId`'s omit-to-clear shape
+ * (`exactOptionalPropertyTypes` requires actually omitting the key).
+ */
+export function setPendingStairEntry(
+  state: PainterState,
+  entry: { readonly floor: string; readonly x: number; readonly y: number } | undefined,
+): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (entry !== undefined) return { ...state, pendingStairEntry: entry };
+  if (state.pendingStairEntry === undefined) return state;
+  const { pendingStairEntry: _pendingStairEntry, ...rest } = state;
+  return rest;
+}
+
+// --- Spawn authoring (Slice 5a) ------------------------------------------
+
+/** Sets the player-spawn point, replacing any existing one (single spawn per map). Ignored mid-stroke, same as `setTool`. NOT part of any command-stack undo history -- overwriting/clearing IS the undo (see this module's doc comment). */
+export function setSpawn(state: PainterState, spawn: MapSpawn): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  return { ...state, spawn };
+}
+
+/** Clears the player-spawn point. Ignored mid-stroke. A safe no-op if no spawn is set. */
+export function clearSpawn(state: PainterState): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (state.spawn === undefined) return state;
+  const { spawn: _spawn, ...rest } = state;
+  return rest;
 }
 
 // --- Stroke -> touched-cells resolution (per tool) ----------------------

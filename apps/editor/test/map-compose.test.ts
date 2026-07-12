@@ -1,4 +1,4 @@
-import type { RoomDocument } from '@threemaker/map-format';
+import type { RoomDocument, StairLinkDocument } from '@threemaker/map-format';
 import { primaryFloorLayers, validateCurrentVersionShape } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import {
@@ -487,5 +487,202 @@ describe('painter-viewport room wiring recipe (Slice 5b -- closes the 5a-gate MU
     const withoutRoomsArg = composeDocumentFromPainterFloors(docWithRoom, state.floors);
     expect(withoutRoomsArg.rooms).toEqual([existingRoom]);
     expect(withoutRoomsArg.rooms).not.toEqual(saved.rooms);
+  });
+});
+
+describe('composeDocumentFromPainterFloors: stairLinks + spawn (Slice 5a -- loop-crear-jugar)', () => {
+  it('regression: a map with no authored stair-links/spawn still composes stairLinks: [] and omits spawn', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 4,
+      height: 4,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const painterFloors = painterFloorsFromDocument(doc);
+    const composed = composeDocumentFromPainterFloors(doc, painterFloors);
+    expect(composed.stairLinks).toEqual([]);
+    expect(composed.spawn).toBeUndefined();
+    expect('spawn' in composed).toBe(false);
+  });
+
+  it('composes explicitly-passed stairLinks into the document, validating as a real v3 shape', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 4,
+      height: 4,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const groundFloor = doc.floors[0];
+    if (!groundFloor) throw new Error('test setup: createBlankMapDocument always yields floors[0]');
+    const twoFloorDoc = {
+      ...doc,
+      floors: [
+        groundFloor,
+        {
+          id: 'floor-1',
+          baseElevation: 3,
+          layers: {
+            tiles: [
+              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            ] as const,
+            shadows: new Array(16).fill(0),
+            regions: new Array(16).fill(0),
+          },
+        },
+      ],
+    };
+    const painterFloors = painterFloorsFromDocument(twoFloorDoc);
+    const stairLinks: readonly StairLinkDocument[] = [
+      {
+        id: 'stair-1',
+        fromFloor: 'floor-0',
+        toFloor: 'floor-1',
+        bidirectional: true,
+        waypoints: [
+          { x: 0, y: 0, floor: 'floor-0' },
+          { x: 1, y: 1, floor: 'floor-1' },
+        ],
+      },
+    ];
+
+    const composed = composeDocumentFromPainterFloors(
+      twoFloorDoc,
+      painterFloors,
+      twoFloorDoc.rooms,
+      stairLinks,
+    );
+    expect(composed.stairLinks).toEqual(stairLinks);
+    expect(() => validateCurrentVersionShape(composed)).not.toThrow();
+  });
+
+  it('drops a stair-link referencing a floor that no longer exists', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 4,
+      height: 4,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const groundFloor = doc.floors[0];
+    if (!groundFloor) throw new Error('test setup: createBlankMapDocument always yields floors[0]');
+    const twoFloorDoc = {
+      ...doc,
+      floors: [
+        groundFloor,
+        {
+          id: 'floor-1',
+          baseElevation: 3,
+          layers: {
+            tiles: [
+              new Array(16).fill(0),
+              new Array(16).fill(0),
+              new Array(16).fill(0),
+              new Array(16).fill(0),
+            ] as const,
+            shadows: new Array(16).fill(0),
+            regions: new Array(16).fill(0),
+          },
+        },
+      ],
+    };
+    const stairLinks: readonly StairLinkDocument[] = [
+      {
+        id: 'stair-1',
+        fromFloor: 'floor-0',
+        toFloor: 'floor-1',
+        bidirectional: true,
+        waypoints: [
+          { x: 0, y: 0, floor: 'floor-0' },
+          { x: 1, y: 1, floor: 'floor-1' },
+        ],
+      },
+    ];
+    const painterFloors = painterFloorsFromDocument(twoFloorDoc);
+
+    // Floor 1 gets removed from the painter's floor list (mirrors removeFloor).
+    const afterRemoval = composeDocumentFromPainterFloors(
+      twoFloorDoc,
+      painterFloors.filter((floor) => floor.id !== 'floor-1'),
+      twoFloorDoc.rooms,
+      stairLinks,
+    );
+    expect(afterRemoval.stairLinks).toEqual([]);
+  });
+
+  it('composes an explicitly-passed spawn into the document, validating as a real v3 shape', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 4,
+      height: 4,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const painterFloors = painterFloorsFromDocument(doc);
+    const spawn = { x: 2, y: 2, floor: 'floor-0' };
+
+    const composed = composeDocumentFromPainterFloors(
+      doc,
+      painterFloors,
+      doc.rooms,
+      doc.stairLinks,
+      spawn,
+    );
+    expect(composed.spawn).toEqual(spawn);
+    expect(() => validateCurrentVersionShape(composed)).not.toThrow();
+  });
+
+  it('drops a spawn referencing a floor that no longer exists', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 4,
+      height: 4,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const groundFloor = doc.floors[0];
+    if (!groundFloor) throw new Error('test setup: createBlankMapDocument always yields floors[0]');
+    const twoFloorDoc = {
+      ...doc,
+      floors: [
+        groundFloor,
+        {
+          id: 'floor-1',
+          baseElevation: 3,
+          layers: {
+            tiles: [
+              new Array(16).fill(0),
+              new Array(16).fill(0),
+              new Array(16).fill(0),
+              new Array(16).fill(0),
+            ] as const,
+            shadows: new Array(16).fill(0),
+            regions: new Array(16).fill(0),
+          },
+        },
+      ],
+    };
+    const spawn = { x: 1, y: 1, floor: 'floor-1' };
+    const painterFloors = painterFloorsFromDocument(twoFloorDoc);
+
+    // Floor 1 (the spawn's floor) gets removed from the painter's floor list.
+    const afterRemoval = composeDocumentFromPainterFloors(
+      twoFloorDoc,
+      painterFloors.filter((floor) => floor.id !== 'floor-1'),
+      twoFloorDoc.rooms,
+      twoFloorDoc.stairLinks,
+      spawn,
+    );
+    expect(afterRemoval.spawn).toBeUndefined();
+    expect('spawn' in afterRemoval).toBe(false);
   });
 });

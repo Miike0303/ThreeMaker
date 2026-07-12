@@ -5,6 +5,8 @@ import {
   addFloor,
   addRoom,
   addRoomRect,
+  addStairLink,
+  clearSpawn,
   createPainterState,
   pointerDown,
   pointerMove,
@@ -14,14 +16,18 @@ import {
   removeFloor,
   removeRoom,
   removeRoomRect,
+  removeStairLink,
   renameRoom,
   selectFloor,
   setActiveLayer,
   setActiveRoomId,
   setFillTileId,
+  setPendingStairEntry,
   setSemanticClass,
   setSemanticMode,
+  setSpawn,
   setTool,
+  toggleStairLinkBidirectional,
   undo,
   undoRoom,
 } from '../src/painter-store.js';
@@ -777,5 +783,263 @@ describe('painter-store: room-box tool (Slice 5b -- techos-y-oclusion-interiores
     expect(activeFloorState(state).layers[0]?.[0]).toBe(0);
     expect(activeFloorState(state).roomCommandStack.undoStack).toHaveLength(1);
     expect(state.rooms).toHaveLength(1);
+  });
+});
+
+describe('painter-store: stair-link authoring (Slice 5a -- loop-crear-jugar)', () => {
+  it('createPainterState defaults stairLinks to an empty array', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    expect(state.stairLinks).toEqual([]);
+  });
+
+  it('createPainterState accepts an initial stairLinks array (map load path)', () => {
+    const stairLinks = [
+      {
+        id: 'stair-1',
+        fromFloor: 'floor-0',
+        toFloor: 'floor-1',
+        bidirectional: true,
+        waypoints: [
+          { x: 0, y: 0, floor: 'floor-0' },
+          { x: 1, y: 1, floor: 'floor-1' },
+        ],
+      },
+    ];
+    const state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      stairLinks,
+    });
+    expect(state.stairLinks).toEqual(stairLinks);
+  });
+
+  it('addStairLink appends a 2-waypoint StairLinkDocument from entry/exit tiles, defaulting bidirectional to true', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addStairLink(state, {
+      id: 'stair-1',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 2, y: 3 },
+      exit: { x: 0, y: 0 },
+    });
+
+    expect(state.stairLinks).toEqual([
+      {
+        id: 'stair-1',
+        fromFloor: 'floor-0',
+        toFloor: 'floor-1',
+        bidirectional: true,
+        waypoints: [
+          { x: 2, y: 3, floor: 'floor-0' },
+          { x: 0, y: 0, floor: 'floor-1' },
+        ],
+      },
+    ]);
+  });
+
+  it('addStairLink honors an explicit bidirectional: false', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addStairLink(state, {
+      id: 'stair-1',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 0, y: 0 },
+      exit: { x: 1, y: 1 },
+      bidirectional: false,
+    });
+    expect(state.stairLinks[0]?.bidirectional).toBe(false);
+  });
+
+  it('addStairLink is a no-op if a link with that id already exists', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addStairLink(state, {
+      id: 'stair-1',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 0, y: 0 },
+      exit: { x: 1, y: 1 },
+    });
+    const result = addStairLink(state, {
+      id: 'stair-1',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 2, y: 2 },
+      exit: { x: 3, y: 3 },
+    });
+    expect(result).toBe(state);
+  });
+
+  it('addStairLink is ignored mid-stroke, same as setTool', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4, fillTileId: 1 });
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = addStairLink(state, {
+      id: 'stair-1',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 0, y: 0 },
+      exit: { x: 1, y: 1 },
+    });
+    expect(result).toBe(state);
+  });
+
+  it('removeStairLink removes the link from state.stairLinks', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addStairLink(state, {
+      id: 'stair-1',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 0, y: 0 },
+      exit: { x: 1, y: 1 },
+    });
+    state = removeStairLink(state, 'stair-1');
+    expect(state.stairLinks).toEqual([]);
+  });
+
+  it('removeStairLink is a safe no-op for an unknown id', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    const result = removeStairLink(state, 'nope');
+    expect(result).toBe(state);
+  });
+
+  it('removeStairLink is ignored mid-stroke, same as setTool', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4, fillTileId: 1 });
+    state = addStairLink(state, {
+      id: 'stair-1',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 0, y: 0 },
+      exit: { x: 1, y: 1 },
+    });
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = removeStairLink(state, 'stair-1');
+    expect(result).toBe(state);
+  });
+
+  it('toggleStairLinkBidirectional flips the flag on the matching link', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addStairLink(state, {
+      id: 'stair-1',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 0, y: 0 },
+      exit: { x: 1, y: 1 },
+    });
+    expect(state.stairLinks[0]?.bidirectional).toBe(true);
+
+    state = toggleStairLinkBidirectional(state, 'stair-1');
+    expect(state.stairLinks[0]?.bidirectional).toBe(false);
+
+    state = toggleStairLinkBidirectional(state, 'stair-1');
+    expect(state.stairLinks[0]?.bidirectional).toBe(true);
+  });
+
+  it('toggleStairLinkBidirectional is a safe no-op for an unknown id', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    const result = toggleStairLinkBidirectional(state, 'nope');
+    expect(result).toBe(state);
+  });
+
+  it('toggleStairLinkBidirectional is ignored mid-stroke, same as setTool', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4, fillTileId: 1 });
+    state = addStairLink(state, {
+      id: 'stair-1',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 0, y: 0 },
+      exit: { x: 1, y: 1 },
+    });
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = toggleStairLinkBidirectional(state, 'stair-1');
+    expect(result).toBe(state);
+  });
+
+  it('setPendingStairEntry sets/clears the pending entry point for the 2-click stair-link flow', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    expect(state.pendingStairEntry).toBeUndefined();
+
+    state = setPendingStairEntry(state, { floor: 'floor-0', x: 1, y: 2 });
+    expect(state.pendingStairEntry).toEqual({ floor: 'floor-0', x: 1, y: 2 });
+
+    state = setPendingStairEntry(state, undefined);
+    expect(state.pendingStairEntry).toBeUndefined();
+  });
+
+  it('setPendingStairEntry is ignored mid-stroke, same as setTool', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = setPendingStairEntry(state, { floor: 'floor-0', x: 1, y: 2 });
+    expect(result).toBe(state);
+  });
+});
+
+describe('painter-store: spawn authoring (Slice 5a -- loop-crear-jugar)', () => {
+  it('createPainterState defaults spawn to undefined', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    expect(state.spawn).toBeUndefined();
+  });
+
+  it('createPainterState accepts an initial spawn (map load path)', () => {
+    const state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      spawn: { x: 2, y: 2, floor: 'floor-0' },
+    });
+    expect(state.spawn).toEqual({ x: 2, y: 2, floor: 'floor-0' });
+  });
+
+  it('setSpawn sets the spawn point', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setSpawn(state, { x: 1, y: 1, floor: 'floor-0' });
+    expect(state.spawn).toEqual({ x: 1, y: 1, floor: 'floor-0' });
+  });
+
+  it('setSpawn replaces an existing spawn (single spawn per map)', () => {
+    let state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      spawn: { x: 0, y: 0, floor: 'floor-0' },
+    });
+    state = setSpawn(state, { x: 3, y: 3, floor: 'floor-0' });
+    expect(state.spawn).toEqual({ x: 3, y: 3, floor: 'floor-0' });
+  });
+
+  it('setSpawn is ignored mid-stroke, same as setTool', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4, fillTileId: 1 });
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = setSpawn(state, { x: 1, y: 1, floor: 'floor-0' });
+    expect(result).toBe(state);
+  });
+
+  it('clearSpawn clears an existing spawn', () => {
+    let state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      spawn: { x: 0, y: 0, floor: 'floor-0' },
+    });
+    state = clearSpawn(state);
+    expect(state.spawn).toBeUndefined();
+  });
+
+  it('clearSpawn is a safe no-op when no spawn is set', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    const result = clearSpawn(state);
+    expect(result).toBe(state);
+  });
+
+  it('clearSpawn is ignored mid-stroke, same as setTool', () => {
+    let state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      spawn: { x: 0, y: 0, floor: 'floor-0' },
+      fillTileId: 1,
+    });
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = clearSpawn(state);
+    expect(result).toBe(state);
   });
 });

@@ -17,8 +17,10 @@ import type {
   FloorDocument,
   MapDocument,
   MapLayers,
+  MapSpawn,
   RoomDocument,
   SlotComposition,
+  StairLinkDocument,
   TileLayerSet,
   TileSheetSlot,
 } from '@threemaker/map-format';
@@ -214,11 +216,11 @@ export function painterFloorsFromDocument(doc: MapDocument): readonly PainterFlo
  * per-floor tile layers, re-attaching each floor's original shadows/
  * regions (untouched passthrough; a brand-new floor added in-session --
  * with no matching original floor id -- gets blank shadows/regions, same
- * as `createBlankMapDocument`). Any `stairLinks`/`rooms` entry referencing a
- * floor id no longer present is dropped (spec/task: "remove drops
- * referencing stair-links"; rooms mirror this exactly -- see
- * `validateRooms`'s floor-ref check, which would otherwise reject a
- * dangling room on save/export).
+ * as `createBlankMapDocument`). Any `stairLinks`/`rooms`/`spawn` entry
+ * referencing a floor id no longer present is dropped (spec/task: "remove
+ * drops referencing stair-links"; rooms and spawn mirror this exactly --
+ * see `validateRooms`/`validateSpawn`'s floor-ref checks, which would
+ * otherwise reject a dangling reference on save/export).
  *
  * `rooms` (techos-y-oclusion-interiores Slice 5a): defaults to the source
  * document's own `rooms` when omitted, so every pre-Slice-5a call site
@@ -226,11 +228,26 @@ export function painterFloorsFromDocument(doc: MapDocument): readonly PainterFlo
  * roomless map (regression). Real callers authoring rooms via
  * `painter-store.ts`'s room CRUD ops (`addRoom`/`removeRoom`/etc.) pass
  * their live `PainterState.rooms` here explicitly.
+ *
+ * `stairLinks`/`spawn` (loop-crear-jugar Slice 5a): same default-to-source
+ * precedent as `rooms` -- omitting either 4th/5th arg keeps composing the
+ * source document's own value (regression: a roomless/stairless/spawnless
+ * map still composes `stairLinks: []` and omits `spawn` entirely, matching
+ * `createBlankMapDocument`'s shape). Real callers authoring stair-links/
+ * spawn via `painter-store.ts` (`addStairLink`/`removeStairLink`/
+ * `toggleStairLinkBidirectional`/`setSpawn`/`clearSpawn`) pass their live
+ * `PainterState.stairLinks`/`PainterState.spawn` here explicitly.
+ * `exactOptionalPropertyTypes` requires actually OMITTING the `spawn` key
+ * when it composes to `undefined` (assigning `spawn: undefined` is a type
+ * error), hence the two-branch return below, same shape as `schema.ts`'s
+ * `validateCurrentVersionShape`.
  */
 export function composeDocumentFromPainterFloors(
   doc: MapDocument,
   floors: readonly PainterFloorSource[],
   rooms: readonly RoomDocument[] = doc.rooms,
+  stairLinks: readonly StairLinkDocument[] = doc.stairLinks,
+  spawn: MapSpawn | undefined = doc.spawn,
 ): MapDocument {
   const originalById = new Map(doc.floors.map((floor) => [floor.id, floor] as const));
   const blankLayer = new Array(doc.width * doc.height).fill(0);
@@ -248,12 +265,20 @@ export function composeDocumentFromPainterFloors(
   });
 
   const floorIds = new Set(floors.map((floor) => floor.id));
-  const stairLinks = doc.stairLinks.filter(
+  const composedStairLinks = stairLinks.filter(
     (link) => floorIds.has(link.fromFloor) && floorIds.has(link.toFloor),
   );
   const composedRooms = rooms.filter((room) => floorIds.has(room.floor));
+  const composedSpawn = spawn !== undefined && floorIds.has(spawn.floor) ? spawn : undefined;
 
-  return { ...doc, floors: composedFloors, stairLinks, rooms: composedRooms };
+  const { spawn: _originalSpawn, ...docWithoutSpawn } = doc;
+  const base = {
+    ...docWithoutSpawn,
+    floors: composedFloors,
+    stairLinks: composedStairLinks,
+    rooms: composedRooms,
+  };
+  return composedSpawn === undefined ? base : { ...base, spawn: composedSpawn };
 }
 
 /** Bridges a `MapDocument`'s merged flags to the `RpgmTileset` shape `buildChunks` expects. `sheetNames` is unused by the renderer's build pipeline (only `computeTileUv`'s caller-provided `sheetPixelSizes` matters), so it's a harmless placeholder. */
