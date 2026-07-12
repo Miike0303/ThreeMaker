@@ -18,6 +18,7 @@ import type {
   FloorDocument,
   MapDocument,
   MapLayers,
+  RoomDocument,
   SlotComposition,
   TileLayerSet,
   TileSheetSlot,
@@ -104,9 +105,9 @@ export function createBlankMapDocument(options: CreateBlankMapDocumentOptions): 
       },
     ],
     stairLinks: [],
-    // Schema v3 (techos-y-oclusion-interiores Slice 1): additive field, kept
-    // empty here -- real room-authoring wiring for this composer lands in
-    // that change's Slice 5a ("map-compose.ts emits v3 natively").
+    // Schema v3 (techos-y-oclusion-interiores): a freshly-created blank map
+    // authors no rooms yet -- see `composeDocumentFromPainterFloors` for the
+    // real room-authoring compose path (Slice 5a).
     rooms: [],
   };
 }
@@ -210,19 +211,27 @@ export function painterFloorsFromDocument(doc: MapDocument): readonly PainterFlo
 }
 
 /**
- * Composes a full v2 `MapDocument` from the painter store's current
+ * Composes a full v3 `MapDocument` from the painter store's current
  * per-floor tile layers, re-attaching each floor's original shadows/
  * regions (untouched passthrough; a brand-new floor added in-session --
  * with no matching original floor id -- gets blank shadows/regions, same
- * as `createBlankMapDocument`). Any `stairLinks` entry referencing a floor
- * id no longer present is dropped (spec/task: "remove drops referencing
- * stair-links") -- a no-op today since this slice authors no stair-links,
- * but keeps a loaded document with stair-links safe against a floor
- * removal.
+ * as `createBlankMapDocument`). Any `stairLinks`/`rooms` entry referencing a
+ * floor id no longer present is dropped (spec/task: "remove drops
+ * referencing stair-links"; rooms mirror this exactly -- see
+ * `validateRooms`'s floor-ref check, which would otherwise reject a
+ * dangling room on save/export).
+ *
+ * `rooms` (techos-y-oclusion-interiores Slice 5a): defaults to the source
+ * document's own `rooms` when omitted, so every pre-Slice-5a call site
+ * (still passing only 2 args) keeps composing byte-identical output for a
+ * roomless map (regression). Real callers authoring rooms via
+ * `painter-store.ts`'s room CRUD ops (`addRoom`/`removeRoom`/etc.) pass
+ * their live `PainterState.rooms` here explicitly.
  */
 export function composeDocumentFromPainterFloors(
   doc: MapDocument,
   floors: readonly PainterFloorSource[],
+  rooms: readonly RoomDocument[] = doc.rooms,
 ): MapDocument {
   const originalById = new Map(doc.floors.map((floor) => [floor.id, floor] as const));
   const blankLayer = new Array(doc.width * doc.height).fill(0);
@@ -243,8 +252,9 @@ export function composeDocumentFromPainterFloors(
   const stairLinks = doc.stairLinks.filter(
     (link) => floorIds.has(link.fromFloor) && floorIds.has(link.toFloor),
   );
+  const composedRooms = rooms.filter((room) => floorIds.has(room.floor));
 
-  return { ...doc, floors: composedFloors, stairLinks };
+  return { ...doc, floors: composedFloors, stairLinks, rooms: composedRooms };
 }
 
 /** Bridges a `MapDocument`'s merged flags to the `RpgmTileset` shape `buildChunks` expects. `sheetNames` is unused by the renderer's build pipeline (only `computeTileUv`'s caller-provided `sheetPixelSizes` matters), so it's a harmless placeholder. */

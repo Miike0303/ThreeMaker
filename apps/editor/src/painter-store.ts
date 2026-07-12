@@ -15,10 +15,24 @@
  * see `activeFloorState`. Tool/layer/fill-id/semantic-mode selection and
  * the `semantics` tile-id-keyed overrides stay top-level/shared across
  * floors (catalog/palette is floor-agnostic per spec).
+ *
+ * Techos y Oclusion Interiores (Slice 5a, "Painter store room ops + undo"):
+ * `PainterState.rooms` mirrors `MapDocument.rooms` exactly (a flat,
+ * top-level `RoomDocument[]`, each referencing its floor by stable id --
+ * NOT nested per floor, since the document schema itself isn't nested).
+ * Every room CRUD op (`addRoom`/`removeRoom`/`renameRoom`/`addRoomRect`/
+ * `removeRoomRect`) is scoped to the room(s) on `activeFloorState(state).id`
+ * only, and pushes its own `RoomCommand` onto that floor's OWN
+ * `roomCommandStack` -- a second, independent per-floor undo stack living
+ * alongside `commandStack` (tile edits and room edits are undone via two
+ * separate stacks/functions, `undo`/`redo` vs. `undoRoom`/`redoRoom`; this
+ * slice does not unify them into one history).
  */
 
 import type {
   CommandStackState,
+  RoomDocument,
+  RoomRect,
   SemanticClass,
   SemanticOverrides,
   TileCellDiff,
@@ -27,6 +41,7 @@ import type {
 } from '@threemaker/map-format';
 import {
   applyTileDiff,
+  COMMAND_STACK_CAP,
   DEFAULT_FLOOR_HEIGHT,
   EMPTY_COMMAND_STACK,
   pushCommand,
@@ -37,13 +52,38 @@ import { assignSemanticClass, resolveTouchedTileIds } from './semantic-store.js'
 import type { TilePoint, ToolId, ToolSMState, ToolSMStrokingState } from './tool-sm.js';
 import { beginStroke, continueStroke, endStroke, TOOL_SM_IDLE } from './tool-sm.js';
 
-/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"). Structurally parallel to `map-compose.ts`'s `PainterFloorSource` (`{id, label?, baseElevation, layers}`, no command stack) and `PainterFloorInit` below (same fields as this type, minus `commandStack`) -- three separate types by design, not accidental divergence: each belongs to its own layer (composed-doc source, store-init input, live store state). */
+/**
+ * One room mutation's before/after `RoomDocument` (Slice 5a room-undo
+ * model, local to this module -- there is no other consumer of room-diff
+ * undo, unlike `TileDiff`/`CommandStackState`, which `patchChunks` also
+ * applies). `before`/`after` absent means "the room did not exist" (add:
+ * `before` absent; remove: `after` absent); both present for
+ * rename/rect-edit ops. `floor`+`id` identify which room in
+ * `PainterState.rooms` this command targets -- always the floor the
+ * command was pushed on, never re-targeted by a later floor switch.
+ */
+export interface RoomCommand {
+  readonly floor: string;
+  readonly id: string;
+  readonly before?: RoomDocument;
+  readonly after?: RoomDocument;
+}
+
+export interface RoomCommandStackState {
+  readonly undoStack: readonly RoomCommand[];
+  readonly redoStack: readonly RoomCommand[];
+}
+
+export const EMPTY_ROOM_COMMAND_STACK: RoomCommandStackState = { undoStack: [], redoStack: [] };
+
+/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"), and (Slice 5a) its own independent room-command stack (`roomCommandStack`) -- a floor's room edits undo/redo separately from its tile edits, never crossing into another floor's history. Structurally parallel to `map-compose.ts`'s `PainterFloorSource` (`{id, label?, baseElevation, layers}`, no command stack) and `PainterFloorInit` below (same fields as this type, minus `commandStack`/`roomCommandStack`) -- three separate types by design, not accidental divergence: each belongs to its own layer (composed-doc source, store-init input, live store state). */
 export interface PainterFloorState {
   readonly id: string;
   readonly label?: string;
   readonly baseElevation: number;
   readonly layers: TileLayerSet;
   readonly commandStack: CommandStackState;
+  readonly roomCommandStack: RoomCommandStackState;
 }
 
 /** A floor's initial layers, as sourced from a loaded/composed `MapDocument` (see `map-compose.ts`'s `painterFloorsFromDocument`, which returns this exact shape as `PainterFloorSource`) or freshly created for a blank floor -- command stacks are always session-local, never persisted. */
@@ -69,6 +109,8 @@ export interface PainterState {
   readonly semanticMode: boolean;
   readonly semanticClass: SemanticClass;
   readonly semantics: SemanticOverrides;
+  /** Every authored room across every floor (Slice 5a), mirroring `MapDocument.rooms` exactly -- flat, top-level, each entry referencing its floor by stable id. */
+  readonly rooms: readonly RoomDocument[];
 }
 
 export interface CreatePainterStateOptions {
@@ -80,13 +122,27 @@ export interface CreatePainterStateOptions {
   readonly semantics?: SemanticOverrides;
   /** Which floor starts active; defaults to 0 (ground). */
   readonly activeFloor?: number;
+  /** Initial rooms (map load path), matching `MapDocument.rooms`; defaults to none authored. */
+  readonly rooms?: readonly RoomDocument[];
 }
 
-/** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. Every floor gets a fresh, empty command stack: undo/redo history is session-local, never carried over from a saved document. */
+/** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. Every floor gets a fresh, empty command stack AND room-command stack: undo/redo history is session-local, never carried over from a saved document. */
 export function createPainterState(options: CreatePainterStateOptions): PainterState {
-  const { floors, width, height, fillTileId = 0, semantics = {}, activeFloor = 0 } = options;
+  const {
+    floors,
+    width,
+    height,
+    fillTileId = 0,
+    semantics = {},
+    activeFloor = 0,
+    rooms = [],
+  } = options;
   return {
-    floors: floors.map((floor) => ({ ...floor, commandStack: EMPTY_COMMAND_STACK })),
+    floors: floors.map((floor) => ({
+      ...floor,
+      commandStack: EMPTY_COMMAND_STACK,
+      roomCommandStack: EMPTY_ROOM_COMMAND_STACK,
+    })),
     activeFloor,
     width,
     height,
@@ -97,6 +153,7 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     semanticMode: false,
     semanticClass: 'none',
     semantics,
+    rooms,
   };
 }
 
@@ -113,7 +170,7 @@ export function activeFloorState(state: PainterState): PainterFloorState {
 
 function replaceActiveFloor(
   state: PainterState,
-  patch: Partial<Pick<PainterFloorState, 'layers' | 'commandStack'>>,
+  patch: Partial<Pick<PainterFloorState, 'layers' | 'commandStack' | 'roomCommandStack'>>,
 ): PainterState {
   const floors = state.floors.map((floor, index) =>
     index === state.activeFloor ? { ...floor, ...patch } : floor,
@@ -148,6 +205,7 @@ export function addFloor(state: PainterState, options: AddFloorOptions): Painter
     baseElevation,
     layers: createEmptyLayers(state.width, state.height),
     commandStack: EMPTY_COMMAND_STACK,
+    roomCommandStack: EMPTY_ROOM_COMMAND_STACK,
   };
   const floors = [...state.floors, floor];
   return { ...state, floors, activeFloor: floors.length - 1 };
@@ -293,6 +351,143 @@ export function redo(state: PainterState): CommandStepOutcome {
     state: replaceActiveFloor(state, { layers, commandStack: result.state }),
     diff: result.diff,
   };
+}
+
+// --- Room CRUD + per-floor undo (Slice 5a) ------------------------------
+
+/** Replaces (or removes, if `next` is `undefined`) the room identified by `(floor, id)` in `rooms`, preserving document order for every other entry; a brand-new `(floor, id)` pair is appended. */
+function upsertRoom(
+  rooms: readonly RoomDocument[],
+  floor: string,
+  id: string,
+  next: RoomDocument | undefined,
+): readonly RoomDocument[] {
+  const index = rooms.findIndex((room) => room.floor === floor && room.id === id);
+  if (next === undefined) {
+    return index === -1 ? rooms : rooms.filter((_, i) => i !== index);
+  }
+  if (index === -1) return [...rooms, next];
+  return rooms.map((room, i) => (i === index ? next : room));
+}
+
+/** Commits a room mutation: sets the new top-level `rooms` array and pushes `command` onto the ACTIVE floor's OWN `roomCommandStack` (clears that floor's redo stack, caps at `COMMAND_STACK_CAP` -- same shape as `pushCommand` for tile diffs). */
+function applyRoomMutation(
+  state: PainterState,
+  rooms: readonly RoomDocument[],
+  command: RoomCommand,
+): PainterState {
+  const floor = activeFloorState(state);
+  const undoStack = [...floor.roomCommandStack.undoStack, command].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, { roomCommandStack: { undoStack, redoStack: [] } });
+  return { ...withStack, rooms };
+}
+
+export interface AddRoomOptions {
+  readonly id: string;
+  readonly name?: string;
+  readonly rects: readonly RoomRect[];
+}
+
+/** Adds a new room to the ACTIVE floor (spec: rooms are authored per floor), referencing it by stable floor id. Ignored mid-stroke, same as `setTool`. A no-op if a room with `options.id` already exists on the active floor -- room ids are unique PER FLOOR (see `validateRooms`), so use `renameRoom`/`addRoomRect` to modify an existing one instead. */
+export function addRoom(state: PainterState, options: AddRoomOptions): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const floor = activeFloorState(state);
+  if (state.rooms.some((room) => room.floor === floor.id && room.id === options.id)) return state;
+
+  const room: RoomDocument =
+    options.name !== undefined
+      ? { id: options.id, name: options.name, floor: floor.id, rects: options.rects }
+      : { id: options.id, floor: floor.id, rects: options.rects };
+  const rooms = upsertRoom(state.rooms, floor.id, options.id, room);
+  return applyRoomMutation(state, rooms, { floor: floor.id, id: options.id, after: room });
+}
+
+/** Removes the room `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no room with that id exists on the active floor. */
+export function removeRoom(state: PainterState, id: string): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const floor = activeFloorState(state);
+  const existing = state.rooms.find((room) => room.floor === floor.id && room.id === id);
+  if (!existing) return state;
+
+  const rooms = upsertRoom(state.rooms, floor.id, id, undefined);
+  return applyRoomMutation(state, rooms, { floor: floor.id, id, before: existing });
+}
+
+/** Renames the room `id` on the ACTIVE floor (`name: undefined` clears an existing name), leaving its `rects` untouched. Ignored mid-stroke. A safe no-op if no room with that id exists on the active floor. */
+export function renameRoom(
+  state: PainterState,
+  id: string,
+  name: string | undefined,
+): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const floor = activeFloorState(state);
+  const existing = state.rooms.find((room) => room.floor === floor.id && room.id === id);
+  if (!existing) return state;
+
+  const updated: RoomDocument =
+    name !== undefined
+      ? { id: existing.id, name, floor: existing.floor, rects: existing.rects }
+      : { id: existing.id, floor: existing.floor, rects: existing.rects };
+  const rooms = upsertRoom(state.rooms, floor.id, id, updated);
+  return applyRoomMutation(state, rooms, { floor: floor.id, id, before: existing, after: updated });
+}
+
+/** Appends `rect` to the room `id` on the ACTIVE floor's own rect list (a room may carry >=1 rects, e.g. an L-shaped footprint). Ignored mid-stroke. A safe no-op if no room with that id exists on the active floor. */
+export function addRoomRect(state: PainterState, id: string, rect: RoomRect): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const floor = activeFloorState(state);
+  const existing = state.rooms.find((room) => room.floor === floor.id && room.id === id);
+  if (!existing) return state;
+
+  const updated: RoomDocument = { ...existing, rects: [...existing.rects, rect] };
+  const rooms = upsertRoom(state.rooms, floor.id, id, updated);
+  return applyRoomMutation(state, rooms, { floor: floor.id, id, before: existing, after: updated });
+}
+
+/** Removes `rects[rectIndex]` from the room `id` on the ACTIVE floor. Ignored mid-stroke. A safe no-op if no room with that id exists on the active floor, `rectIndex` is out of range, OR removing it would leave the room with zero rects (schema requires >=1 -- use `removeRoom` to delete the whole room instead). */
+export function removeRoomRect(state: PainterState, id: string, rectIndex: number): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const floor = activeFloorState(state);
+  const existing = state.rooms.find((room) => room.floor === floor.id && room.id === id);
+  if (!existing) return state;
+  if (rectIndex < 0 || rectIndex >= existing.rects.length) return state;
+  if (existing.rects.length <= 1) return state;
+
+  const rects = existing.rects.filter((_, i) => i !== rectIndex);
+  const updated: RoomDocument = { ...existing, rects };
+  const rooms = upsertRoom(state.rooms, floor.id, id, updated);
+  return applyRoomMutation(state, rooms, { floor: floor.id, id, before: existing, after: updated });
+}
+
+export interface RoomCommandStepOutcome {
+  readonly state: PainterState;
+  readonly command?: RoomCommand;
+}
+
+/** Undoes the most recent room command on the ACTIVE floor's OWN `roomCommandStack`, if any -- never a different floor's (spec: "per-floor undo isolation", same guarantee as `undo` for tile edits). */
+export function undoRoom(state: PainterState): RoomCommandStepOutcome {
+  const floor = activeFloorState(state);
+  const last = floor.roomCommandStack.undoStack[floor.roomCommandStack.undoStack.length - 1];
+  if (!last) return { state };
+
+  const rooms = upsertRoom(state.rooms, last.floor, last.id, last.before);
+  const undoStack = floor.roomCommandStack.undoStack.slice(0, -1);
+  const redoStack = [...floor.roomCommandStack.redoStack, last].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, { roomCommandStack: { undoStack, redoStack } });
+  return { state: { ...withStack, rooms }, command: last };
+}
+
+/** Re-applies the most recently undone room command on the ACTIVE floor's OWN `roomCommandStack`, if any. */
+export function redoRoom(state: PainterState): RoomCommandStepOutcome {
+  const floor = activeFloorState(state);
+  const last = floor.roomCommandStack.redoStack[floor.roomCommandStack.redoStack.length - 1];
+  if (!last) return { state };
+
+  const rooms = upsertRoom(state.rooms, last.floor, last.id, last.after);
+  const redoStack = floor.roomCommandStack.redoStack.slice(0, -1);
+  const undoStack = [...floor.roomCommandStack.undoStack, last].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, { roomCommandStack: { undoStack, redoStack } });
+  return { state: { ...withStack, rooms }, command: last };
 }
 
 // --- Stroke -> touched-cells resolution (per tool) ----------------------

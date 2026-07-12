@@ -1,14 +1,20 @@
-import type { TileLayerSet } from '@threemaker/map-format';
+import type { RoomDocument, TileLayerSet } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import {
   activeFloorState,
   addFloor,
+  addRoom,
+  addRoomRect,
   createPainterState,
   pointerDown,
   pointerMove,
   pointerUp,
   redo,
+  redoRoom,
   removeFloor,
+  removeRoom,
+  removeRoomRect,
+  renameRoom,
   selectFloor,
   setActiveLayer,
   setFillTileId,
@@ -16,6 +22,7 @@ import {
   setSemanticMode,
   setTool,
   undo,
+  undoRoom,
 } from '../src/painter-store.js';
 
 function makeLayers(width: number, height: number): TileLayerSet {
@@ -483,5 +490,175 @@ describe('painter-store: floor switcher (Slice 4 -- painter-floors spec)', () =>
     // Each floor gets its own fresh command stack regardless of source doc.
     expect(state.floors[0]?.commandStack.undoStack).toHaveLength(0);
     expect(state.floors[1]?.commandStack.undoStack).toHaveLength(0);
+  });
+});
+
+describe('painter-store: room CRUD + per-floor undo (Slice 5a -- techos-y-oclusion-interiores)', () => {
+  it('createPainterState defaults rooms to an empty array', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    expect(state.rooms).toEqual([]);
+  });
+
+  it('createPainterState accepts an initial rooms array (map load path)', () => {
+    const rooms: readonly RoomDocument[] = [
+      { id: 'room-1', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 2, height: 2 }] },
+    ];
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4, rooms });
+    expect(state.rooms).toEqual(rooms);
+  });
+
+  it('addRoom adds a room to state.rooms, referencing the active floor by id', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 2, height: 2 }] });
+
+    expect(state.rooms).toEqual([
+      { id: 'room-1', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 2, height: 2 }] },
+    ]);
+  });
+
+  it('addRoom carries an optional name', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, {
+      id: 'room-1',
+      name: 'Library',
+      rects: [{ x: 0, y: 0, width: 2, height: 2 }],
+    });
+    expect(state.rooms[0]).toMatchObject({ name: 'Library' });
+  });
+
+  it('addRoom is a no-op if a room with that id already exists on the active floor', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] });
+    const result = addRoom(state, { id: 'room-1', rects: [{ x: 2, y: 2, width: 1, height: 1 }] });
+    expect(result).toBe(state);
+  });
+
+  it('addRoom is ignored mid-stroke, same as setTool', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4, fillTileId: 1 });
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    const result = addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] });
+    expect(result).toBe(state);
+  });
+
+  it('removeRoom removes the room from state.rooms', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] });
+    state = removeRoom(state, 'room-1');
+    expect(state.rooms).toEqual([]);
+  });
+
+  it('removeRoom is a safe no-op when no room with that id exists on the active floor', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    const result = removeRoom(state, 'nope');
+    expect(result).toBe(state);
+  });
+
+  it('renameRoom updates the room name without touching its rects', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] });
+    state = renameRoom(state, 'room-1', 'Library');
+    expect(state.rooms[0]).toMatchObject({
+      name: 'Library',
+      rects: [{ x: 0, y: 0, width: 1, height: 1 }],
+    });
+  });
+
+  it('renameRoom(undefined) clears an existing name', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, {
+      id: 'room-1',
+      name: 'Library',
+      rects: [{ x: 0, y: 0, width: 1, height: 1 }],
+    });
+    state = renameRoom(state, 'room-1', undefined);
+    expect(state.rooms[0]?.name).toBeUndefined();
+  });
+
+  it('renameRoom is a safe no-op for an unknown room id', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    expect(renameRoom(state, 'nope', 'x')).toBe(state);
+  });
+
+  it('addRoomRect appends a rect to an existing room', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] });
+    state = addRoomRect(state, 'room-1', { x: 2, y: 2, width: 1, height: 1 });
+    expect(state.rooms[0]?.rects).toEqual([
+      { x: 0, y: 0, width: 1, height: 1 },
+      { x: 2, y: 2, width: 1, height: 1 },
+    ]);
+  });
+
+  it('removeRoomRect removes the given rect', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, {
+      id: 'room-1',
+      rects: [
+        { x: 0, y: 0, width: 1, height: 1 },
+        { x: 2, y: 2, width: 1, height: 1 },
+      ],
+    });
+    state = removeRoomRect(state, 'room-1', 0);
+    expect(state.rooms[0]?.rects).toEqual([{ x: 2, y: 2, width: 1, height: 1 }]);
+  });
+
+  it('removeRoomRect refuses to leave a room with zero rects', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] });
+    const result = removeRoomRect(state, 'room-1', 0);
+    expect(result).toBe(state);
+    expect(result.rooms[0]?.rects).toHaveLength(1);
+  });
+
+  it('undoRoom reverts the most recent room command; redoRoom re-applies it', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] });
+    expect(state.rooms).toHaveLength(1);
+
+    const undone = undoRoom(state);
+    expect(undone.state.rooms).toEqual([]);
+    expect(undone.command).toBeDefined();
+
+    const redone = redoRoom(undone.state);
+    expect(redone.state.rooms).toHaveLength(1);
+  });
+
+  it('undoRoom/redoRoom on a fresh store with no room history is a safe no-op', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    expect(undoRoom(state).command).toBeUndefined();
+    expect(redoRoom(state).command).toBeUndefined();
+  });
+
+  it('undo routes to the active floor its own room-command stack, never a different floor (spec: "per-floor undo isolation")', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, { id: 'room-a', rects: [{ x: 0, y: 0, width: 1, height: 1 }] }); // floor 0
+
+    state = addFloor(state, { id: 'floor-1' }); // now active
+    state = addRoom(state, { id: 'room-b', rects: [{ x: 1, y: 1, width: 1, height: 1 }] }); // floor 1
+
+    expect(state.rooms).toHaveLength(2);
+
+    // Undo while floor 1 is active must only affect floor 1's room.
+    state = undoRoom(state).state;
+    expect(state.rooms).toEqual([
+      { id: 'room-a', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
+    ]);
+
+    // Switching back to floor 0 and undoing now affects floor 0's own room command.
+    state = selectFloor(state, 0);
+    state = undoRoom(state).state;
+    expect(state.rooms).toEqual([]);
+  });
+
+  it('rooms authored on one floor do not leak onto another floor', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] }); // floor-0
+    state = addFloor(state, { id: 'floor-1' });
+    state = addRoom(state, { id: 'room-1', rects: [{ x: 1, y: 1, width: 1, height: 1 }] }); // same id, floor-1 -- allowed (per-floor unique ids)
+
+    expect(state.rooms).toEqual([
+      { id: 'room-1', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
+      { id: 'room-1', floor: 'floor-1', rects: [{ x: 1, y: 1, width: 1, height: 1 }] },
+    ]);
   });
 });

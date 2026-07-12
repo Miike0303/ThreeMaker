@@ -1,4 +1,5 @@
-import { primaryFloorLayers } from '@threemaker/map-format';
+import type { RoomDocument } from '@threemaker/map-format';
+import { primaryFloorLayers, validateCurrentVersionShape } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import {
   composeDocumentFromPainterFloors,
@@ -351,5 +352,89 @@ describe('painterFloorsFromDocument / composeDocumentFromPainterFloors (Slice 4 
     const composed = composeDocumentFromPainterFloors(doc, painterFloors);
     expect(composed.floors[1]?.layers.shadows).toEqual([0, 0, 0, 0]);
     expect(composed.floors[1]?.layers.regions).toEqual([0, 0, 0, 0]);
+  });
+});
+
+describe('composeDocumentFromPainterFloors: rooms (Slice 5a -- map-format v3 native emit)', () => {
+  it('defaults to the source document rooms when no rooms arg is given (regression: roomless map still composes rooms: [])', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 2,
+      height: 2,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const painterFloors = painterFloorsFromDocument(doc);
+    const composed = composeDocumentFromPainterFloors(doc, painterFloors);
+    expect(composed.rooms).toEqual([]);
+  });
+
+  it('composes the explicitly-passed rooms into the document rooms field', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 4,
+      height: 4,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const painterFloors = painterFloorsFromDocument(doc);
+    const rooms: readonly RoomDocument[] = [
+      { id: 'room-1', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 2, height: 2 }] },
+    ];
+
+    const composed = composeDocumentFromPainterFloors(doc, painterFloors, rooms);
+    expect(composed.rooms).toEqual(rooms);
+    // The composed document is a genuinely valid v3 shape.
+    expect(() => validateCurrentVersionShape(composed)).not.toThrow();
+  });
+
+  it('drops rooms referencing a floor that no longer exists, mirroring stair-link cleanup', () => {
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 2,
+      height: 2,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const groundFloor = doc.floors[0];
+    if (!groundFloor) throw new Error('test setup: createBlankMapDocument always yields floors[0]');
+    const twoFloorDoc = {
+      ...doc,
+      floors: [
+        groundFloor,
+        {
+          id: 'floor-1',
+          baseElevation: 3,
+          layers: {
+            tiles: [
+              [0, 0, 0, 0],
+              [0, 0, 0, 0],
+              [0, 0, 0, 0],
+              [0, 0, 0, 0],
+            ] as const,
+            shadows: [0, 0, 0, 0],
+            regions: [0, 0, 0, 0],
+          },
+        },
+      ],
+    };
+    const rooms: readonly RoomDocument[] = [
+      { id: 'ground-room', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
+      { id: 'roof-room', floor: 'floor-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
+    ];
+    const painterFloors = painterFloorsFromDocument(twoFloorDoc);
+
+    // Floor 1 gets removed from the painter's floor list (mirrors removeFloor).
+    const afterRemoval = composeDocumentFromPainterFloors(
+      twoFloorDoc,
+      painterFloors.filter((floor) => floor.id !== 'floor-1'),
+      rooms,
+    );
+    expect(afterRemoval.rooms).toEqual([
+      { id: 'ground-room', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
+    ]);
   });
 });
