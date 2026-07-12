@@ -1,4 +1,4 @@
-import type { RoomDocument, StairLinkDocument } from '@threemaker/map-format';
+import type { MapSpawn, RoomDocument, StairLinkDocument } from '@threemaker/map-format';
 import { primaryFloorLayers, validateCurrentVersionShape } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,7 +11,7 @@ import {
   toRenderableMap,
   toRenderableTileset,
 } from '../src/map-compose.js';
-import { addRoom, createPainterState } from '../src/painter-store.js';
+import { addRoom, addStairLink, createPainterState, setSpawn } from '../src/painter-store.js';
 
 describe('mergeSlotFlags', () => {
   it('copies only the given slot own id range from its source flags, leaving everything else 0', () => {
@@ -487,6 +487,120 @@ describe('painter-viewport room wiring recipe (Slice 5b -- closes the 5a-gate MU
     const withoutRoomsArg = composeDocumentFromPainterFloors(docWithRoom, state.floors);
     expect(withoutRoomsArg.rooms).toEqual([existingRoom]);
     expect(withoutRoomsArg.rooms).not.toEqual(saved.rooms);
+  });
+});
+
+describe('painter-viewport stair-link + spawn wiring recipe (Slice 6 -- closes the 5b-gate WARNING gap)', () => {
+  it('a stair-link and a spawn authored via the store round-trip through compose to the saved MapDocument', () => {
+    // Mirrors the room wiring recipe above (Slice 5b): load path first
+    // (`createPainterState({ ..., stairLinks: doc.stairLinks, spawn: doc.spawn })`),
+    // then author path (`composeDocumentFromPainterFloors(doc, floors, rooms,
+    // stairLinks, spawn)`), through the SAME two `painter-viewport.ts`
+    // call sites (`loadMap`'s `createPainterState` call, `currentDocument`'s
+    // `composeDocumentFromPainterFloors` call) that Slice 5b fixed. There was
+    // no regression test proving stair-links/spawn survive this exact path --
+    // this test closes that gap (5b gate WARNING) so a future edit to either
+    // call site cannot silently reintroduce the drop-on-save bug.
+    const doc = createBlankMapDocument({
+      id: 'map-1',
+      name: 'Demo',
+      width: 4,
+      height: 4,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const groundFloor = doc.floors[0];
+    if (!groundFloor) throw new Error('test setup: createBlankMapDocument always yields floors[0]');
+    const twoFloorDoc = {
+      ...doc,
+      floors: [
+        groundFloor,
+        {
+          id: 'floor-1',
+          baseElevation: 3,
+          layers: {
+            tiles: [
+              new Array(16).fill(0),
+              new Array(16).fill(0),
+              new Array(16).fill(0),
+              new Array(16).fill(0),
+            ] as const,
+            shadows: new Array(16).fill(0),
+            regions: new Array(16).fill(0),
+          },
+        },
+      ],
+    };
+    const existingLink: StairLinkDocument = {
+      id: 'existing-stair',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      bidirectional: true,
+      waypoints: [
+        { x: 0, y: 0, floor: 'floor-0' },
+        { x: 1, y: 1, floor: 'floor-1' },
+      ],
+    };
+    const existingSpawn: MapSpawn = { x: 0, y: 0, floor: 'floor-0' };
+    const docWithAuthoring = { ...twoFloorDoc, stairLinks: [existingLink], spawn: existingSpawn };
+
+    // Load path: an existing stair-link + spawn must reach the painter
+    // store's `state.stairLinks`/`state.spawn`.
+    let state = createPainterState({
+      floors: painterFloorsFromDocument(docWithAuthoring),
+      width: docWithAuthoring.width,
+      height: docWithAuthoring.height,
+      stairLinks: docWithAuthoring.stairLinks,
+      spawn: docWithAuthoring.spawn,
+    });
+    expect(state.stairLinks).toEqual([existingLink]); // loaded stair-link reached the store
+    expect(state.spawn).toEqual(existingSpawn); // loaded spawn reached the store
+
+    // Author path: a NEW stair-link (2-click flow, mirrored via the store
+    // directly) and a replaced spawn must reach the saved document.
+    state = addStairLink(state, {
+      id: 'new-stair',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 2, y: 2 },
+      exit: { x: 3, y: 3 },
+    });
+    state = setSpawn(state, { x: 2, y: 2, floor: 'floor-1' });
+
+    const saved = composeDocumentFromPainterFloors(
+      docWithAuthoring,
+      state.floors,
+      docWithAuthoring.rooms,
+      state.stairLinks,
+      state.spawn,
+    );
+    const newLink: StairLinkDocument = {
+      id: 'new-stair',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      bidirectional: true,
+      waypoints: [
+        { x: 2, y: 2, floor: 'floor-0' },
+        { x: 3, y: 3, floor: 'floor-1' },
+      ],
+    };
+    expect(saved.stairLinks).toEqual([existingLink, newLink]);
+    expect(saved.spawn).toEqual({ x: 2, y: 2, floor: 'floor-1' });
+
+    // Regression guard for the bug this test closes: composing with the OLD
+    // 3-arg call (omitting stairLinks/spawn, defaulting to
+    // `docWithAuthoring`'s ORIGINAL values) would silently drop the
+    // newly-authored stair-link and the replaced spawn -- proving the
+    // 4th/5th-arg wiring is load-bearing, exactly like the room recipe above.
+    const withoutArgs = composeDocumentFromPainterFloors(
+      docWithAuthoring,
+      state.floors,
+      docWithAuthoring.rooms,
+    );
+    expect(withoutArgs.stairLinks).toEqual([existingLink]);
+    expect(withoutArgs.spawn).toEqual(existingSpawn);
+    expect(withoutArgs.stairLinks).not.toEqual(saved.stairLinks);
+    expect(withoutArgs.spawn).not.toEqual(saved.spawn);
   });
 });
 
