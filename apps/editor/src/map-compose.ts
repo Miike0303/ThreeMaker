@@ -104,6 +104,10 @@ export function createBlankMapDocument(options: CreateBlankMapDocumentOptions): 
       },
     ],
     stairLinks: [],
+    // Schema v3 (techos-y-oclusion-interiores Slice 1): additive field, kept
+    // empty here -- real room-authoring wiring for this composer lands in
+    // that change's Slice 5a ("map-compose.ts emits v3 natively").
+    rooms: [],
   };
 }
 

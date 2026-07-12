@@ -58,6 +58,22 @@ export function migrateV1ToV2(doc: Record<string, unknown>): Record<string, unkn
 
 registerMigration(1, migrateV1ToV2);
 
+/**
+ * v2 -> v3 lossless wrap (techos-y-oclusion-interiores design, "Migration
+ * v2->v3"): a v2 document had no room concept at all, so migration adds an
+ * EMPTY `rooms` array and bumps `version` -- every other field passes
+ * through unmodified via the spread. "Byte-identical" per spec means render
+ * behavior (empty rooms -> empty `roomIdGrid` -> zero carve -> identical
+ * geometry) plus zero loss of pre-existing fields; the serialized JSON
+ * legitimately gains the `rooms` key (see `migrate.test.ts`'s "v2 -> v3
+ * migration (THE compatibility gate)" describe block).
+ */
+export function migrateV2ToV3(doc: Record<string, unknown>): Record<string, unknown> {
+  return { ...doc, version: 3, rooms: [] };
+}
+
+registerMigration(2, migrateV2ToV3);
+
 function readVersion(raw: Record<string, unknown>): number {
   if (typeof raw.version !== 'number' || !Number.isInteger(raw.version)) {
     throw new MapFormatError('malformed', '"version" must be an integer.');

@@ -44,6 +44,7 @@ function makeDoc(name: string): MapDocument {
       },
     ],
     stairLinks: [],
+    rooms: [],
   };
 }
 

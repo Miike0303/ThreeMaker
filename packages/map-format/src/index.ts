@@ -1,5 +1,12 @@
 export type { MapMigration } from './migrate.js';
-export { clearMigrations, migrateV1ToV2, parseMapDocument, registerMigration } from './migrate.js';
+export {
+  clearMigrations,
+  migrateV1ToV2,
+  migrateV2ToV3,
+  parseMapDocument,
+  registerMigration,
+} from './migrate.js';
+export { computeRoomIdGrid } from './rooms.js';
 export type {
   FloorDocument,
   MapDocument,
@@ -7,6 +14,8 @@ export type {
   MapLayers,
   MapTilesetDocument,
   RampDirection,
+  RoomDocument,
+  RoomRect,
   SemanticClass,
   SemanticOverrides,
   SlotComposition,

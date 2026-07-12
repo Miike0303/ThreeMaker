@@ -15,6 +15,14 @@
  * top-level list of `StairLinkDocument`s connecting them by stable floor id.
  * A v1 document (a single, un-stacked `layers` group) migrates losslessly
  * into a one-floor v2 document -- see `migrate.ts`'s `migrateV1ToV2`.
+ *
+ * Schema v3 (techos-y-oclusion-interiores design, Slice 1): additive
+ * top-level `RoomDocument[]` (`rooms`), mirroring `stairLinks[]` exactly --
+ * each room references its floor by stable id and carries one or more
+ * tile-rect footprints. `computeRoomIdGrid` (`rooms.ts`) turns a floor's
+ * rooms into a per-floor `Uint16Array` grid, `0` = unauthored (no room). A v2
+ * document migrates losslessly into a roomless v3 document -- see
+ * `migrate.ts`'s `migrateV2ToV3`.
  */
 
 /** One of RPG Maker's 9 fixed tileset sheet slots. */
@@ -88,7 +96,7 @@ export interface MapLayers {
 }
 
 export const MAP_FORMAT_MAGIC = 'threemaker-map' as const;
-export const CURRENT_MAP_FORMAT_VERSION = 2;
+export const CURRENT_MAP_FORMAT_VERSION = 3;
 
 /**
  * Default `baseElevation` increment for a newly-added floor (painter "add
@@ -129,6 +137,31 @@ export interface StairLinkDocument {
   readonly waypoints: readonly StairLinkWaypoint[];
 }
 
+/** One rectangular tile-coordinate footprint of a `RoomDocument`, in-bounds validated against the map's `width`/`height`. */
+export interface RoomRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * One authored room (techos-y-oclusion-interiores design, "Room authoring
+ * model"): a stable id, an optional display name, the `FloorDocument.id` it
+ * sits on, and >=1 tile-rect footprints (a single logical, possibly
+ * L-shaped, room = one fade unit). `computeRoomIdGrid` (`rooms.ts`) turns a
+ * floor's rooms into a per-floor `Uint16Array` grid; `id` uniqueness is
+ * enforced PER FLOOR only (two rooms on different floors may share an id --
+ * see `validateRooms`), since the grid's own cell values encode a
+ * floor-scoped 1-based ordinal, never `id` itself.
+ */
+export interface RoomDocument {
+  readonly id: string;
+  readonly name?: string;
+  readonly floor: string;
+  readonly rects: readonly RoomRect[];
+}
+
 export interface MapDocument {
   readonly format: typeof MAP_FORMAT_MAGIC;
   readonly version: number;
@@ -141,6 +174,8 @@ export interface MapDocument {
   readonly floors: readonly FloorDocument[];
   /** Stable-floor-id-referencing transitions between floors. Empty for a single-floor document. */
   readonly stairLinks: readonly StairLinkDocument[];
+  /** Stable-floor-id-referencing room footprints (schema v3, additive). Empty for a document with no authored rooms. */
+  readonly rooms: readonly RoomDocument[];
 }
 
 export type MapFormatErrorCode = 'bad-magic' | 'unsupported-version' | 'malformed';
@@ -197,6 +232,7 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
   const floors = validateFloors(raw.floors, raw.width as number, raw.height as number);
   const floorIds = new Set(floors.map((floor) => floor.id));
   const stairLinks = validateStairLinks(raw.stairLinks, floorIds);
+  const rooms = validateRooms(raw.rooms, floorIds, raw.width as number, raw.height as number);
 
   return {
     format: MAP_FORMAT_MAGIC,
@@ -208,6 +244,7 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
     tileset,
     floors,
     stairLinks,
+    rooms,
   };
 }
 
@@ -382,6 +419,121 @@ function validateWaypoint(
     );
   }
   return { x: raw.x as number, y: raw.y as number, floor: raw.floor };
+}
+
+function validateRooms(
+  input: unknown,
+  floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): readonly RoomDocument[] {
+  if (!Array.isArray(input)) {
+    throw new MapFormatError('malformed', '"rooms" must be an array.');
+  }
+  const rooms = input.map((entry, index) =>
+    validateRoom(entry, index, floorIds, mapWidth, mapHeight),
+  );
+
+  // Spec: "Unique room ids per floor" -- scoped per floor (not global), since
+  // `computeRoomIdGrid`'s cell values encode a floor-scoped 1-based ordinal,
+  // never `id` itself; two rooms on DIFFERENT floors may share an id.
+  const firstIndexByFloorAndId = new Map<string, number>();
+  for (const [index, room] of rooms.entries()) {
+    const key = `${room.floor} ${room.id}`;
+    const firstIndex = firstIndexByFloorAndId.get(key);
+    if (firstIndex !== undefined) {
+      throw new MapFormatError(
+        'malformed',
+        `"rooms[${index}].id" duplicates "rooms[${firstIndex}].id" (both are ${JSON.stringify(room.id)}) on floor ${JSON.stringify(room.floor)}; room ids must be unique per floor.`,
+      );
+    }
+    firstIndexByFloorAndId.set(key, index);
+  }
+
+  return rooms;
+}
+
+function validateRoom(
+  input: unknown,
+  index: number,
+  floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): RoomDocument {
+  if (typeof input !== 'object' || input === null) {
+    throw new MapFormatError('malformed', `"rooms[${index}]" must be an object.`);
+  }
+  const raw = input as Record<string, unknown>;
+  if (typeof raw.id !== 'string' || raw.id.length === 0) {
+    throw new MapFormatError('malformed', `"rooms[${index}].id" must be a non-empty string.`);
+  }
+  if (raw.name !== undefined && typeof raw.name !== 'string') {
+    throw new MapFormatError('malformed', `"rooms[${index}].name" must be a string when present.`);
+  }
+  if (typeof raw.floor !== 'string' || !floorIds.has(raw.floor)) {
+    throw new MapFormatError(
+      'malformed',
+      `"rooms[${index}].floor" must reference an existing floor id.`,
+    );
+  }
+  const rects = validateRoomRects(raw.rects, index, mapWidth, mapHeight);
+  return raw.name === undefined
+    ? { id: raw.id, floor: raw.floor, rects }
+    : { id: raw.id, name: raw.name, floor: raw.floor, rects };
+}
+
+function validateRoomRects(
+  input: unknown,
+  roomIndex: number,
+  mapWidth: number,
+  mapHeight: number,
+): readonly RoomRect[] {
+  if (!Array.isArray(input) || input.length === 0) {
+    throw new MapFormatError('malformed', `"rooms[${roomIndex}].rects" must be a non-empty array.`);
+  }
+  return input.map((entry, rectIndex) =>
+    validateRoomRect(entry, roomIndex, rectIndex, mapWidth, mapHeight),
+  );
+}
+
+function validateRoomRect(
+  input: unknown,
+  roomIndex: number,
+  rectIndex: number,
+  mapWidth: number,
+  mapHeight: number,
+): RoomRect {
+  const label = `rooms[${roomIndex}].rects[${rectIndex}]`;
+  if (typeof input !== 'object' || input === null) {
+    throw new MapFormatError('malformed', `"${label}" must be an object.`);
+  }
+  const raw = input as Record<string, unknown>;
+  if (!Number.isInteger(raw.x) || (raw.x as number) < 0) {
+    throw new MapFormatError('malformed', `"${label}.x" must be a non-negative integer.`);
+  }
+  if (!Number.isInteger(raw.y) || (raw.y as number) < 0) {
+    throw new MapFormatError('malformed', `"${label}.y" must be a non-negative integer.`);
+  }
+  if (!Number.isInteger(raw.width) || (raw.width as number) <= 0) {
+    throw new MapFormatError('malformed', `"${label}.width" must be a positive integer.`);
+  }
+  if (!Number.isInteger(raw.height) || (raw.height as number) <= 0) {
+    throw new MapFormatError('malformed', `"${label}.height" must be a positive integer.`);
+  }
+  const x = raw.x as number;
+  const y = raw.y as number;
+  const width = raw.width as number;
+  const height = raw.height as number;
+  // Spec scenario "Cell references existing room": a rect reaching outside
+  // the map would carve/paint cells that can never resolve back to a real
+  // room at grid-computation time -- rejected here, at authoring time.
+  if (x + width > mapWidth || y + height > mapHeight) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}" (x=${x}, y=${y}, width=${width}, height=${height}) must stay within the map bounds ${mapWidth}x${mapHeight}.`,
+    );
+  }
+  return { x, y, width, height };
 }
 
 function validateTileset(input: unknown): MapTilesetDocument {

@@ -37,6 +37,7 @@ function makeValidDocInput(overrides: Record<string, unknown> = {}): Record<stri
     },
     floors: [{ id: 'floor-0', baseElevation: 0, layers: makeLayers(size) }],
     stairLinks: [],
+    rooms: [],
     ...overrides,
   };
 }
@@ -289,5 +290,127 @@ describe('validateCurrentVersionShape', () => {
       }),
     );
     expect(doc.tileset.semantics['5']).toEqual({ class: 'ramp' });
+  });
+});
+
+// techos-y-oclusion-interiores Slice 1: RoomDocument schema entity (additive,
+// top-level `rooms[]` mirroring `stairLinks[]`, design ADR "Rooms placement").
+describe('validateCurrentVersionShape: rooms (schema v3)', () => {
+  it('accepts an empty "rooms" array (unauthored map, spec: Unauthored cell defaults)', () => {
+    const doc = validateCurrentVersionShape(makeValidDocInput());
+    expect(doc.rooms).toEqual([]);
+  });
+
+  it('rejects a missing "rooms" field', () => {
+    const input = makeValidDocInput();
+    delete (input as Record<string, unknown>).rooms;
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('accepts a well-formed room and round-trips it through serialize/parse', () => {
+    const input = makeValidDocInput({
+      rooms: [
+        {
+          id: 'room-1',
+          name: 'Library',
+          floor: 'floor-0',
+          rects: [{ x: 0, y: 0, width: 2, height: 2 }],
+        },
+      ],
+    });
+    const doc = validateCurrentVersionShape(input);
+    expect(doc.rooms).toHaveLength(1);
+    expect(doc.rooms[0]).toEqual({
+      id: 'room-1',
+      name: 'Library',
+      floor: 'floor-0',
+      rects: [{ x: 0, y: 0, width: 2, height: 2 }],
+    });
+
+    const json = serializeMapDocument(doc);
+    const reparsed = validateCurrentVersionShape(JSON.parse(json));
+    expect(reparsed).toEqual(doc);
+  });
+
+  it('accepts a room with no "name" (optional field)', () => {
+    const input = makeValidDocInput({
+      rooms: [{ id: 'room-1', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 1, height: 1 }] }],
+    });
+    const doc = validateCurrentVersionShape(input);
+    expect(doc.rooms[0]).toEqual({
+      id: 'room-1',
+      floor: 'floor-0',
+      rects: [{ x: 0, y: 0, width: 1, height: 1 }],
+    });
+  });
+
+  it('rejects two rooms sharing the same id on the same floor (spec: Unique room ids per floor)', () => {
+    const input = makeValidDocInput({
+      rooms: [
+        { id: 'room-1', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
+        { id: 'room-1', floor: 'floor-0', rects: [{ x: 1, y: 1, width: 1, height: 1 }] },
+      ],
+    });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+    try {
+      validateCurrentVersionShape(input);
+    } catch (err) {
+      expect((err as MapFormatError).code).toBe('malformed');
+      expect((err as MapFormatError).message).toContain('room-1');
+      expect((err as MapFormatError).message).toContain('rooms[0]');
+      expect((err as MapFormatError).message).toContain('rooms[1]');
+    }
+  });
+
+  it('accepts two rooms sharing the same id on DIFFERENT floors (uniqueness is per-floor, not global)', () => {
+    const input = makeValidDocInput({
+      floors: [
+        { id: 'floor-0', baseElevation: 0, layers: makeLayers(4) },
+        { id: 'floor-1', baseElevation: 3, layers: makeLayers(4) },
+      ],
+      rooms: [
+        { id: 'room-1', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
+        { id: 'room-1', floor: 'floor-1', rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
+      ],
+    });
+    const doc = validateCurrentVersionShape(input);
+    expect(doc.rooms).toHaveLength(2);
+  });
+
+  it('rejects a room whose "floor" does not reference an existing floor id', () => {
+    const input = makeValidDocInput({
+      rooms: [
+        {
+          id: 'room-1',
+          floor: 'does-not-exist',
+          rects: [{ x: 0, y: 0, width: 1, height: 1 }],
+        },
+      ],
+    });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects a room with an empty "rects" array', () => {
+    const input = makeValidDocInput({
+      rooms: [{ id: 'room-1', floor: 'floor-0', rects: [] }],
+    });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects a room rect that extends beyond the map bounds (spec: Cell references existing room)', () => {
+    // A rect reaching outside the map would carve/light cells that can never
+    // resolve back to this room at render time -- rejected at authoring time
+    // rather than silently clamped.
+    const input = makeValidDocInput({
+      rooms: [{ id: 'room-1', floor: 'floor-0', rects: [{ x: 1, y: 1, width: 5, height: 5 }] }],
+    });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
+  });
+
+  it('rejects a room rect with a non-positive width or height', () => {
+    const input = makeValidDocInput({
+      rooms: [{ id: 'room-1', floor: 'floor-0', rects: [{ x: 0, y: 0, width: 0, height: 1 }] }],
+    });
+    expect(() => validateCurrentVersionShape(input)).toThrow(MapFormatError);
   });
 });

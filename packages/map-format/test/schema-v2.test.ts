@@ -49,16 +49,17 @@ function makeV2Fixture(overrides: Record<string, unknown> = {}): Record<string, 
     tileset: { slots: {}, flags: [0], semantics: {} },
     floors: [{ id: 'floor-0', baseElevation: 0, layers: makeLayers(size) }],
     stairLinks: [],
+    rooms: [],
     ...overrides,
   };
 }
 
 describe('map-format v2 acceptance (Slice 1 compatibility gate)', () => {
-  it('a v1 fixture parses as a one-floor v2 document', () => {
+  it('a v1 fixture parses as a one-floor document at the current version', () => {
     const v1 = makeV1Fixture();
     const doc = parseMapDocument(v1);
 
-    expect(doc.version).toBe(2);
+    expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
     expect(doc.floors).toHaveLength(1);
     expect(doc.floors[0]?.id).toBe('floor-0');
     expect(doc.floors[0]?.baseElevation).toBe(0);
