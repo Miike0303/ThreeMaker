@@ -9,14 +9,24 @@
  * the literal active tile id, no automatic blending.
  */
 
-export type ToolId = 'brush' | 'box-fill' | 'flood-fill' | 'eyedropper' | 'room-box';
+export type ToolId =
+  | 'brush'
+  | 'box-fill'
+  | 'flood-fill'
+  | 'eyedropper'
+  | 'room-box'
+  | 'stair-link'
+  | 'spawn-point';
 
 /**
  * Unity Tile Palette-style shortcuts (design: "B/U/G-style shortcuts"), plus
- * "I" for eyedropper and "R" for the room-box tool (Slice 5b: techos-y-
+ * "I" for eyedropper, "R" for the room-box tool (Slice 5b: techos-y-
  * oclusion-interiores -- drags a rectangle to author a `RoomRect`, same
  * drag-a-box gesture as box-fill, see `painter-store.ts`'s
- * `commitRoomBoxStroke`).
+ * `commitRoomBoxStroke`), and "S"/"P" for the stair-link/spawn-point tools
+ * (Slice 5b: loop-crear-jugar -- both are single-click tools, not drags; see
+ * `painter-store.ts`'s `pointerDown` for how they short-circuit the stroking
+ * state machine entirely, the same way `eyedropper` does).
  */
 export const TOOL_SHORTCUTS: Readonly<Record<string, ToolId>> = {
   b: 'brush',
@@ -24,6 +34,8 @@ export const TOOL_SHORTCUTS: Readonly<Record<string, ToolId>> = {
   g: 'flood-fill',
   i: 'eyedropper',
   r: 'room-box',
+  s: 'stair-link',
+  p: 'spawn-point',
 };
 
 /** Resolves a keyboard event's `key` (case-insensitive) to a tool, or `undefined` if it isn't a tool shortcut. */

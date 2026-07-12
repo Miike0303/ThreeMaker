@@ -7,7 +7,12 @@ import { formatTemplate } from '../format-template.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, seedDemoTiles } from '../map-compose.js';
 import type { PainterState } from '../painter-store.js';
-import type { RampGlyphOverlayItem, RoomOverlayItem } from '../painter-viewport.js';
+import type {
+  RampGlyphOverlayItem,
+  RoomOverlayItem,
+  SpawnOverlayItem,
+  StairOverlayItem,
+} from '../painter-viewport.js';
 import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
 import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
 import type { ToolId } from '../tool-sm.js';
@@ -24,6 +29,8 @@ const TOOLS: readonly { readonly id: ToolId; readonly shortcut: string }[] = [
   { id: 'flood-fill', shortcut: 'G' },
   { id: 'eyedropper', shortcut: 'I' },
   { id: 'room-box', shortcut: 'R' },
+  { id: 'stair-link', shortcut: 'S' },
+  { id: 'spawn-point', shortcut: 'P' },
 ];
 
 const SEMANTIC_CLASSES: readonly SemanticClass[] = [
@@ -73,6 +80,18 @@ async function buildPaletteSlots(
   return slots;
 }
 
+/** Resolves a floor id to its display label (`label` if authored, otherwise `painter.floorOption` formatted with its stack index) -- shared by the stair-link list and the spawn indicator, since both reference floors by stable id rather than index. Falls back to the raw id for a dangling reference (should not happen in practice; `composeDocumentFromPainterFloors` drops those on save). */
+function resolveFloorLabel(
+  floors: PainterState['floors'],
+  id: string,
+  t: (key: string) => string,
+): string {
+  const index = floors.findIndex((floor) => floor.id === id);
+  if (index === -1) return id;
+  const floor = floors[index];
+  return floor?.label ?? formatTemplate(t('painter.floorOption'), { index });
+}
+
 /**
  * Painter: compose a map from two different games' tilesets (one slot
  * each), then paint it with brush/box-fill/flood-fill/eyedropper, undo/
@@ -98,6 +117,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [rampGlyphs, setRampGlyphs] = useState<readonly RampGlyphOverlayItem[]>([]);
   const [roomOverlay, setRoomOverlay] = useState<readonly RoomOverlayItem[]>([]);
+  const [stairOverlay, setStairOverlay] = useState<readonly StairOverlayItem[]>([]);
+  const [spawnOverlay, setSpawnOverlay] = useState<SpawnOverlayItem | undefined>(undefined);
 
   useEffect(() => {
     listGames()
@@ -113,6 +134,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
       onPicked: (tileId) => viewport.setFillTileId(tileId),
       onRampGlyphsChange: setRampGlyphs,
       onRoomOverlayChange: setRoomOverlay,
+      onStairOverlayChange: setStairOverlay,
+      onSpawnOverlayChange: setSpawnOverlay,
     });
     viewportRef.current = viewport;
     return () => {
@@ -385,6 +408,60 @@ export function PainterPanel({ t }: PainterPanelProps) {
         </div>
       )}
 
+      {mapReady && painterState && (
+        <div className="painter-stair-links">
+          <span className="painter-stair-links-heading">{t('painter.stairLinks')}</span>
+          {painterState.pendingStairEntry && (
+            <p className="painter-stair-link-pending-hint">{t('painter.stairLink.pendingHint')}</p>
+          )}
+          <ul className="painter-stair-link-list">
+            {painterState.stairLinks.map((link) => (
+              <li key={link.id}>
+                <span>
+                  {formatTemplate(t('painter.stairLink.summary'), {
+                    from: resolveFloorLabel(painterState.floors, link.fromFloor, t),
+                    to: resolveFloorLabel(painterState.floors, link.toFloor, t),
+                  })}
+                </span>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={link.bidirectional}
+                    onChange={() => viewportRef.current?.toggleStairLinkBidirectional(link.id)}
+                  />
+                  {t('painter.stairLink.bidirectional')}
+                </label>
+                <button type="button" onClick={() => viewportRef.current?.removeStairLink(link.id)}>
+                  {t('painter.stairLink.remove')}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {mapReady && painterState && (
+        <div className="painter-spawn">
+          <span className="painter-spawn-heading">{t('painter.spawn')}</span>
+          {painterState.spawn ? (
+            <>
+              <span>
+                {formatTemplate(t('painter.spawn.summary'), {
+                  floor: resolveFloorLabel(painterState.floors, painterState.spawn.floor, t),
+                  x: painterState.spawn.x,
+                  y: painterState.spawn.y,
+                })}
+              </span>
+              <button type="button" onClick={() => viewportRef.current?.clearSpawn()}>
+                {t('painter.spawn.clear')}
+              </button>
+            </>
+          ) : (
+            <span>{t('painter.spawn.notSet')}</span>
+          )}
+        </div>
+      )}
+
       {mapReady && painterState && paletteSlots.length > 0 && (
         <div className="painter-palettes">
           {paletteSlots.map((paletteSlot) => (
@@ -455,6 +532,68 @@ export function PainterPanel({ t }: PainterPanelProps) {
                 })}
               />
             ))}
+          </div>
+        )}
+        {painterState && stairOverlay.length > 0 && (
+          <div
+            className="painter-stair-overlay"
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+          >
+            {stairOverlay.map((point) => {
+              const link = painterState.stairLinks.find((entry) => entry.id === point.linkId);
+              // The marker's aria-label names the OTHER end of the link -- an
+              // entry marker (on fromFloor) says where it leads TO, an exit
+              // marker (on toFloor) says where it came FROM.
+              const counterpartFloor = point.role === 'entry' ? link?.toFloor : link?.fromFloor;
+              const label = formatTemplate(
+                t(
+                  point.role === 'entry'
+                    ? 'painter.stairLink.entryLabel'
+                    : 'painter.stairLink.exitLabel',
+                ),
+                {
+                  floor: counterpartFloor
+                    ? resolveFloorLabel(painterState.floors, counterpartFloor, t)
+                    : '',
+                },
+              );
+              return (
+                <span
+                  key={`${point.linkId}-${point.role}`}
+                  className={`painter-stair-marker painter-stair-marker-${point.role}`}
+                  role="img"
+                  style={{
+                    position: 'absolute',
+                    left: `${point.xFrac * 100}%`,
+                    top: `${point.yFrac * 100}%`,
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                  aria-label={label}
+                >
+                  {point.role === 'entry' ? '▲' : '▼'}
+                </span>
+              );
+            })}
+          </div>
+        )}
+        {spawnOverlay && (
+          <div
+            className="painter-spawn-overlay"
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+          >
+            <span
+              className="painter-spawn-marker"
+              role="img"
+              style={{
+                position: 'absolute',
+                left: `${spawnOverlay.xFrac * 100}%`,
+                top: `${spawnOverlay.yFrac * 100}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+              aria-label={t('painter.spawn.overlayLabel')}
+            >
+              ★
+            </span>
           </div>
         )}
       </div>

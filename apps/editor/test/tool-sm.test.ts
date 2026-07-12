@@ -115,3 +115,29 @@ describe('ToolSM: room-box tool (Slice 5b -- techos-y-oclusion-interiores)', () 
     expect(endStroke(state)).toEqual({ status: 'idle' });
   });
 });
+
+describe('ToolSM: stair-link + spawn-point tools (Slice 5b -- loop-crear-jugar)', () => {
+  it('resolves "S"/"P" (case-insensitive) to stair-link/spawn-point', () => {
+    expect(resolveToolShortcut('s')).toBe('stair-link');
+    expect(resolveToolShortcut('S')).toBe('stair-link');
+    expect(resolveToolShortcut('p')).toBe('spawn-point');
+    expect(resolveToolShortcut('P')).toBe('spawn-point');
+  });
+
+  it('the generic stroking transitions still work structurally for both tool ids (never actually driven this way -- painter-store.ts short-circuits them in pointerDown, same as eyedropper -- but ToolSM itself stays generic over every ToolId)', () => {
+    const stairStroking = beginStroke(TOOL_SM_IDLE, 'stair-link', 0, { x: 1, y: 1 });
+    expect(stairStroking).toEqual({
+      status: 'stroking',
+      tool: 'stair-link',
+      layer: 0,
+      startX: 1,
+      startY: 1,
+      points: [{ x: 1, y: 1 }],
+    });
+    expect(endStroke(stairStroking)).toEqual({ status: 'idle' });
+
+    const spawnStroking = beginStroke(TOOL_SM_IDLE, 'spawn-point', 0, { x: 2, y: 2 });
+    expect(spawnStroking).toMatchObject({ status: 'stroking', tool: 'spawn-point' });
+    expect(endStroke(spawnStroking)).toEqual({ status: 'idle' });
+  });
+});

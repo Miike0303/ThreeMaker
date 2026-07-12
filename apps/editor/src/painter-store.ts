@@ -330,16 +330,80 @@ export interface PointerDownResult {
   readonly pickedTileId?: number;
 }
 
-/** `pointerdown`: eyedropper picks immediately (no stroke) from the active floor; every other tool begins a stroke. */
-export function pointerDown(state: PainterState, point: TilePoint): PointerDownResult {
+export interface PointerDownOptions {
+  /**
+   * Caller-supplied id for the stair-link the SECOND 'stair-link' click
+   * creates (Slice 5b), mirroring 'room-box'/`pointerUp`'s caller-supplied
+   * `newRoomId` -- the store never invents ids itself. Ignored on the FIRST
+   * click of the 2-click flow (which only records `pendingStairEntry`) and
+   * for every other tool.
+   */
+  readonly newStairLinkId?: string;
+}
+
+/**
+ * `pointerdown`: eyedropper picks immediately (no stroke) from the active
+ * floor; 'spawn-point' and 'stair-link' (Slice 5b) also act immediately with
+ * no stroke, same short-circuit shape as eyedropper; every other tool begins
+ * a stroke.
+ */
+export function pointerDown(
+  state: PainterState,
+  point: TilePoint,
+  options: PointerDownOptions = {},
+): PointerDownResult {
   if (state.tool === 'eyedropper') {
     const floor = activeFloorState(state);
     const layer = floor.layers[state.activeLayer];
     const pickedTileId = layer?.[point.y * state.width + point.x] ?? 0;
     return { state, pickedTileId };
   }
+  if (state.tool === 'spawn-point') {
+    const floor = activeFloorState(state);
+    return { state: setSpawn(state, { x: point.x, y: point.y, floor: floor.id }) };
+  }
+  if (state.tool === 'stair-link') {
+    return { state: handleStairLinkClick(state, point, options.newStairLinkId) };
+  }
   const stroke = beginStroke(state.stroke, state.tool, state.activeLayer, point);
   return { state: { ...state, stroke } };
+}
+
+/**
+ * Drives the 2-click stair-link authoring flow (Slice 5b design: "click
+ * entry tile on active floor -> switch floor (existing switcher) -> click
+ * exit tile"). The FIRST click with no pending entry only records it
+ * (`setPendingStairEntry`, using the CURRENTLY active floor as `fromFloor`).
+ * The SECOND click creates the link via `addStairLink`, using the pending
+ * entry as the `fromFloor`/entry point and whichever floor is active NOW as
+ * `toFloor`/exit (the caller is expected to have switched floors via
+ * `selectFloor` in between, though this function does not itself enforce a
+ * DIFFERENT floor -- the schema does not forbid `fromFloor === toFloor`
+ * either), then clears the pending entry either way. A safe no-op that
+ * stays mid-flow (pending entry NOT cleared) if the second click arrives
+ * without a caller-supplied `newStairLinkId` -- mirrors
+ * `commitRoomBoxStroke`'s own newRoomId-absent no-op.
+ */
+function handleStairLinkClick(
+  state: PainterState,
+  point: TilePoint,
+  newStairLinkId: string | undefined,
+): PainterState {
+  const floor = activeFloorState(state);
+  if (state.pendingStairEntry === undefined) {
+    return setPendingStairEntry(state, { floor: floor.id, x: point.x, y: point.y });
+  }
+  if (!newStairLinkId) return state;
+
+  const pending = state.pendingStairEntry;
+  const added = addStairLink(state, {
+    id: newStairLinkId,
+    fromFloor: pending.floor,
+    toFloor: floor.id,
+    entry: { x: pending.x, y: pending.y },
+    exit: { x: point.x, y: point.y },
+  });
+  return setPendingStairEntry(added, undefined);
 }
 
 /** `pointermove`: extends the in-progress stroke. No-op while idle. */
@@ -728,6 +792,11 @@ function computeStrokeTouchedCells(
     case 'eyedropper':
       // Eyedropper never reaches here: `pointerDown` short-circuits it
       // before a stroke is ever begun (see this module's doc comment).
+      return [];
+    case 'stair-link':
+    case 'spawn-point':
+      // Never reached: `pointerDown` short-circuits both tools before a
+      // stroke is ever begun (Slice 5b), same as 'eyedropper' above.
       return [];
     case 'room-box':
       // Never reached: `pointerUp` short-circuits a 'room-box' stroke into

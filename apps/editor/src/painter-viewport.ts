@@ -21,6 +21,8 @@ import type { PainterState } from './painter-store.js';
 import * as painter from './painter-store.js';
 import { computeRampGlyphCells } from './ramp-glyph.js';
 import { computeRoomOverlayRects, roomRectCorners } from './room-overlay.js';
+import { computeSpawnOverlayPoint } from './spawn-overlay.js';
+import { computeStairOverlayPoints } from './stair-overlay.js';
 import type { TilePoint, ToolId } from './tool-sm.js';
 import { resolveToolShortcut } from './tool-sm.js';
 import type { OverviewCameraPose } from './viewer-camera.js';
@@ -76,6 +78,21 @@ export interface RoomOverlayItem {
   readonly heightFrac: number;
 }
 
+/** One stair-link marker (entry OR exit, see `stair-overlay.ts`'s `StairOverlayRole`) touching the active floor, projected to a screen-space fraction -- a point glyph like `RampGlyphOverlayItem`, not an outlined box like `RoomOverlayItem`. */
+export interface StairOverlayItem {
+  readonly linkId: string;
+  readonly role: 'entry' | 'exit';
+  readonly bidirectional: boolean;
+  readonly xFrac: number;
+  readonly yFrac: number;
+}
+
+/** The single authored spawn marker, projected to a screen-space fraction, when it sits on the active floor (see `spawn-overlay.ts`). `undefined` when unauthored or authored on a different floor. */
+export interface SpawnOverlayItem {
+  readonly xFrac: number;
+  readonly yFrac: number;
+}
+
 export interface PainterViewportCallbacks {
   /** Fired after every painter-store transition (tool switch, stroke commit, undo/redo, semantic assignment...) so the surrounding UI can re-render its toolbar/inspector. */
   readonly onStateChange?: (state: PainterState) => void;
@@ -85,6 +102,10 @@ export interface PainterViewportCallbacks {
   readonly onRampGlyphsChange?: (glyphs: readonly RampGlyphOverlayItem[]) => void;
   /** Fired whenever the active floor's authored room overlay changes: on map load, floor switch, resize, and after any room-box stroke/room CRUD op commits (see `recomputeRoomOverlay`). */
   readonly onRoomOverlayChange?: (rooms: readonly RoomOverlayItem[]) => void;
+  /** Fired whenever the active floor's stair-link marker overlay changes: on map load, floor switch, resize, and after any stair-link click/removal/toggle (see `recomputeStairOverlay`). */
+  readonly onStairOverlayChange?: (points: readonly StairOverlayItem[]) => void;
+  /** Fired whenever the active floor's spawn marker overlay changes: on map load, floor switch, resize, and after any spawn placement/clear (see `recomputeSpawnOverlay`). */
+  readonly onSpawnOverlayChange?: (point: SpawnOverlayItem | undefined) => void;
 }
 
 /**
@@ -170,6 +191,8 @@ export class PainterViewport {
       fillTileId,
       semantics: doc.tileset.semantics,
       rooms: doc.rooms,
+      stairLinks: doc.stairLinks,
+      ...(doc.spawn !== undefined ? { spawn: doc.spawn } : {}),
     });
 
     this.rebuildActiveFloorScene();
@@ -178,6 +201,8 @@ export class PainterViewport {
     this.emitState();
     this.recomputeRampGlyphs();
     this.recomputeRoomOverlay();
+    this.recomputeStairOverlay();
+    this.recomputeSpawnOverlay();
   }
 
   /** Adds a new blank floor on top of the stack and makes it active (spec: "adding a floor"). No-op if no map is loaded. */
@@ -220,6 +245,8 @@ export class PainterViewport {
     this.emitState();
     this.recomputeRampGlyphs();
     this.recomputeRoomOverlay();
+    this.recomputeStairOverlay();
+    this.recomputeSpawnOverlay();
   }
 
   setTool(tool: ToolId): void {
@@ -288,6 +315,30 @@ export class PainterViewport {
     this.recomputeRoomOverlay();
   }
 
+  /** Removes the stair-link `id` (Slice 5b panel action) -- this IS the undo for stair-link authoring, see `painter-store.ts`'s module doc comment. */
+  removeStairLink(id: string): void {
+    if (!this.state) return;
+    this.state = painter.removeStairLink(this.state, id);
+    this.emitState();
+    this.recomputeStairOverlay();
+  }
+
+  /** Flips the `bidirectional` flag on the stair-link `id` (Slice 5b panel action). */
+  toggleStairLinkBidirectional(id: string): void {
+    if (!this.state) return;
+    this.state = painter.toggleStairLinkBidirectional(this.state, id);
+    this.emitState();
+    this.recomputeStairOverlay();
+  }
+
+  /** Clears the authored spawn (Slice 5b panel action) -- overwriting/clearing IS the undo, see `painter-store.ts`'s module doc comment. */
+  clearSpawn(): void {
+    if (!this.state) return;
+    this.state = painter.clearSpawn(this.state);
+    this.emitState();
+    this.recomputeSpawnOverlay();
+  }
+
   undo(): void {
     if (!this.state) return;
     const result = painter.undo(this.state);
@@ -311,6 +362,8 @@ export class PainterViewport {
       this.doc,
       this.state.floors,
       this.state.rooms,
+      this.state.stairLinks,
+      this.state.spawn,
     );
     return {
       ...composed,
@@ -341,9 +394,13 @@ export class PainterViewport {
     if (!this.state) return;
     const point = this.pickTile(event);
     if (!point) return;
-    const result = painter.pointerDown(this.state, point);
+    const options =
+      this.state.tool === 'stair-link' ? { newStairLinkId: crypto.randomUUID() } : undefined;
+    const result = painter.pointerDown(this.state, point, options);
     this.state = result.state;
     if (result.pickedTileId !== undefined) this.callbacks.onPicked?.(result.pickedTileId);
+    if (this.state.tool === 'stair-link') this.recomputeStairOverlay();
+    if (this.state.tool === 'spawn-point') this.recomputeSpawnOverlay();
     this.emitState();
   }
 
@@ -532,6 +589,63 @@ export class PainterViewport {
     this.callbacks.onRoomOverlayChange?.(items);
   }
 
+  /**
+   * Recomputes the active floor's stair-link marker overlay (Slice 5b
+   * design: entry/exit markers) and pushes it to `onStairOverlayChange`.
+   * Each marker is a single tile-space point (unlike `recomputeRoomOverlay`'s
+   * 4-corner bounding box), projected the same way `recomputeRampGlyphs`
+   * projects a ramp glyph.
+   */
+  private recomputeStairOverlay(): void {
+    if (!this.state || !this.cameraPose) return;
+    const activeFloorId = painter.activeFloorState(this.state).id;
+    const points = computeStairOverlayPoints(this.state.stairLinks, activeFloorId);
+
+    const items: StairOverlayItem[] = [];
+    for (const point of points) {
+      const projected = projectToScreenFraction(
+        { x: point.x + 0.5, y: 0, z: point.y + 0.5 },
+        this.cameraPose,
+        OVERVIEW_FOV_DEG,
+        this.camera.aspect,
+      );
+      if (!projected) continue;
+      items.push({
+        linkId: point.linkId,
+        role: point.role,
+        bidirectional: point.bidirectional,
+        xFrac: projected.xFrac,
+        yFrac: projected.yFrac,
+      });
+    }
+    this.callbacks.onStairOverlayChange?.(items);
+  }
+
+  /**
+   * Recomputes the active floor's spawn marker overlay (Slice 5b design:
+   * "overlay glyph") and pushes it to `onSpawnOverlayChange` -- `undefined`
+   * when unauthored or authored on a different floor (see
+   * `spawn-overlay.ts`'s `computeSpawnOverlayPoint`).
+   */
+  private recomputeSpawnOverlay(): void {
+    if (!this.state || !this.cameraPose) return;
+    const activeFloorId = painter.activeFloorState(this.state).id;
+    const point = computeSpawnOverlayPoint(this.state.spawn, activeFloorId);
+    if (!point) {
+      this.callbacks.onSpawnOverlayChange?.(undefined);
+      return;
+    }
+    const projected = projectToScreenFraction(
+      { x: point.x + 0.5, y: 0, z: point.y + 0.5 },
+      this.cameraPose,
+      OVERVIEW_FOV_DEG,
+      this.camera.aspect,
+    );
+    this.callbacks.onSpawnOverlayChange?.(
+      projected ? { xFrac: projected.xFrac, yFrac: projected.yFrac } : undefined,
+    );
+  }
+
   private startRenderLoop(): void {
     if (this.animationHandle !== undefined) return;
     const renderFrame = () => {
@@ -549,6 +663,8 @@ export class PainterViewport {
     this.renderer.setSize(width, height);
     this.recomputeRampGlyphs();
     this.recomputeRoomOverlay();
+    this.recomputeStairOverlay();
+    this.recomputeSpawnOverlay();
   }
 
   dispose(): void {

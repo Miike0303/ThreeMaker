@@ -1043,3 +1043,97 @@ describe('painter-store: spawn authoring (Slice 5a -- loop-crear-jugar)', () => 
     expect(result).toBe(state);
   });
 });
+
+describe('painter-store: spawn-point tool (Slice 5b -- loop-crear-jugar)', () => {
+  it('pointerDown with the spawn-point tool sets the spawn on the active floor without starting a stroke', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setTool(state, 'spawn-point');
+    const { state: nextState } = pointerDown(state, { x: 2, y: 3 });
+
+    expect(nextState.spawn).toEqual({ x: 2, y: 3, floor: 'floor-0' });
+    expect(nextState.stroke).toEqual({ status: 'idle' });
+  });
+
+  it('a second spawn-point click replaces the existing spawn (single spawn per map)', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setTool(state, 'spawn-point');
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    ({ state } = pointerDown(state, { x: 3, y: 3 }));
+
+    expect(state.spawn).toEqual({ x: 3, y: 3, floor: 'floor-0' });
+  });
+
+  it('places the spawn on whichever floor is active at click time', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addFloor(state, { id: 'floor-1' }); // now active
+    state = setTool(state, 'spawn-point');
+    ({ state } = pointerDown(state, { x: 1, y: 1 }));
+
+    expect(state.spawn).toEqual({ x: 1, y: 1, floor: 'floor-1' });
+  });
+});
+
+describe('painter-store: stair-link tool 2-click flow (Slice 5b -- loop-crear-jugar)', () => {
+  it('the FIRST click with the stair-link tool records a pending entry and creates no link yet', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setTool(state, 'stair-link');
+    const { state: nextState } = pointerDown(state, { x: 2, y: 3 });
+
+    expect(nextState.pendingStairEntry).toEqual({ floor: 'floor-0', x: 2, y: 3 });
+    expect(nextState.stairLinks).toEqual([]);
+    expect(nextState.stroke).toEqual({ status: 'idle' });
+  });
+
+  it('the SECOND click (after switching floors) creates a 2-waypoint StairLinkDocument and clears the pending entry', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addFloor(state, { id: 'floor-1' }); // now active
+    state = selectFloor(state, 0); // back to floor-0, the "from" floor
+    state = setTool(state, 'stair-link');
+    ({ state } = pointerDown(state, { x: 2, y: 3 })); // entry click on floor-0
+
+    state = selectFloor(state, 1); // switch to floor-1, the "to" floor
+    const result = pointerDown(state, { x: 0, y: 0 }, { newStairLinkId: 'stair-1' });
+
+    expect(result.state.stairLinks).toEqual([
+      {
+        id: 'stair-1',
+        fromFloor: 'floor-0',
+        toFloor: 'floor-1',
+        bidirectional: true,
+        waypoints: [
+          { x: 2, y: 3, floor: 'floor-0' },
+          { x: 0, y: 0, floor: 'floor-1' },
+        ],
+      },
+    ]);
+    expect(result.state.pendingStairEntry).toBeUndefined();
+  });
+
+  it('the SECOND click without a caller-supplied newStairLinkId is a safe no-op (stays mid-flow)', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addFloor(state, { id: 'floor-1' });
+    state = selectFloor(state, 0);
+    state = setTool(state, 'stair-link');
+    ({ state } = pointerDown(state, { x: 2, y: 3 }));
+
+    state = selectFloor(state, 1);
+    const result = pointerDown(state, { x: 0, y: 0 });
+
+    expect(result.state.stairLinks).toEqual([]);
+    expect(result.state.pendingStairEntry).toEqual({ floor: 'floor-0', x: 2, y: 3 });
+  });
+
+  it('a third click after a completed link starts a brand-new pending entry (flow resets)', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addFloor(state, { id: 'floor-1' });
+    state = selectFloor(state, 0);
+    state = setTool(state, 'stair-link');
+    ({ state } = pointerDown(state, { x: 2, y: 3 }));
+    state = selectFloor(state, 1);
+    ({ state } = pointerDown(state, { x: 0, y: 0 }, { newStairLinkId: 'stair-1' }));
+
+    const result = pointerDown(state, { x: 1, y: 1 });
+    expect(result.state.pendingStairEntry).toEqual({ floor: 'floor-1', x: 1, y: 1 });
+    expect(result.state.stairLinks).toHaveLength(1);
+  });
+});
