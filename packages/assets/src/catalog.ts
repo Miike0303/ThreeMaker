@@ -367,6 +367,21 @@ export class Catalog {
     return row?.count ?? 0;
   }
 
+  /**
+   * The current maximum `scan_errors.id`, or 0 if the table is empty.
+   * `scan_errors` accumulates across every `catalog` invocation against the
+   * same store (it is never cleared) -- callers that want a summary scoped
+   * to just the CURRENT run (e.g. the CLI's `failuresByCode`) should capture
+   * this before the run starts and only count rows with `id` greater than
+   * this baseline afterward.
+   */
+  getMaxScanErrorId(): number {
+    const row = this.db
+      .prepare<[], { maxId: number | null }>(`SELECT MAX(id) as maxId FROM scan_errors`)
+      .get();
+    return row?.maxId ?? 0;
+  }
+
   listScanErrors(filter: ScanErrorFilter = {}): ScanErrorRow[] {
     const clauses: string[] = [];
     const params: (string | number)[] = [];

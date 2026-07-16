@@ -173,6 +173,22 @@ describe('catalog', () => {
     expect(catalog.listAssets({ gameId: first.gameId })).toHaveLength(1);
   });
 
+  it('getMaxScanErrorId returns 0 for an empty scan_errors table, and rises monotonically after inserts', () => {
+    expect(catalog.getMaxScanErrorId()).toBe(0);
+
+    catalog.insertScanError({ gameId: null, relPath: 'a', code: 'read-error', message: 'x' });
+    const afterFirst = catalog.getMaxScanErrorId();
+    expect(afterFirst).toBeGreaterThan(0);
+
+    catalog.insertScanError({ gameId: null, relPath: 'b', code: 'read-error', message: 'y' });
+    const afterSecond = catalog.getMaxScanErrorId();
+    expect(afterSecond).toBeGreaterThan(afterFirst);
+
+    // Matches the highest id actually present in listScanErrors().
+    const errors = catalog.listScanErrors();
+    expect(afterSecond).toBe(Math.max(...errors.map((e) => e.id)));
+  });
+
   it('isolates a per-asset decrypt failure (missing key) without aborting the game ingest', () => {
     const gameRoot = join(workDir, 'Game');
     // .png_ / .rpgmvp are always-encrypted extensions -- they need a key

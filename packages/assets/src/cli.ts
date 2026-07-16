@@ -8,6 +8,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { IngestGameResult } from './catalog.js';
 import { ingestGame, openCatalog, sumResults } from './catalog.js';
+import { buildFailuresByCode } from './failures-by-code.js';
 import { scanGames } from './scanner.js';
 import { ingestTilesetsForGame } from './tileset-ingest.js';
 
@@ -149,6 +150,7 @@ function runCatalog(rootDir: string, maxDepth: number | undefined, storeDir: str
   const catalog = openCatalog(dbPath);
 
   try {
+    const scanErrorBaselineId = catalog.getMaxScanErrorId();
     const scanResult = scanGames(rootDir, maxDepth === undefined ? {} : { maxDepth });
 
     for (const error of scanResult.errors) {
@@ -185,10 +187,7 @@ function runCatalog(rootDir: string, maxDepth: number | undefined, storeDir: str
     const dedupeStats = catalog.getDedupeStats();
     const durationMs = Date.now() - startedAt;
 
-    const errorsByCode = new Map<string, number>();
-    for (const error of catalog.listScanErrors()) {
-      errorsByCode.set(error.code, (errorsByCode.get(error.code) ?? 0) + 1);
-    }
+    const failuresByCode = buildFailuresByCode(catalog.listScanErrors(), scanErrorBaselineId);
 
     const summary = {
       rootDir,
@@ -209,7 +208,7 @@ function runCatalog(rootDir: string, maxDepth: number | undefined, storeDir: str
       bytesScannedThisRun: totals.bytesScanned,
       bytesStoredThisRun: totals.bytesStored,
       durationMs,
-      failuresByCode: Object.fromEntries(errorsByCode),
+      failuresByCode,
       perGame,
     };
 
