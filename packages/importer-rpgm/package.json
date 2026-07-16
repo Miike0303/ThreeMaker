@@ -13,6 +13,9 @@
     "test": "vitest run",
     "typecheck": "tsc -b --pretty"
   },
+  "dependencies": {
+    "@threemaker/map-format": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "7.0.2",
     "vitest": "4.1.10"

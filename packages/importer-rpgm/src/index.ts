@@ -1,6 +1,9 @@
 // Browser-safe entry: pure parsers only. The Node-only project loader
 // (which reads from the filesystem) lives at the `./node` subpath export so
 // importing this package never drags `node:fs` into a browser bundle.
+
+export type { ConvertRpgmMapOptions, RpgmPlayerStart } from './convert-to-v3.js';
+export { convertRpgmMap } from './convert-to-v3.js';
 export type {
   EdgeDirection,
   EdgeProfile,
