@@ -4,8 +4,12 @@
 // directory of RPG Maker MV/MZ games. Run via `tsx` (see the root `scan`
 // script) — this file is intentionally not part of the package's public
 // exports, since it's a Node-only entry point, not a library API.
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { convertRpgmMap } from '@threemaker/importer-rpgm';
+import { loadProject } from '@threemaker/importer-rpgm/node';
+import { serializeMapDocument } from '@threemaker/map-format';
 import type { IngestGameResult } from './catalog.js';
 import { ingestGame, openCatalog, sumResults } from './catalog.js';
 import { buildFailuresByCode } from './failures-by-code.js';
@@ -18,6 +22,7 @@ function printUsage(): void {
   console.error('Usage: tsx src/cli.ts scan <rootDir> [--max-depth <n>]');
   console.error('Usage: tsx src/cli.ts catalog <rootDir> [--store <dir>] [--max-depth <n>]');
   console.error('Usage: tsx src/cli.ts ingest-tilesets [--store <dir>]');
+  console.error('Usage: tsx src/cli.ts convert-rpgm <gameDir> <mapId> --out <file.tmmap>');
 }
 
 interface ScanOrCatalogArgs {
@@ -32,7 +37,14 @@ interface IngestTilesetsArgs {
   readonly storeDir?: string;
 }
 
-type ParsedArgs = ScanOrCatalogArgs | IngestTilesetsArgs;
+interface ConvertRpgmArgs {
+  readonly command: 'convert-rpgm';
+  readonly gameDir: string;
+  readonly mapId: number;
+  readonly outPath: string;
+}
+
+type ParsedArgs = ScanOrCatalogArgs | IngestTilesetsArgs | ConvertRpgmArgs;
 
 function parseStoreOnlyArgs(
   command: 'ingest-tilesets',
@@ -47,10 +59,28 @@ function parseStoreOnlyArgs(
   return { command, ...(storeDir === undefined ? {} : { storeDir }) };
 }
 
+/** `convert-rpgm <gameDir> <mapId> --out <file>` — two positionals + one required flag, unlike every other command's single positional. */
+function parseConvertRpgmArgs(rest: readonly string[]): ConvertRpgmArgs | null {
+  const [gameDir, mapIdRaw, ...flags] = rest;
+  if (!gameDir || !mapIdRaw) return null;
+  const mapId = Number.parseInt(mapIdRaw, 10);
+  if (Number.isNaN(mapId)) return null;
+
+  const outFlagIndex = flags.indexOf('--out');
+  if (outFlagIndex === -1) return null;
+  const outPath = flags[outFlagIndex + 1];
+  if (!outPath) return null;
+
+  return { command: 'convert-rpgm', gameDir, mapId, outPath };
+}
+
 function parseArgs(argv: readonly string[]): ParsedArgs | null {
   const [command, ...afterCommand] = argv;
   if (command === 'ingest-tilesets') {
     return parseStoreOnlyArgs(command, afterCommand);
+  }
+  if (command === 'convert-rpgm') {
+    return parseConvertRpgmArgs(afterCommand);
   }
 
   const [rootDir, ...rest] = afterCommand;
@@ -121,6 +151,89 @@ function runIngestTilesets(storeDir: string): void {
   } finally {
     catalog.close();
   }
+}
+
+/**
+ * Best-effort read of RPGM's `System.json` `startMapId`/`startX`/`startY`,
+ * returning a player-start position only when `mapId` IS the project's
+ * configured start map. Duplicates `load-project.ts`'s private data-dir
+ * candidate search (`dir`, `dir/data`, `dir/www/data`) rather than exporting
+ * it for this one 3-line reuse (ponytail: hoist a real `parseSystem` into
+ * `@threemaker/importer-rpgm` if this CLI ever needs more `System.json`
+ * fields than just the start position).
+ */
+function readPlayerStartIfStartMap(
+  gameDir: string,
+  mapId: number,
+): { readonly x: number; readonly y: number } | undefined {
+  const candidates = [gameDir, join(gameDir, 'data'), join(gameDir, 'www', 'data')];
+  for (const dir of candidates) {
+    const systemPath = join(dir, 'System.json');
+    if (!existsSync(systemPath)) continue;
+    try {
+      const system = JSON.parse(readFileSync(systemPath, 'utf8')) as {
+        readonly startMapId?: number;
+        readonly startX?: number;
+        readonly startY?: number;
+      };
+      if (
+        system.startMapId === mapId &&
+        typeof system.startX === 'number' &&
+        typeof system.startY === 'number'
+      ) {
+        return { x: system.startX, y: system.startY };
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+async function runConvertRpgm(gameDir: string, mapId: number, outPath: string): Promise<void> {
+  const project = await loadProject(gameDir);
+  const map = project.maps.get(mapId);
+  if (!map) {
+    console.error(
+      `convert-rpgm: no Map${String(mapId).padStart(3, '0')}.json found under "${gameDir}".`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const tileset = project.tilesets.find((entry) => entry.id === map.tilesetId);
+  if (!tileset) {
+    console.error(
+      `convert-rpgm: map ${mapId} references tilesetId ${map.tilesetId}, which was not found in Tilesets.json.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const playerStart = readPlayerStartIfStartMap(gameDir, mapId);
+  const doc = convertRpgmMap(map, tileset, {
+    id: `rpgm-map-${mapId}`,
+    ...(playerStart ? { playerStart } : {}),
+  });
+
+  writeFileSync(outPath, serializeMapDocument(doc), 'utf8');
+
+  console.log(
+    JSON.stringify(
+      {
+        gameDir,
+        mapId,
+        outPath,
+        name: doc.name,
+        width: doc.width,
+        height: doc.height,
+        isStartMap: playerStart !== undefined,
+        spawn: doc.spawn ?? null,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 function runScan(rootDir: string, maxDepth: number | undefined): void {
@@ -228,6 +341,14 @@ function main(argv: readonly string[]): void {
 
   if (parsed.command === 'ingest-tilesets') {
     runIngestTilesets(parsed.storeDir ?? DEFAULT_STORE_DIR);
+    return;
+  }
+
+  if (parsed.command === 'convert-rpgm') {
+    void runConvertRpgm(parsed.gameDir, parsed.mapId, parsed.outPath).catch((error: unknown) => {
+      console.error('convert-rpgm: failed.', error);
+      process.exitCode = 1;
+    });
     return;
   }
 

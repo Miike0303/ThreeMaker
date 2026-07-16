@@ -14,7 +14,8 @@
     "typecheck": "tsc -b --pretty",
     "scan": "tsx src/cli.ts scan",
     "catalog": "tsx src/cli.ts catalog",
-    "ingest-tilesets": "tsx src/cli.ts ingest-tilesets"
+    "ingest-tilesets": "tsx src/cli.ts ingest-tilesets",
+    "convert-rpgm": "tsx src/cli.ts convert-rpgm"
   },
   "devDependencies": {
     "tsx": "^4.23.0",
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "@threemaker/importer-rpgm": "workspace:*",
+    "@threemaker/map-format": "workspace:*",
     "better-sqlite3": "^11.10.0"
   }
 }
