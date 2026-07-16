@@ -25,6 +25,16 @@ const OGG_MAGIC: readonly number[] = [0x4f, 0x67, 0x67, 0x53]; // "OggS"
 const M4A_FTYP_MAGIC: readonly number[] = [0x66, 0x74, 0x79, 0x70]; // "ftyp", at offset 4
 const M4A_FTYP_OFFSET = 4;
 
+// RPG Maker's NW.js/Chromium runtime happily plays/decodes these regardless
+// of the asset's `.png`/`.ogg` extension, so real games routinely ship WebP
+// renamed .png(_) and WAV/MP3 renamed .ogg(_). The decryption algorithm is
+// correct for these -- only the magic whitelist below was too strict.
+const RIFF_MAGIC: readonly number[] = [0x52, 0x49, 0x46, 0x46]; // "RIFF"
+const WEBP_FOURCC_MAGIC: readonly number[] = [0x57, 0x45, 0x42, 0x50]; // "WEBP", at offset 8
+const WAVE_FOURCC_MAGIC: readonly number[] = [0x57, 0x41, 0x56, 0x45]; // "WAVE", at offset 8
+const RIFF_FOURCC_OFFSET = 8;
+const ID3_MAGIC: readonly number[] = [0x49, 0x44, 0x33]; // "ID3" (ID3v2 tag)
+
 export type DecryptErrorCode = 'bad-header' | 'truncated' | 'bad-key' | 'magic-mismatch';
 
 export class DecryptError extends Error {
@@ -45,11 +55,25 @@ function bytesMatchAt(data: Uint8Array, offset: number, expected: readonly numbe
   return true;
 }
 
+/** True for `data[0] === 0xff` followed by a byte with the top 3 bits set — an MPEG audio frame sync (no ID3 tag). */
+function isMp3FrameSync(data: Uint8Array): boolean {
+  return data.length >= 2 && data[0] === 0xff && (data[1] as number) >= 0xe0;
+}
+
+/** True for a RIFF container whose fourCC at offset 8 matches `fourcc` (e.g. WebP-in-RIFF, WAVE-in-RIFF). */
+function isRiffContainer(data: Uint8Array, fourcc: readonly number[]): boolean {
+  return bytesMatchAt(data, 0, RIFF_MAGIC) && bytesMatchAt(data, RIFF_FOURCC_OFFSET, fourcc);
+}
+
 function hasKnownMagic(data: Uint8Array): boolean {
   return (
     bytesMatchAt(data, 0, PNG_MAGIC) ||
     bytesMatchAt(data, 0, OGG_MAGIC) ||
-    bytesMatchAt(data, M4A_FTYP_OFFSET, M4A_FTYP_MAGIC)
+    bytesMatchAt(data, M4A_FTYP_OFFSET, M4A_FTYP_MAGIC) ||
+    isRiffContainer(data, WEBP_FOURCC_MAGIC) ||
+    isRiffContainer(data, WAVE_FOURCC_MAGIC) ||
+    bytesMatchAt(data, 0, ID3_MAGIC) ||
+    isMp3FrameSync(data)
   );
 }
 
@@ -83,7 +107,9 @@ export function parseEncryptionKey(systemJson: unknown): Uint8Array | null {
  * - `bad-header`: the fake header's magic bytes don't match `RPGMV`.
  * - `bad-key`: `key` is not exactly 16 bytes.
  * - `magic-mismatch`: the decrypted output doesn't match any known asset
- *   magic (PNG, OGG, or M4A `ftyp`) — the key is likely wrong.
+ *   magic (PNG, OGG, M4A `ftyp`, WebP/WAVE-in-RIFF, or MP3 `ID3`/frame
+ *   sync — real games ship these under the `.png`/`.ogg` extensions too)
+ *   — the key is likely wrong.
  */
 export function decryptRpgmv(data: Uint8Array, key: Uint8Array): Uint8Array {
   if (data.length < FAKE_HEADER_LEN + XOR_LEN) {

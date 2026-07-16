@@ -143,4 +143,79 @@ describe('decryptRpgmv', () => {
       expect((err as DecryptError).code).toBe('magic-mismatch');
     }
   });
+
+  it('decrypts a WebP renamed .png_ back to its original bytes (real games ship WebP under the PNG extension)', () => {
+    // RIFF....WEBP -- the WEBP fourcc sits at offset 8, RIFF at offset 0.
+    const plain = concat(
+      new TextEncoder().encode('RIFF'),
+      new Uint8Array([0x1a, 0, 0, 0]), // chunk size, arbitrary
+      new TextEncoder().encode('WEBP'),
+      new TextEncoder().encode('VP8X-synthetic-body'),
+    );
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+
+    const decrypted = decryptRpgmv(encrypted, KEY_BYTES);
+
+    expect(Array.from(decrypted)).toEqual(Array.from(plain));
+  });
+
+  it('decrypts a WAV renamed .ogg_ back to its original bytes (triangulation for the RIFF family)', () => {
+    // RIFF....WAVE
+    const plain = concat(
+      new TextEncoder().encode('RIFF'),
+      new Uint8Array([0x24, 0, 0, 0]),
+      new TextEncoder().encode('WAVE'),
+      new TextEncoder().encode('fmt -synthetic-body'),
+    );
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+
+    const decrypted = decryptRpgmv(encrypted, KEY_BYTES);
+
+    expect(Array.from(decrypted)).toEqual(Array.from(plain));
+  });
+
+  it('decrypts an MP3 (ID3 tag) renamed .ogg_ back to its original bytes', () => {
+    const plain = concat(
+      new TextEncoder().encode('ID3'),
+      new Uint8Array([3, 0, 0, 0, 0, 0, 0]),
+      new TextEncoder().encode('synthetic-mp3-body'),
+    );
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+
+    const decrypted = decryptRpgmv(encrypted, KEY_BYTES);
+
+    expect(Array.from(decrypted)).toEqual(Array.from(plain));
+  });
+
+  it('decrypts an MP3 (raw frame sync, no ID3 tag) renamed .ogg_ back to its original bytes', () => {
+    // 0xFF followed by a byte with the top 3 bits set (0xE0 mask) is a valid
+    // MPEG frame sync -- games sometimes ship MP3s with no ID3 tag at all.
+    const plain = concat(
+      new Uint8Array([0xff, 0xfb, 0x90, 0x64]),
+      new TextEncoder().encode('synthetic-mp3-frame-body'),
+    );
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+
+    const decrypted = decryptRpgmv(encrypted, KEY_BYTES);
+
+    expect(Array.from(decrypted)).toEqual(Array.from(plain));
+  });
+
+  it('still throws DecryptError(magic-mismatch) for a RIFF chunk that is neither WEBP nor WAVE', () => {
+    const plain = concat(
+      new TextEncoder().encode('RIFF'),
+      new Uint8Array([0x10, 0, 0, 0]),
+      new TextEncoder().encode('AVI '), // a RIFF-family type we don't accept
+      new Uint8Array(16),
+    );
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+
+    expect(() => decryptRpgmv(encrypted, KEY_BYTES)).toThrow(DecryptError);
+    try {
+      decryptRpgmv(encrypted, KEY_BYTES);
+      expect.unreachable('expected decryptRpgmv to throw');
+    } catch (err) {
+      expect((err as DecryptError).code).toBe('magic-mismatch');
+    }
+  });
 });
