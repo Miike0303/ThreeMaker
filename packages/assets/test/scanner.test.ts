@@ -184,6 +184,23 @@ describe('scanGames — asset-tree traversal shares the same guarded walk as the
   });
 });
 
+describe('scanGames — UTF-8 BOM tolerance', () => {
+  it('reads a System.json prefixed with a UTF-8 BOM instead of skipping the whole game (invalid-system-json)', () => {
+    const gameDir = join(workDir, 'bom-game');
+    // Some deployed games ship System.json re-saved with a leading BOM
+    // (EF BB BF) by editors/translation tools -- JSON.parse throws on it
+    // unless stripped first.
+    writeSystemJson(join(gameDir, 'data'), `﻿${JSON.stringify(VALID_SYSTEM_JSON)}`);
+
+    const result = scanGames(workDir, { maxDepth: 12 });
+
+    expect(result.errors).toHaveLength(0);
+    const game = result.games.find((g) => g.rootPath === gameDir);
+    expect(game).toBeDefined();
+    expect(game?.hasEncryptedImages).toBe(false);
+  });
+});
+
 describe('scanGames — per-game error isolation', () => {
   it('reports a corrupt System.json as an error without aborting the rest of the run', () => {
     const goodGameA = join(workDir, 'good-a');

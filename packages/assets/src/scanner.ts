@@ -269,7 +269,7 @@ function buildGameRecord(
 
   let systemJson: unknown;
   try {
-    systemJson = JSON.parse(raw);
+    systemJson = JSON.parse(stripBom(raw));
   } catch (err) {
     throw new ScanBuildError(
       'invalid-system-json',
@@ -323,4 +323,9 @@ function collectAssetFiles(
 
 function describeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Strips a leading UTF-8 BOM (U+FEFF) — some deployed games ship `System.json` re-saved by editors/translation tools that add one, which `JSON.parse` otherwise rejects, skipping the whole game. */
+function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }

@@ -24,6 +24,11 @@ export interface TilesetIngestResult {
  */
 const CANDIDATE_IMAGE_EXTENSIONS: readonly string[] = ['.png', '.png_', '.rpgmvp'];
 
+/** Strips a leading UTF-8 BOM (U+FEFF) — some deployed games ship `Tilesets.json` re-saved by editors/translation tools that add one, which `JSON.parse` otherwise rejects. */
+function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
 function resolveSheetAsset(
   catalog: Catalog,
   gameId: number,
@@ -51,7 +56,7 @@ export function ingestTilesetsForGame(catalog: Catalog, game: GameRow): TilesetI
     return { tilesetsProcessed: 0, sheetsLinked: 0, sheetsSkipped: 0 };
   }
 
-  const json = JSON.parse(readFileSync(tilesetsPath, 'utf8'));
+  const json = JSON.parse(stripBom(readFileSync(tilesetsPath, 'utf8')));
   const tilesets = parseTilesets(json);
 
   let sheetsLinked = 0;

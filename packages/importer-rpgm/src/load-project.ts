@@ -26,9 +26,14 @@ function resolveDataDir(dir: string): string {
   );
 }
 
+/** Strips a leading UTF-8 BOM (U+FEFF) — some deployed games ship JSON re-saved by editors/translation tools that add one, which `JSON.parse` otherwise rejects. */
+function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
 async function readJson(filePath: string): Promise<unknown> {
   const contents = await readFile(filePath, 'utf8');
-  return JSON.parse(contents);
+  return JSON.parse(stripBom(contents));
 }
 
 /**

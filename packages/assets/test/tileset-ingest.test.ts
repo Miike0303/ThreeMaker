@@ -121,6 +121,21 @@ describe('ingestTilesetsForGame', () => {
     ]);
   });
 
+  it('reads a Tilesets.json prefixed with a UTF-8 BOM instead of throwing on JSON.parse', () => {
+    const game = makeGameRow('mz');
+    seedCatalogedAsset(game.id, 'img/tilesets/Outside_A2.png');
+    mkdirSync(join(gameRoot, 'data'), { recursive: true });
+    writeFileSync(
+      join(gameRoot, 'data', 'Tilesets.json'),
+      `﻿${JSON.stringify(makeTilesetsJson())}`,
+      'utf8',
+    );
+
+    const result = ingestTilesetsForGame(catalog, game);
+
+    expect(result).toEqual({ tilesetsProcessed: 1, sheetsLinked: 1, sheetsSkipped: 1 });
+  });
+
   it('throws for a malformed Tilesets.json (real-world games ship these) -- callers must isolate this per game, same convention as ingestGame', () => {
     const game = makeGameRow('mz');
     mkdirSync(join(gameRoot, 'data'), { recursive: true });
