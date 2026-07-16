@@ -175,13 +175,15 @@ describe('catalog', () => {
 
   it('isolates a per-asset decrypt failure (missing key) without aborting the game ingest', () => {
     const gameRoot = join(workDir, 'Game');
-    writeAsset(gameRoot, 'img', 'tilesets/Overworld.png', TINY_PNG); // will fail: flagged encrypted, no key
-    writeAsset(gameRoot, 'img', 'system/Window.png', TINY_PNG); // also flagged, also fails
+    // .png_ / .rpgmvp are always-encrypted extensions -- they need a key
+    // regardless of the game's flag, so a missing key fails them per-asset.
+    writeAsset(gameRoot, 'img', 'tilesets/Overworld.png_', TINY_PNG); // will fail: encrypted extension, no key
+    writeAsset(gameRoot, 'img', 'system/Window.rpgmvp', TINY_PNG); // also encrypted extension, also fails
     const record = makeGame({
       rootPath: gameRoot,
       hasEncryptedImages: true,
       encryptionKey: null,
-      imageAssets: ['tilesets/Overworld.png', 'system/Window.png'],
+      imageAssets: ['tilesets/Overworld.png_', 'system/Window.rpgmvp'],
     });
 
     const result = ingestGame(catalog, record, { storeDir });
@@ -191,6 +193,40 @@ describe('catalog', () => {
     const errors = catalog.listScanErrors({ gameId: result.gameId });
     expect(errors).toHaveLength(2);
     expect(errors.every((e) => e.code === 'bad-key')).toBe(true);
+  });
+
+  it('passes through a plain .png asset untouched even when the game is flagged hasEncryptedImages (per-file decision, not per-game flag)', () => {
+    const gameRoot = join(workDir, 'Game');
+    // Real deployed MV/MZ games always ship some plain assets alongside
+    // encrypted ones (e.g. img/system/Loading.png is never encrypted by the
+    // official deployer) -- the game-level flag must not force-decrypt them.
+    writeAsset(gameRoot, 'img', 'system/Loading.png', TINY_PNG);
+
+    const key = new Uint8Array(16).fill(0x11);
+    const header = new Uint8Array([0x52, 0x50, 0x47, 0x4d, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const plain = new Uint8Array(32).fill(0);
+    plain.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0); // PNG magic
+    const encryptedChunk = plain.slice(0, 16).map((b, i) => b ^ (key[i] ?? 0));
+    const rest = plain.slice(16);
+    const encrypted = new Uint8Array([...header, ...encryptedChunk, ...rest]);
+    writeAsset(gameRoot, 'img', 'tilesets/Overworld.png_', encrypted);
+
+    const record = makeGame({
+      rootPath: gameRoot,
+      hasEncryptedImages: true,
+      encryptionKey: key,
+      imageAssets: ['system/Loading.png', 'tilesets/Overworld.png_'],
+    });
+
+    const result = ingestGame(catalog, record, { storeDir });
+
+    expect(result.filesFailed).toBe(0);
+    const assets = catalog.listAssets({ gameId: result.gameId });
+    expect(assets).toHaveLength(2);
+    const loading = assets.find((a) => a.relPath === 'img/system/Loading.png');
+    expect(loading?.wasEncrypted).toBe(false);
+    const overworld = assets.find((a) => a.relPath === 'img/tilesets/Overworld.png_');
+    expect(overworld?.wasEncrypted).toBe(true);
   });
 
   it('audio assets are decrypted through the same pipeline when hasEncryptedAudio is set', () => {

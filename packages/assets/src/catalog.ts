@@ -599,6 +599,28 @@ function classifyObjectKind(kind: 'image' | 'audio', relPath: string): InsertObj
   return 'other';
 }
 
+/**
+ * Extensions RPG Maker MV/MZ only ever produces for encrypted assets. A
+ * file's OWN extension, not the game-level `hasEncryptedImages`/
+ * `hasEncryptedAudio` flag, decides whether it needs decryption -- real
+ * deployed games always mix plain and encrypted assets (the official
+ * deployer never encrypts `img/system/Loading.png`/`Window.png`, plugin
+ * assets are often added unencrypted, etc.), so a game-wide flag would
+ * force-decrypt (and drop, on `bad-header`) perfectly valid plain files.
+ */
+const ENCRYPTED_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.rpgmvp',
+  '.png_',
+  '.rpgmvo',
+  '.ogg_',
+  '.m4a_',
+]);
+
+/** True when `relPath`'s extension is one of RPG Maker's encrypted-asset extensions. */
+function isEncryptedExtension(relPath: string): boolean {
+  return ENCRYPTED_EXTENSIONS.has(extname(relPath).toLowerCase());
+}
+
 export interface IngestGameOptions {
   readonly storeDir: string;
 }
@@ -640,13 +662,14 @@ export function sumResults(results: readonly IngestGameResult[]): AggregateInges
 }
 
 /**
- * Ingests one scanned game into the catalog: decrypts (per
- * `hasEncryptedImages`/`hasEncryptedAudio`, NOT per file extension — a
- * game's flag is authoritative for every asset of that kind), hashes,
- * stores content-addressed bytes, and links catalog rows. Never throws for
- * a single bad asset — failures are recorded as `scan_errors` rows and the
- * rest of the game's assets still get ingested (per-game error isolation
- * extends to per-asset isolation within a game).
+ * Ingests one scanned game into the catalog: decrypts (per FILE extension —
+ * `.rpgmvp`/`.png_`/`.rpgmvo`/`.ogg_`/`.m4a_` always need decryption, plain
+ * `.png`/`.ogg`/`.m4a` never do, regardless of the game's
+ * `hasEncryptedImages`/`hasEncryptedAudio` flag — real deployed games mix
+ * both), hashes, stores content-addressed bytes, and links catalog rows.
+ * Never throws for a single bad asset — failures are recorded as
+ * `scan_errors` rows and the rest of the game's assets still get ingested
+ * (per-game error isolation extends to per-asset isolation within a game).
  */
 export function ingestGame(
   catalog: Catalog,
@@ -688,7 +711,7 @@ export function ingestGame(
     }
     bytesScanned += raw.length;
 
-    const needsDecrypt = kind === 'image' ? game.hasEncryptedImages : game.hasEncryptedAudio;
+    const needsDecrypt = isEncryptedExtension(relPath);
     let decoded: Uint8Array;
     if (needsDecrypt) {
       if (!game.encryptionKey) {
@@ -697,7 +720,7 @@ export function ingestGame(
           gameId,
           relPath: catalogRelPath,
           code: 'bad-key',
-          message: `Game reports encrypted ${kind} assets but has no usable encryption key.`,
+          message: `Asset "${relPath}" has an encrypted-${kind} extension but the game has no usable encryption key.`,
         });
         return;
       }
