@@ -60,6 +60,7 @@ import {
 } from './fixture-paths.js';
 import type { FloorRouter, FloorSource, StairLinkRuntime } from './floor-runtime.js';
 import { buildFloorGameplay, createFloorRouter } from './floor-runtime.js';
+import { disposeFloorTextures } from './floor-textures.js';
 import type { GameManifest } from './game-manifest.js';
 import { parseGameManifest } from './game-manifest.js';
 import { groundYAt } from './ground-y.js';
@@ -733,9 +734,16 @@ async function renderFixtureMap(
    * the character. `group.position.y` is offset by `baseElevation *
    * HEIGHT_UNIT` (design: "group.position.y = baseElevation * HEIGHT_UNIT")
    * so a floor above the ground floor physically sits above it in world
-   * space. Textures are shared across sessions/floors of the same source
-   * (`ownsTextures: false`), so cycling back to a previously-seen map (or
-   * building a second floor from the same tileset) never reloads them.
+   * space. `ownsTextures: false`: this scene never disposes `source.textures`
+   * itself, on the assumption the CALLER owns their lifetime. That holds for
+   * the DEV fixture/giant/mz/floors cycle below (each mode's map data,
+   * `textures` included, is cached at module/closure scope, so cycling back
+   * to a previously-seen mode reuses the same texture instances and never
+   * reloads them) -- but NOT for the manifest map-cycle (rpgm-whole-game-import):
+   * that one calls `loadAuthoredMap` fresh per hop, which allocates a brand
+   * new `textures` set every time, and disposes the outgoing set itself via
+   * `disposeFloorTextures` (see that block below) precisely because nothing
+   * else would.
    */
   function buildFloorRender(
     source: FloorSource,
@@ -1207,13 +1215,25 @@ async function renderFixtureMap(
   // @threemaker/core's EventInterpreter + @threemaker/narrative's
   // InkDialogueProvider. `demoMapActive` gates NPC/trigger interaction to
   // only the fixture map -- the 'g' dev map-cycle toggle below switches to
-  // maps this demo's tile coordinates don't apply to.
+  // maps this demo's tile coordinates don't apply to. Construction itself is
+  // ALSO gated on `sessionOverride === undefined` (the true DEV fixture map,
+  // see below), not just `demoMapActive` -- an authored/manifest map in
+  // `tauri dev` must never even build the demo NPC sprites/interpreter in
+  // the first place, since a later-toggled visibility flag would still leave
+  // them briefly constructed and collidable.
   let npcRegistry: NpcRegistry | undefined;
   let triggerIndex: TriggerIndex | undefined;
   let interpreter: EventInterpreter | undefined;
   let demoEvents: EventScript | undefined;
   const npcSprites = new Map<string, CharacterSprite>();
-  let demoMapActive = true;
+  // Only the true DEV fixture map (`sessionOverride === undefined` -- the
+  // ONLY call site that omits it is the Roseliam-fixture fallback at the
+  // bottom of `main()`) starts with the demo active. The single-file
+  // authored path AND the manifest path both always pass `sessionOverride`,
+  // so they start `false` -- fixes a bug where the demo NPCs' fixture-only
+  // gray billboards (and their movement collision) appeared on top of a real
+  // imported game map in `tauri dev`.
+  let demoMapActive = sessionOverride === undefined;
   let activeEntityMove: {
     readonly mover: GridMover;
     readonly direction: Direction;
@@ -1221,7 +1241,7 @@ async function renderFixtureMap(
     readonly done: () => void;
   } | null = null;
 
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && sessionOverride === undefined) {
     try {
       const demoContent = loadDemoContent();
       demoEvents = demoContent.events;
@@ -1583,6 +1603,17 @@ async function renderFixtureMap(
   if (manifestNav && manifestNav.manifest.maps.length > 1) {
     let currentMapIndex = 0;
     let cyclingManifestMap = false;
+    // The `textures` record every floor of the CURRENTLY-rendered manifest
+    // map shares (same object reference across floors -- see
+    // `disposeFloorTextures`'s doc comment). `loadAuthoredMap` allocates a
+    // brand new set per hop with no cross-hop cache, and `ownsTextures: false`
+    // above means nothing else ever frees them -- tracked here so a
+    // completed hop can dispose the map it is leaving, right after
+    // `session.dispose()`. Seeded from the initial map this session was
+    // already built with (`sessionOverride`, the authored/manifest path's
+    // own first `loadAuthoredMap` result), so even the very first 'g' press
+    // frees it correctly.
+    let currentTextures = sessionOverride?.floorSources[0]?.textures;
 
     window.addEventListener('keydown', (event) => {
       if (event.repeat || event.key.toLowerCase() !== 'g' || cyclingManifestMap) return;
@@ -1608,6 +1639,8 @@ async function renderFixtureMap(
 
           currentMapIndex = nextIndex;
           session.dispose();
+          disposeFloorTextures(currentTextures);
+          currentTextures = nextResult.floorSources[0]?.textures;
           session = createMapSession(
             nextResult.floorSources,
             nextResult.stairLinks,
