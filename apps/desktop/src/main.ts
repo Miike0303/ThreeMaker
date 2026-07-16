@@ -1,3 +1,4 @@
+import { BaseDirectory, readFile } from '@tauri-apps/plugin-fs';
 import type { EventHost, EventScript } from '@threemaker/core';
 import { EventInterpreter, GameLoop, WorldState } from '@threemaker/core';
 import type {
@@ -31,6 +32,7 @@ import {
 } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
+import type { AuthoredMapResult } from './authored-map.js';
 import { loadAuthoredMap } from './authored-map.js';
 import type { CameraMode } from './camera-rig.js';
 import { clampTiltDeg, computeCameraPose, cycleCameraMode } from './camera-rig.js';
@@ -58,10 +60,13 @@ import {
 } from './fixture-paths.js';
 import type { FloorRouter, FloorSource, StairLinkRuntime } from './floor-runtime.js';
 import { buildFloorGameplay, createFloorRouter } from './floor-runtime.js';
+import type { GameManifest } from './game-manifest.js';
+import { parseGameManifest } from './game-manifest.js';
 import { groundYAt } from './ground-y.js';
 import { createHd2dPipeline } from './hd2d-pipeline.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
+import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
 import {
   aboveFloorTilemap,
   createRoomTracker,
@@ -199,6 +204,8 @@ interface FixtureMapData {
   readonly sheetPixelSizes: SheetPixelSizes;
   readonly textures: Partial<Record<TileSheetId, THREE.Texture>>;
   readonly characterTexture: THREE.Texture;
+  /** Which of `characterTexture`'s 8 character blocks (4 cols x 2 rows) is the player sprite -- rpgm-whole-game-import's real actor-sheet resolution overrides the `CHARACTER_INDEX` default when the manifest's `actorSheet` resolved. Defaults to `CHARACTER_INDEX` when omitted (every DEV-fixture/single-file-authored call site, unchanged). */
+  readonly characterIndex?: number;
 }
 
 /** A loaded map's own tileset + sheet textures, without the (shared) player character sheet. */
@@ -303,6 +310,80 @@ async function loadMzFixtureMapData(): Promise<MapSourceData> {
   const { textures, sheetPixelSizes } = await loadUsedSheetTextures(__MZ_FIXTURES_DIR__, tileset);
 
   return { map, tileset, sheetPixelSizes, textures };
+}
+
+/** One resolved asset-store object: the decoded texture plus its pixel size (`buildChunks`/`CharacterSprite` both need both). */
+interface ResolvedObjectTexture {
+  readonly texture: THREE.Texture;
+  readonly width: number;
+  readonly height: number;
+}
+
+const ASSET_STORE_OBJECTS_DIR = '.threemaker/asset-store/objects';
+
+/**
+ * Reads one asset-store object's bytes via Tauri fs and decodes it into a
+ * texture (rpgm-whole-game-import: multi-map navigation + real player
+ * sprite, both below). Deliberately duplicates `authored-map.ts`'s private
+ * `resolveObjectTextureReal` (same path convention: `objects/{sha256[:2]}/
+ * {sha256}`) rather than exporting it from there -- keeps `authored-map.ts`'s
+ * public surface (`loadAuthoredMap`/`AuthoredMapDeps`) unchanged, and this is
+ * the same "small local duplication over cross-module coupling" call this
+ * codebase already makes elsewhere (see `cli.ts`'s `readPlayerStartIfStartMap`
+ * ponytail comment, pre-refactor).
+ */
+async function resolveObjectTextureReal(sha256: string): Promise<ResolvedObjectTexture> {
+  const bytes = await readFile(`${ASSET_STORE_OBJECTS_DIR}/${sha256.slice(0, 2)}/${sha256}`, {
+    baseDir: BaseDirectory.Home,
+  });
+  const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+  try {
+    const texture = await loadSheetTexture(blobUrl);
+    const image = texture.image as { width: number; height: number };
+    return { texture, width: image.width, height: image.height };
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+}
+
+/**
+ * Loads one manifest-entry map (multi-map navigation): same
+ * `loadAuthoredMap` pipeline the single-file authored path uses, but reading
+ * a specific file under `.threemaker/maps` (`relativeFile`, e.g.
+ * `"kingdom-of-subversion/map007.tmmap.json"`) instead of the shared
+ * `current.tmmap.json`. `loadAuthoredMap`'s own signature/behavior is
+ * unchanged -- this only supplies a differently-scoped `readMapDocumentText`.
+ */
+function loadAuthoredMapAt(relativeFile: string): Promise<AuthoredMapResult | null> {
+  return loadAuthoredMap({
+    readMapDocumentText: () => readMapDocumentText(`${MAP_DIR_RELATIVE}/${relativeFile}`),
+    resolveObjectTexture: resolveObjectTextureReal,
+  });
+}
+
+/**
+ * Resolves the manifest's optional `actorSheet` into a real player-sprite
+ * texture. Fail-soft (W1-style, same convention as `authored-map.ts`'s own
+ * per-slot texture resolution): a missing/unreadable object logs and falls
+ * back to the canvas-generated placeholder, same as no `actorSheet` at all --
+ * never blocks the map from rendering.
+ */
+async function resolvePlayerCharacterTexture(
+  actorSheet: { readonly object: string; readonly characterIndex: number } | undefined,
+): Promise<{ readonly texture: THREE.Texture; readonly characterIndex: number | undefined }> {
+  if (!actorSheet) {
+    return { texture: buildPlaceholderCharacterTexture(), characterIndex: undefined };
+  }
+  try {
+    const resolved = await resolveObjectTextureReal(actorSheet.object);
+    return { texture: resolved.texture, characterIndex: actorSheet.characterIndex };
+  } catch (error) {
+    console.error(
+      `main: player character sheet object ${actorSheet.object} is missing or unreadable; using the placeholder sprite.`,
+      error,
+    );
+    return { texture: buildPlaceholderCharacterTexture(), characterIndex: undefined };
+  }
 }
 
 // World-space size of one tile edge; must match everywhere a world position
@@ -600,12 +681,33 @@ interface SessionOverride {
   readonly spawn: FloorSpawn | undefined;
 }
 
+/**
+ * Multi-map navigation inputs (rpgm-whole-game-import): when present and
+ * `manifest.maps.length > 1`, the 'g' key cycles through every converted map
+ * in the game instead of the DEV-only fixture/giant/mz/floors cycle (see the
+ * `import.meta.env.DEV && !manifestNav` gate below) -- production-safe,
+ * unlike that DEV cycle, since a real game's own maps are real content, not
+ * a synthetic stress test.
+ */
+interface ManifestNav {
+  readonly manifest: GameManifest;
+  readonly loadEntry: (relativeFile: string) => Promise<AuthoredMapResult | null>;
+}
+
 async function renderFixtureMap(
   container: HTMLElement,
   data: FixtureMapData,
   sessionOverride?: SessionOverride,
+  manifestNav?: ManifestNav,
 ): Promise<void> {
-  const { map: fixtureMap, tileset, sheetPixelSizes, textures, characterTexture } = data;
+  const {
+    map: fixtureMap,
+    tileset,
+    sheetPixelSizes,
+    textures,
+    characterTexture,
+    characterIndex: dataCharacterIndex,
+  } = data;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a2e);
@@ -904,7 +1006,7 @@ async function renderFixtureMap(
     texture: characterTexture,
     sheetColumns: CHARACTER_SHEET_COLUMNS,
     sheetRows: CHARACTER_SHEET_ROWS,
-    characterIndex: CHARACTER_INDEX,
+    characterIndex: dataCharacterIndex ?? CHARACTER_INDEX,
     tileWorldSize: TILE_WORLD_SIZE,
   });
   character.setTilePosition(
@@ -1317,8 +1419,11 @@ async function renderFixtureMap(
   // (Plantas Apiladas slice 3: visually verifies the per-floor Y-offset and
   // the active floor-render window policy -- OcclusionFloorPolicy as of
   // "Ceilings and Interior Occlusion" -- ahead of a real authored
-  // multi-floor `.tmmap`) -> back to the fixture map.
-  if (import.meta.env.DEV) {
+  // multi-floor `.tmmap`) -> back to the fixture map. Mutually exclusive
+  // with the manifest multi-map cycle below (`!manifestNav`): a real
+  // converted game takes over the 'g' key entirely, rather than both
+  // listeners firing on the same keypress.
+  if (import.meta.env.DEV && !manifestNav) {
     type MapCycleMode = 'fixture' | 'giant' | 'mz' | 'floors';
     const CYCLE_ORDER: readonly MapCycleMode[] = ['fixture', 'giant', 'mz', 'floors'];
 
@@ -1464,6 +1569,55 @@ async function renderFixtureMap(
           mode = CYCLE_ORDER[previousIndex] ?? 'fixture';
         } finally {
           cycling = false;
+        }
+      })();
+    });
+  }
+
+  // Manifest multi-map cycle (rpgm-whole-game-import): 'g' walks forward
+  // through every map `convert-rpgm-game` produced for the current game,
+  // wrapping back to the first. Production-safe (no `import.meta.env.DEV`
+  // gate) -- these are the game's own real converted maps, not a synthetic
+  // dev demo. Mutually exclusive with the DEV fixture-cycle block above
+  // (`manifestNav` is only ever passed when this branch should own 'g').
+  if (manifestNav && manifestNav.manifest.maps.length > 1) {
+    let currentMapIndex = 0;
+    let cyclingManifestMap = false;
+
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat || event.key.toLowerCase() !== 'g' || cyclingManifestMap) return;
+      // Same guards as the DEV cycle above: never dispose `session` mid-script
+      // or mid-traversal.
+      if (interpreter && interpreter.state !== 'idle') return;
+      if (activeTraversal) return;
+      cyclingManifestMap = true;
+      void (async () => {
+        try {
+          const maps = manifestNav.manifest.maps;
+          const nextIndex = (currentMapIndex + 1) % maps.length;
+          const nextEntry = maps[nextIndex];
+          if (!nextEntry) return;
+
+          const nextResult = await manifestNav.loadEntry(nextEntry.file);
+          if (!nextResult) {
+            console.error(
+              `Failed to load manifest map "${nextEntry.file}" -- staying on the current map.`,
+            );
+            return;
+          }
+
+          currentMapIndex = nextIndex;
+          session.dispose();
+          session = createMapSession(
+            nextResult.floorSources,
+            nextResult.stairLinks,
+            nextResult.spawn ? { spawn: nextResult.spawn } : undefined,
+          );
+          focusCameraOnSpawn();
+        } catch (error) {
+          console.error('Failed to cycle to the next manifest map:', error);
+        } finally {
+          cyclingManifestMap = false;
         }
       })();
     });
@@ -1730,6 +1884,64 @@ async function main(): Promise<void> {
   // Slice 4b replaced the DEV-only Roseliam fixture 4a used here, so this
   // branch no longer depends on `/@fs/`/`__FIXTURES_DIR__` at all.
   if (isTauriAvailable()) {
+    // Multi-map (manifest-driven) authored path (rpgm-whole-game-import):
+    // takes priority over the single-file authored path below when
+    // `convert-rpgm-game`'s manifest exists and lists at least one map.
+    // Falls through to the single-file path unchanged on any failure here
+    // (no manifest saved yet, a malformed manifest, or the first map itself
+    // failing to load/render) -- exactly the same fail-soft layering the
+    // single-file path already has relative to the DEV fixture below.
+    let manifest: GameManifest | undefined;
+    try {
+      const manifestText = await readManifestText();
+      if (manifestText !== null) manifest = parseGameManifest(JSON.parse(manifestText));
+    } catch (error) {
+      console.error(
+        'main: the map manifest failed to parse/validate; falling back to the single authored map.',
+        error,
+      );
+    }
+
+    const firstEntry = manifest?.maps[0];
+    if (manifest && firstEntry) {
+      try {
+        const authored = await loadAuthoredMapAt(firstEntry.file);
+        if (!authored) {
+          throw new Error(`loadAuthoredMap returned null for manifest entry "${firstEntry.file}".`);
+        }
+        const primaryFloor = authored.floorSources[0];
+        if (!primaryFloor) throw new Error('loadAuthoredMap returned no floors.');
+
+        const { texture: characterTexture, characterIndex } = await resolvePlayerCharacterTexture(
+          manifest.actorSheet,
+        );
+        statusEl.remove();
+        await renderFixtureMap(
+          container,
+          {
+            map: primaryFloor.map,
+            tileset: primaryFloor.tileset,
+            sheetPixelSizes: primaryFloor.sheetPixelSizes,
+            textures: primaryFloor.textures,
+            characterTexture,
+            ...(characterIndex !== undefined ? { characterIndex } : {}),
+          },
+          {
+            floorSources: authored.floorSources,
+            stairLinks: authored.stairLinks,
+            spawn: authored.spawn,
+          },
+          { manifest, loadEntry: loadAuthoredMapAt },
+        );
+        return;
+      } catch (error) {
+        console.error(
+          'main: manifest map load/render failed; falling back to the single authored map.',
+          error,
+        );
+      }
+    }
+
     const authored = await loadAuthoredMap();
     if (authored) {
       const primaryFloor = authored.floorSources[0];
