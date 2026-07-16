@@ -157,4 +157,25 @@ describe('convertRpgmMap', () => {
 
     expect(() => validateCurrentVersionShape(doc)).not.toThrow();
   });
+
+  it('passes given tileset slots through verbatim (catalog lookup is the caller job, not this pure converters)', () => {
+    const map = buildSyntheticMap();
+    const tileset = buildSyntheticTileset();
+    const slots = {
+      A1: { object: 'abc123', sourceTilesetId: 7, sourceGameId: 1 },
+    };
+
+    const doc = convertRpgmMap(map, tileset, { slots });
+
+    expect(doc.tileset.slots).toEqual(slots);
+  });
+
+  it('defaults slots to an empty object when none are given (unchanged spike behavior)', () => {
+    const map = buildSyntheticMap();
+    const tileset = buildSyntheticTileset();
+
+    const doc = convertRpgmMap(map, tileset);
+
+    expect(doc.tileset.slots).toEqual({});
+  });
 });

@@ -13,7 +13,7 @@
  * v3 document.
  */
 
-import type { MapDocument } from '@threemaker/map-format';
+import type { MapDocument, SlotComposition } from '@threemaker/map-format';
 import { CURRENT_MAP_FORMAT_VERSION, MAP_FORMAT_MAGIC } from '@threemaker/map-format';
 import { decodeTileFlags } from './tile-flags.js';
 import type { RpgmMap, RpgmTileset } from './types.js';
@@ -34,6 +34,15 @@ export interface ConvertRpgmMapOptions {
    * fallback below picks the first passable tile instead.
    */
   readonly playerStart?: RpgmPlayerStart;
+  /**
+   * Per-slot sheet sourcing, already resolved by the caller (e.g. the
+   * `convert-rpgm` CLI's catalog lookup -- see
+   * `packages/assets/src/resolve-rpgm-slots.ts`). This pure converter never
+   * touches the catalog itself; a slot omitted here is left unsourced,
+   * matching the empty-`{}` default and `apps/desktop/src/authored-map.ts`'s
+   * per-slot skip for an unsourced slot. Defaults to `{}`.
+   */
+  readonly slots?: SlotComposition;
 }
 
 /**
@@ -83,12 +92,12 @@ function findFirstStandableTile(map: RpgmMap, tileset: RpgmTileset): RpgmPlayerS
 /**
  * Converts one parsed RPGM map + its matching tileset into a single-floor v3
  * `MapDocument` at `baseElevation` 0. `stairLinks`/`rooms` are always empty
- * (no RPGM-native source for either). `tileset.slots` is always `{}`
- * (ponytail: no catalog/asset-store ingestion in this spike -- every slot is
- * left unsourced, so `apps/desktop/src/authored-map.ts`'s per-slot resolver
- * simply skips every slot rather than failing; wiring real per-slot sha256
- * catalog refs is the follow-up, see `packages/assets/src/tileset-ingest.ts`
- * for the existing ingestion pattern this would build on).
+ * (no RPGM-native source for either). `tileset.slots` defaults to `{}` and is
+ * otherwise exactly whatever `opts.slots` gives -- this pure converter never
+ * touches the catalog itself (see `ConvertRpgmMapOptions.slots`'s doc
+ * comment); a slot with no `object` stays unsourced, so
+ * `apps/desktop/src/authored-map.ts`'s per-slot resolver simply skips it
+ * rather than failing.
  */
 export function convertRpgmMap(
   map: RpgmMap,
@@ -106,7 +115,7 @@ export function convertRpgmMap(
     width: map.width,
     height: map.height,
     tileset: {
-      slots: {},
+      slots: opts.slots ?? {},
       flags: tileset.flags,
       semantics: {},
     },

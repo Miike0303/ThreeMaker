@@ -9,10 +9,11 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { convertRpgmMap } from '@threemaker/importer-rpgm';
 import { loadProject } from '@threemaker/importer-rpgm/node';
-import { serializeMapDocument } from '@threemaker/map-format';
+import { serializeMapDocument, validateCurrentVersionShape } from '@threemaker/map-format';
 import type { IngestGameResult } from './catalog.js';
 import { ingestGame, openCatalog, sumResults } from './catalog.js';
 import { buildFailuresByCode } from './failures-by-code.js';
+import { resolveRpgmSlotsFromCatalog } from './resolve-rpgm-slots.js';
 import { scanGames } from './scanner.js';
 import { ingestTilesetsForGame } from './tileset-ingest.js';
 
@@ -22,7 +23,9 @@ function printUsage(): void {
   console.error('Usage: tsx src/cli.ts scan <rootDir> [--max-depth <n>]');
   console.error('Usage: tsx src/cli.ts catalog <rootDir> [--store <dir>] [--max-depth <n>]');
   console.error('Usage: tsx src/cli.ts ingest-tilesets [--store <dir>]');
-  console.error('Usage: tsx src/cli.ts convert-rpgm <gameDir> <mapId> --out <file.tmmap>');
+  console.error(
+    'Usage: tsx src/cli.ts convert-rpgm <gameDir> <mapId> --out <file.tmmap> [--store <dir>]',
+  );
 }
 
 interface ScanOrCatalogArgs {
@@ -42,6 +45,7 @@ interface ConvertRpgmArgs {
   readonly gameDir: string;
   readonly mapId: number;
   readonly outPath: string;
+  readonly storeDir?: string;
 }
 
 type ParsedArgs = ScanOrCatalogArgs | IngestTilesetsArgs | ConvertRpgmArgs;
@@ -59,7 +63,7 @@ function parseStoreOnlyArgs(
   return { command, ...(storeDir === undefined ? {} : { storeDir }) };
 }
 
-/** `convert-rpgm <gameDir> <mapId> --out <file>` — two positionals + one required flag, unlike every other command's single positional. */
+/** `convert-rpgm <gameDir> <mapId> --out <file> [--store <dir>]` — two positionals + one required flag + one optional flag, unlike every other command's single positional. */
 function parseConvertRpgmArgs(rest: readonly string[]): ConvertRpgmArgs | null {
   const [gameDir, mapIdRaw, ...flags] = rest;
   if (!gameDir || !mapIdRaw) return null;
@@ -71,7 +75,14 @@ function parseConvertRpgmArgs(rest: readonly string[]): ConvertRpgmArgs | null {
   const outPath = flags[outFlagIndex + 1];
   if (!outPath) return null;
 
-  return { command: 'convert-rpgm', gameDir, mapId, outPath };
+  let storeDir: string | undefined;
+  const storeFlagIndex = flags.indexOf('--store');
+  if (storeFlagIndex !== -1) {
+    storeDir = flags[storeFlagIndex + 1];
+    if (!storeDir) return null;
+  }
+
+  return { command: 'convert-rpgm', gameDir, mapId, outPath, ...(storeDir ? { storeDir } : {}) };
 }
 
 function parseArgs(argv: readonly string[]): ParsedArgs | null {
@@ -191,7 +202,12 @@ function readPlayerStartIfStartMap(
   return undefined;
 }
 
-async function runConvertRpgm(gameDir: string, mapId: number, outPath: string): Promise<void> {
+async function runConvertRpgm(
+  gameDir: string,
+  mapId: number,
+  outPath: string,
+  storeDir?: string,
+): Promise<void> {
   const project = await loadProject(gameDir);
   const map = project.maps.get(mapId);
   if (!map) {
@@ -210,14 +226,36 @@ async function runConvertRpgm(gameDir: string, mapId: number, outPath: string): 
     return;
   }
 
+  // [--store] catalog-backed slot wiring: fail-soft, same convention as every
+  // other lookup in this CLI -- a missing/unreadable catalog never aborts the
+  // conversion, it just leaves every slot unsourced (matching the no-`--store`
+  // behavior exactly).
+  let slots = {};
+  if (storeDir) {
+    const dbPath = join(storeDir, 'catalog.db');
+    const catalog = openCatalog(dbPath);
+    try {
+      slots = resolveRpgmSlotsFromCatalog(catalog, gameDir, tileset.id);
+    } finally {
+      catalog.close();
+    }
+  }
+
   const playerStart = readPlayerStartIfStartMap(gameDir, mapId);
   const doc = convertRpgmMap(map, tileset, {
     id: `rpgm-map-${mapId}`,
+    slots,
     ...(playerStart ? { playerStart } : {}),
   });
 
+  // [N1] Validate the shape we are about to write, not just trust the
+  // converter -- catches a future schema drift between `convertRpgmMap`'s
+  // output and `MapDocument` before it ever reaches disk.
+  validateCurrentVersionShape(doc);
+
   writeFileSync(outPath, serializeMapDocument(doc), 'utf8');
 
+  const slotsResolved = Object.keys(slots).length;
   console.log(
     JSON.stringify(
       {
@@ -229,6 +267,7 @@ async function runConvertRpgm(gameDir: string, mapId: number, outPath: string): 
         height: doc.height,
         isStartMap: playerStart !== undefined,
         spawn: doc.spawn ?? null,
+        slotsResolved,
       },
       null,
       2,
@@ -345,10 +384,12 @@ function main(argv: readonly string[]): void {
   }
 
   if (parsed.command === 'convert-rpgm') {
-    void runConvertRpgm(parsed.gameDir, parsed.mapId, parsed.outPath).catch((error: unknown) => {
-      console.error('convert-rpgm: failed.', error);
-      process.exitCode = 1;
-    });
+    void runConvertRpgm(parsed.gameDir, parsed.mapId, parsed.outPath, parsed.storeDir).catch(
+      (error: unknown) => {
+        console.error('convert-rpgm: failed.', error);
+        process.exitCode = 1;
+      },
+    );
     return;
   }
 
