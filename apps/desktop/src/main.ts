@@ -68,6 +68,7 @@ import { createHd2dPipeline } from './hd2d-pipeline.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
+import { isAuthoredResultPlayable } from './map-playability.js';
 import {
   aboveFloorTilemap,
   createRoomTracker,
@@ -693,6 +694,16 @@ interface SessionOverride {
 interface ManifestNav {
   readonly manifest: GameManifest;
   readonly loadEntry: (relativeFile: string) => Promise<AuthoredMapResult | null>;
+  /**
+   * Index into `manifest.maps` this session was actually built from. Not
+   * always `0`: `main()` skips forward past any leading map that isn't
+   * playable (see `findFirstPlayableManifestMap`) -- a real RPG Maker
+   * project's very first map is very often an unused/placeholder map with
+   * no standable tile anywhere. The 'g' cycle below must start counting
+   * from HERE, not from `0`, or its first press would just re-discover the
+   * same skipped-over map(s).
+   */
+  readonly startIndex: number;
 }
 
 async function renderFixtureMap(
@@ -1601,7 +1612,7 @@ async function renderFixtureMap(
   // dev demo. Mutually exclusive with the DEV fixture-cycle block above
   // (`manifestNav` is only ever passed when this branch should own 'g').
   if (manifestNav && manifestNav.manifest.maps.length > 1) {
-    let currentMapIndex = 0;
+    let currentMapIndex = manifestNav.startIndex;
     let cyclingManifestMap = false;
     // The `textures` record every floor of the CURRENTLY-rendered manifest
     // map shares (same object reference across floors -- see
@@ -1895,16 +1906,40 @@ async function renderFixtureMap(
 }
 
 async function main(): Promise<void> {
-  const container = document.getElementById('app');
-  if (!container) throw new Error('Missing #app container element.');
+  const containerOrNull = document.getElementById('app');
+  if (!containerOrNull) throw new Error('Missing #app container element.');
+  // Re-bound to a non-null-typed const: TS's control-flow narrowing above
+  // does not carry into the `showStatus` function declaration below (a
+  // hoisted declaration, not evaluated in place), so every use from here on
+  // reads this binding instead of the still-nullable-typed `containerOrNull`.
+  const container: HTMLElement = containerOrNull;
 
   document.title = i18n.t('app.title');
   document.body.appendChild(buildLocaleSelector());
 
   const statusEl = document.createElement('div');
   statusEl.className = 'status-message';
-  statusEl.textContent = i18n.t('map.loading');
-  container.appendChild(statusEl);
+
+  /**
+   * Shows `message` and resets `container` to hold ONLY `statusEl` --
+   * discarding any renderer canvas a previously-FAILED attempt already
+   * appended (boot-resilience fix, adversarial review: a failed
+   * `renderFixtureMap` call can throw AFTER `container.appendChild
+   * (renderer.domElement)` but before `renderer.setAnimationLoop(...)`,
+   * leaving a live, full-viewport, permanently-black canvas behind --
+   * `#app`'s CSS sizes every child to fill the whole window, and normal
+   * block flow stacks a later child BELOW that dead canvas, off-screen. Two
+   * dead canvases from two failed attempts, both still in the DOM, would
+   * make even a THIRD, fully-successful render invisible. Calling this
+   * before every attempt guarantees the user always sees either a status
+   * message or the one live canvas, never a stray dead one covering it).
+   */
+  function showStatus(message: string): void {
+    statusEl.textContent = message;
+    container.replaceChildren(statusEl);
+  }
+
+  showStatus(i18n.t('map.loading'));
 
   // Authored-load path (loop-crear-jugar, Slice 4a/4b): gated on the real
   // Tauri host being present (both `tauri dev` and a production build), NOT
@@ -1920,10 +1955,10 @@ async function main(): Promise<void> {
     // Multi-map (manifest-driven) authored path (rpgm-whole-game-import):
     // takes priority over the single-file authored path below when
     // `convert-rpgm-game`'s manifest exists and lists at least one map.
-    // Falls through to the single-file path unchanged on any failure here
-    // (no manifest saved yet, a malformed manifest, or the first map itself
-    // failing to load/render) -- exactly the same fail-soft layering the
-    // single-file path already has relative to the DEV fixture below.
+    // Falls through to the single-file path unchanged when every manifest
+    // map fails (no manifest saved yet, a malformed manifest, or every
+    // entry failing to load/render) -- exactly the same fail-soft layering
+    // the single-file path already has relative to the DEV fixture below.
     let manifest: GameManifest | undefined;
     try {
       const manifestText = await readManifestText();
@@ -1935,52 +1970,71 @@ async function main(): Promise<void> {
       );
     }
 
-    const firstEntry = manifest?.maps[0];
-    if (manifest && firstEntry) {
-      try {
-        const authored = await loadAuthoredMapAt(firstEntry.file);
-        if (!authored) {
-          throw new Error(`loadAuthoredMap returned null for manifest entry "${firstEntry.file}".`);
-        }
-        const primaryFloor = authored.floorSources[0];
-        if (!primaryFloor) throw new Error('loadAuthoredMap returned no floors.');
+    if (manifest) {
+      // Try every manifest map, in order, until one actually renders --
+      // NOT just `maps[0]`. A real RPG Maker project's very first map
+      // (lowest mapId, first MapInfos.json tree entry) is very often an
+      // unused/placeholder map with no standable tile anywhere at all
+      // (`isAuthoredResultPlayable`'s own doc comment); blindly trying only
+      // that one and giving up on the whole batch-converted game over it
+      // would be a much worse fallback than simply skipping to the next map.
+      for (let index = 0; index < manifest.maps.length; index++) {
+        const entry = manifest.maps[index];
+        if (!entry) continue;
+        try {
+          const authored = await loadAuthoredMapAt(entry.file);
+          if (!authored) {
+            throw new Error(`loadAuthoredMap returned null for manifest entry "${entry.file}".`);
+          }
+          const primaryFloor = authored.floorSources[0];
+          if (!primaryFloor) throw new Error('loadAuthoredMap returned no floors.');
+          if (!isAuthoredResultPlayable(authored)) {
+            throw new Error(`manifest map "${entry.file}" has no standable spawn tile.`);
+          }
 
-        const { texture: characterTexture, characterIndex } = await resolvePlayerCharacterTexture(
-          manifest.actorSheet,
-        );
-        statusEl.remove();
-        await renderFixtureMap(
-          container,
-          {
-            map: primaryFloor.map,
-            tileset: primaryFloor.tileset,
-            sheetPixelSizes: primaryFloor.sheetPixelSizes,
-            textures: primaryFloor.textures,
-            characterTexture,
-            ...(characterIndex !== undefined ? { characterIndex } : {}),
-          },
-          {
-            floorSources: authored.floorSources,
-            stairLinks: authored.stairLinks,
-            spawn: authored.spawn,
-          },
-          { manifest, loadEntry: loadAuthoredMapAt },
-        );
-        return;
-      } catch (error) {
-        console.error(
-          'main: manifest map load/render failed; falling back to the single authored map.',
-          error,
-        );
+          const { texture: characterTexture, characterIndex } = await resolvePlayerCharacterTexture(
+            manifest.actorSheet,
+          );
+          showStatus(i18n.t('map.loading'));
+          statusEl.remove();
+          await renderFixtureMap(
+            container,
+            {
+              map: primaryFloor.map,
+              tileset: primaryFloor.tileset,
+              sheetPixelSizes: primaryFloor.sheetPixelSizes,
+              textures: primaryFloor.textures,
+              characterTexture,
+              ...(characterIndex !== undefined ? { characterIndex } : {}),
+            },
+            {
+              floorSources: authored.floorSources,
+              stairLinks: authored.stairLinks,
+              spawn: authored.spawn,
+            },
+            { manifest, loadEntry: loadAuthoredMapAt, startIndex: index },
+          );
+          return;
+        } catch (error) {
+          console.error(
+            `main: manifest map "${entry.file}" failed to load/render; trying the next map.`,
+            error,
+          );
+          showStatus(i18n.t('map.loading'));
+        }
       }
+      console.error(
+        'main: every manifest map failed to load/render; falling back to the single authored map.',
+      );
     }
 
-    const authored = await loadAuthoredMap();
-    if (authored) {
-      const primaryFloor = authored.floorSources[0];
-      if (!primaryFloor) throw new Error('loadAuthoredMap returned no floors.');
-      try {
+    try {
+      const authored = await loadAuthoredMap();
+      if (authored) {
+        const primaryFloor = authored.floorSources[0];
+        if (!primaryFloor) throw new Error('loadAuthoredMap returned no floors.');
         const characterTexture = buildPlaceholderCharacterTexture();
+        showStatus(i18n.t('map.loading'));
         statusEl.remove();
         await renderFixtureMap(
           container,
@@ -1998,22 +2052,29 @@ async function main(): Promise<void> {
           },
         );
         return;
-      } catch (error) {
-        console.error('Authored map loaded, but rendering it failed:', error);
-        statusEl.textContent = i18n.t('map.fixtureNotFound');
-        return;
       }
+    } catch (error) {
+      // Previously this returned here (skipping the DEV fixture below
+      // entirely) -- now it falls through, same as every other layer, so a
+      // single-file authored failure still leaves the DEV fixture as a last
+      // resort in `tauri dev` instead of leaving `main()` with nothing left
+      // to try.
+      console.error(
+        'main: single-file authored map load/render failed; falling back to the DEV fixture.',
+        error,
+      );
+      showStatus(i18n.t('map.loading'));
     }
   }
 
   // `/@fs/` and `server.fs.allow` (vite.config.ts) only exist under `vite
   // dev` -- a production build has no dev server to serve the (git-ignored,
   // never-shipped) DEV-demo fixture from. At this point no authored map was
-  // found either (the branch above already returned if one was), so the
-  // accurate message is "no authored map found", not "fixture not found" --
-  // production has no fixture concept at all.
+  // found either (every branch above already returned if one rendered), so
+  // the accurate message is "no authored map found", not "fixture not
+  // found" -- production has no fixture concept at all.
   if (!import.meta.env.DEV) {
-    statusEl.textContent = i18n.t('map.noAuthoredMap');
+    showStatus(i18n.t('map.noAuthoredMap'));
     return;
   }
 
@@ -2023,7 +2084,7 @@ async function main(): Promise<void> {
     await renderFixtureMap(container, data);
   } catch (error) {
     console.error('Failed to load the Roseliam fixture map:', error);
-    statusEl.textContent = i18n.t('map.fixtureNotFound');
+    showStatus(i18n.t('map.fixtureNotFound'));
   }
 }
 
