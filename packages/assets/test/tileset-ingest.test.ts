@@ -147,6 +147,37 @@ describe('ingestTilesetsForGame', () => {
     expect(() => ingestTilesetsForGame(catalog, game)).toThrow();
   });
 
+  it('resolves a sheet name case-insensitively (RPG Maker runs on case-insensitive filesystems -- "a1" must match a cataloged "A1.png")', () => {
+    const game = makeGameRow('mz');
+    seedCatalogedAsset(game.id, 'img/tilesets/A1.png');
+    mkdirSync(join(gameRoot, 'data'), { recursive: true });
+    writeFileSync(
+      join(gameRoot, 'data', 'Tilesets.json'),
+      JSON.stringify([
+        null,
+        {
+          id: 1,
+          name: 'Water',
+          tilesetNames: ['a1', '', '', '', '', '', '', '', ''],
+          flags: new Array(8192).fill(0),
+        },
+      ]),
+    );
+
+    const result = ingestTilesetsForGame(catalog, game);
+
+    expect(result).toEqual({ tilesetsProcessed: 1, sheetsLinked: 1, sheetsSkipped: 0 });
+    const tileset = catalog.getTileset(catalog.listTilesetsForGame(game.id)[0]?.id ?? -1);
+    expect(tileset?.sheets).toEqual([
+      {
+        slot: 'A1',
+        assetId: expect.any(Number),
+        sha256: 'sha-img/tilesets/A1.png',
+        relPath: 'img/tilesets/A1.png',
+      },
+    ]);
+  });
+
   it('is idempotent: running twice does not duplicate tilesets or sheets', () => {
     const game = makeGameRow('mz');
     seedCatalogedAsset(game.id, 'img/tilesets/Outside_A2.png');

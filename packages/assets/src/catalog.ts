@@ -396,11 +396,17 @@ export class Catalog {
     return row ?? { assetCount: 0, distinctObjectCount: 0 };
   }
 
-  /** Looks up a single asset by its unique `(game_id, rel_path)` -- used by tileset ingestion to resolve a sheet name to its already-cataloged object. */
+  /**
+   * Looks up a single asset by `(game_id, rel_path)` -- used by tileset
+   * ingestion to resolve a sheet name to its already-cataloged object.
+   * Case-insensitive on `rel_path`: RPG Maker runs on case-insensitive
+   * filesystems (Windows), so a `Tilesets.json` sheet name like "a1" must
+   * resolve to a cataloged `A1.png` just like it would in-engine.
+   */
   getAssetByRelPath(gameId: number, relPath: string): AssetRow | null {
     const row = this.db
       .prepare<[number, string], AssetRowRaw>(
-        `SELECT id, game_id, rel_path, type, sha256, was_encrypted FROM assets WHERE game_id = ? AND rel_path = ?`,
+        `SELECT id, game_id, rel_path, type, sha256, was_encrypted FROM assets WHERE game_id = ? AND rel_path = ? COLLATE NOCASE`,
       )
       .get(gameId, relPath);
     return row ? mapAssetRow(row) : null;

@@ -296,6 +296,11 @@ describe('catalog tileset composition (getAssetByRelPath / upsertTileset / upser
     expect(catalog.getAssetByRelPath(gameId, 'img/tilesets/Nope.png')).toBeNull();
   });
 
+  it('getAssetByRelPath resolves case-insensitively (RPG Maker filesystems are case-insensitive)', () => {
+    const asset = catalog.getAssetByRelPath(gameId, 'IMG/TILESETS/outside_a2.PNG');
+    expect(asset?.id).toBe(assetId);
+  });
+
   it('upsertTileset inserts a new row and getTileset returns it with no sheets yet', () => {
     const tilesetId = catalog.upsertTileset({
       gameId,
