@@ -15,7 +15,8 @@
     "scan": "tsx src/cli.ts scan",
     "catalog": "tsx src/cli.ts catalog",
     "ingest-tilesets": "tsx src/cli.ts ingest-tilesets",
-    "convert-rpgm": "tsx src/cli.ts convert-rpgm"
+    "convert-rpgm": "tsx src/cli.ts convert-rpgm",
+    "convert-rpgm-game": "tsx src/cli.ts convert-rpgm-game"
   },
   "devDependencies": {
     "tsx": "^4.23.0",
