@@ -1648,6 +1648,28 @@ async function renderFixtureMap(
             return;
           }
 
+          // Same pre-flight check the boot scan runs (`main.ts`'s manifest
+          // loop) -- an unplayable entry (no standable spawn tile; see
+          // `map-playability.ts`'s doc comment, e.g. kingdom-of-subversion's
+          // own Map001) must never reach `session.dispose()` below: doing so
+          // BEFORE `createMapSession` throws would tear down the still-live,
+          // still-displayed session and its textures for nothing, since
+          // `createMapSession` -> `resolveInitialSpawn` would immediately
+          // throw and leave `session`/`currentTextures` in a disposed,
+          // unrecoverable state (caught only by the outer catch, which has
+          // nothing left to restore). Advance `currentMapIndex` anyway so
+          // repeated 'g' presses skip past this entry instead of retrying it
+          // forever, and dispose the just-loaded (never displayed) textures
+          // immediately -- they were decoded but are now unused.
+          if (!isAuthoredResultPlayable(nextResult)) {
+            console.error(
+              `Manifest map "${nextEntry.file}" has no standable spawn tile; skipping it and staying on the current map.`,
+            );
+            currentMapIndex = nextIndex;
+            disposeFloorTextures(nextResult.floorSources[0]?.textures);
+            return;
+          }
+
           currentMapIndex = nextIndex;
           session.dispose();
           disposeFloorTextures(currentTextures);
