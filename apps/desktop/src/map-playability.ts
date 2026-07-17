@@ -1,11 +1,17 @@
 /**
  * Cheap pre-flight playability check (rpgm-whole-game-import boot-resilience
  * fix, post-deploy regression): true when `resolveInitialSpawn` would find a
- * standable spawn tile for this authored result. Runs the exact same
- * `buildFloorGameplay` + `resolveInitialSpawn` calls `main.ts`'s
- * `createMapSession` performs internally, but BEFORE ever constructing a
- * `THREE.WebGPURenderer` -- so a manifest entry with no walkable tile
- * anywhere never reaches the expensive, leak-prone renderer setup at all.
+ * GOOD spawn tile for this authored result -- "playable" means the center-out
+ * `findSpawnTile` search, using the strengthened `isGoodSpawnCandidate`
+ * predicate (standable AND has a usable exit; see
+ * `@threemaker/gameplay`'s `PassabilityGrid.isGoodSpawnCandidate` and this
+ * change's spawn-quality bug fix in `apps/desktop/src/spawn.ts`), finds
+ * SOMETHING on the map, not merely that some tile is standable by its own
+ * flags. Runs the exact same `buildFloorGameplay` + `resolveInitialSpawn`
+ * calls `main.ts`'s `createMapSession` performs internally, but BEFORE ever
+ * constructing a `THREE.WebGPURenderer` -- so a manifest entry with no
+ * walkable, reachable tile anywhere never reaches the expensive, leak-prone
+ * renderer setup at all.
  *
  * This is a real, observed occurrence, not a hypothetical edge case: a
  * fresh RPG Maker project's very first map (lowest mapId, first

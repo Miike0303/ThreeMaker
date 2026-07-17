@@ -114,36 +114,17 @@ describe('convertRpgmMap', () => {
     expect(doc.spawn).toEqual({ x: 2, y: 1, floor: 'floor-0' });
   });
 
-  it('falls back to the first passable tile when no player start is given', () => {
+  it('omits spawn entirely when no player start is given, even on a map with standable tiles (spawn-quality bug fix: let the desktop runtime pick)', () => {
     const map = buildSyntheticMap();
     const tileset = buildSyntheticTileset();
 
-    // (0,0) is the only standable tile: every other cell has the wall tile (id 1).
-    const doc = convertRpgmMap(map, tileset);
-
-    expect(doc.spawn).toEqual({ x: 0, y: 0, floor: 'floor-0' });
-  });
-
-  it('omits spawn entirely when no tile on the map is standable', () => {
-    const width = 2;
-    const height = 1;
-    const wallLayer = new Array(width * height).fill(1);
-    const map = buildSyntheticMap({
-      width,
-      height,
-      layers: {
-        tileLayers: [
-          wallLayer,
-          new Array(width * height).fill(0),
-          new Array(width * height).fill(0),
-          new Array(width * height).fill(0),
-        ],
-        shadows: new Array(width * height).fill(0),
-        regions: new Array(width * height).fill(0),
-      },
-    });
-    const tileset = buildSyntheticTileset();
-
+    // (0,0) is standable here (every other cell has the wall tile, id 1),
+    // but this converter no longer synthesizes a spawn for a non-start map
+    // at all -- `apps/desktop/src/spawn.ts`'s `resolveInitialSpawn` ->
+    // `findSpawnTile` center-out search (which also applies the
+    // strengthened "has a usable exit" predicate) picks a better position
+    // at load time instead of trusting a row-major first-standable-tile
+    // scan that has no way to know if that tile is enclosed/reachable.
     const doc = convertRpgmMap(map, tileset);
 
     expect(doc.spawn).toBeUndefined();

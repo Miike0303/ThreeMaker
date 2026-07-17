@@ -113,6 +113,101 @@ describe('PassabilityGrid (synthetic maps)', () => {
     expect(grid.isStandable(2, 0)).toBe(false); // fully sealed
     expect(grid.isStandable(-1, 0)).toBe(false); // out of bounds
   });
+
+  describe('isGoodSpawnCandidate (spawn-quality bug fix)', () => {
+    it('returns true for an ordinary open tile with an open neighbor', () => {
+      const layer0 = [1, 1, 1, 1, 1, 1, 1, 1, 1];
+      const map = buildMap(3, 3, { 0: layer0 });
+      const tileset = buildTileset({ 1: 0 });
+      const grid = new PassabilityGrid(map, tileset);
+
+      expect(grid.isGoodSpawnCandidate(1, 1)).toBe(true);
+    });
+
+    it('returns false for a tile standable by its own flags (0x0) but fully enclosed by neighbors that block every entry (real bug: "spawns in a wall")', () => {
+      // Center tile (1,1) has flags 0 (fully open by its own bits), but is
+      // ringed by tiles flagged impassable from every direction -- the
+      // exact pattern the reported bug describes: a spawn candidate that
+      // LOOKS standable (isStandable true) yet has no usable exit at all.
+      // biome-ignore format: grid literal reads clearer un-wrapped
+      const layer0 = [
+        7, 7, 7,
+        7, 1, 7,
+        7, 7, 7,
+      ];
+      const map = buildMap(3, 3, { 0: layer0 });
+      const tileset = buildTileset({
+        1: 0,
+        7: IMPASSABLE_DOWN | IMPASSABLE_LEFT | IMPASSABLE_RIGHT | IMPASSABLE_UP,
+      });
+      const grid = new PassabilityGrid(map, tileset);
+
+      expect(grid.isStandable(1, 1)).toBe(true); // the pre-existing (insufficient) check would accept this
+      expect(grid.isGoodSpawnCandidate(1, 1)).toBe(false);
+    });
+
+    it('returns false for a tile fully sealed by its own flags (isStandable already false)', () => {
+      const layer0 = [1, 1, 1, 1, 7, 1, 1, 1, 1];
+      const map = buildMap(3, 3, { 0: layer0 });
+      const tileset = buildTileset({
+        1: 0,
+        7: IMPASSABLE_DOWN | IMPASSABLE_LEFT | IMPASSABLE_RIGHT | IMPASSABLE_UP,
+      });
+      const grid = new PassabilityGrid(map, tileset);
+
+      expect(grid.isGoodSpawnCandidate(1, 1)).toBe(false);
+    });
+
+    it('returns false at a map corner/edge with no standable neighbor in bounds (real bug: "reads as outside")', () => {
+      // (0,0) is open by its own flags, but both its in-bounds neighbors
+      // are walls and the other two directions are off the map entirely.
+      const layer0 = [1, 7, 7, 1];
+      const map = buildMap(2, 2, { 0: layer0 });
+      const tileset = buildTileset({
+        1: 0,
+        7: IMPASSABLE_DOWN | IMPASSABLE_LEFT | IMPASSABLE_RIGHT | IMPASSABLE_UP,
+      });
+      const grid = new PassabilityGrid(map, tileset);
+
+      expect(grid.isStandable(0, 0)).toBe(true);
+      expect(grid.isGoodSpawnCandidate(0, 0)).toBe(false);
+    });
+
+    it('returns true when at least one direction has BOTH a passable exit and a standable neighbor, even if other directions are blocked', () => {
+      // (1,1) can only leave rightward; (2,1) is open. Every other neighbor
+      // is either blocked-from-(1,1) or itself unstandable.
+      // biome-ignore format: grid literal reads clearer un-wrapped
+      const layer0 = [
+        7, 7, 7,
+        7, 8, 1,
+        7, 7, 7,
+      ];
+      const map = buildMap(3, 3, { 0: layer0 });
+      const tileset = buildTileset({
+        1: 0,
+        7: IMPASSABLE_DOWN | IMPASSABLE_LEFT | IMPASSABLE_RIGHT | IMPASSABLE_UP,
+        8: IMPASSABLE_DOWN | IMPASSABLE_LEFT | IMPASSABLE_UP, // only rightward is open
+      });
+      const grid = new PassabilityGrid(map, tileset);
+
+      expect(grid.isGoodSpawnCandidate(1, 1)).toBe(true);
+    });
+
+    it('a successful canMove into a neighbor always implies that neighbor is standable (no separate neighbor check needed)', () => {
+      // Documents the invariant isGoodSpawnCandidate relies on: entering a
+      // tile requires at least one of ITS OWN 4 bits (the one blocking
+      // entry from this side) to be unset, which is exactly what
+      // `isStandable` itself checks ("not all 4 set") -- so a passable
+      // neighbor can never simultaneously be `isStandable() === false`.
+      const layer0 = [1, 1];
+      const map = buildMap(2, 1, { 0: layer0 });
+      const tileset = buildTileset({ 1: 0 });
+      const grid = new PassabilityGrid(map, tileset);
+
+      expect(grid.canMove(0, 0, 'right')).toBe(true);
+      expect(grid.isStandable(1, 0)).toBe(true);
+    });
+  });
 });
 
 describe('PassabilityGrid elevation (region-derived height)', () => {

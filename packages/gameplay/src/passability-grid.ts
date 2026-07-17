@@ -19,6 +19,9 @@ const DIRECTION_EDGE: Record<Direction, EdgeDirection> = {
   right: 'east',
 };
 
+/** Every direction, for `isGoodSpawnCandidate`'s exhaustive per-direction scan. */
+const ALL_DIRECTIONS: readonly Direction[] = ['down', 'left', 'right', 'up'];
+
 function isBlockedDirection(flags: TileFlags, direction: Direction): boolean {
   switch (direction) {
     case 'down':
@@ -162,6 +165,35 @@ export class PassabilityGrid {
       flags.impassableRight &&
       flags.impassableUp
     );
+  }
+
+  /**
+   * Stricter than `isStandable`: also requires at least one direction where
+   * `canMove` actually succeeds. Rejects a tile that reads as "not fully
+   * sealed" by its own 4 flags but is, in practice, an unreachable/
+   * untraversable spot -- e.g. every neighbor blocks entry from this tile's
+   * side (or is off the map edge), or every direction's edge-profile/
+   * elevation check blocks the step even though none of the tile's own 4
+   * directional bits are individually set (real observed bug: a player
+   * spawning "inside a wall", fully standable by its own flags yet unable
+   * to move any direction at all).
+   *
+   * No separate "and the neighbor is standable" check is needed: `canMove`
+   * succeeding into a destination already GUARANTEES that destination is
+   * standable (entering requires at least one of its own 4 bits -- the one
+   * blocking entry from this side -- to be unset, which is exactly
+   * `isStandable`'s own "not all 4 set" condition).
+   *
+   * Used for SPAWN CHOICE only (`apps/desktop/src/spawn.ts`'s
+   * `resolveInitialSpawn`) -- general gameplay passability (`canMove`) is
+   * completely unaffected: a real one-way ledge or narrow dead-end the
+   * player can otherwise walk into and back out of during normal play
+   * keeps working exactly as before. This predicate only gates where a
+   * session may spawn, never whether a move mid-game is allowed.
+   */
+  isGoodSpawnCandidate(x: number, y: number): boolean {
+    if (!this.isStandable(x, y)) return false;
+    return ALL_DIRECTIONS.some((direction) => this.canMove(x, y, direction));
   }
 }
 

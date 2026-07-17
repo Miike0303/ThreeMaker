@@ -96,7 +96,7 @@ describe('convertRpgmMap output accepted by the authored-map load path', () => {
     expect(deps.resolveObjectTexture).not.toHaveBeenCalled();
   });
 
-  it('resolves spawn to the converter-picked first passable tile', async () => {
+  it('omits spawn for a non-start map (spawn-quality bug fix): the desktop runtime picks one at load time instead', async () => {
     const rpgmMap = buildSyntheticRpgmMap();
     const rpgmTileset = buildSyntheticRpgmTileset();
     const doc = convertRpgmMap(rpgmMap, rpgmTileset, { id: 'rpgm-map-100' });
@@ -104,8 +104,12 @@ describe('convertRpgmMap output accepted by the authored-map load path', () => {
 
     const result = await loadAuthoredMap(deps);
 
-    // Center tile (1,1) is the only passable one on this synthetic map.
-    expect(result?.spawn).toEqual({ x: 1, y: 1, floorIndex: 0 });
+    // translateMapDocument's own spawn translation is `undefined` here --
+    // `createMapSession`'s `resolveInitialSpawn` (apps/desktop/src/spawn.ts)
+    // is what actually picks a spawn tile at session-build time, not this
+    // load path; center tile (1,1), the only passable one on this synthetic
+    // map, is still findable via that center-out search.
+    expect(result?.spawn).toBeUndefined();
   });
 
   it('resolves spawn to an explicit RPGM player start when this map is the start map', async () => {

@@ -15,7 +15,7 @@ import type { RpgmSystemStart } from './rpgm-system.js';
 export interface ConvertRpgmMapOptions {
   /** When provided, tileset slots are resolved from this catalog (fail-soft: an unmatched game/tileset simply leaves every slot unsourced, same as omitting `catalog` entirely). */
   readonly catalog?: Catalog;
-  /** When provided and its `mapId` matches the map being converted, that map's authored spawn becomes the RPGM player-start tile instead of the converter's own nearest-standable-tile fallback. */
+  /** When provided and its `mapId` matches the map being converted, that map's authored spawn becomes the RPGM player-start tile; every other map gets no authored spawn at all (spawn-quality bug fix, rpgm-whole-game-import) -- the desktop runtime's own center-out `findSpawnTile` search picks a better position at load time than this pure converter could. */
   readonly systemStart?: RpgmSystemStart;
 }
 
