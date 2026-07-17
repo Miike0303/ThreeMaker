@@ -625,6 +625,116 @@ describe('buildChunkGroup elevation (region-derived height + cliff faces)', () =
   });
 });
 
+describe('buildChunkGroup layer-separation lift (z-fight bug fix)', () => {
+  it('lifts each editable layer index by a tiny, distinct amount so 2+ ground tiles at the same cell never land perfectly coplanar', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 1,
+          sheet: 'B',
+          quads: [{ u0: 0.1, v0: 0, u1: 0.2, v1: 0.1 }],
+          elevation: 'ground',
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const yValues = new Set<number>();
+    for (let i = 0; i < position.count; i++) yValues.add(Number(position.getY(i).toFixed(6)));
+    // 2 quads (4 vertices each), each internally flat -- but the two
+    // DIFFERENT layers must land on two DIFFERENT Y values, or they are
+    // perfectly coplanar (the real bug: which one wins the depth test
+    // becomes floating-point noise that flickers as the camera moves).
+    expect(yValues.size).toBe(2);
+  });
+
+  it('leaves layerIndex 0 at exactly y=0 (backward compatible with the pre-existing flat-ground behavior)', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+    // toBeCloseTo, matching the pre-existing "places a ground tile flat at
+    // y=0" test's own tolerance: `rotateX(-Math.PI / 2)` alone introduces
+    // negligible floating-point noise (~1e-17) independent of this fix.
+    expect(box.min.y).toBeCloseTo(0);
+    expect(box.max.y).toBeCloseTo(0);
+  });
+
+  it('lifts a deeper layer index by MORE than a shallower one, monotonically, and stays well below the shadow overlay lift (0.01 x tileWorldSize)', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 1,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+        {
+          tileX: 1,
+          tileY: 0,
+          layerIndex: 3,
+          sheet: 'B',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+    // layerIndex 1's quad sits at some small lift > 0; layerIndex 3's quad
+    // (a separate tile, at x=1) sits higher still, and even the deepest
+    // layer stays under the shadow overlay's own 0.01 lift.
+    expect(box.min.y).toBeGreaterThan(0);
+    expect(box.max.y).toBeGreaterThan(box.min.y);
+    expect(box.max.y).toBeLessThan(0.01);
+  });
+});
+
 describe('buildChunkGroup ramp geometry (Slice 2b)', () => {
   /** Finds the vertex index whose (x,z) matches, within tolerance, so assertions can target a specific corner regardless of buffer layout. */
   function findVertexIndex(

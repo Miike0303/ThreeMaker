@@ -84,6 +84,37 @@ interface CarveBucket {
  */
 const SHADOW_LIFT_FACTOR = 0.01;
 
+/**
+ * Fraction of a tile edge each editable tile LAYER (RPG Maker's 4 stacked
+ * paintable layers per map, `TileBuildData.layerIndex` 0-3) is lifted above
+ * the one below it, so 2+ ground tiles painted on DIFFERENT layers at the
+ * SAME cell never render as perfectly coplanar quads.
+ *
+ * Real RPG Maker maps routinely paint more than one editable layer at the
+ * same cell (a floor on layer 0, a rug/decal/lighting-overlay tile on layer
+ * 1, and so on) -- corescript's own 2D painter's-algorithm renderer draws
+ * layers strictly bottom-to-top with no depth buffer at all, so this can
+ * never conflict there. This 3D renderer instead places every ground quad
+ * at the SAME world Y (purely region-height-derived, identical regardless
+ * of which editable layer a tile came from) -- without this per-layer lift,
+ * two such quads are bit-for-bit coplanar, and which one wins the depth
+ * test becomes floating-point-precision noise that visibly flickers as the
+ * camera moves (bug report: "parpadeo en las texturas al moverme" --
+ * confirmed by direct inspection of real map data: ~6% of a real
+ * kingdom-of-subversion map's cells carry 2+ non-star tiles across
+ * different layers, vs 0-1.7% in this repo's small/sparse dev fixtures,
+ * which is why the fixture path read as "clean").
+ *
+ * Sized well below `SHADOW_LIFT_FACTOR` (0.01) even at the deepest editable
+ * layer (index 3: `3 * 0.001 = 0.003`), so the shadow-pencil overlay still
+ * unambiguously sits above every tile layer regardless of which one a
+ * shadow mark's cell resolves to -- no new z-fight introduced between the
+ * shadow overlay and a lifted upper layer. At `tileWorldSize` scale (1 world
+ * unit per tile), a 0.001-0.003 unit vertical gap is imperceptible, the same
+ * "small enough to be invisible" tradeoff `SHADOW_LIFT_FACTOR` already makes.
+ */
+const LAYER_LIFT_FACTOR = 0.001;
+
 /** Full-rect UV for untextured overlay quads (the material has no map, values are irrelevant). */
 const FULL_UV: UvRect = { u0: 0, v0: 0, u1: 1, v1: 1 };
 
@@ -528,6 +559,13 @@ function buildTileGeometry(
   const worldX = tile.tileX * tileWorldSize;
   const worldZ = tile.tileY * tileWorldSize;
   const elevationLift = (tile.height ?? 0) * heightUnit;
+  // z-fight fix: separates ground quads from different editable layers at
+  // the same cell (see LAYER_LIFT_FACTOR's doc comment). Not applied to
+  // 'upper'/wall-prism geometry below -- star tiles and A3/A4 prisms are
+  // already extruded well clear of the ground plane, and ramps/cliffs are
+  // only ever generated for a cell's layer-0 tile (chunk-geometry.ts's
+  // "layer-0 ownership rule"), so `layerLift` is always 0 there in practice.
+  const layerLift = tile.layerIndex * LAYER_LIFT_FACTOR * tileWorldSize;
 
   if (tile.elevation === 'upper') {
     // Anchor at the star tile's stack base (MV3D "tileoffset" convention --
@@ -582,8 +620,9 @@ function buildTileGeometry(
       const quad = buildGroundQuad(uv, worldX + col * half, worldZ + row * half, half, half);
       if (ramp) {
         applyRampSlope(quad, ramp, worldX, worldZ, tileWorldSize, heightUnit);
-      } else if (elevationLift !== 0) {
-        quad.translate(0, elevationLift, 0);
+        if (layerLift !== 0) quad.translate(0, layerLift, 0);
+      } else if (elevationLift !== 0 || layerLift !== 0) {
+        quad.translate(0, elevationLift + layerLift, 0);
       }
       geometries.push(quad);
     }
@@ -593,8 +632,9 @@ function buildTileGeometry(
       const quad = buildGroundQuad(uv, worldX, worldZ, tileWorldSize, tileWorldSize);
       if (ramp) {
         applyRampSlope(quad, ramp, worldX, worldZ, tileWorldSize, heightUnit);
-      } else if (elevationLift !== 0) {
-        quad.translate(0, elevationLift, 0);
+        if (layerLift !== 0) quad.translate(0, layerLift, 0);
+      } else if (elevationLift !== 0 || layerLift !== 0) {
+        quad.translate(0, elevationLift + layerLift, 0);
       }
       geometries.push(quad);
     }
