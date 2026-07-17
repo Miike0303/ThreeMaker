@@ -735,6 +735,95 @@ describe('buildChunkGroup layer-separation lift (z-fight bug fix)', () => {
   });
 });
 
+describe('buildChunkGroup upright object tiles (HD-2D squashed-furniture bug fix)', () => {
+  it('renders an "object"-elevation tile as an upright standing quad, not a flat ground quad', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'C',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'object',
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { C: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, wallHeight: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+    // A flat ground quad would have min.y === max.y (zero height). An
+    // upright quad spans from the ground up to wallHeight -- same shape as
+    // the 'upper' star-tile branch (see "places a ground tile flat at y=0
+    // and an upper tile standing up above y=0" above), reusing the SAME
+    // upright-quad mechanism, not a second one.
+    expect(box.min.y).toBeCloseTo(0);
+    expect(box.max.y).toBeCloseTo(1);
+  });
+
+  it('anchors an "object" tile\'s base at its own region-derived elevation (height * heightUnit), same as a flat ground tile would', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'C',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'object',
+          height: 2,
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { C: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, wallHeight: 1, heightUnit: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+    expect(box.min.y).toBeCloseTo(2);
+    expect(box.max.y).toBeCloseTo(3);
+  });
+
+  it('a passable (elevation: ground) object-sheet tile still renders as a flat quad (decals/rugs unaffected)', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'C',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'ground',
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { C: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, wallHeight: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+    expect(box.min.y).toBeCloseTo(0);
+    expect(box.max.y).toBeCloseTo(0);
+  });
+});
+
 describe('buildChunkGroup ramp geometry (Slice 2b)', () => {
   /** Finds the vertex index whose (x,z) matches, within tolerance, so assertions can target a specific corner regardless of buffer layout. */
   function findVertexIndex(
@@ -1206,7 +1295,7 @@ describe('buildChunkGroup ceiling carve buckets (Slice 3a)', () => {
     }
   });
 
-  it('never carves upper-layer or wall-sheet (A3/A4) tiles even when their cell has a non-zero roomId', () => {
+  it('never carves upper-layer, wall-sheet (A3/A4), or upright object tiles even when their cell has a non-zero roomId', () => {
     const chunk = makeChunk({
       tiles: [
         {
@@ -1225,11 +1314,23 @@ describe('buildChunkGroup ceiling carve buckets (Slice 3a)', () => {
           quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
           elevation: 'ground',
         },
+        {
+          tileX: 0,
+          tileY: 1,
+          layerIndex: 0,
+          sheet: 'C',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'object',
+        },
       ],
     });
-    // Both cells authored as room 1 -- but upper/wall tiles must never carve.
-    const roomIdGrid = new Uint16Array([1, 1]);
-    const materials = { B: new THREE.MeshBasicMaterial(), A4: new THREE.MeshBasicMaterial() };
+    // Every cell authored as room 1 -- but upper/wall/object tiles must never carve.
+    const roomIdGrid = new Uint16Array([1, 1, 1, 1]);
+    const materials = {
+      B: new THREE.MeshBasicMaterial(),
+      A4: new THREE.MeshBasicMaterial(),
+      C: new THREE.MeshBasicMaterial(),
+    };
 
     const group = buildChunkGroup(chunk, materials, {
       tileWorldSize: 1,
@@ -1237,6 +1338,6 @@ describe('buildChunkGroup ceiling carve buckets (Slice 3a)', () => {
     });
 
     const names = group.children.map((child) => child.name).sort();
-    expect(names).toEqual(['chunk-0-0-A4', 'chunk-0-0-B']);
+    expect(names).toEqual(['chunk-0-0-A4', 'chunk-0-0-B', 'chunk-0-0-C']);
   });
 });

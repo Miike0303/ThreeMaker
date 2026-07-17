@@ -7,8 +7,19 @@ export const TILE_SIZE_PX = 48;
 /** Default chunk edge length in tiles; chunks bound geometry rebuild cost on large maps. */
 export const DEFAULT_CHUNK_SIZE = 16;
 
-/** Whether a tile sits on the flat ground plane or is extruded as a standing wall-like quad. */
-export type ElevationClass = 'ground' | 'upper';
+/**
+ * Whether a tile sits on the flat ground plane, is extruded as a standing
+ * star-bit wall-like quad, or is an impassable non-A "object" tile
+ * (furniture, signs, trees on the B/C/D/E sheets) rendered as its own
+ * upright standing quad -- HD-2D bug fix: these previously fell through to
+ * the flat "ground" branch and rendered squashed on the floor instead of
+ * standing up like the billboarded player/NPC sprites they visually
+ * represent. See `chunk-geometry.ts`'s classification and
+ * `build-chunk-group.ts`'s `'object'` branch (reuses `buildWallQuad`, the
+ * same upright-quad mechanism `'upper'` star tiles already use -- no second
+ * billboard mechanism).
+ */
+export type ElevationClass = 'ground' | 'upper' | 'object';
 
 /** A normalized (0-1) UV rectangle, already flipped to three.js' V-up texture space. */
 export interface UvRect {

@@ -33,6 +33,24 @@ export function isWallSheet(sheet: TileSheetId): boolean {
   return WALL_SHEETS.has(sheet);
 }
 
+/**
+ * The 4 non-autotile "object" sheets (single-frame decorations: furniture,
+ * signs, trees, statues...) -- as opposed to A1/A2/A5 (floor/decor
+ * autotiles) and A3/A4 (wall autotiles, see `isWallSheet`). Used by
+ * `chunk-geometry.ts` to classify an IMPASSABLE tile on one of these sheets
+ * as `'object'` elevation (upright standing quad) instead of `'ground'`
+ * (flat) -- HD-2D bug fix for furniture/trees/signs rendering squashed on
+ * the floor. A1/A2/A5 tiles are deliberately excluded even when flagged
+ * impassable (e.g. water/chasm autotiles): those are floor-plane hazards,
+ * not standing objects, and must stay flat.
+ */
+const OBJECT_SHEETS: ReadonlySet<TileSheetId> = new Set(['B', 'C', 'D', 'E']);
+
+/** Whether a tile's sheet is one of RPG Maker's non-autotile "object" sheets (B/C/D/E). */
+export function isObjectSheet(sheet: TileSheetId): boolean {
+  return OBJECT_SHEETS.has(sheet);
+}
+
 /** Stable string key for a tile coordinate, for `Set`/`Map` membership checks. */
 export function tileKey(x: number, y: number): string {
   return `${x},${y}`;

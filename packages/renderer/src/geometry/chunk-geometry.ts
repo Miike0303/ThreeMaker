@@ -5,7 +5,7 @@ import {
   decodeTileFlags,
   getTileSheet,
 } from '@threemaker/importer-rpgm';
-import { computeCliffEdges, rampDataAt } from './elevation.js';
+import { computeCliffEdges, isObjectSheet, rampDataAt } from './elevation.js';
 import { computeTileUv } from './tile-uv.js';
 import type {
   ChunkBuildData,
@@ -208,7 +208,24 @@ export function buildChunks(
           if (!tileUv) continue;
 
           const flags = decodeTileFlags(tileset.flags[tileId] ?? 0);
-          const elevation = flags.isUpperLayer ? 'upper' : 'ground';
+          // HD-2D upright-object bug fix: an impassable (any of the 4
+          // directional bits) tile on a non-autotile "object" sheet
+          // (B/C/D/E -- furniture, signs, trees, statues) renders as a
+          // standing quad, same mechanism as an 'upper' star tile, instead
+          // of falling through to the flat 'ground' branch and rendering
+          // squashed on the floor. A1/A2/A5 floor autotiles are excluded
+          // even when impassable (e.g. water/chasm) -- see
+          // `isObjectSheet`'s own doc comment.
+          const isImpassable =
+            flags.impassableDown ||
+            flags.impassableLeft ||
+            flags.impassableRight ||
+            flags.impassableUp;
+          const elevation = flags.isUpperLayer
+            ? 'upper'
+            : isObjectSheet(tileUv.sheet) && isImpassable
+              ? 'object'
+              : 'ground';
           const height = heightGrid[y * map.width + x] ?? 0;
 
           const chunkX = Math.floor(x / chunkSize);

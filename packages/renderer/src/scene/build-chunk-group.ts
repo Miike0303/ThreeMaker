@@ -604,6 +604,21 @@ function buildTileGeometry(
     return [buildWallQuad(uv, worldX, standBaseLift, standCenterZ, tileWorldSize, wallHeight)];
   }
 
+  if (tile.elevation === 'object') {
+    // HD-2D squashed-furniture bug fix: an impassable B/C/D/E tile (chunk-
+    // geometry.ts's classification) stands upright on its OWN cell, anchored
+    // at its own region-derived elevation -- no MV3D star-stack "stand on
+    // the tile south of it" semantics (`standBaseLift`/`standCenterZ`
+    // above), since that convention only applies to actual star-bit tiles.
+    // Reuses `buildWallQuad`, the SAME upright-quad mechanism the 'upper'
+    // branch just above already uses -- not a second billboard mechanism.
+    // Never reached for a 4-quad autotile: B/C/D/E are single-frame sheets.
+    const uv = tile.quads[0];
+    if (!uv) return [];
+    const objectCenterZ = worldZ + tileWorldSize / 2;
+    return [buildWallQuad(uv, worldX, elevationLift, objectCenterZ, tileWorldSize, wallHeight)];
+  }
+
   if (isWallSheet(tile.sheet)) {
     return buildWallPrismGeometry(tile, tileWorldSize, wallPrismHeight, heightUnit, wallOpenEdges);
   }
@@ -686,9 +701,10 @@ export function buildChunkGroup(
     );
 
     // Carve-eligible: flat ground-quad tiles only (plus their cliff/skirt
-    // faces) -- never star-bit "upper layer" quads or wall-autotile (A3/A4)
-    // prisms, regardless of what room id their cell carries.
-    const carveEligible = !isWallTile && tile.elevation !== 'upper';
+    // faces) -- never star-bit "upper layer" quads, upright "object" quads
+    // (HD-2D furniture/signs/trees fix), or wall-autotile (A3/A4) prisms,
+    // regardless of what room id their cell carries.
+    const carveEligible = !isWallTile && tile.elevation === 'ground';
     const roomId =
       carveEligible && ceilingCarve
         ? (ceilingCarve.roomIdGrid[tile.tileY * ceilingCarve.mapWidth + tile.tileX] ?? 0)

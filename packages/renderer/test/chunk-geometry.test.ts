@@ -299,6 +299,63 @@ describe('buildChunks', () => {
     expect(chunks[0]?.tiles[0]?.elevation).toBe('upper');
   });
 
+  it('classifies a non-star tile on an object sheet (B/C/D/E) with any impassable bit as "object" elevation (upright-render fix)', () => {
+    const layer0 = new Array(16).fill(0);
+    layer0[0] = 3; // sheet B, local index 3 -- flagged impassable-down only in this test's tileset override.
+    const map = makeMap({
+      layers: {
+        tileLayers: [layer0, new Array(16).fill(0), new Array(16).fill(0), new Array(16).fill(0)],
+        shadows: new Array(16).fill(0),
+        regions: new Array(16).fill(0),
+      },
+    });
+    const flags = new Array(8192).fill(0);
+    flags[3] = 0x1; // impassableDown only -- "any" impassable bit, not all 4.
+
+    const chunks = buildChunks(map, makeTileset({ flags }), SHEET_SIZES, 16);
+
+    expect(chunks[0]?.tiles[0]?.elevation).toBe('object');
+  });
+
+  it('keeps a passable (no impassable bits) object-sheet tile as "ground" elevation (decals/rugs stay flat)', () => {
+    const layer0 = new Array(16).fill(0);
+    layer0[0] = 1; // sheet B, no flags set in the default makeTileset().
+    const map = makeMap({
+      layers: {
+        tileLayers: [layer0, new Array(16).fill(0), new Array(16).fill(0), new Array(16).fill(0)],
+        shadows: new Array(16).fill(0),
+        regions: new Array(16).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+
+    expect(chunks[0]?.tiles[0]?.elevation).toBe('ground');
+  });
+
+  it('does NOT classify an impassable A-sheet (floor autotile) tile as "object" -- the razor only applies to B/C/D/E', () => {
+    const layer0 = new Array(16).fill(0);
+    layer0[0] = 2048; // sheet A1 (autotile base id), impassable in this test's tileset override.
+    const map = makeMap({
+      layers: {
+        tileLayers: [layer0, new Array(16).fill(0), new Array(16).fill(0), new Array(16).fill(0)],
+        shadows: new Array(16).fill(0),
+        regions: new Array(16).fill(0),
+      },
+    });
+    const flags = new Array(8192).fill(0);
+    flags[2048] = 0xf; // impassable in all 4 directions.
+
+    const chunks = buildChunks(
+      map,
+      makeTileset({ flags }),
+      { ...SHEET_SIZES, A1: { width: 768, height: 768 } },
+      16,
+    );
+
+    expect(chunks[0]?.tiles[0]?.elevation).toBe('ground');
+  });
+
   it('splits tiles across chunk boundaries using the given chunk size', () => {
     const width = 4;
     const height = 4;
