@@ -69,6 +69,7 @@ import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
+import { withNoclip } from './noclip.js';
 import {
   aboveFloorTilemap,
   createRoomTracker,
@@ -802,6 +803,14 @@ async function renderFixtureMap(
     return { tilemap, streamer };
   }
 
+  // Ctrl noclip debug mode (rpgm-whole-game-import, user-requested): held
+  // while `true`, `withNoclip` (below, in the mover's `canMove`) bypasses
+  // passability entirely. Declared here (before `createMapSession`) so its
+  // closure captures this SAME binding across every session rebuild (map
+  // cycling creates a fresh `mover`/`canMove` closure each time, but noclip
+  // state itself should persist across that rebuild, not reset to off).
+  let noclipActive = false;
+
   /**
    * Builds a fully wired session for one or more stacked floors: one
    * `FloorGameplay` (passability/elevation) and one renderer `FloorRenderSlot`
@@ -956,13 +965,23 @@ async function renderFixtureMap(
       // completes) -- `demoMapActive` also scopes the check to the fixture
       // map, since the demo NPCs' tiles are meaningless on the dev map-cycle's
       // other maps. `floorRouter.passability` routes to the mover's
-      // `currentFloor`.
-      canMove: (x, y, direction) => {
-        if (!floorRouter.passability.canMove(x, y, direction)) return false;
-        if (!demoMapActive || !npcRegistry) return true;
-        const delta = DIRECTION_DELTA[direction];
-        return !npcRegistry.occupies(x + delta.x, y + delta.y);
-      },
+      // `currentFloor`. `withNoclip` wraps the whole thing (including NPC
+      // collision) so holding Ctrl bypasses both terrain AND NPC blocking;
+      // its own escape-hatch `isStandable` check is a thin passthrough
+      // (not `floorRouter.passability` captured once) so it re-resolves
+      // `floorRouter`'s CURRENT floor on every call too, exactly like the
+      // inner `canMove` callback below -- a stair traversal changing floors
+      // must never leave this pinned to a stale, already-left floor.
+      canMove: withNoclip(
+        () => noclipActive,
+        { isStandable: (x, y) => floorRouter.passability.isStandable(x, y) },
+        (x, y, direction) => {
+          if (!floorRouter.passability.canMove(x, y, direction)) return false;
+          if (!demoMapActive || !npcRegistry) return true;
+          const delta = DIRECTION_DELTA[direction];
+          return !npcRegistry.occupies(x + delta.x, y + delta.y);
+        },
+      ),
     });
 
     // Build the spawn surroundings, for every floor the initial window
@@ -1438,9 +1457,27 @@ async function renderFixtureMap(
           CAMERA_MAX_DISTANCE,
         );
         return;
+      case 'control':
+        // Held, not toggled -- see the matching 'keyup' listener below,
+        // which is what actually turns this back off. Repeat keydowns
+        // while held just set the same value again, harmless.
+        noclipActive = true;
+        debugPanel.setNoclipActive(true);
+        return;
       default:
         return;
     }
+  });
+
+  // Releasing Ctrl restores normal passability immediately (`withNoclip`,
+  // above) -- including the "don't re-trap" escape hatch if noclip carried
+  // the player into/through a wall. Real engine feature (available in
+  // production, in both fixture and manifest/authored modes), not a dev
+  // toggle -- unlike the 'g' dev map-cycle below.
+  window.addEventListener('keyup', (event) => {
+    if (event.key.toLowerCase() !== 'control') return;
+    noclipActive = false;
+    debugPanel.setNoclipActive(false);
   });
 
   // Dev map-cycle toggle: 'g' cycles the fixture map -> a giant deterministic

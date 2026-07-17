@@ -56,6 +56,7 @@ export const CONTROL_ROWS: readonly ControlRow[] = [
   { keys: '[ / ]', labelKey: 'debug.controls.tilt' },
   { keys: '- / =', labelKey: 'debug.controls.zoom' },
   { keys: 'P', labelKey: 'debug.controls.postfx' },
+  { keys: 'Ctrl', labelKey: 'debug.controls.noclip' },
 ];
 
 /** Dev-only cheat-sheet row (mirrors the `g` map-cycle toggle in main.ts, DEV-gated there too). */
@@ -108,6 +109,15 @@ export interface DebugPanel {
   readonly element: HTMLElement;
   /** Repaints the live-values section from a fresh snapshot. Call at a low rate (e.g. 4 Hz) -- see main.ts; not meant to be called per rendered frame. */
   update(snapshot: DebugSnapshot): void;
+  /**
+   * Toggles the noclip debug-mode indicator (rpgm-whole-game-import: held
+   * Ctrl). Deliberately a separate method rather than a `DebugSnapshot`
+   * field/`formatDebugRows` row: noclip only ever flips on a keydown/keyup
+   * edge (not every 4 Hz `update()` tick), and keeping it out of
+   * `formatDebugRows` avoids touching that function's existing exact-row
+   * assertions (`debug-panel.test.ts`) for an unrelated feature.
+   */
+  setNoclipActive(active: boolean): void;
 }
 
 /**
@@ -173,6 +183,21 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
     valueEls.push(valueEl);
   }
 
+  // Noclip indicator (rpgm-whole-game-import): a standalone row, not part
+  // of `formatDebugRows`'s array -- see `DebugPanel.setNoclipActive`'s doc
+  // comment for why. Always present (shows OFF by default) rather than
+  // hidden/shown, so its position in the panel never shifts.
+  const noclipRow = document.createElement('div');
+  noclipRow.className = 'debug-panel-row';
+  const noclipLabel = document.createElement('span');
+  noclipLabel.className = 'debug-panel-label';
+  noclipLabel.textContent = t('debug.noclip');
+  const noclipValue = document.createElement('span');
+  noclipValue.className = 'debug-panel-value';
+  noclipValue.textContent = t('debug.noclipOff');
+  noclipRow.append(noclipLabel, noclipValue);
+  valuesSection.appendChild(noclipRow);
+
   const controlsSection = document.createElement('div');
   controlsSection.className = 'debug-panel-controls';
   const controlsTitle = document.createElement('div');
@@ -217,6 +242,9 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
         const valueEl = valueEls[index];
         if (valueEl) valueEl.textContent = row.value;
       });
+    },
+    setNoclipActive(active: boolean): void {
+      noclipValue.textContent = active ? t('debug.noclipOn') : t('debug.noclipOff');
     },
   };
 }
