@@ -796,6 +796,72 @@ describe('buildChunkGroup upright object tiles (HD-2D squashed-furniture bug fix
     expect(box.max.y).toBeCloseTo(3);
   });
 
+  it('separates two "object" tiles at the SAME cell on different layers along Z, not just Y (z-fight fix: table + item-on-table)', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 1,
+          sheet: 'C',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'object',
+        },
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 2,
+          sheet: 'C',
+          quads: [{ u0: 0.1, v0: 0, u1: 0.2, v1: 0.1 }],
+          elevation: 'object',
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { C: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, wallHeight: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const zValues = new Set<number>();
+    for (let i = 0; i < position.count; i++) zValues.add(Number(position.getZ(i).toFixed(6)));
+    // Two vertical quads at the identical (x, y) cell, on different layers,
+    // must land on 2 DISTINCT Z planes -- Y-based layerLift cannot separate
+    // a vertical quad from itself (it shifts the whole plane up, not apart
+    // along its own normal); the fix must offset along Z instead.
+    expect(zValues.size).toBe(2);
+  });
+
+  it('leaves a layerIndex-0 "object" tile at the un-shifted Z center (backward compatible)', () => {
+    const chunk = makeChunk({
+      tiles: [
+        {
+          tileX: 0,
+          tileY: 0,
+          layerIndex: 0,
+          sheet: 'C',
+          quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+          elevation: 'object',
+        },
+      ],
+    });
+
+    const group = buildChunkGroup(
+      chunk,
+      { C: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, wallHeight: 1 },
+    );
+
+    const mesh = group.children[0] as THREE.Mesh;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox as THREE.Box3;
+    // Center Z for a 1x1 tile at (0,0) with no layer shift is 0.5.
+    expect((box.min.z + box.max.z) / 2).toBeCloseTo(0.5);
+  });
+
   it('a passable (elevation: ground) object-sheet tile still renders as a flat quad (decals/rugs unaffected)', () => {
     const chunk = makeChunk({
       tiles: [

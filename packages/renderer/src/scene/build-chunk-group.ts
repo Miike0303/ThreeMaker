@@ -613,9 +613,34 @@ function buildTileGeometry(
     // Reuses `buildWallQuad`, the SAME upright-quad mechanism the 'upper'
     // branch just above already uses -- not a second billboard mechanism.
     // Never reached for a 4-quad autotile: B/C/D/E are single-frame sheets.
+    //
+    // z-fight fix (gate-fix, adversarial review): real maps routinely paint
+    // TWO impassable object tiles at the SAME cell on different layers (a
+    // table on layer 1 + an item sitting on it on layer 2, measured 9,013
+    // cells across 459/847 of the user's real converted maps) -- both are
+    // vertical quads at the identical worldX/baseY/tileWorldSize, so without
+    // a per-layer offset they'd be bit-for-bit coplanar (the same z-fight
+    // class LAYER_LIFT_FACTOR fixes for flat floors, reintroduced here
+    // vertically). A Y lift can't help a VERTICAL quad -- it shifts the
+    // whole plane up, not apart along its own normal -- so the separation is
+    // along Z instead, biased toward +Z (the HD-2D camera side) so the
+    // deeper layer's quad wins the depth test, preserving RPG Maker's own
+    // "higher editable layer paints last / on top" intent.
+    //
+    // ponytail: two non-star object tiles stacked on DIFFERENT layers at
+    // the SAME row still render as split parallel Z-planes rather than one
+    // combined silhouette -- acceptable because standard RPGM authoring
+    // marks a tall object's overhanging top portion with the star bit
+    // (rendered via the 'upper' branch instead), not as a second object tile.
+    // ponytail: known false positive in the razor itself -- a directionally-
+    // impassable (but visually flat) B/C/D/E decal (e.g. a one-way-blocked
+    // floor marking) would stand up too; A1/A2/A5 autotiles and fully-
+    // passable B/C/D/E tiles are the only exclusions this classification
+    // makes today (see `isObjectSheet`'s doc comment).
     const uv = tile.quads[0];
     if (!uv) return [];
-    const objectCenterZ = worldZ + tileWorldSize / 2;
+    const objectCenterZ =
+      worldZ + tileWorldSize / 2 + tile.layerIndex * LAYER_LIFT_FACTOR * tileWorldSize;
     return [buildWallQuad(uv, worldX, elevationLift, objectCenterZ, tileWorldSize, wallHeight)];
   }
 
