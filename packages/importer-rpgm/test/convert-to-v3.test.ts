@@ -1,4 +1,8 @@
-import { MAP_FORMAT_MAGIC, validateCurrentVersionShape } from '@threemaker/map-format';
+import {
+  CURRENT_MAP_FORMAT_VERSION,
+  MAP_FORMAT_MAGIC,
+  validateCurrentVersionShape,
+} from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import { convertRpgmMap } from '../src/convert-to-v3.js';
 import type { RpgmMap, RpgmTileset, TileSheetNames } from '../src/types.js';
@@ -64,7 +68,7 @@ describe('convertRpgmMap', () => {
     const doc = convertRpgmMap(map, tileset);
 
     expect(doc.format).toBe(MAP_FORMAT_MAGIC);
-    expect(doc.version).toBe(3);
+    expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
     expect(doc.width).toBe(3);
     expect(doc.height).toBe(2);
     expect(doc.floors).toHaveLength(1);

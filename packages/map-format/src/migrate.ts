@@ -74,6 +74,43 @@ export function migrateV2ToV3(doc: Record<string, unknown>): Record<string, unkn
 
 registerMigration(2, migrateV2ToV3);
 
+/** The four v4 narrative collections, in the order the v3 guard below names them. */
+const V4_NARRATIVE_KEYS = ['npcs', 'triggers', 'events', 'worldSeeds'] as const;
+
+/**
+ * v3 -> v4 lossless wrap (authored-events-npcs design, "D4 migration"): a v3
+ * document carried no narrative concept at all, so migration adds the four
+ * EMPTY narrative collections and bumps `version` -- every other field passes
+ * through unmodified via the spread, exactly like `migrateV2ToV3`. The
+ * serialized JSON legitimately gains the four keys (see `schema-v4.test.ts`'s
+ * migration gate).
+ *
+ * Because that is a spread THEN an unconditional overwrite, a document that
+ * already carries narrative content while still declaring `version: 3` -- a
+ * one-character authoring slip in a hand-written map -- would migrate
+ * "successfully" with every NPC, trigger, event and seed silently discarded and
+ * no error at any layer: exactly the "silently narrative-free map" degradation
+ * spec R5 forbids. So that case fails LOUDLY instead, naming the keys found.
+ * Absent (`undefined`) keys stay the ordinary v3 case and keep migrating, per
+ * `schema.ts`'s own absent-collapses-to-default convention. Checked against the
+ * 848 real v3 documents on disk: none carries any of these keys, so this
+ * rejects no existing data.
+ */
+export function migrateV3ToV4(doc: Record<string, unknown>): Record<string, unknown> {
+  const carried = V4_NARRATIVE_KEYS.filter((key) => doc[key] !== undefined);
+  if (carried.length > 0) {
+    throw new MapFormatError(
+      'malformed',
+      `Map document declares "version": 3 but already carries v4 narrative content (${carried
+        .map((key) => JSON.stringify(key))
+        .join(', ')}). Set "version" to 4 -- the v3 -> v4 migration would otherwise discard it.`,
+    );
+  }
+  return { ...doc, version: 4, npcs: [], triggers: [], events: {}, worldSeeds: {} };
+}
+
+registerMigration(3, migrateV3ToV4);
+
 function readVersion(raw: Record<string, unknown>): number {
   if (typeof raw.version !== 'number' || !Number.isInteger(raw.version)) {
     throw new MapFormatError('malformed', '"version" must be an integer.');

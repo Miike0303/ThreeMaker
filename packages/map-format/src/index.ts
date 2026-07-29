@@ -3,6 +3,7 @@ export {
   clearMigrations,
   migrateV1ToV2,
   migrateV2ToV3,
+  migrateV3ToV4,
   parseMapDocument,
   registerMigration,
 } from './migrate.js';
@@ -12,10 +13,14 @@ export { deriveRampCells } from './runtime-bridge.js';
 export type {
   FloorDocument,
   MapDocument,
+  MapEventScripts,
   MapFormatErrorCode,
   MapLayers,
   MapSpawn,
   MapTilesetDocument,
+  NpcDocument,
+  NpcFacing,
+  NpcSpriteRef,
   RampDirection,
   RoomDocument,
   RoomRect,
@@ -28,6 +33,8 @@ export type {
   TileLayerData,
   TileSemanticEntry,
   TileSheetSlot,
+  TriggerDocument,
+  WorldSeedValue,
 } from './schema.js';
 export {
   CURRENT_MAP_FORMAT_VERSION,

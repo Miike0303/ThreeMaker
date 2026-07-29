@@ -12,6 +12,9 @@
     "test": "vitest run",
     "typecheck": "tsc -b --pretty"
   },
+  "dependencies": {
+    "@threemaker/core": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "7.0.2",
     "vitest": "4.1.10"

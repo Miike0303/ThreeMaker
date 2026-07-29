@@ -3,6 +3,7 @@ import {
   clearMigrations,
   migrateV1ToV2,
   migrateV2ToV3,
+  migrateV3ToV4,
   parseMapDocument,
   registerMigration,
 } from '../src/migrate.js';
@@ -92,6 +93,7 @@ describe('parseMapDocument', () => {
     clearMigrations();
     registerMigration(1, migrateV1ToV2);
     registerMigration(2, migrateV2ToV3);
+    registerMigration(3, migrateV3ToV4);
   });
 
   it('accepts a document already at the current version, with no migration needed', () => {
@@ -124,6 +126,33 @@ describe('parseMapDocument', () => {
   it('rejects an older version with no registered migration', () => {
     clearMigrations();
     expect(() => parseMapDocument(makeValidDocInput({ version: 0 }))).toThrow(MapFormatError);
+  });
+
+  // C1a task 1.3(b) -- spec R1's "unsupported version fails as before" row,
+  // previously covered only at the `code` level (see the two tests above), never
+  // at the message level.
+  //
+  // RECORDED DISCREPANCY: the spec/tasks artifacts assert that a document
+  // declaring version 5 surfaces `'No migration registered from map format
+  // version 4 to 5.'`. It cannot: `parseMapDocument` rejects any version ABOVE
+  // `CURRENT_MAP_FORMAT_VERSION` before the migration loop is ever entered, so
+  // version 5 takes the newer-than-current branch. The quoted message belongs to
+  // the migration loop's missing-hop branch, which is only reachable for a
+  // version BELOW the current one. Both branches are pinned below, by their real
+  // messages.
+  describe('unsupported versions fail loudly, by message (task 1.3b)', () => {
+    it('rejects a document declaring version 5 as newer than this build supports', () => {
+      expect(() => parseMapDocument(makeValidDocInput({ version: 5 }))).toThrow(
+        `Map document version 5 is newer than the current supported version ${CURRENT_MAP_FORMAT_VERSION}. Upgrade the app to open it.`,
+      );
+    });
+
+    it('rejects an older version whose migration hop is not registered, naming both versions', () => {
+      clearMigrations();
+      expect(() => parseMapDocument(makeValidDocInput({ version: 3 }))).toThrow(
+        'No migration registered from map format version 3 to 4.',
+      );
+    });
   });
 
   it('applies a registered migration chain to reach the current version', () => {
@@ -246,7 +275,9 @@ describe('parseMapDocument', () => {
       const v2Input = makeV2DocInput();
       const doc = parseMapDocument(v2Input);
 
-      expect(doc.version).toBe(3);
+      // `parseMapDocument` always migrates all the way forward, so a v2 input
+      // lands at the CURRENT version (v4 since authored-events-npcs), not v3.
+      expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
       expect(doc.rooms).toEqual([]);
       expect(doc.floors).toHaveLength(1);
       expect(doc.floors[0]?.layers).toEqual(

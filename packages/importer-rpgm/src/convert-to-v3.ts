@@ -93,6 +93,10 @@ export function convertRpgmMap(
     ],
     stairLinks: [],
     rooms: [],
+    npcs: [],
+    triggers: [],
+    events: {},
+    worldSeeds: {},
   };
 
   return opts.playerStart === undefined

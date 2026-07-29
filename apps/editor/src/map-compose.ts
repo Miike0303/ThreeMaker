@@ -110,6 +110,12 @@ export function createBlankMapDocument(options: CreateBlankMapDocumentOptions): 
     // authors no rooms yet -- see `composeDocumentFromPainterFloors` for the
     // real room-authoring compose path (Slice 5a).
     rooms: [],
+    // Schema v4 (c1a-authored-events-npcs): a blank map authors no narrative
+    // content yet -- the painter's authoring path fills these in.
+    npcs: [],
+    triggers: [],
+    events: {},
+    worldSeeds: {},
   };
 }
 
@@ -270,6 +276,13 @@ export function composeDocumentFromPainterFloors(
   );
   const composedRooms = rooms.filter((room) => floorIds.has(room.floor));
   const composedSpawn = spawn !== undefined && floorIds.has(spawn.floor) ? spawn : undefined;
+  // Schema v4 (c1a-authored-events-npcs): `npcs`/`triggers` reference their
+  // floor by stable id exactly like `rooms`/`stairLinks`/`spawn`, so a removed
+  // floor must drop them here too -- `validateNpc`/`validateTrigger` reject a
+  // dangling reference on the next parse. `events`/`worldSeeds` carry no floor
+  // reference and ride the spread untouched.
+  const composedNpcs = doc.npcs.filter((npc) => floorIds.has(npc.floor));
+  const composedTriggers = doc.triggers.filter((trigger) => floorIds.has(trigger.floor));
 
   const { spawn: _originalSpawn, ...docWithoutSpawn } = doc;
   const base = {
@@ -277,6 +290,8 @@ export function composeDocumentFromPainterFloors(
     floors: composedFloors,
     stairLinks: composedStairLinks,
     rooms: composedRooms,
+    npcs: composedNpcs,
+    triggers: composedTriggers,
   };
   return composedSpawn === undefined ? base : { ...base, spawn: composedSpawn };
 }

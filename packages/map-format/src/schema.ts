@@ -25,6 +25,9 @@
  * `migrate.ts`'s `migrateV2ToV3`.
  */
 
+import type { EventCommand } from '@threemaker/core';
+import { parseEventScript } from '@threemaker/core';
+
 /** One of RPG Maker's 9 fixed tileset sheet slots. */
 export type TileSheetSlot = 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'B' | 'C' | 'D' | 'E';
 
@@ -96,7 +99,7 @@ export interface MapLayers {
 }
 
 export const MAP_FORMAT_MAGIC = 'threemaker-map' as const;
-export const CURRENT_MAP_FORMAT_VERSION = 3;
+export const CURRENT_MAP_FORMAT_VERSION = 4;
 
 /**
  * Default `baseElevation` increment for a newly-added floor (painter "add
@@ -177,6 +180,42 @@ export interface MapSpawn {
   readonly floor: string;
 }
 
+/** Facing domain for an authored NPC: the same value domain as gameplay's `Direction` (`packages/gameplay/src/grid-mover.ts:2`), restated here so this package stays dependency-free. */
+export type NpcFacing = 'down' | 'left' | 'right' | 'up';
+
+/** Content-addressed NPC sheet reference, mirroring `ManifestActorSheet` (`apps/desktop/src/game-manifest.ts:25-30`) -- desktop has no catalog access, so the document carries the sha256 directly. */
+export interface NpcSpriteRef {
+  readonly object: string;
+  readonly characterIndex: number;
+}
+
+/** One authored NPC (schema v4). `floor` references a stable `FloorDocument.id` like `MapSpawn`; `onInteract` keys into `MapDocument.events`. */
+export interface NpcDocument {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly floor: string;
+  readonly facing: NpcFacing;
+  readonly sprite: NpcSpriteRef;
+  readonly onInteract: string;
+}
+
+/** One authored trigger (schema v4). `event` keys into `MapDocument.events`. */
+export interface TriggerDocument {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly floor: string;
+  readonly on: 'enter' | 'interact';
+  readonly event: string;
+}
+
+/** Authored event scripts keyed by event key. Command-level validation is delegated to `@threemaker/core`'s `parseEventScript` (see `validateEvents`). */
+export type MapEventScripts = Readonly<Record<string, readonly EventCommand[]>>;
+
+/** A world-state seed value: primitives only, matching the runtime's `WorldValue`. */
+export type WorldSeedValue = boolean | number | string;
+
 export interface MapDocument {
   readonly format: typeof MAP_FORMAT_MAGIC;
   readonly version: number;
@@ -193,6 +232,17 @@ export interface MapDocument {
   readonly rooms: readonly RoomDocument[];
   /** Authored player-spawn point (loop-crear-jugar, additive). Omitted entirely when unauthored -- never emitted as an `undefined`-valued key, matching `label`'s optional-field convention. */
   readonly spawn?: MapSpawn;
+  /**
+   * Authored narrative content (schema v4). All four are REQUIRED with empty
+   * defaults -- never optional like `spawn?` -- so every object literal typed
+   * as `MapDocument` (this module's rebuilt shape, the editor's blank
+   * document) fails to COMPILE when a field is not mirrored, instead of
+   * dropping it silently.
+   */
+  readonly npcs: readonly NpcDocument[];
+  readonly triggers: readonly TriggerDocument[];
+  readonly events: MapEventScripts;
+  readonly worldSeeds: Readonly<Record<string, WorldSeedValue>>;
 }
 
 export type MapFormatErrorCode = 'bad-magic' | 'unsupported-version' | 'malformed';
@@ -251,6 +301,15 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
   const stairLinks = validateStairLinks(raw.stairLinks, floorIds);
   const rooms = validateRooms(raw.rooms, floorIds, raw.width as number, raw.height as number);
   const spawn = validateSpawn(raw.spawn, floorIds, raw.width as number, raw.height as number);
+  const npcs = validateNpcs(raw.npcs, floorIds, raw.width as number, raw.height as number);
+  const triggers = validateTriggers(
+    raw.triggers,
+    floorIds,
+    raw.width as number,
+    raw.height as number,
+  );
+  const events = validateEvents(raw.events);
+  const worldSeeds = validateWorldSeeds(raw.worldSeeds);
 
   return spawn === undefined
     ? {
@@ -264,6 +323,10 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
         floors,
         stairLinks,
         rooms,
+        npcs,
+        triggers,
+        events,
+        worldSeeds,
       }
     : {
         format: MAP_FORMAT_MAGIC,
@@ -277,7 +340,246 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
         stairLinks,
         rooms,
         spawn,
+        npcs,
+        triggers,
+        events,
+        worldSeeds,
       };
+}
+
+/**
+ * Collection-level guard shared by `npcs`/`triggers`: an absent key collapses
+ * to the empty default (so a v3 document and every pre-v4 fixture keep
+ * parsing), and a present value must be an array.
+ */
+function validateNarrativeArray(input: unknown, label: string): readonly unknown[] {
+  if (input === undefined) return [];
+  if (!Array.isArray(input)) {
+    throw new MapFormatError('malformed', `"${label}" must be an array.`);
+  }
+  return input as readonly unknown[];
+}
+
+/** Record counterpart to `validateNarrativeArray` -- absent collapses to `{}`, present must be a plain object. */
+function validateNarrativeRecord(input: unknown, label: string): Readonly<Record<string, unknown>> {
+  if (input === undefined) return {};
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    throw new MapFormatError('malformed', `"${label}" must be an object.`);
+  }
+  return input as Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Floor reference shared by `npcs`/`triggers`, mirroring `spawn`/`rooms`/
+ * `stairLinks`' floor-id convention. The message names the ENTRY ID as well as
+ * the offending value: an authored document that outlived a deleted floor is
+ * otherwise only diagnosable by counting array indices by hand.
+ */
+function validateNarrativeFloor(
+  input: unknown,
+  label: string,
+  id: string,
+  floorIds: ReadonlySet<string>,
+): string {
+  if (typeof input !== 'string' || !floorIds.has(input)) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.floor" of ${JSON.stringify(id)} must reference an existing floor id, got ${JSON.stringify(input)}.`,
+    );
+  }
+  return input;
+}
+
+/** In-bounds tile coordinate shared by `npcs`/`triggers`, matching `validateSpawn`'s `[0, limit)` rule. */
+function validateNarrativeCoord(
+  input: unknown,
+  label: string,
+  field: 'x' | 'y',
+  id: string,
+  limit: number,
+): number {
+  if (!Number.isInteger(input) || (input as number) < 0 || (input as number) >= limit) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.${field}" of ${JSON.stringify(id)} must be an integer within [0, ${limit}), got ${JSON.stringify(input)}.`,
+    );
+  }
+  return input as number;
+}
+
+const NPC_FACINGS: readonly NpcFacing[] = ['down', 'left', 'right', 'up'];
+const TRIGGER_KINDS: readonly TriggerDocument['on'][] = ['enter', 'interact'];
+
+function validateNpcs(
+  input: unknown,
+  floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): readonly NpcDocument[] {
+  const npcs = validateNarrativeArray(input, 'npcs').map((entry, index) =>
+    validateNpc(entry, index, floorIds, mapWidth, mapHeight),
+  );
+
+  // Tile occupancy is a hard content-authoring invariant, ported from
+  // gameplay's `parseNpcs`: NPCs collide, so two on one tile leaves one
+  // permanently unreachable. Scoped PER FLOOR exactly like `validateRooms`' id
+  // uniqueness -- the same x,y on two floors is two distinct tiles. The first
+  // claimant's index is tracked so the error names both conflicting entries.
+  const firstIndexByTile = new Map<string, number>();
+  for (const [index, npc] of npcs.entries()) {
+    const key = `${npc.floor} ${npc.x},${npc.y}`;
+    const firstIndex = firstIndexByTile.get(key);
+    if (firstIndex !== undefined) {
+      throw new MapFormatError(
+        'malformed',
+        `"npcs[${index}]" (${JSON.stringify(npc.id)}) occupies the same tile (${npc.x},${npc.y}) on floor ${JSON.stringify(npc.floor)} as "npcs[${firstIndex}]".`,
+      );
+    }
+    firstIndexByTile.set(key, index);
+  }
+
+  return npcs;
+}
+
+function validateNpc(
+  input: unknown,
+  index: number,
+  floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): NpcDocument {
+  const label = `npcs[${index}]`;
+  if (typeof input !== 'object' || input === null) {
+    throw new MapFormatError('malformed', `"${label}" must be an object.`);
+  }
+  const raw = input as Record<string, unknown>;
+  if (typeof raw.id !== 'string' || raw.id.length === 0) {
+    throw new MapFormatError('malformed', `"${label}.id" must be a non-empty string.`);
+  }
+  const floor = validateNarrativeFloor(raw.floor, label, raw.id, floorIds);
+  const x = validateNarrativeCoord(raw.x, label, 'x', raw.id, mapWidth);
+  const y = validateNarrativeCoord(raw.y, label, 'y', raw.id, mapHeight);
+  if (typeof raw.facing !== 'string' || !NPC_FACINGS.includes(raw.facing as NpcFacing)) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.facing" must be one of ${NPC_FACINGS.join(', ')}, got ${JSON.stringify(raw.facing)}.`,
+    );
+  }
+  const sprite = validateNpcSprite(raw.sprite, label);
+  if (typeof raw.onInteract !== 'string' || raw.onInteract.length === 0) {
+    throw new MapFormatError('malformed', `"${label}.onInteract" must be a non-empty string.`);
+  }
+  return {
+    id: raw.id,
+    x,
+    y,
+    floor,
+    facing: raw.facing as NpcFacing,
+    sprite,
+    onInteract: raw.onInteract,
+  };
+}
+
+function validateNpcSprite(input: unknown, label: string): NpcSpriteRef {
+  if (typeof input !== 'object' || input === null) {
+    throw new MapFormatError('malformed', `"${label}.sprite" must be an object.`);
+  }
+  const raw = input as Record<string, unknown>;
+  if (typeof raw.object !== 'string' || raw.object.length === 0) {
+    throw new MapFormatError('malformed', `"${label}.sprite.object" must be a non-empty string.`);
+  }
+  if (!Number.isInteger(raw.characterIndex) || (raw.characterIndex as number) < 0) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.sprite.characterIndex" must be a non-negative integer, got ${JSON.stringify(raw.characterIndex)}.`,
+    );
+  }
+  return { object: raw.object, characterIndex: raw.characterIndex as number };
+}
+
+function validateTriggers(
+  input: unknown,
+  floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): readonly TriggerDocument[] {
+  return validateNarrativeArray(input, 'triggers').map((entry, index) =>
+    validateTrigger(entry, index, floorIds, mapWidth, mapHeight),
+  );
+}
+
+function validateTrigger(
+  input: unknown,
+  index: number,
+  floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): TriggerDocument {
+  const label = `triggers[${index}]`;
+  if (typeof input !== 'object' || input === null) {
+    throw new MapFormatError('malformed', `"${label}" must be an object.`);
+  }
+  const raw = input as Record<string, unknown>;
+  if (typeof raw.id !== 'string' || raw.id.length === 0) {
+    throw new MapFormatError('malformed', `"${label}.id" must be a non-empty string.`);
+  }
+  const floor = validateNarrativeFloor(raw.floor, label, raw.id, floorIds);
+  const x = validateNarrativeCoord(raw.x, label, 'x', raw.id, mapWidth);
+  const y = validateNarrativeCoord(raw.y, label, 'y', raw.id, mapHeight);
+  if (typeof raw.on !== 'string' || !TRIGGER_KINDS.includes(raw.on as TriggerDocument['on'])) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.on" must be one of ${TRIGGER_KINDS.join(', ')}, got ${JSON.stringify(raw.on)}.`,
+    );
+  }
+  if (typeof raw.event !== 'string' || raw.event.length === 0) {
+    throw new MapFormatError('malformed', `"${label}.event" must be a non-empty string.`);
+  }
+  return { id: raw.id, x, y, floor, on: raw.on as TriggerDocument['on'], event: raw.event };
+}
+
+/**
+ * Command-level validation is core's, not ours: the envelope
+ * `{version: 1, events}` is synthesized here because `parseEventScript` is
+ * core's only public entry point (`parseEventCommand` is unexported), keeping a
+ * single command-schema definition instead of a drifting duplicate. Core's
+ * plain `Error` is re-wrapped as a `MapFormatError` so `parseMapDocument` keeps
+ * exactly one error type for every rejection, with core's own path-naming
+ * message text preserved verbatim.
+ */
+function validateEvents(input: unknown): MapEventScripts {
+  const events = validateNarrativeRecord(input, 'events');
+  try {
+    return parseEventScript({ version: 1, events });
+  } catch (error) {
+    throw new MapFormatError(
+      'malformed',
+      `"events" is not a valid event script: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+/**
+ * `WorldValue` primitives only (`packages/core/src/world-state.ts`) -- a nested
+ * object or array would reach `seedIfAbsent` unusable.
+ *
+ * The returned record is a COPY, never the caller's own object: every other
+ * collection here is rebuilt entry-by-entry, so a validated document must not
+ * be the one place that keeps sharing mutable state with the untrusted input
+ * JSON (a later mutation of that input would otherwise reach through this
+ * document's `readonly` seeds unvalidated).
+ */
+function validateWorldSeeds(input: unknown): Readonly<Record<string, WorldSeedValue>> {
+  const seeds = { ...validateNarrativeRecord(input, 'worldSeeds') };
+  for (const [key, value] of Object.entries(seeds)) {
+    if (typeof value !== 'boolean' && typeof value !== 'number' && typeof value !== 'string') {
+      throw new MapFormatError(
+        'malformed',
+        `"worldSeeds.${key}" must be a boolean, number, or string, got ${JSON.stringify(value)}.`,
+      );
+    }
+  }
+  return seeds as Readonly<Record<string, WorldSeedValue>>;
 }
 
 function validateFloors(input: unknown, width: number, height: number): readonly FloorDocument[] {
