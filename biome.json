@@ -28,7 +28,8 @@
         "packages/core/src/event-interpreter.ts",
         "packages/core/test/event-command.test.ts",
         "packages/core/test/event-interpreter.test.ts",
-        "apps/desktop/test/demo-content.test.ts"
+        "apps/desktop/test/demo-content.test.ts",
+        "apps/desktop/test/authored-map-narrative.test.ts"
       ],
       "linter": {
         "rules": {

@@ -13,7 +13,7 @@
  * through unchanged, not to re-derive ramp semantics from scratch).
  */
 import type { MapDocument, SemanticOverrides } from '@threemaker/map-format';
-import { MAP_FORMAT_MAGIC } from '@threemaker/map-format';
+import { CURRENT_MAP_FORMAT_VERSION, MAP_FORMAT_MAGIC } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import { translateMapDocument } from '../src/map-document-runtime.js';
 
@@ -66,7 +66,7 @@ const STAIR_LANDING_X = STAIR_ROW + 2; // 18
 function buildDevDemoEquivalentDocument(): MapDocument {
   return {
     format: MAP_FORMAT_MAGIC,
-    version: 3,
+    version: CURRENT_MAP_FORMAT_VERSION,
     id: 'dev-demo',
     name: 'Dev Demo',
     width: FLOOR_SIZE,
@@ -123,6 +123,57 @@ function buildDevDemoEquivalentDocument(): MapDocument {
       },
     ],
     spawn: { x: 5, y: 5, floor: 'floor-0' },
+    // The four v4 narrative collections are REQUIRED (`schema.ts`'s
+    // `MapDocument`), so a literal typed `MapDocument` must mirror them even
+    // when empty. This file is outside `tsc`'s graph (`apps/desktop/tsconfig.json`
+    // uses `include: ["src"]`), so omitting them was invisible to the compiler.
+    npcs: [],
+    triggers: [],
+    events: {},
+    worldSeeds: {},
+  };
+}
+
+/**
+ * The base document with all four narrative collections POPULATED, entries
+ * deliberately split across BOTH floors and sharing one `(x, y)`: a translator
+ * that hardcoded floor index 0, dropped `floor`, or passed the document's floor
+ * ID string straight through cannot satisfy these expectations. `events` values
+ * are real `EventCommand`s (spec revision 3, amendment 3), so the story
+ * references reachable through them are the ones the bundle will compile.
+ */
+function buildNarrativeDocument(): MapDocument {
+  return {
+    ...buildDevDemoEquivalentDocument(),
+    npcs: [
+      {
+        id: 'elder',
+        x: 4,
+        y: 6,
+        floor: 'floor-0',
+        facing: 'down',
+        sprite: { object: 'a'.repeat(64), characterIndex: 0 },
+        onInteract: 'talk-elder',
+      },
+      {
+        id: 'ghost',
+        x: 4,
+        y: 6,
+        floor: 'floor-1',
+        facing: 'up',
+        sprite: { object: 'b'.repeat(64), characterIndex: 3 },
+        onInteract: 'talk-ghost',
+      },
+    ],
+    triggers: [
+      { id: 'door', x: 7, y: 8, floor: 'floor-0', on: 'enter', event: 'talk-elder' },
+      { id: 'lever', x: 7, y: 8, floor: 'floor-1', on: 'interact', event: 'talk-ghost' },
+    ],
+    events: {
+      'talk-elder': [{ type: 'showDialogue', source: { kind: 'ink', storyId: 'elder' } }],
+      'talk-ghost': [{ type: 'showDialogue', source: { kind: 'ink', storyId: 'ghost' } }],
+    },
+    worldSeeds: { 'elder.greeted': false, coins: 3 },
   };
 }
 
@@ -252,5 +303,101 @@ describe('translateMapDocument', () => {
     const { spawn: _omit, ...withoutSpawn } = doc;
     const result = translateMapDocument(withoutSpawn as MapDocument);
     expect(result.spawn).toBeUndefined();
+  });
+});
+
+/**
+ * Guards the ONE fan-out path the compiler cannot protect (spec R3: the
+ * `map-document-runtime.ts` row returns an unrelated `TranslatedMapDocument`,
+ * so a dropped narrative collection is a silent data loss, not a build error),
+ * and the document-floor-ID -> runtime-floor-INDEX boundary it owns: an ID
+ * string reaching `NpcRegistry`/`TriggerIndex` builds keys like `"floor-0:4,6"`
+ * that no floor-scoped lookup can match, so every NPC and trigger would vanish
+ * with no error at any layer.
+ */
+describe('translateMapDocument — authored narrative (v4)', () => {
+  it("resolves every authored NPC's floor id to its floor index, preserving every other field", () => {
+    const result = translateMapDocument(buildNarrativeDocument());
+
+    expect(result.npcs).toEqual([
+      {
+        id: 'elder',
+        x: 4,
+        y: 6,
+        floor: 0,
+        facing: 'down',
+        sprite: { object: 'a'.repeat(64), characterIndex: 0 },
+        onInteract: 'talk-elder',
+      },
+      {
+        id: 'ghost',
+        x: 4,
+        y: 6,
+        floor: 1,
+        facing: 'up',
+        sprite: { object: 'b'.repeat(64), characterIndex: 3 },
+        onInteract: 'talk-ghost',
+      },
+    ]);
+  });
+
+  it("resolves every authored trigger's floor id to its floor index, preserving `on` and `event`", () => {
+    const result = translateMapDocument(buildNarrativeDocument());
+
+    expect(result.triggers).toEqual([
+      { id: 'door', x: 7, y: 8, floor: 0, on: 'enter', event: 'talk-elder' },
+      { id: 'lever', x: 7, y: 8, floor: 1, on: 'interact', event: 'talk-ghost' },
+    ]);
+  });
+
+  it('carries events and worldSeeds through unchanged, keeping every story reference reachable', () => {
+    const doc = buildNarrativeDocument();
+    const result = translateMapDocument(doc);
+
+    expect(result.events).toEqual(doc.events);
+    expect(result.worldSeeds).toEqual(doc.worldSeeds);
+  });
+
+  it('resolves narrative floor ids by ARRAY ORDER, not by parsing a numeric suffix out of the id', () => {
+    const doc = buildNarrativeDocument();
+    const [groundFloor, upperFloor] = doc.floors;
+    if (!groundFloor || !upperFloor) throw new Error('fixture must have exactly 2 floors');
+    const reordered: MapDocument = {
+      ...doc,
+      // Ground floor last and renamed, so the id text carries no index hint.
+      floors: [
+        { ...upperFloor, id: 'upper' },
+        { ...groundFloor, id: 'ground' },
+      ],
+      stairLinks: [],
+      rooms: [],
+      spawn: undefined,
+      npcs: doc.npcs.map((npc) => ({ ...npc, floor: 'ground' })),
+      triggers: doc.triggers.map((trigger) => ({ ...trigger, floor: 'upper' })),
+    };
+
+    const result = translateMapDocument(reordered);
+    expect(result.npcs.map((npc) => npc.floor)).toEqual([1, 1]);
+    expect(result.triggers.map((trigger) => trigger.floor)).toEqual([0, 0]);
+  });
+
+  it("throws naming the NPC id and the missing floor id when an NPC's floor does not resolve", () => {
+    const doc = buildNarrativeDocument();
+    const dangling: MapDocument = {
+      ...doc,
+      npcs: doc.npcs.map((npc) => ({ ...npc, floor: 'floor-99' })),
+    };
+
+    expect(() => translateMapDocument(dangling)).toThrow(/npcs\[elder\]\.floor.*"floor-99"/);
+  });
+
+  it("throws naming the trigger id and the missing floor id when a trigger's floor does not resolve", () => {
+    const doc = buildNarrativeDocument();
+    const dangling: MapDocument = {
+      ...doc,
+      triggers: doc.triggers.map((trigger) => ({ ...trigger, floor: 'nowhere' })),
+    };
+
+    expect(() => translateMapDocument(dangling)).toThrow(/triggers\[door\]\.floor.*"nowhere"/);
   });
 });

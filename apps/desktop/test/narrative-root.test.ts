@@ -1,0 +1,102 @@
+/**
+ * Narrative root (spec R6): the SESSION-scoped half of the narrative runtime.
+ * `WorldState`, the world-seed set and the dialogue overlay live here and MUST
+ * survive a map swap; compiled stories, the dialogue provider, the
+ * `EventInterpreter`, NPCs and triggers are per-map and are rebuilt by the
+ * bundle (task 5.4) -- nothing of that kind is asserted here.
+ *
+ * Everything below is DOM-free on purpose: this repo's vitest runs under
+ * `environment: 'node'` (no `document`), so the overlay is INJECTED as a
+ * factory and the root only guarantees its lifetime -- one per session, built
+ * on first request. `createDialogueOverlay` itself stays untested here, the
+ * same split `dialogue-ui.test.ts` already uses.
+ */
+
+import { describe, expect, it, vi } from 'vitest';
+import type { DialogueOverlay } from '../src/dialogue-ui.js';
+import { createNarrativeRoot } from '../src/narrative-root.js';
+
+/** A DOM-free stand-in: the root never reads the overlay, it only owns it. */
+function fakeOverlay(): DialogueOverlay {
+  return {
+    element: {} as HTMLElement,
+    showLine: vi.fn(),
+    showChoices: vi.fn(),
+    setHighlightedIndex: vi.fn(),
+    showError: vi.fn(),
+    hide: vi.fn(),
+  };
+}
+
+function makeRoot(createOverlay: () => DialogueOverlay = fakeOverlay) {
+  return createNarrativeRoot({ createOverlay });
+}
+
+describe('createNarrativeRoot', () => {
+  it('seeds every key the world does not hold yet', () => {
+    const root = makeRoot();
+
+    root.seedIfAbsent({ secret_revealed: false, coins: 3, lastNpc: 'elder' });
+
+    expect(root.world.snapshot()).toEqual({
+      secret_revealed: false,
+      coins: 3,
+      lastNpc: 'elder',
+    });
+  });
+
+  // Spec R6, "seeds are not re-applied per map": loading a second authored map
+  // applies its seeds again, and a value a story changed must survive that.
+  it('never overwrites a value changed after the first seed application', () => {
+    const root = makeRoot();
+    root.seedIfAbsent({ secret_revealed: false });
+
+    root.world.set('secret_revealed', true);
+    root.seedIfAbsent({ secret_revealed: false });
+
+    expect(root.world.get('secret_revealed')).toBe(true);
+  });
+
+  // The guard is per-key `has`, not "only seed on the first call" -- a key can
+  // already be set before any map's seeds are applied.
+  it('never overwrites a key already set before any seed was applied', () => {
+    const root = makeRoot();
+    root.world.set('coins', 7);
+
+    root.seedIfAbsent({ coins: 0 });
+
+    expect(root.world.get('coins')).toBe(7);
+  });
+
+  it('applies only the absent subset when a second map seeds new keys too', () => {
+    const root = makeRoot();
+    root.seedIfAbsent({ carried: 1 });
+    root.world.set('carried', 2);
+
+    root.seedIfAbsent({ carried: 1, fresh: 'x' });
+
+    expect(root.world.snapshot()).toEqual({ carried: 2, fresh: 'x' });
+  });
+
+  it('emits no changed signal for a key it skips', () => {
+    const root = makeRoot();
+    root.seedIfAbsent({ carried: 1 });
+    const changed = vi.fn();
+    root.world.signals.on('changed', changed);
+
+    root.seedIfAbsent({ carried: 1 });
+
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('builds the dialogue overlay lazily and exactly once per session', () => {
+    const overlay = fakeOverlay();
+    const createOverlay = vi.fn(() => overlay);
+    const root = makeRoot(createOverlay);
+
+    expect(createOverlay).not.toHaveBeenCalled();
+    expect(root.overlay()).toBe(overlay);
+    expect(root.overlay()).toBe(overlay);
+    expect(createOverlay).toHaveBeenCalledTimes(1);
+  });
+});

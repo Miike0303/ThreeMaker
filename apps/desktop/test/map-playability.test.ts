@@ -79,7 +79,11 @@ function buildResult(overlayTileId: number | null): AuthoredMapResult {
     sheetPixelSizes: {},
   };
 
-  return { floorSources: [floorSource], stairLinks: [], spawn: undefined };
+  // `narrative` is REQUIRED on `AuthoredMapResult` (schema v4 authored
+  // content) -- mirrored here by hand because `apps/desktop/tsconfig.json`
+  // uses `include: ["src"]`, so this file is outside `tsc`'s graph and the
+  // compiler cannot report the omission.
+  return { floorSources: [floorSource], stairLinks: [], spawn: undefined, narrative: undefined };
 }
 
 describe('isAuthoredResultPlayable', () => {
@@ -92,8 +96,13 @@ describe('isAuthoredResultPlayable', () => {
   });
 
   it('returns false when the result has no floor sources at all', () => {
-    expect(isAuthoredResultPlayable({ floorSources: [], stairLinks: [], spawn: undefined })).toBe(
-      false,
-    );
+    expect(
+      isAuthoredResultPlayable({
+        floorSources: [],
+        stairLinks: [],
+        spawn: undefined,
+        narrative: undefined,
+      }),
+    ).toBe(false);
   });
 });

@@ -23,7 +23,15 @@
  */
 
 import type { RpgmMap, RpgmTileset, TileSheetNames } from '@threemaker/importer-rpgm';
-import type { FloorDocument, MapDocument, StairLinkDocument } from '@threemaker/map-format';
+import type {
+  FloorDocument,
+  MapDocument,
+  MapEventScripts,
+  NpcDocument,
+  StairLinkDocument,
+  TriggerDocument,
+  WorldSeedValue,
+} from '@threemaker/map-format';
 import { computeRoomIdGrid, deriveRampCells } from '@threemaker/map-format';
 import type { FloorSource, StairLinkRuntime } from './floor-runtime.js';
 
@@ -56,11 +64,35 @@ export interface TranslatedSpawn {
   readonly floorIndex: number;
 }
 
+/**
+ * One authored NPC with its document floor ID resolved to a runtime floor
+ * INDEX -- the domain `NpcDefinition.floor` (`@threemaker/gameplay`) requires
+ * and `assertFloorIndex` enforces. `sprite` deliberately stays the document's
+ * content-addressed `{object, characterIndex}` ref: turning a sha256 into a
+ * loaded sheet needs texture IO, which is the per-map narrative bundle's job
+ * (design D5), not this pure step's.
+ */
+export type TranslatedNpc = Omit<NpcDocument, 'floor'> & { readonly floor: number };
+
+/** One authored trigger with its document floor ID resolved to a runtime floor INDEX (`TriggerDefinition.floor`'s domain). */
+export type TranslatedTrigger = Omit<TriggerDocument, 'floor'> & { readonly floor: number };
+
 /** Full translator output, consumed downstream by `createMapSession(floorSources, stairLinks, {spawn})` (a later slice's wiring -- see this module's own doc comment). */
 export interface TranslatedMapDocument {
   readonly floorSources: readonly TranslatedFloorSource[];
   readonly stairLinks: readonly StairLinkRuntime[];
   readonly spawn: TranslatedSpawn | undefined;
+  /**
+   * Authored narrative content (schema v4), carried through with every floor
+   * reference resolved. Nothing consumes these yet -- the per-map narrative
+   * bundle does (design D1) -- but dropping them here would be an invisible
+   * data loss: this function returns its own shape, so the compiler cannot
+   * report an unmirrored document field (spec R3's one test-guarded row).
+   */
+  readonly npcs: readonly TranslatedNpc[];
+  readonly triggers: readonly TranslatedTrigger[];
+  readonly events: MapEventScripts;
+  readonly worldSeeds: Readonly<Record<string, WorldSeedValue>>;
 }
 
 /** Bridges one floor's `MapLayers` to the `RpgmMap` shape `buildChunks` expects -- mirrors editor's `map-compose.ts`'s `toRenderableMap`, generalized to take the floor directly instead of a floor index into a single document. */
@@ -90,7 +122,7 @@ function toDocTileset(doc: MapDocument): RpgmTileset {
   };
 }
 
-/** Resolves a `FloorDocument.id` reference to its position in `doc.floors` (array order = stacking order = `StairLinkRuntime`/spawn's numeric floor index). Throws on an unresolvable id -- `parseMapDocument`'s schema validation already guarantees every stair-link/spawn floor reference exists in a valid document, so this only ever fires on a document that skipped validation. */
+/** Resolves a `FloorDocument.id` reference to its position in `doc.floors` (array order = stacking order = `StairLinkRuntime`/spawn/NPC/trigger's numeric floor index). Throws on an unresolvable id -- `parseMapDocument`'s schema validation already guarantees every stair-link/spawn/npc/trigger floor reference exists in a valid document, so this only ever fires on a document that skipped validation. Failing loudly here still matters: for narrative entries a surviving id string becomes a floor-scoped registry key that can never match, so the entry would silently disappear instead of erroring. */
 function resolveFloorIndex(doc: MapDocument, floorId: string, context: string): number {
   const index = doc.floors.findIndex((floor) => floor.id === floorId);
   if (index === -1) {
@@ -147,10 +179,33 @@ function translateSpawn(doc: MapDocument): TranslatedSpawn | undefined {
 }
 
 /**
- * Translates a valid `.tmmap` v3 `MapDocument` into desktop's runtime
+ * Resolves one authored NPC's floor ID to its floor index. The document's
+ * `floor` is an ID string and the runtime's is an array index (same field
+ * name, different type), so this is the single conversion point for NPCs --
+ * an unresolved ID must never survive it: `NpcRegistry` would key the entry
+ * `"floor-0:x,y"` and every floor-scoped lookup would silently miss, making
+ * the NPC vanish with no error. `resolveFloorIndex` throws naming both the
+ * NPC id and the missing floor id.
+ */
+function translateNpc(doc: MapDocument, npc: NpcDocument): TranslatedNpc {
+  return { ...npc, floor: resolveFloorIndex(doc, npc.floor, `npcs[${npc.id}].floor`) };
+}
+
+/** Resolves one authored trigger's floor ID to its floor index -- same ID-vs-index boundary as `translateNpc`, with `TriggerIndex` as the silent-miss victim. */
+function translateTrigger(doc: MapDocument, trigger: TriggerDocument): TranslatedTrigger {
+  return {
+    ...trigger,
+    floor: resolveFloorIndex(doc, trigger.floor, `triggers[${trigger.id}].floor`),
+  };
+}
+
+/**
+ * Translates a valid `.tmmap` v4 `MapDocument` into desktop's runtime
  * shapes: one `TranslatedFloorSource` per floor (array order preserved,
  * matching `floors` stacking order), every `StairLinkDocument` resolved to
- * a `StairLinkRuntime`, and the authored spawn resolved (or `undefined`).
+ * a `StairLinkRuntime`, the authored spawn resolved (or `undefined`), and the
+ * authored narrative content carried through with each entry's floor ID
+ * resolved to its floor index.
  * Pure -- same output for the same input, no IO, no three.js/DOM access.
  */
 export function translateMapDocument(doc: MapDocument): TranslatedMapDocument {
@@ -158,5 +213,9 @@ export function translateMapDocument(doc: MapDocument): TranslatedMapDocument {
     floorSources: doc.floors.map((floor) => translateFloor(doc, floor)),
     stairLinks: doc.stairLinks.map((link) => translateStairLink(doc, link)),
     spawn: translateSpawn(doc),
+    npcs: doc.npcs.map((npc) => translateNpc(doc, npc)),
+    triggers: doc.triggers.map((trigger) => translateTrigger(doc, trigger)),
+    events: doc.events,
+    worldSeeds: doc.worldSeeds,
   };
 }
