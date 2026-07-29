@@ -979,7 +979,9 @@ async function renderFixtureMap(
           if (!floorRouter.passability.canMove(x, y, direction)) return false;
           if (!demoMapActive || !npcRegistry) return true;
           const delta = DIRECTION_DELTA[direction];
-          return !npcRegistry.occupies(x + delta.x, y + delta.y);
+          // Floor-scoped like `floorRouter.passability` above: an NPC standing
+          // on another floor's same `(x, y)` must never block movement here.
+          return !npcRegistry.occupies(floorRouter.currentFloor, x + delta.x, y + delta.y);
         },
       ),
     });
@@ -1317,7 +1319,12 @@ async function renderFixtureMap(
 
       interpreter = new EventInterpreter({ world, host, provider });
       npcRegistry = new NpcRegistry(demoContent.npcs.npcs);
-      triggerIndex = new TriggerIndex(demoContent.triggers.triggers, session.spawn);
+      // The spawn tile is only "already arrived" on the floor the player
+      // actually spawned on, so the initial tile carries that floor index.
+      triggerIndex = new TriggerIndex(demoContent.triggers.triggers, {
+        ...session.spawn,
+        floor: session.floorRouter.currentFloor,
+      });
 
       for (const npc of demoContent.npcs.npcs) {
         if (npc.sprite.sheet !== CHARACTER_SHEET_FILE) {
@@ -1382,12 +1389,13 @@ async function renderFixtureMap(
           if (event.key.toLowerCase() !== 'e') return;
           const { x, y } = session.mover.tile;
           const facing = session.mover.facing;
-          const npc = npcRegistry?.npcAdjacentFacing(x, y, facing);
+          const floor = session.floorRouter.currentFloor;
+          const npc = npcRegistry?.npcAdjacentFacing(floor, x, y, facing);
           if (npc) {
             interpreter.run(demoEvents?.[npc.onInteract] ?? []);
             return;
           }
-          for (const eventId of triggerIndex?.interact(x, y, facing) ?? []) {
+          for (const eventId of triggerIndex?.interact(floor, x, y, facing) ?? []) {
             interpreter.run(demoEvents?.[eventId] ?? []);
           }
           return;
@@ -1885,7 +1893,11 @@ async function renderFixtureMap(
       }
 
       if (demoMapActive && interpreter && triggerIndex && demoEvents) {
-        for (const eventId of triggerIndex.enter(mover.tile.x, mover.tile.y)) {
+        for (const eventId of triggerIndex.enter(
+          session.floorRouter.currentFloor,
+          mover.tile.x,
+          mover.tile.y,
+        )) {
           interpreter.run(demoEvents[eventId] ?? []);
         }
       }

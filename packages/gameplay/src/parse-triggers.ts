@@ -8,6 +8,14 @@ export interface TriggerDefinition {
   readonly id: string;
   readonly x: number;
   readonly y: number;
+  /**
+   * Runtime floor INDEX this trigger sits on (an index into the session's
+   * `floors` array, like `StairLinkRuntime.fromFloor`) -- NOT a `.tmmap`
+   * floor id. `TriggerIndex` scopes every lookup by it, so a trigger never
+   * fires from another floor's same `(x, y)`. `*.triggers.json` has no floor
+   * concept, so `parseTriggers` defaults it to `0` (single-floor DEV fixture).
+   */
+  readonly floor: number;
   readonly on: TriggerEvent;
   /** Event id to run when this trigger fires. */
   readonly event: string;
@@ -51,7 +59,9 @@ function parseTrigger(value: unknown, path: string): TriggerDefinition {
   const parsedY = parseInteger(y, path, 'y');
   const parsedOn = parseTriggerEvent(on, path);
   if (typeof event !== 'string') fail(`${path} requires a string "event".`);
-  return { id, x: parsedX, y: parsedY, on: parsedOn, event };
+  // The `*.triggers.json` format is single-floor by construction; floor 0
+  // keeps it compiling against the floor-aware `TriggerDefinition`.
+  return { id, x: parsedX, y: parsedY, floor: 0, on: parsedOn, event };
 }
 
 /**

@@ -1,9 +1,13 @@
+import { assertFloorIndex } from './floor-index.js';
 import type { Direction, GridPosition } from './grid-mover.js';
 import { DIRECTION_DELTA } from './grid-mover.js';
 import type { TriggerDefinition } from './parse-triggers.js';
 
-function tileKey(x: number, y: number): string {
-  return `${x},${y}`;
+// Floor-scoped, mirroring `NpcRegistry`: a trigger on floor 1 must never fire
+// for the same `(x, y)` on floor 0. The floor index comes FIRST in every
+// lookup, matching the desktop session's `(floorIndex, x, y)` convention.
+function tileKey(floor: number, x: number, y: number): string {
+  return `${floor}:${x},${y}`;
 }
 
 /**
@@ -22,13 +26,20 @@ export class TriggerIndex {
   // Last tile the player was reported at, for on-enter dedup. `enter()`
   // called again for the same tile (standing still, or repeated per-frame
   // calls mid-tile) is a no-op; a changed tile is a fresh arrival, even if
-  // it's a tile visited before -- leaving then re-entering re-fires.
+  // it's a tile visited before -- leaving then re-entering re-fires. The
+  // floor is part of "the tile", so arriving at the same `(x, y)` on a
+  // different floor (a stair traversal) is also a fresh arrival.
   private lastTileKey: string | null;
 
-  constructor(triggers: readonly TriggerDefinition[], initialTile?: GridPosition) {
+  constructor(
+    triggers: readonly TriggerDefinition[],
+    initialTile?: GridPosition & { readonly floor: number },
+  ) {
+    if (initialTile) assertFloorIndex(initialTile.floor, 'TriggerIndex: initialTile');
     const byTile = new Map<string, TriggerDefinition[]>();
     for (const trigger of triggers) {
-      const key = tileKey(trigger.x, trigger.y);
+      assertFloorIndex(trigger.floor, `TriggerIndex: trigger "${trigger.id}"`);
+      const key = tileKey(trigger.floor, trigger.x, trigger.y);
       const existing = byTile.get(key);
       if (existing) existing.push(trigger);
       else byTile.set(key, [trigger]);
@@ -38,36 +49,46 @@ export class TriggerIndex {
     // as an arrival (fires if it lands on a trigger tile). Pass the
     // player's spawn tile to avoid firing for a trigger the player merely
     // spawns on top of.
-    this.lastTileKey = initialTile ? tileKey(initialTile.x, initialTile.y) : null;
+    this.lastTileKey = initialTile
+      ? tileKey(initialTile.floor, initialTile.x, initialTile.y)
+      : null;
   }
 
   /**
-   * Reports the player's current tile. Returns the event ids of every
-   * `on: 'enter'` trigger on that tile, but only the first time this tile
-   * is reported after being on a different one -- safe to call every
-   * frame, or only on completed moves.
+   * Reports the player's current tile on floor `floor`. Returns the event
+   * ids of every `on: 'enter'` trigger on that tile of that floor, but only
+   * the first time this tile is reported after being on a different one --
+   * safe to call every frame, or only on completed moves.
    */
-  enter(x: number, y: number): readonly string[] {
-    const key = tileKey(x, y);
+  enter(floor: number, x: number, y: number): readonly string[] {
+    assertFloorIndex(floor, 'TriggerIndex#enter');
+    const key = tileKey(floor, x, y);
     if (key === this.lastTileKey) return [];
     this.lastTileKey = key;
-    return this.triggersAt(x, y, 'enter');
+    return this.triggersAt(floor, x, y, 'enter');
   }
 
   /**
-   * Reports an interact input while the player stands at `(x, y)` facing
-   * `facing`. Returns the event ids of every `on: 'interact'` trigger on
-   * the tile directly ahead (one step in the facing direction) -- this
-   * naturally requires both adjacency and facing, since the checked tile
-   * is derived from exactly one `DIRECTION_DELTA` step.
+   * Reports an interact input while the player stands at `(x, y)` on floor
+   * `floor` facing `facing`. Returns the event ids of every
+   * `on: 'interact'` trigger on the tile directly ahead (one step in the
+   * facing direction, on the player's own floor) -- this naturally requires
+   * both adjacency and facing, since the checked tile is derived from
+   * exactly one `DIRECTION_DELTA` step.
    */
-  interact(x: number, y: number, facing: Direction): readonly string[] {
+  interact(floor: number, x: number, y: number, facing: Direction): readonly string[] {
+    assertFloorIndex(floor, 'TriggerIndex#interact');
     const delta = DIRECTION_DELTA[facing];
-    return this.triggersAt(x + delta.x, y + delta.y, 'interact');
+    return this.triggersAt(floor, x + delta.x, y + delta.y, 'interact');
   }
 
-  private triggersAt(x: number, y: number, on: TriggerDefinition['on']): readonly string[] {
-    const triggers = this.byTile.get(tileKey(x, y)) ?? [];
+  private triggersAt(
+    floor: number,
+    x: number,
+    y: number,
+    on: TriggerDefinition['on'],
+  ): readonly string[] {
+    const triggers = this.byTile.get(tileKey(floor, x, y)) ?? [];
     return triggers.filter((trigger) => trigger.on === on).map((trigger) => trigger.event);
   }
 }

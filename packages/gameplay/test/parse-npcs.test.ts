@@ -24,6 +24,9 @@ describe('parseNpcs', () => {
           id: 'elder',
           x: 3,
           y: 4,
+          // `*.npcs.json` carries no floor; the parser defaults every entry to
+          // the single floor this format can describe (see `NpcDefinition.floor`).
+          floor: 0,
           facing: 'down',
           sprite: { sheet: 'Actor1', index: 1 },
           onInteract: 'elder-intro',

@@ -16,6 +16,14 @@ export interface NpcDefinition {
   readonly id: string;
   readonly x: number;
   readonly y: number;
+  /**
+   * Runtime floor INDEX this NPC stands on (an index into the session's
+   * `floors` array, like `StairLinkRuntime.fromFloor`) -- NOT a `.tmmap`
+   * floor id. `NpcRegistry` scopes every lookup by it, so two NPCs may share
+   * one `(x, y)` on different floors. `*.npcs.json` has no floor concept, so
+   * `parseNpcs` defaults it to `0` (single-floor DEV fixture).
+   */
+  readonly floor: number;
   readonly facing: Direction;
   readonly sprite: NpcSprite;
   /** Event id run when a player interacts with this NPC (see `NpcRegistry#findNpcAt`). */
@@ -77,6 +85,9 @@ function parseNpc(value: unknown, path: string): NpcDefinition {
     id,
     x: parsedX,
     y: parsedY,
+    // The `*.npcs.json` format is single-floor by construction; floor 0 keeps
+    // it compiling against the floor-aware `NpcDefinition`.
+    floor: 0,
     facing: parsedFacing,
     sprite: parsedSprite,
     onInteract,

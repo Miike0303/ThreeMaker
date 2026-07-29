@@ -10,7 +10,9 @@ describe('parseTriggers', () => {
 
     expect(result).toEqual({
       version: 1,
-      triggers: [{ id: 'gate', x: 3, y: 4, on: 'enter', event: 'gate-open' }],
+      // `*.triggers.json` carries no floor; the parser defaults every entry to
+      // the single floor this format can describe (see `TriggerDefinition.floor`).
+      triggers: [{ id: 'gate', x: 3, y: 4, floor: 0, on: 'enter', event: 'gate-open' }],
     });
   });
 
