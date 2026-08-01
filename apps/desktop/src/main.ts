@@ -1270,6 +1270,20 @@ async function renderFixtureMap(
   // below are `bundle?.`-guarded rather than flag-gated: nothing is constructed
   // to hide, which is what the deleted `demoMapActive` stood in for.
   let bundle: MapNarrativeBundle | undefined;
+  /**
+   * True for the WHOLE duration of a manifest map hop ('g', below) -- every
+   * `await` in it included, both the incoming map's load and its narrative
+   * bundle build. Declared out HERE, beside `bundle`, because the game loop is
+   * what has to honour it: the loop keeps ticking across those awaits, and
+   * between the synchronous session swap and the bundle's attachment `bundle` is
+   * `undefined`. A step taken inside that window would walk through NPCs (the
+   * mover's npc hook has no registry to ask) and would lose any `enter` trigger
+   * tile it crossed PERMANENTLY -- the incoming `TriggerIndex` is constructed
+   * afterwards with `arrival = spawn` and only fires on a tile CHANGE. Freezing
+   * the player's own input for the whole hop is what makes that window
+   * unobservable instead of partially handled.
+   */
+  let cyclingManifestMap = false;
   let activeEntityMove: {
     readonly mover: GridMover;
     readonly direction: Direction;
@@ -1442,8 +1456,20 @@ async function renderFixtureMap(
   // The booted map's own bundle. Every later one comes from a swap sequence
   // below. Not wrapped in a try/catch: `loadAuthoredMap` already proved every
   // authored reference resolves, so a throw here means a floor reference this
-  // session cannot satisfy -- a real content bug that must reach `main()`'s
-  // handler, not a swallowed console line.
+  // session cannot satisfy (or a sidecar that only fails at `compileInk`) -- a
+  // real content bug that must reach `main()`'s handler, not a swallowed console
+  // line.
+  //
+  // ponytail: this throw escapes AFTER the renderer, the session, the floor
+  // textures and the window key listeners of this attempt already exist, and
+  // `main()`'s handlers only recover the DOM (`showStatus` replaces the
+  // container's children) -- none of that is disposed, so the fallback attempt
+  // boots a SECOND instance on top and one bad authored map costs one leaked
+  // GPU context per boot attempt. Declared ceiling, not an oversight: closing it
+  // needs a disposal path for a HALF-initialized app (a teardown handle
+  // accumulated as each of renderer/session/textures/listeners is created, run
+  // by one `catch` around the whole of `renderFixtureMap`), which is a
+  // structural change to this function's setup, not a local fix.
   await buildNarrativeBundle(sessionOverride?.narrative);
 
   window.addEventListener('keydown', (event) => {
@@ -1525,6 +1551,32 @@ async function renderFixtureMap(
     let floorsDemoMaps: readonly [RpgmMap, RpgmMap] | undefined;
     let cycling = false;
 
+    /**
+     * This cycle's point of no return, shared by every branch: the outgoing map's
+     * narrative runtime is freed BEFORE its session is, mirroring the manifest
+     * hop's order (design D1 -- one disposal path, outgoing bundle first).
+     *
+     * Called from inside each branch, AFTER whatever that branch can still fail
+     * at (only 'mz' can: its `await loadMzFixtureMapData()`), so a branch that
+     * never reaches this line leaves the still-displayed map's NPCs untouched.
+     * It must not sit after the branch either: `createMapSession` runs after
+     * `session.dispose()` and can throw (an unstandable spawn), and the outer
+     * catch only rolls `mode` back -- which would leave the outgoing map's NPC
+     * sprites in the scene over a disposed session, with nothing left to rebuild
+     * them from. None of this cycle's targets is an authored document, so no new
+     * bundle is built either way (spec R5): the swap REMOVES the previous map's
+     * billboards rather than merely hiding them (the deleted `demoMapActive`, and
+     * the R7 leak it left behind).
+     *
+     * Declared ceiling, unchanged: cycling back to 'fixture' rebuilds only the
+     * booted map's floor 0, so narrative is not restored with it -- dev-toggle
+     * only, and a restart brings it back.
+     */
+    function disposeOutgoingMap(): void {
+      disposeNarrativeBundle();
+      session.dispose();
+    }
+
     window.addEventListener('keydown', (event) => {
       if (event.repeat || event.key.toLowerCase() !== 'g' || cycling) return;
       // Block map switching while a script is running/blocked: disposing
@@ -1551,7 +1603,7 @@ async function renderFixtureMap(
               height: GIANT_MAP_SIZE,
               seed: GIANT_MAP_SEED,
             });
-            session.dispose();
+            disposeOutgoingMap();
             session = createMapSession([
               {
                 floorId: 'floor-0',
@@ -1564,7 +1616,7 @@ async function renderFixtureMap(
             ]);
           } else if (mode === 'mz') {
             mzData ??= await loadMzFixtureMapData();
-            session.dispose();
+            disposeOutgoingMap();
             session = createMapSession([
               {
                 floorId: 'floor-0',
@@ -1592,7 +1644,7 @@ async function renderFixtureMap(
                 seed: GIANT_MAP_SEED + 1,
               }),
             ];
-            session.dispose();
+            disposeOutgoingMap();
             session = createMapSession(
               [
                 {
@@ -1629,7 +1681,7 @@ async function renderFixtureMap(
             // stair-link is the real way up now: walk onto
             // `(DEV_DEMO_STAIR_ENTRY_X, DEV_DEMO_STAIR_ROW)` to climb.
           } else {
-            session.dispose();
+            disposeOutgoingMap();
             session = createMapSession([
               {
                 floorId: 'floor-0',
@@ -1641,18 +1693,6 @@ async function renderFixtureMap(
               },
             ]);
           }
-          // None of this cycle's targets is an authored document, so none of
-          // them carries narrative: the outgoing bundle is freed and no new one
-          // is built (spec R5), which REMOVES the previous map's NPC billboards
-          // instead of merely hiding them (the deleted `demoMapActive`, and the
-          // R7 leak it left behind). Placed after the branch, not before: every
-          // branch reaches `session.dispose()` synchronously from there, so no
-          // frame observes the in-between state, and a branch that FAILED to
-          // load its map (mz) must not strip a still-displayed map's NPCs.
-          // Declared ceiling: cycling back to 'fixture' rebuilds only the booted
-          // map's floor 0, so narrative is not restored with it -- dev-toggle
-          // only, and a restart brings it back.
-          disposeNarrativeBundle();
           focusCameraOnSpawn();
         } catch (error) {
           console.error('Failed to switch to the next dev map-cycle map:', error);
@@ -1676,7 +1716,14 @@ async function renderFixtureMap(
   // (`manifestNav` is only ever passed when this branch should own 'g').
   if (manifestNav && manifestNav.manifest.maps.length > 1) {
     let currentMapIndex = manifestNav.startIndex;
-    let cyclingManifestMap = false;
+    /**
+     * True while the overlay is showing a hop's narrative-build failure (below).
+     * Tracked because nothing else would ever take that banner down: a failed
+     * build leaves NO bundle, so no `script:finished` signal can hide the
+     * overlay, and it would otherwise still be sitting over whichever map the
+     * next successful hop brings in.
+     */
+    let narrativeFailureShown = false;
     // The `textures` record every floor of the CURRENTLY-rendered manifest
     // map shares (same object reference across floors -- see
     // `disposeFloorTextures`'s doc comment). `loadAuthoredMap` allocates a
@@ -1751,7 +1798,39 @@ async function renderFixtureMap(
             nextResult.stairLinks,
             nextResult.spawn ? { spawn: nextResult.spawn } : undefined,
           );
-          await buildNarrativeBundle(nextResult.narrative);
+          try {
+            await buildNarrativeBundle(nextResult.narrative);
+            if (narrativeFailureShown) {
+              narrativeRoot.overlay().hide();
+              narrativeFailureShown = false;
+            }
+          } catch (error) {
+            // Caught SEPARATELY from the hop's outer catch, and not rethrown:
+            // this is past the point of no return, so there is no previous map
+            // left to roll back to -- the incoming one is already rendered and
+            // playable. What it is NOT is complete: `bundle` stays `undefined`
+            // (the assignment inside `buildNarrativeBundle` never ran), so this
+            // map is being played with its authored NPCs, triggers and events
+            // entirely absent, which is exactly the silent degradation spec R4
+            // forbids. Reachable, not hypothetical: `loadAuthoredMap` checks a
+            // sidecar for EMPTINESS but deliberately does not compile it, so a
+            // syntactically broken `.ink` passes the load's cross-validation and
+            // only throws here, inside `compileInk`, after the swap. The
+            // single-file boot path lets the identical failure reach `main()`'s
+            // status message; this path must be just as loud, so the real
+            // diagnostic goes to the same surface a script failure uses, naming
+            // the map -- the outer catch below only reaches the console.
+            console.error(
+              `Manifest map "${nextEntry.file}" loaded, but its authored narrative did not:`,
+              error,
+            );
+            narrativeRoot
+              .overlay()
+              .showError(
+                `${nextEntry.file}: ${describeAuthoredFailure(error)} -- this map is playable, but WITHOUT its authored NPCs, triggers and events.`,
+              );
+            narrativeFailureShown = true;
+          }
           focusCameraOnSpawn();
         } catch (error) {
           console.error('Failed to cycle to the next manifest map:', error);
@@ -1860,7 +1939,13 @@ async function renderFixtureMap(
       // walking is frozen during dialogue/scripts. A moveEntity command in
       // flight still drives the mover -- that's the interpreter itself
       // commanding the move, not the held keyboard direction.
-      if (interpreterIdle) {
+      // `cyclingManifestMap` extends that same pause across a manifest map hop,
+      // awaits included (see the flag's own declaration): the swap replaces
+      // `session` and rebuilds `bundle` asynchronously, and a step taken inside
+      // that window has no NPC collision and loses the `enter` triggers of every
+      // tile it crosses for good. An interpreter-commanded move cannot be in
+      // flight there -- the hop refuses to start unless the interpreter is idle.
+      if (interpreterIdle && !cyclingManifestMap) {
         const direction = heldDirection.current();
         if (direction) mover.requestMove(direction);
       } else if (activeEntityMove?.mover === mover) {

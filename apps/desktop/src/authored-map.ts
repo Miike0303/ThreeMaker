@@ -96,12 +96,13 @@ export interface AuthoredMapDeps {
    * working map (`MAP_FILE_RELATIVE`), which is correct for the single-file
    * authored path.
    *
-   * KNOWN GAP, deliberate and bounded: `main.ts`'s `loadAuthoredMapAt`
-   * (manifest entries) does not pass it yet, so a manifest map's sidecars
-   * would be looked for next to `current.tmmap.json`. That is unreachable
-   * today -- an RPGM-converted map has an empty `events`, so zero sidecars are
-   * ever required and no read happens at all. Task 6.4/6.6 supplies it when
-   * the manifest path gets a narrative bundle.
+   * Optional in TYPE ONLY -- every caller in `main.ts` passes it, and a manifest
+   * map depends on it: `loadAuthoredMapAt` builds `${MAP_DIR_RELATIVE}/${entry
+   * .file}` so each converted map's sidecars are resolved next to THAT map,
+   * never next to the shared `current.tmmap.json`. Omitting it silently
+   * relocates every sidecar lookup of that map, which surfaces as a "no sidecar
+   * exists" rejection naming the wrong directory -- so a NEW caller must pass
+   * its own map's path rather than inherit the default.
    */
   readonly mapRelativePath?: string;
   /** Reads one `.ink` sidecar's text by home-relative path, `null` when it does not exist. Defaults to `map-file.ts`'s home-relative reader -- the same helper the map document itself is read through. */

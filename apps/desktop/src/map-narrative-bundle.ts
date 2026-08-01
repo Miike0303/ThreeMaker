@@ -207,28 +207,49 @@ export async function buildMapNarrativeBundle(
     }),
   );
 
-  const sprites: CharacterSprite[] = narrative.npcs.map((npc) => {
-    const texture = sheets.get(npc.sprite.object);
-    if (!texture) throw new Error(`map-narrative-bundle: unresolved sheet ${npc.sprite.object}.`);
-    const sprite = new CharacterSprite({
-      texture,
-      // Design D5: NPC sheets use the standard 4x2 character-block layout, the
-      // same one `main.ts` builds the player sprite with.
-      sheetColumns: DEFAULT_SHEET_COLUMNS,
-      sheetRows: DEFAULT_SHEET_ROWS,
-      characterIndex: npc.sprite.characterIndex,
-      tileWorldSize: deps.tileWorldSize,
-    });
-    sprite.setFrame(npc.facing, 1);
-    sprite.setTilePosition(
-      npc.x,
-      npc.y,
-      deps.tileWorldSize,
-      npcGroundY(npc.floor, npc.x, npc.y, deps),
-    );
-    deps.scene.add(sprite.mesh);
-    return sprite;
-  });
+  const sprites: CharacterSprite[] = [];
+  try {
+    for (const npc of narrative.npcs) {
+      const texture = sheets.get(npc.sprite.object);
+      if (!texture) throw new Error(`map-narrative-bundle: unresolved sheet ${npc.sprite.object}.`);
+      // Resolved BEFORE the sprite is constructed: this is the one call in the
+      // loop that can throw on authored data (`npcGroundY`, a floor index past
+      // `deps.floors`), so doing it first keeps the failure from allocating a
+      // mesh it would only have to free again.
+      const groundY = npcGroundY(npc.floor, npc.x, npc.y, deps);
+      const sprite = new CharacterSprite({
+        texture,
+        // Design D5: NPC sheets use the standard 4x2 character-block layout, the
+        // same one `main.ts` builds the player sprite with.
+        sheetColumns: DEFAULT_SHEET_COLUMNS,
+        sheetRows: DEFAULT_SHEET_ROWS,
+        characterIndex: npc.sprite.characterIndex,
+        tileWorldSize: deps.tileWorldSize,
+      });
+      // Tracked the instant it exists, so the cleanup below reaches it even if
+      // the very next statement is what throws.
+      sprites.push(sprite);
+      sprite.setFrame(npc.facing, 1);
+      sprite.setTilePosition(npc.x, npc.y, deps.tileWorldSize, groundY);
+      deps.scene.add(sprite.mesh);
+    }
+  } catch (error) {
+    // Partial construction is NOT recoverable, but it is still ours to clean up:
+    // `dispose()` only exists on the bundle object below, which a throw here
+    // never returns, so every mesh already in the shared scene and every sheet
+    // texture already decoded would leak with no handle left to free them (spec
+    // R7's leak, reached by construction instead of by a missed swap). Frees
+    // exactly what this function allocated -- never `deps.scene`'s other
+    // content, never the floor textures -- then rethrows unchanged so the
+    // caller still sees the real diagnostic.
+    for (const sprite of sprites) {
+      deps.scene.remove(sprite.mesh);
+      sprite.dispose();
+    }
+    for (const texture of sheets.values()) texture.dispose();
+    sheets.clear();
+    throw error;
+  }
 
   let disposed = false;
 

@@ -261,6 +261,38 @@ describe('buildMapNarrativeBundle', () => {
     ).rejects.toThrow(/floor must be a non-negative integer floor index/);
   });
 
+  /**
+   * The UPPER floor bound, and the mirror of the `-1` case above: floor index
+   * `1` satisfies `assertFloorIndex` (a non-negative integer), so `NpcRegistry`
+   * and `TriggerIndex` both accept it and the failure lands in `npcGroundY`
+   * instead -- MID sprite loop, i.e. after every sheet texture was resolved and
+   * after the first NPC's mesh was already added to the shared scene. Nothing
+   * outside the bundle holds a handle to either of those, and the bundle (with
+   * its `dispose()`) is never returned, so the build itself must free what it
+   * allocated before rethrowing or the whole partial construction leaks.
+   */
+  it('frees the sprites and sheet textures it allocated when a floor index fails mid-loop', async () => {
+    const narrative = await twoSheetNarrative();
+    const [first, second] = narrative.npcs;
+    if (!first || !second) throw new Error('the fixture must author two NPCs');
+    const sheets = trackedSheets();
+    const scene = new THREE.Scene();
+
+    await expect(
+      build(
+        {
+          narrative: { ...narrative, npcs: [first, { ...second, floor: 1 }] },
+          resolveObjectTexture: sheets.resolveObjectTexture,
+        },
+        { scene },
+      ),
+    ).rejects.toThrow(/no floor at index 1 \(have 1 floor\(s\)\)/);
+
+    expect(scene.children).toEqual([]);
+    expect(sheets.textures).toHaveLength(2);
+    for (const texture of sheets.textures) expect(texture.dispose).toHaveBeenCalledTimes(1);
+  });
+
   // D5 fail-soft, mirroring `authored-map.ts`'s per-slot texture handling: a
   // missing sheet object degrades that NPC to a visible placeholder, loudly.
   it('degrades a missing sheet object to a placeholder and logs it loudly', async () => {

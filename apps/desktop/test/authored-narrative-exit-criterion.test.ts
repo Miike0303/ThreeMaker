@@ -166,6 +166,73 @@ describe('exit criterion: two authored NPCs on one .tmmap share world state', ()
     expect(bundle.interpreter.state).toBe('idle');
   });
 
+  // The same scenario down the elder's OTHER branch. Not redundant with the
+  // `choose(0)` case above: it is the only thing that pins "declining changes
+  // nothing" on the document path -- the choice must leave the seeded world value
+  // alone, so the guard keeps taking its challenge branch.
+  it("declining the elder's offer leaves the world seed and the guard's dialogue alone", async () => {
+    const { bundle, root } = await bootAuthoredMap();
+    const lines: string[] = [];
+    const failed = vi.fn();
+    bundle.interpreter.signals.on('dialogue:line', (event) => lines.push(event.text));
+    bundle.interpreter.signals.on('script:failed', failed);
+
+    pressInteract(bundle, { x: 2, y: 1, facing: 'left', floor: 0 });
+    bundle.interpreter.advance();
+    expect(bundle.interpreter.state).toBe('waiting-for-choice');
+    bundle.interpreter.choose(1);
+    finishDialogue(bundle);
+
+    expect(lines.at(-1)).toBe('Very well, traveler.');
+    expect(root.world.get('secret_revealed')).toBe(false);
+
+    pressInteract(bundle, { x: 4, y: 3, facing: 'down', floor: 0 });
+    finishDialogue(bundle);
+
+    expect(lines.at(-1)).toBe('Halt! State your business.');
+    expect(failed).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Repeat interaction on the SAME compiled story -- the case every other test in
+   * this suite structurally cannot see, because each of them builds a fresh
+   * bundle (hence a fresh `Story`) per scenario while the real runtime keeps one
+   * compiled story for the whole map session. An `.ink` knot whose choices are
+   * all once-only (`*`) runs out of them on re-entry: the second visit silently
+   * offers fewer options, and the visit after that reaches a weave with no
+   * content left and surfaces inkjs's raw "ran out of content" as a player-facing
+   * error. Four visits, because that is where the committed fixture used to
+   * degrade from wrong, to broken, to empty.
+   */
+  it('lets the player talk to the elder again without losing choices or content', async () => {
+    const { bundle } = await bootAuthoredMap();
+    const lines: string[] = [];
+    const choiceSets: string[][] = [];
+    const failed = vi.fn();
+    bundle.interpreter.signals.on('dialogue:line', (event) => lines.push(event.text));
+    bundle.interpreter.signals.on('dialogue:choices', (event) =>
+      choiceSets.push([...event.options]),
+    );
+    bundle.interpreter.signals.on('script:failed', failed);
+
+    for (let visit = 0; visit < 4; visit++) {
+      pressInteract(bundle, { x: 2, y: 1, facing: 'left', floor: 0 });
+      expect(bundle.interpreter.state).toBe('waiting-for-dialogue');
+      bundle.interpreter.advance();
+      expect(bundle.interpreter.state).toBe('waiting-for-choice');
+      // The DECLINING branch on every visit, so nothing about the story's own
+      // world writes can be what keeps the choices alive.
+      bundle.interpreter.choose(1);
+      finishDialogue(bundle);
+      expect(bundle.interpreter.state).toBe('idle');
+    }
+
+    expect(failed).not.toHaveBeenCalled();
+    expect(choiceSets).toHaveLength(4);
+    for (const options of choiceSets) expect(options).toHaveLength(2);
+    expect(lines.filter((line) => line === 'Very well, traveler.')).toHaveLength(4);
+  });
+
   // Spec R5's third scenario, on the same document: the authored `enter` trigger
   // fires once per arrival, and its event resolves through the same
   // `bundle.events` lookup an NPC's does.
