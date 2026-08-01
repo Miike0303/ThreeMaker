@@ -1,6 +1,6 @@
 import { BaseDirectory, readFile } from '@tauri-apps/plugin-fs';
-import type { EventHost, EventScript } from '@threemaker/core';
-import { EventInterpreter, GameLoop, WorldState } from '@threemaker/core';
+import type { EventHost } from '@threemaker/core';
+import { GameLoop } from '@threemaker/core';
 import type {
   Direction,
   StairTraversalFloor,
@@ -10,16 +10,13 @@ import type {
 import {
   DIRECTION_DELTA,
   GridMover,
-  NpcRegistry,
   StairTraversal,
   StairTriggerTracker,
-  TriggerIndex,
 } from '@threemaker/gameplay';
 import type { RampCellInput, RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
 import type { RoomDocument } from '@threemaker/map-format';
 import { computeRoomIdGrid } from '@threemaker/map-format';
-import { bindStoryToWorld, compileInk, InkDialogueProvider } from '@threemaker/narrative';
 import type { FloorVisibilityPolicy, SheetPixelSizes } from '@threemaker/renderer';
 import {
   buildChunks,
@@ -32,7 +29,7 @@ import {
 } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
-import type { AuthoredMapResult } from './authored-map.js';
+import type { AuthoredMapNarrative, AuthoredMapResult } from './authored-map.js';
 import { loadAuthoredMap } from './authored-map.js';
 import type { CameraMode } from './camera-rig.js';
 import { clampTiltDeg, computeCameraPose, cycleCameraMode } from './camera-rig.js';
@@ -46,7 +43,6 @@ import { buildPlaceholderCharacterTexture } from './character-sprite-placeholder
 import { clampRange } from './clamp.js';
 import type { DebugSnapshot } from './debug-panel.js';
 import { createDebugPanel } from './debug-panel.js';
-import { loadDemoContent } from './demo-content.js';
 import {
   createDialogueOverlay,
   nextHighlightedIndex,
@@ -68,7 +64,10 @@ import { createHd2dPipeline } from './hd2d-pipeline.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
+import type { MapNarrativeBundle } from './map-narrative-bundle.js';
+import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
+import { createNarrativeRoot } from './narrative-root.js';
 import { withNoclip } from './noclip.js';
 import {
   aboveFloorTilemap,
@@ -355,11 +354,20 @@ async function resolveObjectTextureReal(sha256: string): Promise<ResolvedObjectT
  * a specific file under `.threemaker/maps` (`relativeFile`, e.g.
  * `"kingdom-of-subversion/map007.tmmap.json"`) instead of the shared
  * `current.tmmap.json`. `loadAuthoredMap`'s own signature/behavior is
- * unchanged -- this only supplies a differently-scoped `readMapDocumentText`.
+ * unchanged -- this only supplies a differently-scoped `readMapDocumentText`
+ * plus the matching `mapRelativePath`.
+ *
+ * `mapRelativePath` is optional in type only (see `AuthoredMapDeps`): it is the
+ * base every `<map>.<storyId>.ink` sidecar path is derived from (design D7), so
+ * omitting it here would send a manifest map looking for its sidecars next to
+ * the shared `current.tmmap.json` instead of next to itself -- a "no sidecar
+ * exists" failure naming the wrong directory.
  */
 function loadAuthoredMapAt(relativeFile: string): Promise<AuthoredMapResult | null> {
+  const mapRelativePath = `${MAP_DIR_RELATIVE}/${relativeFile}`;
   return loadAuthoredMap({
-    readMapDocumentText: () => readMapDocumentText(`${MAP_DIR_RELATIVE}/${relativeFile}`),
+    mapRelativePath,
+    readMapDocumentText: () => readMapDocumentText(mapRelativePath),
     resolveObjectTexture: resolveObjectTextureReal,
   });
 }
@@ -682,6 +690,13 @@ interface SessionOverride {
   readonly floorSources: readonly FloorSource[];
   readonly stairLinks: readonly StairLinkRuntime[];
   readonly spawn: FloorSpawn | undefined;
+  /**
+   * This map's cross-validated authored narrative, or `undefined` when it
+   * authors none (spec R5). Required, never optional, for the same reason
+   * `AuthoredMapResult.narrative` is: an authored entry point that forgot to
+   * forward it would silently boot a narrative-free map.
+   */
+  readonly narrative: AuthoredMapNarrative | undefined;
 }
 
 /**
@@ -958,13 +973,13 @@ async function renderFixtureMap(
       speed: PLAYER_SPEED,
       // Composed per @threemaker/gameplay's documented pattern
       // (NpcRegistry#occupies JSDoc): PassabilityGrid stays terrain-only,
-      // NPC collision is added at this callsite. `npcRegistry` and
-      // `demoMapActive` are declared later in this function (demo wiring,
-      // below) but already initialized by the time this closure is ever
-      // invoked (first call happens from the game loop, well after setup
-      // completes) -- `demoMapActive` also scopes the check to the fixture
-      // map, since the demo NPCs' tiles are meaningless on the dev map-cycle's
-      // other maps. `floorRouter.passability` routes to the mover's
+      // NPC collision is added at this callsite. `bundle` is declared later in
+      // this function (narrative wiring, below) but already resolved by the
+      // time this closure is ever invoked (first call happens from the game
+      // loop, well after setup completes), and it is `undefined` for a map that
+      // authors no NPCs at all (spec R5), which is what makes the collision
+      // check disappear rather than be flag-gated.
+      // `floorRouter.passability` routes to the mover's
       // `currentFloor`. `withNoclip` wraps the whole thing (including NPC
       // collision) so holding Ctrl bypasses both terrain AND NPC blocking;
       // its own escape-hatch `isStandable` check is a thin passthrough
@@ -977,11 +992,11 @@ async function renderFixtureMap(
         { isStandable: (x, y) => floorRouter.passability.isStandable(x, y) },
         (x, y, direction) => {
           if (!floorRouter.passability.canMove(x, y, direction)) return false;
-          if (!demoMapActive || !npcRegistry) return true;
+          if (!bundle) return true;
           const delta = DIRECTION_DELTA[direction];
           // Floor-scoped like `floorRouter.passability` above: an NPC standing
           // on another floor's same `(x, y)` must never block movement here.
-          return !npcRegistry.occupies(floorRouter.currentFloor, x + delta.x, y + delta.y);
+          return !bundle.npcRegistry.occupies(floorRouter.currentFloor, x + delta.x, y + delta.y);
         },
       ),
     });
@@ -1236,36 +1251,25 @@ async function renderFixtureMap(
         return { x: target.x, y: target.y, z: target.z };
       },
       get dialogueState() {
-        return interpreter?.state ?? 'idle';
+        return bundle?.interpreter.state ?? 'idle';
       },
     };
   }
 
-  // Narrative demo wiring (dev-only, layered on the fixture map -- see
-  // demo-content.ts and dialogue-ui.ts): loads apps/desktop/src/demo/'s
-  // map007 NPCs/triggers/events/ink and wires them through
-  // @threemaker/core's EventInterpreter + @threemaker/narrative's
-  // InkDialogueProvider. `demoMapActive` gates NPC/trigger interaction to
-  // only the fixture map -- the 'g' dev map-cycle toggle below switches to
-  // maps this demo's tile coordinates don't apply to. Construction itself is
-  // ALSO gated on `sessionOverride === undefined` (the true DEV fixture map,
-  // see below), not just `demoMapActive` -- an authored/manifest map in
-  // `tauri dev` must never even build the demo NPC sprites/interpreter in
-  // the first place, since a later-toggled visibility flag would still leave
-  // them briefly constructed and collidable.
-  let npcRegistry: NpcRegistry | undefined;
-  let triggerIndex: TriggerIndex | undefined;
-  let interpreter: EventInterpreter | undefined;
-  let demoEvents: EventScript | undefined;
-  const npcSprites = new Map<string, CharacterSprite>();
-  // Only the true DEV fixture map (`sessionOverride === undefined` -- the
-  // ONLY call site that omits it is the Roseliam-fixture fallback at the
-  // bottom of `main()`) starts with the demo active. The single-file
-  // authored path AND the manifest path both always pass `sessionOverride`,
-  // so they start `false` -- fixes a bug where the demo NPCs' fixture-only
-  // gray billboards (and their movement collision) appeared on top of a real
-  // imported game map in `tauri dev`.
-  let demoMapActive = sessionOverride === undefined;
+  // Narrative runtime wiring (spec R6, design D1), split by LIFETIME.
+  // `narrativeRoot` is SESSION-scoped and created exactly ONCE, deliberately
+  // ABOVE the per-map swap logic below: it owns the `WorldState` whose whole
+  // purpose is to outlive the map that wrote it, the once-per-session seed set,
+  // and the single dialogue overlay. `bundle` is PER-MAP (stories, provider,
+  // interpreter, registries, sprites), rebuilt by `buildNarrativeBundle` and
+  // freed by `disposeNarrativeBundle`. A `new WorldState()` INSIDE the per-map
+  // block is the defect that forced this whole wiring to gate itself off
+  // instead of rebuilding; hoisting it is what un-gates it.
+  //
+  // A map that authors no narrative gets NO bundle at all (spec R5), so reads
+  // below are `bundle?.`-guarded rather than flag-gated: nothing is constructed
+  // to hide, which is what the deleted `demoMapActive` stood in for.
+  let bundle: MapNarrativeBundle | undefined;
   let activeEntityMove: {
     readonly mover: GridMover;
     readonly direction: Direction;
@@ -1273,162 +1277,174 @@ async function renderFixtureMap(
     readonly done: () => void;
   } | null = null;
 
-  if (import.meta.env.DEV && sessionOverride === undefined) {
-    try {
-      const demoContent = loadDemoContent();
-      demoEvents = demoContent.events;
-
-      const world = new WorldState();
-      for (const [key, value] of demoContent.worldSeeds) world.set(key, value);
-
-      const stories = new Map(
-        [...demoContent.inkSources].map(([storyId, source]) => {
-          const story = compileInk(source);
-          bindStoryToWorld(story, { storyId, world });
-          return [storyId, story] as const;
-        }),
-      );
-      const provider = new InkDialogueProvider(stories);
-
-      const host: EventHost = {
-        moveEntity(entityId, direction, steps, done) {
-          if (entityId !== 'player') {
-            // NPCs are static in this demo slice (see NpcRegistry's
-            // documented v1 ceiling) -- nothing to drive.
-            done();
-            return;
-          }
-          if (activeEntityMove) {
-            // No parallel events in v1 (core's own documented ceiling), so
-            // an overlapping request here would be a content bug; defensive.
-            done();
-            return;
-          }
-          activeEntityMove = {
-            mover: session.mover,
-            direction: direction as Direction,
-            stepsRemaining: Math.max(0, Math.trunc(steps)),
-            done,
-          };
-        },
-        teleport(entityId, x, y, facing) {
-          if (entityId !== 'player') return;
-          session.mover.teleport(x, y, facing as Direction | undefined);
-        },
-      };
-
-      interpreter = new EventInterpreter({ world, host, provider });
-      npcRegistry = new NpcRegistry(demoContent.npcs.npcs);
-      // The spawn tile is only "already arrived" on the floor the player
-      // actually spawned on, so the initial tile carries that floor index.
-      triggerIndex = new TriggerIndex(demoContent.triggers.triggers, {
-        ...session.spawn,
-        floor: session.floorRouter.currentFloor,
-      });
-
-      for (const npc of demoContent.npcs.npcs) {
-        if (npc.sprite.sheet !== CHARACTER_SHEET_FILE) {
-          throw new Error(
-            `Demo NPC "${npc.id}" references sprite sheet "${npc.sprite.sheet}", but only "${CHARACTER_SHEET_FILE}" is loaded.`,
-          );
-        }
-        const sprite = new CharacterSprite({
-          texture: characterTexture,
-          sheetColumns: CHARACTER_SHEET_COLUMNS,
-          sheetRows: CHARACTER_SHEET_ROWS,
-          characterIndex: npc.sprite.index,
-          tileWorldSize: TILE_WORLD_SIZE,
-        });
-        sprite.setFrame(npc.facing, 1);
-        sprite.setTilePosition(
-          npc.x,
-          npc.y,
-          TILE_WORLD_SIZE,
-          groundYAt(session.floorRouter.elevation, npc.x, npc.y, HEIGHT_UNIT),
-        );
-        scene.add(sprite.mesh);
-        npcSprites.set(npc.id, sprite);
+  // App-supplied effects for every bundle's interpreter -- session-lived, since
+  // it closes over the mutable `session`/`activeEntityMove` rather than over one
+  // map's content.
+  const host: EventHost = {
+    moveEntity(entityId, direction, steps, done) {
+      if (entityId !== 'player') {
+        // NPCs are static in v1 (see NpcRegistry's documented ceiling) --
+        // nothing to drive.
+        done();
+        return;
       }
+      if (activeEntityMove) {
+        // No parallel events in v1 (core's own documented ceiling), so
+        // an overlapping request here would be a content bug; defensive.
+        done();
+        return;
+      }
+      activeEntityMove = {
+        mover: session.mover,
+        direction: direction as Direction,
+        stepsRemaining: Math.max(0, Math.trunc(steps)),
+        done,
+      };
+    },
+    teleport(entityId, x, y, facing) {
+      if (entityId !== 'player') return;
+      session.mover.teleport(x, y, facing as Direction | undefined);
+    },
+  };
 
-      const dialogueOverlay = createDialogueOverlay(i18n.t);
-      container.appendChild(dialogueOverlay.element);
-      let highlightedIndex = 0;
-      let pendingChoiceCount = 0;
+  const narrativeRoot = createNarrativeRoot({
+    // Mounting happens INSIDE the factory: the root owns the overlay's lifetime,
+    // this file owns where it lives (narrative-root.ts's own doc comment). Built
+    // lazily on first use, so a narrative-free session never adds it to the DOM.
+    createOverlay: () => {
+      const overlay = createDialogueOverlay(i18n.t);
+      container.appendChild(overlay.element);
+      return overlay;
+    },
+  });
 
-      interpreter.signals.on('dialogue:line', (event) => {
-        dialogueOverlay.showLine(event.speaker, event.text);
-      });
-      interpreter.signals.on('dialogue:choices', (event) => {
-        highlightedIndex = 0;
-        pendingChoiceCount = event.options.length;
-        dialogueOverlay.showChoices(event.options, highlightedIndex);
-      });
-      interpreter.signals.on('dialogue:closed', () => {
-        pendingChoiceCount = 0;
-      });
-      interpreter.signals.on('script:finished', () => {
-        pendingChoiceCount = 0;
-        dialogueOverlay.hide();
-        // See createMostRecentHeldDirection's clear() doc: drops any stale
-        // held-arrow entry left over from dialogue navigation so the player
-        // doesn't auto-walk the instant control returns to them.
-        heldDirection.clear();
-      });
-      interpreter.signals.on('script:failed', (event) => {
-        pendingChoiceCount = 0;
-        const message = event.error instanceof Error ? event.error.message : String(event.error);
-        console.error('Event script failed:', event.error);
-        dialogueOverlay.showError(message);
-        heldDirection.clear();
-      });
+  let highlightedIndex = 0;
+  let pendingChoiceCount = 0;
 
-      window.addEventListener('keydown', (event) => {
-        if (event.repeat || !interpreter || !demoMapActive) return;
-
-        if (interpreter.state === 'idle') {
-          if (event.key.toLowerCase() !== 'e') return;
-          const { x, y } = session.mover.tile;
-          const facing = session.mover.facing;
-          const floor = session.floorRouter.currentFloor;
-          const npc = npcRegistry?.npcAdjacentFacing(floor, x, y, facing);
-          if (npc) {
-            interpreter.run(demoEvents?.[npc.onInteract] ?? []);
-            return;
-          }
-          for (const eventId of triggerIndex?.interact(floor, x, y, facing) ?? []) {
-            interpreter.run(demoEvents?.[eventId] ?? []);
-          }
-          return;
-        }
-
-        const hasChoices = interpreter.state === 'waiting-for-choice';
-        const action = resolveDialogueKeyAction(event.key, hasChoices);
-        if (!action) return;
-
-        switch (action.kind) {
-          case 'advance':
-            if (interpreter.state === 'waiting-for-dialogue') interpreter.advance();
-            return;
-          case 'confirmHighlighted':
-            interpreter.choose(highlightedIndex);
-            return;
-          case 'chooseIndex':
-            if (action.index < pendingChoiceCount) interpreter.choose(action.index);
-            return;
-          case 'navigate':
-            highlightedIndex = nextHighlightedIndex(
-              highlightedIndex,
-              action.delta,
-              pendingChoiceCount,
-            );
-            dialogueOverlay.setHighlightedIndex(highlightedIndex);
-            return;
-        }
-      });
-    } catch (error) {
-      console.error('Failed to load demo dialogue content:', error);
-    }
+  /**
+   * Wires one bundle's interpreter to the session overlay. Called on EVERY
+   * bundle build, not once per session: the interpreter is per-map (spec R6), so
+   * its signal subscriptions are per-map too. The overlay is resolved through
+   * `narrativeRoot.overlay()` rather than captured as a local, so every bundle
+   * drives the same session chrome.
+   *
+   * `script:failed` is load-bearing, not diagnostics: it is the ONLY surface
+   * through which a story/provider failure ever reaches the player.
+   */
+  function subscribeDialogueSignals(interpreter: MapNarrativeBundle['interpreter']): void {
+    interpreter.signals.on('dialogue:line', (event) => {
+      narrativeRoot.overlay().showLine(event.speaker, event.text);
+    });
+    interpreter.signals.on('dialogue:choices', (event) => {
+      highlightedIndex = 0;
+      pendingChoiceCount = event.options.length;
+      narrativeRoot.overlay().showChoices(event.options, highlightedIndex);
+    });
+    interpreter.signals.on('dialogue:closed', () => {
+      pendingChoiceCount = 0;
+    });
+    interpreter.signals.on('script:finished', () => {
+      pendingChoiceCount = 0;
+      narrativeRoot.overlay().hide();
+      // See createMostRecentHeldDirection's clear() doc: drops any stale
+      // held-arrow entry left over from dialogue navigation so the player
+      // doesn't auto-walk the instant control returns to them.
+      heldDirection.clear();
+    });
+    interpreter.signals.on('script:failed', (event) => {
+      pendingChoiceCount = 0;
+      const message = event.error instanceof Error ? event.error.message : String(event.error);
+      console.error('Event script failed:', event.error);
+      narrativeRoot.overlay().showError(message);
+      heldDirection.clear();
+    });
   }
+
+  /**
+   * Frees the outgoing map's narrative runtime: its NPC meshes leave the shared
+   * scene and the NPC sheet textures the bundle itself loaded are disposed
+   * (spec R7 -- before this change those sprites were only ever hidden). The
+   * reference is dropped only AFTER `dispose()` has run.
+   *
+   * It never touches FLOOR textures: those come from `loadAuthoredMap`'s tileset
+   * resolution and are freed by the swap's own `disposeFloorTextures`
+   * (`buildFloorRender` sets `ownsTextures: false`), so each set has exactly one
+   * disposal path and no double free is reachable.
+   */
+  function disposeNarrativeBundle(): void {
+    bundle?.dispose();
+    bundle = undefined;
+  }
+
+  /**
+   * Builds the incoming map's narrative runtime over the session root, leaving
+   * `bundle` undefined when that map authors none (spec R5). Must run AFTER
+   * `createMapSession`: each NPC sprite's ground Y comes from ITS OWN floor in
+   * the new session, and the trigger index's already-entered tile is the new
+   * session's arrival spawn + floor.
+   */
+  async function buildNarrativeBundle(narrative: AuthoredMapNarrative | undefined): Promise<void> {
+    bundle = await buildMapNarrativeBundle({
+      narrative,
+      root: narrativeRoot,
+      host,
+      scene,
+      floors: session.floorRouter.floors,
+      arrival: { ...session.spawn, floor: session.floorRouter.currentFloor },
+      resolveObjectTexture: resolveObjectTextureReal,
+      tileWorldSize: TILE_WORLD_SIZE,
+      heightUnit: HEIGHT_UNIT,
+    });
+    if (bundle) subscribeDialogueSignals(bundle.interpreter);
+  }
+
+  window.addEventListener('keydown', (event) => {
+    if (event.repeat || !bundle) return;
+    const { interpreter } = bundle;
+
+    if (interpreter.state === 'idle') {
+      if (event.key.toLowerCase() !== 'e') return;
+      const { x, y } = session.mover.tile;
+      const facing = session.mover.facing;
+      const floor = session.floorRouter.currentFloor;
+      const npc = bundle.npcRegistry.npcAdjacentFacing(floor, x, y, facing);
+      if (npc) {
+        interpreter.run(bundle.events[npc.onInteract] ?? []);
+        return;
+      }
+      for (const eventId of bundle.triggerIndex.interact(floor, x, y, facing)) {
+        interpreter.run(bundle.events[eventId] ?? []);
+      }
+      return;
+    }
+
+    const hasChoices = interpreter.state === 'waiting-for-choice';
+    const action = resolveDialogueKeyAction(event.key, hasChoices);
+    if (!action) return;
+
+    switch (action.kind) {
+      case 'advance':
+        if (interpreter.state === 'waiting-for-dialogue') interpreter.advance();
+        return;
+      case 'confirmHighlighted':
+        interpreter.choose(highlightedIndex);
+        return;
+      case 'chooseIndex':
+        if (action.index < pendingChoiceCount) interpreter.choose(action.index);
+        return;
+      case 'navigate':
+        highlightedIndex = nextHighlightedIndex(highlightedIndex, action.delta, pendingChoiceCount);
+        narrativeRoot.overlay().setHighlightedIndex(highlightedIndex);
+        return;
+    }
+  });
+
+  // The booted map's own bundle. Every later one comes from a swap sequence
+  // below. Not wrapped in a try/catch: `loadAuthoredMap` already proved every
+  // authored reference resolves, so a throw here means a floor reference this
+  // session cannot satisfy -- a real content bug that must reach `main()`'s
+  // handler, not a swallowed console line.
+  await buildNarrativeBundle(sessionOverride?.narrative);
 
   window.addEventListener('keydown', (event) => {
     if (event.repeat) return;
@@ -1515,13 +1531,11 @@ async function renderFixtureMap(
       // `session` mid-script would strand an in-flight moveEntity (its
       // `mover` reference goes stale, so the host's `done()` never fires
       // and the interpreter never returns to idle) and the dialogue overlay
-      // would keep showing over a session it no longer belongs to (its
-      // keydown handler also gates on `demoMapActive`, which this same
-      // switch would flip, freezing advance/choose forever). Scripts always
-      // run on the fixture map only, so simply refusing the cycle here --
-      // not attempting to cancel the running script -- is consistent with
-      // how the player's own movement is already paused during a script.
-      if (interpreter && interpreter.state !== 'idle') return;
+      // would keep showing over a session it no longer belongs to. Refusing
+      // the cycle here -- rather than attempting to cancel the running
+      // script -- is consistent with how the player's own movement is already
+      // paused during a script.
+      if (bundle && bundle.interpreter.state !== 'idle') return;
       // Same reasoning as the script guard above: disposing `session`
       // mid-traversal would strand `activeTraversal`'s `mover.teleport`
       // completion frame on an already-disposed session's mover.
@@ -1627,15 +1641,19 @@ async function renderFixtureMap(
               },
             ]);
           }
+          // None of this cycle's targets is an authored document, so none of
+          // them carries narrative: the outgoing bundle is freed and no new one
+          // is built (spec R5), which REMOVES the previous map's NPC billboards
+          // instead of merely hiding them (the deleted `demoMapActive`, and the
+          // R7 leak it left behind). Placed after the branch, not before: every
+          // branch reaches `session.dispose()` synchronously from there, so no
+          // frame observes the in-between state, and a branch that FAILED to
+          // load its map (mz) must not strip a still-displayed map's NPCs.
+          // Declared ceiling: cycling back to 'fixture' rebuilds only the booted
+          // map's floor 0, so narrative is not restored with it -- dev-toggle
+          // only, and a restart brings it back.
+          disposeNarrativeBundle();
           focusCameraOnSpawn();
-
-          // The demo NPCs/triggers are authored against the fixture map's
-          // own tile coordinates -- irrelevant (and potentially
-          // out-of-bounds) on the giant/mz/floors maps, so hide the NPC
-          // billboards and stop routing interact/enter input to them while
-          // cycled away.
-          demoMapActive = mode === 'fixture';
-          for (const sprite of npcSprites.values()) sprite.mesh.visible = demoMapActive;
         } catch (error) {
           console.error('Failed to switch to the next dev map-cycle map:', error);
           // Roll the mode back so the next 'g' press retries the same target
@@ -1675,7 +1693,7 @@ async function renderFixtureMap(
       if (event.repeat || event.key.toLowerCase() !== 'g' || cyclingManifestMap) return;
       // Same guards as the DEV cycle above: never dispose `session` mid-script
       // or mid-traversal.
-      if (interpreter && interpreter.state !== 'idle') return;
+      if (bundle && bundle.interpreter.state !== 'idle') return;
       if (activeTraversal) return;
       cyclingManifestMap = true;
       void (async () => {
@@ -1716,6 +1734,15 @@ async function renderFixtureMap(
           }
 
           currentMapIndex = nextIndex;
+          // The EXISTING swap sequence, extended -- there is no second disposal
+          // path (design D1). Everything that can still refuse the hop has
+          // already run above (`loadEntry`, which also performs the incoming
+          // map's LOUD narrative cross-validation, and the playability
+          // pre-flight), so this line is the point of no return. Order matters:
+          // the outgoing bundle is disposed BEFORE the incoming one is built,
+          // and the incoming one is built AFTER `createMapSession`, whose floors
+          // and arrival tile it reads.
+          disposeNarrativeBundle();
           session.dispose();
           disposeFloorTextures(currentTextures);
           currentTextures = nextResult.floorSources[0]?.textures;
@@ -1724,6 +1751,7 @@ async function renderFixtureMap(
             nextResult.stairLinks,
             nextResult.spawn ? { spawn: nextResult.spawn } : undefined,
           );
+          await buildNarrativeBundle(nextResult.narrative);
           focusCameraOnSpawn();
         } catch (error) {
           console.error('Failed to cycle to the next manifest map:', error);
@@ -1825,7 +1853,7 @@ async function renderFixtureMap(
         return;
       }
 
-      const interpreterIdle = !interpreter || interpreter.state === 'idle';
+      const interpreterIdle = !bundle || bundle.interpreter.state === 'idle';
 
       // Input pause (design's data-flow contract): the player's own
       // requestMove is skipped whenever the interpreter isn't idle, so
@@ -1892,17 +1920,17 @@ async function renderFixtureMap(
         };
       }
 
-      if (demoMapActive && interpreter && triggerIndex && demoEvents) {
-        for (const eventId of triggerIndex.enter(
+      if (bundle) {
+        for (const eventId of bundle.triggerIndex.enter(
           session.floorRouter.currentFloor,
           mover.tile.x,
           mover.tile.y,
         )) {
-          interpreter.run(demoEvents[eventId] ?? []);
+          bundle.interpreter.run(bundle.events[eventId] ?? []);
         }
-      }
 
-      for (const sprite of npcSprites.values()) sprite.faceCamera(camera);
+        for (const sprite of bundle.sprites) sprite.faceCamera(camera);
+      }
 
       // Cheap per-frame streaming check: each floor's `ChunkStreamer.update`
       // early-exits with an empty diff while the character stays inside the
@@ -1976,6 +2004,17 @@ async function renderFixtureMap(
   });
 }
 
+/**
+ * The user-facing text of an authored-map failure. `loadAuthoredMap`'s own
+ * narrative rejections are written to be read by the person who authored the
+ * map -- they name the map file, the event key, the story id and the expected
+ * sidecar path -- so the message is shown verbatim rather than replaced by a
+ * localized generic one.
+ */
+function describeAuthoredFailure(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function main(): Promise<void> {
   const containerOrNull = document.getElementById('app');
   if (!containerOrNull) throw new Error('Missing #app container element.');
@@ -2011,6 +2050,15 @@ async function main(): Promise<void> {
   }
 
   showStatus(i18n.t('map.loading'));
+
+  /**
+   * Message of the last authored-map failure, or `undefined` when no authored
+   * map was ever found. The two are NOT the same thing and must not print the
+   * same status: "no authored map found" for a map that loaded and then failed
+   * its narrative cross-validation hides the only diagnostic that names the
+   * offending event, story and expected sidecar path.
+   */
+  let authoredFailure: string | undefined;
 
   // Authored-load path (loop-crear-jugar, Slice 4a/4b): gated on the real
   // Tauri host being present (both `tauri dev` and a production build), NOT
@@ -2082,6 +2130,7 @@ async function main(): Promise<void> {
               floorSources: authored.floorSources,
               stairLinks: authored.stairLinks,
               spawn: authored.spawn,
+              narrative: authored.narrative,
             },
             { manifest, loadEntry: loadAuthoredMapAt, startIndex: index },
           );
@@ -2091,6 +2140,7 @@ async function main(): Promise<void> {
             `main: manifest map "${entry.file}" failed to load/render; trying the next map.`,
             error,
           );
+          authoredFailure = describeAuthoredFailure(error);
           showStatus(i18n.t('map.loading'));
         }
       }
@@ -2120,6 +2170,7 @@ async function main(): Promise<void> {
             floorSources: authored.floorSources,
             stairLinks: authored.stairLinks,
             spawn: authored.spawn,
+            narrative: authored.narrative,
           },
         );
         return;
@@ -2134,18 +2185,24 @@ async function main(): Promise<void> {
         'main: single-file authored map load/render failed; falling back to the DEV fixture.',
         error,
       );
-      showStatus(i18n.t('map.loading'));
+      // Kept for the terminal status below: since C1a a map can parse perfectly
+      // and still fail HERE on a dangling narrative reference, a missing `.ink`
+      // sidecar or an unseeded `world_get` key -- failures whose messages name
+      // the map, the event, the story and the expected path. Reporting those as
+      // "no authored map found" told the author the opposite of the truth.
+      authoredFailure = describeAuthoredFailure(error);
+      showStatus(authoredFailure);
     }
   }
 
   // `/@fs/` and `server.fs.allow` (vite.config.ts) only exist under `vite
   // dev` -- a production build has no dev server to serve the (git-ignored,
-  // never-shipped) DEV-demo fixture from. At this point no authored map was
-  // found either (every branch above already returned if one rendered), so
-  // the accurate message is "no authored map found", not "fixture not
-  // found" -- production has no fixture concept at all.
+  // never-shipped) DEV-demo fixture from. At this point either no authored map
+  // was found at all (every branch above already returned if one rendered), or
+  // one was found and REJECTED -- and only in the first case is "no authored
+  // map found" the truth. Production has no fixture concept at all.
   if (!import.meta.env.DEV) {
-    showStatus(i18n.t('map.noAuthoredMap'));
+    showStatus(authoredFailure ?? i18n.t('map.noAuthoredMap'));
     return;
   }
 
@@ -2155,7 +2212,9 @@ async function main(): Promise<void> {
     await renderFixtureMap(container, data);
   } catch (error) {
     console.error('Failed to load the Roseliam fixture map:', error);
-    showStatus(i18n.t('map.fixtureNotFound'));
+    // Same reasoning: an authored map that was found and rejected is far more
+    // actionable than the fixture's own absence.
+    showStatus(authoredFailure ?? i18n.t('map.fixtureNotFound'));
   }
 }
 

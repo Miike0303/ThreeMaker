@@ -73,7 +73,12 @@ function benchmarkBuildChunks(
 }
 
 describe('buildChunks benchmark (decision gate)', () => {
-  it('measures full-rebuild p95 at 100x100 and reports the number', () => {
+  // Explicit timeouts: these two cases assert only finiteness and counts, so a
+  // wall-clock overrun is their ONLY failure mode. The 512x512 case measures
+  // ~1.9s on its own, which under parallel load can cross vitest's 5s default
+  // and fail the whole suite for reasons unrelated to any change. The gate is a
+  // decision record, not a performance budget -- keep it deterministic.
+  it('measures full-rebuild p95 at 100x100 and reports the number', { timeout: 60_000 }, () => {
     const iterations = 25;
     const result = benchmarkBuildChunks(100, 100, iterations);
 
@@ -87,7 +92,7 @@ describe('buildChunks benchmark (decision gate)', () => {
     expect(result.chunkCount).toBeGreaterThan(0);
   });
 
-  it('measures full-rebuild p95 at 512x512 and reports the number', () => {
+  it('measures full-rebuild p95 at 512x512 and reports the number', { timeout: 60_000 }, () => {
     const iterations = 10;
     const result = benchmarkBuildChunks(512, 512, iterations);
 
