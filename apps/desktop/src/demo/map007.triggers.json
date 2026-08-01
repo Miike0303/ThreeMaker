@@ -1,4 +1,0 @@
-{
-  "version": 1,
-  "triggers": [{ "id": "welcome", "x": 10, "y": 11, "on": "enter", "event": "welcome_message" }]
-}

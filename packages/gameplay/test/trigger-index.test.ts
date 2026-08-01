@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TriggerDefinition } from '../src/parse-triggers.js';
+import type { TriggerDefinition } from '../src/trigger-index.js';
 import { TriggerIndex } from '../src/trigger-index.js';
 
 function trigger(overrides: Partial<TriggerDefinition> = {}): TriggerDefinition {

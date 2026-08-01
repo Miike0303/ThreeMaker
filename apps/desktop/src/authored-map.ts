@@ -11,14 +11,14 @@
  *
  * Since C1a it also loads this map's `.ink` sidecars by name
  * (`<map>.<storyId>.ink`, design D7), cross-validates the authored narrative
- * loudly (port of `demo-content.ts:121-158`) and returns it as
+ * loudly (ported from the since-deleted `demo-content.ts`) and returns it as
  * `AuthoredMapResult.narrative` for the per-map bundle to compile and wire.
  * That validation THROWS -- unlike the fallback cases below, a dangling
  * narrative reference is a content bug and must never degrade to a silently
  * narrative-free map.
  *
  * Returns `null` (after logging why) whenever the caller should fall back to
- * the existing DEV demos/fixture path instead: no MAP DOCUMENT saved yet, or
+ * the existing DEV fixture path instead: no MAP DOCUMENT saved yet, or
  * that document fails to read/parse/validate (spec: "DEV demos remain
  * fallback"). Scope matters: only the map-document read degrades to `null`. A
  * SIDECAR read failure does not -- it joins the loud narrative rejections
@@ -220,7 +220,7 @@ const MAP_FILE_SUFFIX = '.tmmap.json';
  */
 const SAFE_STORY_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
-/** Sidecar path for one story of one map: `<dir>/<name>.tmmap.json` -> `<dir>/<name>.<storyId>.ink` (design D7, the demo's own `map007.elder.ink` convention). A path that does not end in the suffix keeps its whole name as the base. Callers MUST have validated `storyId` against `SAFE_STORY_ID_PATTERN` first. */
+/** Sidecar path for one story of one map: `<dir>/<name>.tmmap.json` -> `<dir>/<name>.<storyId>.ink` (design D7, inherited from the deleted DEV demo's own `map007.elder.ink` convention). A path that does not end in the suffix keeps its whole name as the base. Callers MUST have validated `storyId` against `SAFE_STORY_ID_PATTERN` first. */
 function sidecarPath(mapRelativePath: string, storyId: string): string {
   const base = mapRelativePath.endsWith(MAP_FILE_SUFFIX)
     ? mapRelativePath.slice(0, -MAP_FILE_SUFFIX.length)
@@ -228,10 +228,10 @@ function sidecarPath(mapRelativePath: string, storyId: string): string {
   return `${base}.${storyId}.ink`;
 }
 
-/** Matches an ink `world_get("key")` external call, capturing the key. Ported verbatim from `demo-content.ts`. */
+/** Matches an ink `world_get("key")` external call, capturing the key. Ported verbatim from the since-deleted `demo-content.ts`. */
 const WORLD_GET_CALL_PATTERN = /world_get\(\s*"([^"]+)"\s*\)/g;
 
-/** Recursively collects every `showDialogue` command, including branches nested inside `conditional` commands -- port of `demo-content.ts`'s `collectDialogueSources`. A nested reference is exactly as dangling as a top-level one. */
+/** Recursively collects every `showDialogue` command, including branches nested inside `conditional` commands -- ported from the since-deleted `demo-content.ts`'s `collectDialogueSources`. A nested reference is exactly as dangling as a top-level one. */
 function collectDialogueSources(commands: readonly EventCommand[]): ShowDialogueCommand[] {
   const result: ShowDialogueCommand[] = [];
   for (const command of commands) {
@@ -276,7 +276,7 @@ function describeCause(error: unknown): string {
 
 /**
  * Reads this map's `.ink` sidecars and cross-validates its authored content,
- * porting `demo-content.ts:121-158`'s loud-failure set (spec: "authored
+ * porting the since-deleted `demo-content.ts`'s loud-failure set (spec: "authored
  * content loads with loud cross-validation"):
  *
  * - every `showDialogue` ink `storyId` must be a safe file-name identifier

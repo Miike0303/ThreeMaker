@@ -5,8 +5,10 @@
  * v4 moves NPC/trigger validation from two standalone sidecar-file parsers into
  * the map document itself, so each ported case keeps its ORIGINAL test name (for
  * traceability against the files it replaces) while asserting the v4 surface.
- * The two source files still exist and still pass; they are deleted in a later
- * work unit, once no importer remains.
+ * The two source files were DELETED in task 7.2 once their last importer went
+ * with the DEV demo content path, so these 24 cases are now the only home for
+ * that coverage -- the original names above are a historical trail, not a live
+ * path.
  *
  * Shape changes the ports had to absorb, recorded rather than dropped silently:
  *

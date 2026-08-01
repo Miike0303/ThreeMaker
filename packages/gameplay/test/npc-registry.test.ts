@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Direction } from '../src/grid-mover.js';
 import { DIRECTION_DELTA } from '../src/grid-mover.js';
+import type { NpcDefinition } from '../src/npc-registry.js';
 import { NpcRegistry } from '../src/npc-registry.js';
-import type { NpcDefinition } from '../src/parse-npcs.js';
 
 function npc(overrides: Partial<NpcDefinition> = {}): NpcDefinition {
   return {

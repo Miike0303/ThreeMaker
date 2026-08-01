@@ -1,7 +1,32 @@
 import { assertFloorIndex } from './floor-index.js';
 import type { Direction, GridPosition } from './grid-mover.js';
 import { DIRECTION_DELTA } from './grid-mover.js';
-import type { TriggerDefinition } from './parse-triggers.js';
+
+/** When a tile trigger fires: on tile-arrival, or on a facing-adjacent interact. */
+export type TriggerEvent = 'enter' | 'interact';
+
+/**
+ * One tile trigger this index holds. The authoring source is a `.tmmap` v4
+ * `triggers[]` entry; the composition root translates it (document floor ID ->
+ * runtime floor index) before handing it here.
+ */
+export interface TriggerDefinition {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  /**
+   * Runtime floor INDEX this trigger sits on (an index into the session's
+   * `floors` array, like `StairLinkRuntime.fromFloor`) -- NOT a `.tmmap`
+   * floor id. Every lookup below scopes by it, so a trigger never fires from
+   * another floor's same `(x, y)`. Asserted by `assertFloorIndex` at
+   * construction, so a document floor id that leaked through translation
+   * fails loudly here rather than silently never firing.
+   */
+  readonly floor: number;
+  readonly on: TriggerEvent;
+  /** Event id to run when this trigger fires. */
+  readonly event: string;
+}
 
 // Floor-scoped, mirroring `NpcRegistry`: a trigger on floor 1 must never fire
 // for the same `(x, y)` on floor 0. The floor index comes FIRST in every

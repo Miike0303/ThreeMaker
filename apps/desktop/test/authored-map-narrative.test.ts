@@ -6,7 +6,8 @@
  * bundle.
  *
  * These nine cases port `demo-content.test.ts`'s nine `assembleDemoContent`
- * cases (that file and its `import.meta.glob` source die in task 7.1). Two
+ * cases (that file and its `import.meta.glob` source were deleted in task
+ * 7.1, so these are now the only home for that coverage). Two
  * mappings are not one-to-one and are recorded rather than faked: "dangling
  * ink storyId" and "missing sidecar" are ONE code path here (story ids are
  * DERIVED from `events` per design D7, so a story with no sidecar IS the

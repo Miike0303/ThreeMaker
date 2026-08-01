@@ -1,7 +1,37 @@
 import { assertFloorIndex } from './floor-index.js';
 import type { Direction } from './grid-mover.js';
 import { DIRECTION_DELTA } from './grid-mover.js';
-import type { NpcDefinition } from './parse-npcs.js';
+
+/** Sprite-sheet reference for an NPC, matching `CharacterSprite`'s sheet/index addressing. */
+export interface NpcSprite {
+  readonly sheet: string;
+  readonly index: number;
+}
+
+/**
+ * One static NPC this registry indexes. The authoring source is a `.tmmap`
+ * v4 `npcs[]` entry; the composition root translates it (document floor ID ->
+ * runtime floor index, content-addressed sheet ref -> resolved sheet) before
+ * handing it here.
+ */
+export interface NpcDefinition {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  /**
+   * Runtime floor INDEX this NPC stands on (an index into the session's
+   * `floors` array, like `StairLinkRuntime.fromFloor`) -- NOT a `.tmmap`
+   * floor id. Every lookup below scopes by it, so two NPCs may share one
+   * `(x, y)` on different floors. Asserted by `assertFloorIndex` at
+   * construction, so a document floor id that leaked through translation
+   * fails loudly here rather than silently missing every lookup.
+   */
+  readonly floor: number;
+  readonly facing: Direction;
+  readonly sprite: NpcSprite;
+  /** Event id run when a player interacts with this NPC (see `NpcRegistry#findNpcAt`). */
+  readonly onInteract: string;
+}
 
 // Floor-scoped: an NPC on floor 1 must never occupy or answer for the same
 // `(x, y)` on floor 0 (stacked floors share one coordinate space). Every

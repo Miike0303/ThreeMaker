@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { NpcDefinition } from '../src/npc-registry.js';
 import { NpcRegistry } from '../src/npc-registry.js';
-import type { NpcDefinition } from '../src/parse-npcs.js';
-import type { TriggerDefinition } from '../src/parse-triggers.js';
+import type { TriggerDefinition } from '../src/trigger-index.js';
 import { TriggerIndex } from '../src/trigger-index.js';
 
 // `floor` is a runtime floor INDEX, while a `.tmmap` document carries a floor

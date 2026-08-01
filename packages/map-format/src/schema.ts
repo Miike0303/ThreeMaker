@@ -421,7 +421,7 @@ function validateNpcs(
   );
 
   // Tile occupancy is a hard content-authoring invariant, ported from
-  // gameplay's `parseNpcs`: NPCs collide, so two on one tile leaves one
+  // gameplay's since-deleted `parseNpcs`: NPCs collide, so two on one tile leaves one
   // permanently unreachable. Scoped PER FLOOR exactly like `validateRooms`' id
   // uniqueness -- the same x,y on two floors is two distinct tiles. The first
   // claimant's index is tracked so the error names both conflicting entries.
