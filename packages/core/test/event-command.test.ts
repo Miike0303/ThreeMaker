@@ -69,6 +69,40 @@ describe('parseEventScript', () => {
     ).toThrow(/"x"/);
   });
 
+  it('rejects transferMap with negative tile coords', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: { door: [{ type: 'transferMap', mapFile: 'a.tmmap.json', x: -1, y: 0 }] },
+      }),
+    ).toThrow(/"x"/);
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: { door: [{ type: 'transferMap', mapFile: 'a.tmmap.json', x: 0, y: -2 }] },
+      }),
+    ).toThrow(/"y"/);
+  });
+
+  it('rejects transferMap mapFile with path traversal segments', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: {
+          door: [{ type: 'transferMap', mapFile: '../secrets/map.tmmap.json', x: 0, y: 0 }],
+        },
+      }),
+    ).toThrow(/mapFile/);
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: {
+          door: [{ type: 'transferMap', mapFile: 'town/../../other.tmmap.json', x: 0, y: 0 }],
+        },
+      }),
+    ).toThrow(/mapFile/);
+  });
+
   it('rejects transferMap with invalid facing', () => {
     expect(() =>
       parseEventScript({

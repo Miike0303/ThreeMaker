@@ -227,17 +227,25 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
       if (typeof mapFile !== 'string' || mapFile.length === 0) {
         fail(`${label} requires a non-empty string "mapFile".`);
       }
-      if (typeof x !== 'number' || !Number.isInteger(x)) {
-        fail(`${label} "x" must be an integer, got ${JSON.stringify(x)}.`);
+      // Manifest paths are relative game entries (e.g. "town/map001.tmmap.json").
+      // Reject ".." segments so authored content cannot walk outside the map dir.
+      const normalizedMapFile = mapFile.replaceAll('\\', '/');
+      if (normalizedMapFile.split('/').includes('..')) {
+        fail(
+          `${label} "mapFile" must not contain ".." path segments, got ${JSON.stringify(mapFile)}.`,
+        );
       }
-      if (typeof y !== 'number' || !Number.isInteger(y)) {
-        fail(`${label} "y" must be an integer, got ${JSON.stringify(y)}.`);
+      if (typeof x !== 'number' || !Number.isInteger(x) || x < 0) {
+        fail(`${label} "x" must be a non-negative integer, got ${JSON.stringify(x)}.`);
+      }
+      if (typeof y !== 'number' || !Number.isInteger(y) || y < 0) {
+        fail(`${label} "y" must be a non-negative integer, got ${JSON.stringify(y)}.`);
       }
       if (facing === undefined) {
-        return { type: 'transferMap', mapFile, x, y };
+        return { type: 'transferMap', mapFile: normalizedMapFile, x, y };
       }
       const parsedFacing = parseCardinalDirection(facing, label, 'facing');
-      return { type: 'transferMap', mapFile, x, y, facing: parsedFacing };
+      return { type: 'transferMap', mapFile: normalizedMapFile, x, y, facing: parsedFacing };
     }
     default:
       fail(`${path} has unknown command type ${JSON.stringify(type)}.`);
