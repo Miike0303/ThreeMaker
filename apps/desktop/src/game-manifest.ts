@@ -35,6 +35,10 @@ export interface GameManifest {
   readonly actorSheet?: ManifestActorSheet;
 }
 
+function normalizeManifestFile(file: string): string {
+  return file.replaceAll('\\', '/');
+}
+
 function parseMapEntry(entry: unknown, index: number): ManifestMapEntry {
   if (!entry || typeof entry !== 'object') {
     throw new Error(`Invalid manifest entry at index ${index}: expected an object.`);
@@ -48,7 +52,12 @@ function parseMapEntry(entry: unknown, index: number): ManifestMapEntry {
   ) {
     throw new Error(`Invalid manifest entry at index ${index}: ${JSON.stringify(entry)}`);
   }
-  return { mapId, name, file, slotsResolved };
+  if (file.length === 0) {
+    throw new Error(`Invalid manifest entry at index ${index}: "file" must be a non-empty string.`);
+  }
+  // Normalize path separators so transferMap / hop lookup and duplicate checks
+  // agree with authored Windows paths.
+  return { mapId, name, file: normalizeManifestFile(file), slotsResolved };
 }
 
 function parseActorSheet(value: unknown): ManifestActorSheet {
@@ -78,6 +87,19 @@ export function parseGameManifest(json: unknown): GameManifest {
   }
 
   const parsedMaps = maps.map((entry, index) => parseMapEntry(entry, index));
+
+  // transferMap / G-cycle resolve by `file`. Duplicate paths make hops
+  // silently sticky to the first entry — refuse at load instead.
+  const firstIndexByFile = new Map<string, number>();
+  for (const [index, entry] of parsedMaps.entries()) {
+    const prior = firstIndexByFile.get(entry.file);
+    if (prior !== undefined) {
+      throw new Error(
+        `Invalid manifest: duplicate map file ${JSON.stringify(entry.file)} at indexes ${prior} and ${index}.`,
+      );
+    }
+    firstIndexByFile.set(entry.file, index);
+  }
 
   return {
     maps: parsedMaps,

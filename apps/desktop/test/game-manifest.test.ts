@@ -69,4 +69,38 @@ describe('parseGameManifest', () => {
       }),
     ).toThrow(/Invalid manifest actorSheet/);
   });
+
+  /**
+   * C1b: transferMap and G-cycle resolve by `file`. Two entries with the same
+   * path make hops ambiguous (always the first index wins). Fail at parse.
+   */
+  it('throws when two map entries share the same file path', () => {
+    expect(() =>
+      parseGameManifest({
+        maps: [
+          { mapId: 1, name: 'A', file: 'town/map.tmmap.json', slotsResolved: 1 },
+          { mapId: 2, name: 'B', file: 'town/map.tmmap.json', slotsResolved: 1 },
+        ],
+      }),
+    ).toThrow(/duplicate.*file/i);
+  });
+
+  it('treats backslash and slash as the same file path for duplicate detection', () => {
+    expect(() =>
+      parseGameManifest({
+        maps: [
+          { mapId: 1, name: 'A', file: 'town\\map.tmmap.json', slotsResolved: 1 },
+          { mapId: 2, name: 'B', file: 'town/map.tmmap.json', slotsResolved: 1 },
+        ],
+      }),
+    ).toThrow(/duplicate.*file/i);
+  });
+
+  it('throws when a map entry file is empty', () => {
+    expect(() =>
+      parseGameManifest({
+        maps: [{ mapId: 1, name: 'A', file: '', slotsResolved: 0 }],
+      }),
+    ).toThrow(/file/i);
+  });
 });
