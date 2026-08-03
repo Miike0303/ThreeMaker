@@ -195,6 +195,22 @@ describe('EventInterpreter', () => {
       expect(onFailed).toHaveBeenCalledTimes(1);
       expect(interpreter.state).toBe('idle');
     });
+
+    it('runs transferMap after dialogue closes (transfer is last command)', () => {
+      const { host, interpreter, provider } = setup();
+      provider.queueSteps([{ kind: 'line', text: 'See you on the other side.' }]);
+
+      interpreter.run([
+        { type: 'showDialogue', source: { kind: 'text', lines: ['See you on the other side.'] } },
+        { type: 'transferMap', mapFile: 'map-b.tmmap.json', x: 4, y: 5 },
+      ]);
+      expect(host.transferCalls).toEqual([]);
+      expect(interpreter.state).toBe('waiting-for-dialogue');
+
+      interpreter.advance();
+      expect(host.transferCalls).toEqual([{ mapFile: 'map-b.tmmap.json', x: 4, y: 5 }]);
+      expect(interpreter.state).toBe('idle');
+    });
   });
 
   describe('moveEntity', () => {
