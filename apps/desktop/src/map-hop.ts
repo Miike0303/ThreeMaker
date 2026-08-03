@@ -119,3 +119,61 @@ export function findManifestMapIndex(
   if (basenameHits.length > 1) return { ok: false, reason: 'ambiguous-basename' };
   return { ok: false, reason: 'not-in-manifest' };
 }
+
+/** Facing accepted by `transferMap` / mover.teleport (cardinal only). */
+export type TransferFacing = 'up' | 'down' | 'left' | 'right';
+
+/**
+ * Early `EventHost.transferMap` gate: whether the host may schedule a hop
+ * microtask. Always paired with `done()` so the interpreter returns to idle
+ * even on refuse (command is terminal either way).
+ *
+ * Distinct from {@link canBeginMapHop}: that guard re-runs inside the hop
+ * after `done()` (interpreter must be idle). This gate also covers the
+ * single-map case where no hop function is installed at all.
+ */
+export type TransferMapHostInput = {
+  /** True when multi-map hop machinery is installed (`manifest.maps.length > 1`). */
+  readonly hopPathActive: boolean;
+  /** True for the whole async hop duration (same flag as canBeginMapHop). */
+  readonly hopInFlight: boolean;
+  /** True while a stair traversal walker owns the character. */
+  readonly activeTraversal: boolean;
+  readonly mapFile: string;
+  readonly x: number;
+  readonly y: number;
+  readonly facing?: TransferFacing;
+};
+
+export type TransferMapHostRefusal = 'no-hop-path' | 'hop-in-flight' | 'traversal-active';
+
+export type TransferMapArrival = {
+  readonly x: number;
+  readonly y: number;
+  readonly facing?: TransferFacing;
+};
+
+export type TransferMapHostDecision =
+  | { readonly ok: true; readonly mapFile: string; readonly arrival: TransferMapArrival }
+  | { readonly ok: false; readonly reason: TransferMapHostRefusal };
+
+/**
+ * Decide whether `EventHost.transferMap` may queue a hop.
+ *
+ * Priority:
+ * 1. no multi-map hop path installed
+ * 2. hop already in flight
+ * 3. stair traversal active
+ */
+export function decideTransferMapHost(input: TransferMapHostInput): TransferMapHostDecision {
+  if (!input.hopPathActive) return { ok: false, reason: 'no-hop-path' };
+  if (input.hopInFlight) return { ok: false, reason: 'hop-in-flight' };
+  if (input.activeTraversal) return { ok: false, reason: 'traversal-active' };
+
+  const arrival: TransferMapArrival =
+    input.facing !== undefined
+      ? { x: input.x, y: input.y, facing: input.facing }
+      : { x: input.x, y: input.y };
+
+  return { ok: true, mapFile: input.mapFile, arrival };
+}

@@ -62,7 +62,12 @@ import { createHopStats, recordHopCompleted } from './hop-stats.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
-import { canBeginMapHop, findManifestMapIndex, nextManifestMapIndex } from './map-hop.js';
+import {
+  canBeginMapHop,
+  decideTransferMapHost,
+  findManifestMapIndex,
+  nextManifestMapIndex,
+} from './map-hop.js';
 import type { MapNarrativeBundle } from './map-narrative-bundle.js';
 import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
@@ -1313,29 +1318,35 @@ async function renderFixtureMap(
     transferMap(mapFile, x, y, facing, done) {
       // End the script first (`done`); hop only after idle. Guarded again
       // inside hopToManifestFile via canBeginMapHop.
-      if (!hopToManifestFile) {
-        console.error(
-          `transferMap to "${mapFile}" refused: no multi-map manifest hop path is active.`,
-        );
-        done();
-        return;
-      }
-      if (cyclingManifestMap || activeTraversal) {
-        console.error(
-          `transferMap to "${mapFile}" refused (hop or traversal in flight); staying on the current map.`,
-        );
-        done();
-        return;
-      }
-      const arrival = {
+      const decision = decideTransferMapHost({
+        hopPathActive: hopToManifestFile !== null,
+        hopInFlight: cyclingManifestMap,
+        activeTraversal: Boolean(activeTraversal),
+        mapFile,
         x,
         y,
         ...(facing !== undefined ? { facing: facing as Direction } : {}),
-      } as const;
+      });
+      if (!decision.ok) {
+        const detail =
+          decision.reason === 'no-hop-path'
+            ? 'no multi-map manifest hop path is active'
+            : `hop or traversal in flight (${decision.reason})`;
+        console.error(
+          `transferMap to "${mapFile}" refused: ${detail}; staying on the current map.`,
+        );
+        done();
+        return;
+      }
       const hop = hopToManifestFile;
+      if (!hop) {
+        // decideTransferMapHost already required hopPathActive; defensive.
+        done();
+        return;
+      }
       done();
       queueMicrotask(() => {
-        void hop(mapFile, arrival);
+        void hop(decision.mapFile, decision.arrival);
       });
     },
   };

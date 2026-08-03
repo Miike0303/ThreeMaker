@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   canBeginMapHop,
+  decideTransferMapHost,
   findManifestMapIndex,
   type ManifestMapFileEntry,
   type MapHopGuardInput,
   type MapHopRefusal,
   nextManifestMapIndex,
+  type TransferMapHostRefusal,
 } from '../src/map-hop.js';
 
 function guards(partial: Partial<MapHopGuardInput> = {}): MapHopGuardInput {
@@ -140,5 +142,121 @@ describe('findManifestMapIndex', () => {
       ok: true,
       index: 0,
     });
+  });
+
+  it('resolves the C1b transfer fixture mapFile against a prefixed multi-map manifest', () => {
+    // Product path: authors write basenames; convert-rpgm-game stores game/file.
+    const list = maps('demo/map-a.tmmap.json', 'demo/map-b.tmmap.json');
+    expect(findManifestMapIndex(list, 'map-b.tmmap.json')).toEqual({ ok: true, index: 1 });
+    expect(findManifestMapIndex(list, 'map-a.tmmap.json')).toEqual({ ok: true, index: 0 });
+  });
+});
+
+/**
+ * EventHost.transferMap early gate (before microtask hop). Separate from
+ * canBeginMapHop: the host must call done() even when refusing so the
+ * interpreter returns to idle, and "no multi-map path" is not a hop guard.
+ */
+describe('decideTransferMapHost', () => {
+  it('accepts a transfer when the multi-map hop path is live and idle', () => {
+    expect(
+      decideTransferMapHost({
+        hopPathActive: true,
+        hopInFlight: false,
+        activeTraversal: false,
+        mapFile: 'map-b.tmmap.json',
+        x: 1,
+        y: 2,
+        facing: 'down',
+      }),
+    ).toEqual({
+      ok: true,
+      mapFile: 'map-b.tmmap.json',
+      arrival: { x: 1, y: 2, facing: 'down' },
+    });
+  });
+
+  it('omits facing from arrival when the command did not author one', () => {
+    const decision = decideTransferMapHost({
+      hopPathActive: true,
+      hopInFlight: false,
+      activeTraversal: false,
+      mapFile: 'map-b.tmmap.json',
+      x: 0,
+      y: 0,
+    });
+    expect(decision).toEqual({
+      ok: true,
+      mapFile: 'map-b.tmmap.json',
+      arrival: { x: 0, y: 0 },
+    });
+    if (decision.ok) {
+      expect('facing' in decision.arrival).toBe(false);
+    }
+  });
+
+  it('refuses when no multi-map hop path is installed (single-map / no manifest)', () => {
+    expect(
+      decideTransferMapHost({
+        hopPathActive: false,
+        hopInFlight: false,
+        activeTraversal: false,
+        mapFile: 'map-b.tmmap.json',
+        x: 0,
+        y: 0,
+      }),
+    ).toEqual({ ok: false, reason: 'no-hop-path' satisfies TransferMapHostRefusal });
+  });
+
+  it('refuses when a hop is already in flight', () => {
+    expect(
+      decideTransferMapHost({
+        hopPathActive: true,
+        hopInFlight: true,
+        activeTraversal: false,
+        mapFile: 'map-b.tmmap.json',
+        x: 0,
+        y: 0,
+      }),
+    ).toEqual({ ok: false, reason: 'hop-in-flight' });
+  });
+
+  it('refuses while a stair traversal is active', () => {
+    expect(
+      decideTransferMapHost({
+        hopPathActive: true,
+        hopInFlight: false,
+        activeTraversal: true,
+        mapFile: 'map-b.tmmap.json',
+        x: 0,
+        y: 0,
+      }),
+    ).toEqual({ ok: false, reason: 'traversal-active' });
+  });
+
+  it('priority: no-hop-path wins over in-flight / traversal', () => {
+    expect(
+      decideTransferMapHost({
+        hopPathActive: false,
+        hopInFlight: true,
+        activeTraversal: true,
+        mapFile: 'x.tmmap.json',
+        x: 0,
+        y: 0,
+      }),
+    ).toEqual({ ok: false, reason: 'no-hop-path' });
+  });
+
+  it('priority: hop-in-flight wins over traversal when the hop path is active', () => {
+    expect(
+      decideTransferMapHost({
+        hopPathActive: true,
+        hopInFlight: true,
+        activeTraversal: true,
+        mapFile: 'x.tmmap.json',
+        x: 0,
+        y: 0,
+      }),
+    ).toEqual({ ok: false, reason: 'hop-in-flight' });
   });
 });
