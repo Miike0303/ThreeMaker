@@ -81,28 +81,18 @@ describe('parseEventScript', () => {
   });
 
   it('allows transferMap nested under conditional then/else', () => {
-    const result = parseEventScript({
-      version: 1,
-      events: {
-        gate: [
-          {
-            type: 'conditional',
-            if: { key: 'open', op: 'eq', value: true },
-            then: [{ type: 'transferMap', mapFile: 'map-b.tmmap.json', x: 2, y: 3 }],
-            else: [{ type: 'setWorldVar', key: 'blocked', value: true }],
-          },
-        ],
-      },
-    });
-    expect(result.gate?.[0]).toMatchObject({ type: 'conditional' });
-    // Rename on destructure: biome flags property access named `then` as thenable.
-    const { then: thenBranch } = result.gate?.[0] as { then: unknown[] };
-    expect(thenBranch[0]).toEqual({
-      type: 'transferMap',
-      mapFile: 'map-b.tmmap.json',
-      x: 2,
-      y: 3,
-    });
+    const events = {
+      gate: [
+        {
+          type: 'conditional' as const,
+          if: { key: 'open' as const, op: 'eq' as const, value: true as const },
+          then: [{ type: 'transferMap' as const, mapFile: 'map-b.tmmap.json', x: 2, y: 3 }],
+          else: [{ type: 'setWorldVar' as const, key: 'blocked', value: true as const }],
+        },
+      ],
+    };
+    const result = parseEventScript({ version: 1, events });
+    expect(result).toEqual(events);
   });
 
   it('parses a script with no events', () => {
