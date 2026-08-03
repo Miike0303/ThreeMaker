@@ -103,6 +103,25 @@ describe('parseEventScript', () => {
     ).toThrow(/mapFile/);
   });
 
+  it('rejects transferMap mapFile that is absolute (not a manifest-relative entry)', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: {
+          door: [{ type: 'transferMap', mapFile: '/etc/passwd.tmmap.json', x: 0, y: 0 }],
+        },
+      }),
+    ).toThrow(/mapFile/);
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: {
+          door: [{ type: 'transferMap', mapFile: 'C:/maps/other.tmmap.json', x: 0, y: 0 }],
+        },
+      }),
+    ).toThrow(/mapFile/);
+  });
+
   it('rejects transferMap with invalid facing', () => {
     expect(() =>
       parseEventScript({

@@ -228,11 +228,17 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
         fail(`${label} requires a non-empty string "mapFile".`);
       }
       // Manifest paths are relative game entries (e.g. "town/map001.tmmap.json").
-      // Reject ".." segments so authored content cannot walk outside the map dir.
+      // Reject ".." segments and absolute paths so authored content cannot leave
+      // the map directory or escape into the host filesystem.
       const normalizedMapFile = mapFile.replaceAll('\\', '/');
       if (normalizedMapFile.split('/').includes('..')) {
         fail(
           `${label} "mapFile" must not contain ".." path segments, got ${JSON.stringify(mapFile)}.`,
+        );
+      }
+      if (normalizedMapFile.startsWith('/') || /^[a-zA-Z]:\//.test(normalizedMapFile)) {
+        fail(
+          `${label} "mapFile" must be a manifest-relative path, not absolute, got ${JSON.stringify(mapFile)}.`,
         );
       }
       if (typeof x !== 'number' || !Number.isInteger(x) || x < 0) {
