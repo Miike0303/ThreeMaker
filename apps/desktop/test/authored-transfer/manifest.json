@@ -1,0 +1,16 @@
+{
+  "maps": [
+    {
+      "mapId": 1,
+      "name": "Transfer Map A",
+      "file": "demo/map-a.tmmap.json",
+      "slotsResolved": 0
+    },
+    {
+      "mapId": 2,
+      "name": "Transfer Map B",
+      "file": "demo/map-b.tmmap.json",
+      "slotsResolved": 0
+    }
+  ]
+}

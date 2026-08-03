@@ -3,11 +3,13 @@ import {
   canBeginMapHop,
   decideTransferMapHost,
   findManifestMapIndex,
+  isMapCycleKey,
   type ManifestMapFileEntry,
   type MapHopGuardInput,
   type MapHopRefusal,
   nextManifestMapIndex,
   planManifestHop,
+  planNextManifestCycle,
   type TransferMapHostRefusal,
 } from '../src/map-hop.js';
 
@@ -327,5 +329,42 @@ describe('planManifestHop', () => {
     });
     expect(plan).toEqual({ ok: true, index: 1, file: 'demo/map-b.tmmap.json' });
     expect(host.arrival).toEqual({ x: 1, y: 1, facing: 'down' });
+  });
+});
+
+describe('isMapCycleKey', () => {
+  it('accepts G in any casing (manifest multi-map / dev cycle)', () => {
+    expect(isMapCycleKey('g')).toBe(true);
+    expect(isMapCycleKey('G')).toBe(true);
+  });
+
+  it('rejects non-cycle keys', () => {
+    expect(isMapCycleKey('e')).toBe(false);
+    expect(isMapCycleKey('Enter')).toBe(false);
+  });
+});
+
+describe('planNextManifestCycle', () => {
+  it('returns the next entry file and wraps at the end', () => {
+    const list = maps('demo/map-a.tmmap.json', 'demo/map-b.tmmap.json');
+    expect(planNextManifestCycle(list, 0)).toEqual({
+      index: 1,
+      file: 'demo/map-b.tmmap.json',
+    });
+    expect(planNextManifestCycle(list, 1)).toEqual({
+      index: 0,
+      file: 'demo/map-a.tmmap.json',
+    });
+  });
+
+  it('stays on the sole entry when the manifest has one map', () => {
+    expect(planNextManifestCycle(maps('only.tmmap.json'), 0)).toEqual({
+      index: 0,
+      file: 'only.tmmap.json',
+    });
+  });
+
+  it('returns undefined for an empty maps list (no cycle to advance)', () => {
+    expect(planNextManifestCycle([], 0)).toBeUndefined();
   });
 });

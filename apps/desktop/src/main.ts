@@ -62,7 +62,12 @@ import { createHopStats, recordHopCompleted } from './hop-stats.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
-import { decideTransferMapHost, nextManifestMapIndex, planManifestHop } from './map-hop.js';
+import {
+  decideTransferMapHost,
+  isMapCycleKey,
+  planManifestHop,
+  planNextManifestCycle,
+} from './map-hop.js';
 import type { MapNarrativeBundle } from './map-narrative-bundle.js';
 import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
@@ -1588,7 +1593,7 @@ async function renderFixtureMap(
     }
 
     window.addEventListener('keydown', (event) => {
-      if (event.repeat || event.key.toLowerCase() !== 'g' || cycling) return;
+      if (event.repeat || !isMapCycleKey(event.key) || cycling) return;
       // Block map switching while a script is running/blocked: disposing
       // `session` mid-script would strand an in-flight moveEntity (its
       // `mover` reference goes stale, so the host's `done()` never fires
@@ -1857,13 +1862,11 @@ async function renderFixtureMap(
     };
 
     window.addEventListener('keydown', (event) => {
-      if (event.repeat || event.key.toLowerCase() !== 'g') return;
-      const maps = manifestNav.manifest.maps;
-      const nextIndex = nextManifestMapIndex(currentMapIndex, maps.length);
-      const nextEntry = maps[nextIndex];
-      if (!nextEntry) return;
+      if (event.repeat || !isMapCycleKey(event.key)) return;
+      const cycle = planNextManifestCycle(manifestNav.manifest.maps, currentMapIndex);
+      if (!cycle) return;
       // Single load path: hopToManifestFile owns guards + dispose/rebuild.
-      void hopToManifestFile?.(nextEntry.file, 'authored', {
+      void hopToManifestFile?.(cycle.file, 'authored', {
         advanceIndexOnUnplayable: true,
       });
     });

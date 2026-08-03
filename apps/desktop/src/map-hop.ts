@@ -211,3 +211,24 @@ export function planManifestHop(input: ManifestHopPlanInput): ManifestHopPlan {
 
   return { ok: true, index: lookup.index, file: entry.file };
 }
+
+/** Manifest multi-map G-cycle and the DEV fixture cycle both use `g`. */
+export function isMapCycleKey(key: string): boolean {
+  return key.toLowerCase() === 'g';
+}
+
+/**
+ * Next map in a forward G-cycle: wraps within `maps`. Returns `undefined`
+ * when there are no entries (no hop to start). Does not consult hop guards —
+ * callers still run {@link planManifestHop} / hopToManifestFile for those.
+ */
+export function planNextManifestCycle(
+  maps: readonly ManifestMapFileEntry[],
+  currentIndex: number,
+): { readonly index: number; readonly file: string } | undefined {
+  if (maps.length < 1) return undefined;
+  const index = nextManifestMapIndex(currentIndex, maps.length);
+  const entry = maps[index];
+  if (!entry) return undefined;
+  return { index, file: entry.file };
+}

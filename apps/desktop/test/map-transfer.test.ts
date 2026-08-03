@@ -21,7 +21,9 @@ import { ElevationField } from '@threemaker/gameplay';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
 import { loadAuthoredMap } from '../src/authored-map.js';
+import { parseGameManifest } from '../src/game-manifest.js';
 import { createHopStats, recordHopCompleted } from '../src/hop-stats.js';
+import { decideTransferMapHost, planManifestHop, planNextManifestCycle } from '../src/map-hop.js';
 import { buildMapNarrativeBundle } from '../src/map-narrative-bundle.js';
 import { createNarrativeRoot } from '../src/narrative-root.js';
 import { buildMap } from './fixtures.js';
@@ -233,5 +235,57 @@ describe('authored transferMap (C1b)', () => {
       { mapFile: 'map-a.tmmap.json', x: 2, y: 2, facing: 'up' },
     ]);
     expect(root.world.get('secret_revealed')).toBe(true);
+  });
+
+  /**
+   * Live-smoke readiness: the multi-map manifest fixture lists A+B with
+   * game-folder prefixes. Authored transferMap basenames and the G-cycle
+   * must resolve to those canonical files before any desktop hop runs.
+   */
+  it('multi-map manifest fixture plans transfer basenames and G-cycle', async () => {
+    const manifest = parseGameManifest(JSON.parse(fixtureText('manifest.json')) as unknown);
+    expect(manifest.maps.map((m) => m.file)).toEqual([
+      'demo/map-a.tmmap.json',
+      'demo/map-b.tmmap.json',
+    ]);
+
+    const { host, transferCalls } = makeHost();
+    // Sidecars stay on the flat fixture path; the manifest only supplies
+    // game-folder-prefixed `file` strings for hop planning (live product shape).
+    const { bundle } = await boot('map-a.tmmap.json', '.threemaker/maps/map-a.tmmap.json', host);
+    const cmd = bundle.events.go_to_b?.[0];
+    expect(cmd).toMatchObject({ type: 'transferMap', mapFile: 'map-b.tmmap.json' });
+    if (cmd?.type !== 'transferMap') throw new Error('expected transferMap');
+
+    const schedule = decideTransferMapHost({
+      hopPathActive: manifest.maps.length > 1,
+      hopInFlight: false,
+      activeTraversal: false,
+      mapFile: cmd.mapFile,
+      x: cmd.x,
+      y: cmd.y,
+      facing: cmd.facing,
+    });
+    expect(schedule).toEqual({
+      ok: true,
+      mapFile: 'map-b.tmmap.json',
+      arrival: { x: 1, y: 1, facing: 'down' },
+    });
+
+    const hopPlan = planManifestHop({
+      guard: { hopInFlight: false, interpreterState: 'idle', activeTraversal: false },
+      maps: manifest.maps,
+      mapFile: cmd.mapFile,
+    });
+    expect(hopPlan).toEqual({ ok: true, index: 1, file: 'demo/map-b.tmmap.json' });
+
+    expect(planNextManifestCycle(manifest.maps, 0)).toEqual({
+      index: 1,
+      file: 'demo/map-b.tmmap.json',
+    });
+
+    // Interpreter still reaches the host with the authored basename (main then plans).
+    bundle.interpreter.run(bundle.events.go_to_b ?? []);
+    expect(transferCalls).toEqual([{ mapFile: 'map-b.tmmap.json', x: 1, y: 1, facing: 'down' }]);
   });
 });
