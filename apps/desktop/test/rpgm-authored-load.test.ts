@@ -1,11 +1,10 @@
 /**
- * rpgm-to-v3-spike acceptance evidence: proves a `convertRpgmMap`-produced
- * document is accepted by the EXISTING authored-map load path
- * (`loadAuthoredMap` -> `translateMapDocument` -> per-slot texture
- * resolution), the same way a painter-authored `.tmmap` file already is.
- * Synthetic RpgmMap/tileset only -- see `SKILL.md`'s "committed tests use
- * synthetic fixtures" rule; the real-project run (kingdom-of-subversion) is
- * this change's manual acceptance evidence, not a committed asset.
+ * Acceptance evidence: a `convertRpgmMap`-produced document is accepted by
+ * the existing authored-map load path (`loadAuthoredMap` ->
+ * `translateMapDocument` -> per-slot texture resolution), the same way a
+ * painter-authored `.tmmap` file already is. Synthetic RpgmMap/tileset only
+ * -- the real-project run (kingdom-of-subversion) is manual evidence, not a
+ * committed asset.
  */
 
 import type { RpgmMap, RpgmTileset, TileSheetNames } from '@threemaker/importer-rpgm';

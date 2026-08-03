@@ -1,16 +1,16 @@
 /**
- * RPGM -> ThreeMaker map-format v3 converter (rpgm-to-v3-spike: validation
- * spike proving the RPGM-import pipeline, not a production feature). Pure --
- * no fs/network here, mirrors `apps/editor/src/map-compose.ts`'s
- * `toRenderableMap`/`toRenderableTileset` in the OPPOSITE direction (v3 ->
- * RpgmMap there, RpgmMap -> v3 here).
+ * RPGM -> ThreeMaker `.tmmap` converter (`convertRpgmMap`). Pure -- no
+ * fs/network here. Emits a document at `CURRENT_MAP_FORMAT_VERSION` (v4 as of
+ * C1a: empty narrative ports `npcs`/`triggers`/`events`/`worldSeeds`).
+ * Mirrors `apps/editor/src/map-compose.ts`'s `toRenderableMap` /
+ * `toRenderableTileset` in the opposite direction (document -> RpgmMap there,
+ * RpgmMap -> document here).
  *
  * `RpgmMap.layers`'s 4 tile layers + shadows + regions are already
  * structurally identical to `MapLayers` (`readonly number[]`, length
  * `width * height`), so the layer copy is a direct 1:1 passthrough -- no
  * transformation needed. Everything this map has no RPGM-native source for
- * (`stairLinks`, `rooms`) comes out empty, matching a freshly-created blank
- * v3 document.
+ * (`stairLinks`, `rooms`, narrative ports) comes out empty.
  */
 
 import type { MapDocument, SlotComposition } from '@threemaker/map-format';
@@ -52,14 +52,14 @@ export interface ConvertRpgmMapOptions {
 }
 
 /**
- * Converts one parsed RPGM map + its matching tileset into a single-floor v3
- * `MapDocument` at `baseElevation` 0. `stairLinks`/`rooms` are always empty
- * (no RPGM-native source for either). `tileset.slots` defaults to `{}` and is
- * otherwise exactly whatever `opts.slots` gives -- this pure converter never
- * touches the catalog itself (see `ConvertRpgmMapOptions.slots`'s doc
- * comment); a slot with no `object` stays unsourced, so
- * `apps/desktop/src/authored-map.ts`'s per-slot resolver simply skips it
- * rather than failing.
+ * Converts one parsed RPGM map + its matching tileset into a single-floor
+ * `MapDocument` at `baseElevation` 0 and the current format version.
+ * `stairLinks`/`rooms`/narrative ports are always empty (no RPGM-native
+ * source). `tileset.slots` defaults to `{}` and is otherwise exactly whatever
+ * `opts.slots` gives -- this pure converter never touches the catalog itself
+ * (see `ConvertRpgmMapOptions.slots`); a slot with no `object` stays
+ * unsourced, so `apps/desktop/src/authored-map.ts`'s per-slot resolver simply
+ * skips it rather than failing.
  */
 export function convertRpgmMap(
   map: RpgmMap,

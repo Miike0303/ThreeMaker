@@ -4,7 +4,7 @@ import {
   validateCurrentVersionShape,
 } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
-import { convertRpgmMap } from '../src/convert-to-v3.js';
+import { convertRpgmMap } from '../src/convert-rpgm-map.js';
 import type { RpgmMap, RpgmTileset, TileSheetNames } from '../src/types.js';
 
 const EMPTY_SHEET_NAMES: TileSheetNames = {
@@ -141,6 +141,16 @@ describe('convertRpgmMap', () => {
     const doc = convertRpgmMap(map, tileset);
 
     expect(() => validateCurrentVersionShape(doc)).not.toThrow();
+  });
+
+  it('emits empty v4 narrative ports (npcs/triggers/events/worldSeeds) at CURRENT_MAP_FORMAT_VERSION', () => {
+    const doc = convertRpgmMap(buildSyntheticMap(), buildSyntheticTileset());
+
+    expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
+    expect(doc.npcs).toEqual([]);
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+    expect(doc.worldSeeds).toEqual({});
   });
 
   it('passes given tileset slots through verbatim (catalog lookup is the caller job, not this pure converters)', () => {
