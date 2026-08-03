@@ -57,10 +57,28 @@
       "onInteract": "guard_check"
     }
   ],
-  "triggers": [],
+  "triggers": [
+    {
+      "id": "to_map_a",
+      "x": 0,
+      "y": 3,
+      "floor": "floor-0",
+      "on": "enter",
+      "event": "go_to_a"
+    }
+  ],
   "events": {
     "guard_check": [
       { "type": "showDialogue", "source": { "kind": "ink", "storyId": "guard", "knot": "start" } }
+    ],
+    "go_to_a": [
+      {
+        "type": "transferMap",
+        "mapFile": "map-a.tmmap.json",
+        "x": 2,
+        "y": 2,
+        "facing": "up"
+      }
     ]
   },
   "worldSeeds": { "secret_revealed": false }
