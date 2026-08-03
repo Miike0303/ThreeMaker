@@ -377,6 +377,34 @@ describe('validateCurrentVersionShape: rooms (schema v3)', () => {
     expect(doc.rooms).toHaveLength(2);
   });
 
+  /**
+   * C1a follow-up: uniqueness used to key on `${floor}\0${id}`. Distinct
+   * (floor, id) pairs that share the same NUL-joined string were falsely
+   * rejected as duplicates. Nested floor→id maps must not collide.
+   */
+  it('does not treat distinct floor+id pairs as duplicates when a raw NUL would glue their keys', () => {
+    const floorA = 'a';
+    const idWithNul = `b${'\0'}c`;
+    const floorWithNul = `a${'\0'}b`;
+    const idC = 'c';
+    const input = makeValidDocInput({
+      floors: [
+        { id: floorA, baseElevation: 0, layers: makeLayers(4) },
+        { id: floorWithNul, baseElevation: 3, layers: makeLayers(4) },
+      ],
+      rooms: [
+        { id: idWithNul, floor: floorA, rects: [{ x: 0, y: 0, width: 1, height: 1 }] },
+        { id: idC, floor: floorWithNul, rects: [{ x: 1, y: 1, width: 1, height: 1 }] },
+      ],
+    });
+    const doc = validateCurrentVersionShape(input);
+    expect(doc.rooms).toHaveLength(2);
+    expect(doc.rooms[0]?.floor).toBe(floorA);
+    expect(doc.rooms[0]?.id).toBe(idWithNul);
+    expect(doc.rooms[1]?.floor).toBe(floorWithNul);
+    expect(doc.rooms[1]?.id).toBe(idC);
+  });
+
   it('rejects a room whose "floor" does not reference an existing floor id', () => {
     const input = makeValidDocInput({
       rooms: [

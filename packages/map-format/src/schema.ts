@@ -803,17 +803,24 @@ function validateRooms(
   // Spec: "Unique room ids per floor" -- scoped per floor (not global), since
   // `computeRoomIdGrid`'s cell values encode a floor-scoped 1-based ordinal,
   // never `id` itself; two rooms on DIFFERENT floors may share an id.
-  const firstIndexByFloorAndId = new Map<string, number>();
+  // Nested Map (floor -> id -> first index), not a NUL-joined string: a raw
+  // U+0000 inside floor or room id used to make distinct pairs share one key
+  // (C1a archive follow-up: schema.ts raw NUL / key-collision).
+  const firstIndexByFloorAndId = new Map<string, Map<string, number>>();
   for (const [index, room] of rooms.entries()) {
-    const key = `${room.floor} ${room.id}`;
-    const firstIndex = firstIndexByFloorAndId.get(key);
+    let byId = firstIndexByFloorAndId.get(room.floor);
+    if (byId === undefined) {
+      byId = new Map<string, number>();
+      firstIndexByFloorAndId.set(room.floor, byId);
+    }
+    const firstIndex = byId.get(room.id);
     if (firstIndex !== undefined) {
       throw new MapFormatError(
         'malformed',
         `"rooms[${index}].id" duplicates "rooms[${firstIndex}].id" (both are ${JSON.stringify(room.id)}) on floor ${JSON.stringify(room.floor)}; room ids must be unique per floor.`,
       );
     }
-    firstIndexByFloorAndId.set(key, index);
+    byId.set(room.id, index);
   }
 
   return rooms;
