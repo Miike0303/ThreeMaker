@@ -43,11 +43,7 @@ import { buildPlaceholderCharacterTexture } from './character-sprite-placeholder
 import { clampRange } from './clamp.js';
 import type { DebugSnapshot } from './debug-panel.js';
 import { createDebugPanel } from './debug-panel.js';
-import {
-  createDialogueOverlay,
-  nextHighlightedIndex,
-  resolveDialogueKeyAction,
-} from './dialogue-ui.js';
+import { createDialogueOverlay, nextHighlightedIndex } from './dialogue-ui.js';
 import {
   fixtureCharacterUrl,
   fixtureImageUrl,
@@ -59,6 +55,7 @@ import { buildFloorGameplay, createFloorRouter } from './floor-runtime.js';
 import { disposeFloorTextures } from './floor-textures.js';
 import type { GameManifest } from './game-manifest.js';
 import { parseGameManifest } from './game-manifest.js';
+import { resolveGameplayKeyAction } from './gameplay-input.js';
 import { groundYAt } from './ground-y.js';
 import { createHd2dPipeline } from './hd2d-pipeline.js';
 import { createHopStats, recordHopCompleted } from './hop-stats.js';
@@ -1434,31 +1431,28 @@ async function renderFixtureMap(
     if (bundle) subscribeDialogueSignals(bundle.interpreter);
   }
 
+  // Narrative keys (C2 prep: pure resolveGameplayKeyAction; host applies).
   window.addEventListener('keydown', (event) => {
     if (event.repeat || !bundle) return;
     const { interpreter } = bundle;
-
-    if (interpreter.state === 'idle') {
-      if (event.key.toLowerCase() !== 'e') return;
-      const { x, y } = session.mover.tile;
-      const facing = session.mover.facing;
-      const floor = session.floorRouter.currentFloor;
-      const npc = bundle.npcRegistry.npcAdjacentFacing(floor, x, y, facing);
-      if (npc) {
-        interpreter.run(bundle.events[npc.onInteract] ?? []);
-        return;
-      }
-      for (const eventId of bundle.triggerIndex.interact(floor, x, y, facing)) {
-        interpreter.run(bundle.events[eventId] ?? []);
-      }
-      return;
-    }
-
-    const hasChoices = interpreter.state === 'waiting-for-choice';
-    const action = resolveDialogueKeyAction(event.key, hasChoices);
+    const action = resolveGameplayKeyAction(event.key, interpreter.state);
     if (!action) return;
 
     switch (action.kind) {
+      case 'try-interact': {
+        const { x, y } = session.mover.tile;
+        const facing = session.mover.facing;
+        const floor = session.floorRouter.currentFloor;
+        const npc = bundle.npcRegistry.npcAdjacentFacing(floor, x, y, facing);
+        if (npc) {
+          interpreter.run(bundle.events[npc.onInteract] ?? []);
+          return;
+        }
+        for (const eventId of bundle.triggerIndex.interact(floor, x, y, facing)) {
+          interpreter.run(bundle.events[eventId] ?? []);
+        }
+        return;
+      }
       case 'advance':
         if (interpreter.state === 'waiting-for-dialogue') interpreter.advance();
         return;
