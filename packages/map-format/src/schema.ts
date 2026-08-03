@@ -500,8 +500,11 @@ function validateNpcSprite(input: unknown, label: string): NpcSpriteRef {
     throw new MapFormatError('malformed', `"${label}.sprite" must be an object.`);
   }
   const raw = input as Record<string, unknown>;
-  if (typeof raw.object !== 'string' || raw.object.length === 0) {
-    throw new MapFormatError('malformed', `"${label}.sprite.object" must be a non-empty string.`);
+  if (typeof raw.object !== 'string' || !/^[0-9a-f]{64}$/.test(raw.object)) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.sprite.object" must be a 64-character lowercase hex sha256, got ${JSON.stringify(raw.object)}.`,
+    );
   }
   if (!Number.isInteger(raw.characterIndex) || (raw.characterIndex as number) < 0) {
     throw new MapFormatError(

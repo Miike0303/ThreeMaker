@@ -153,6 +153,28 @@ describe('map-format v4 entry-level validation (task 1.2)', () => {
     expect(doc.npcs.map((entry) => entry.floor)).toEqual(['floor-0', 'floor-1']);
   });
 
+  it('rejects npc sprite.object that is not a 64-char lowercase hex sha256', () => {
+    expect(() =>
+      parseMapDocument(
+        raw({ npcs: [npc({ sprite: { object: 'not-a-sha', characterIndex: 0 } })] }),
+      ),
+    ).toThrow(/sprite\.object.*sha256|64/);
+    expect(() =>
+      parseMapDocument(
+        raw({
+          npcs: [npc({ sprite: { object: 'A'.repeat(64), characterIndex: 0 } })],
+        }),
+      ),
+    ).toThrow(/sprite\.object/);
+  });
+
+  it('accepts npc sprite.object as a 64-char lowercase hex sha256', () => {
+    const doc = parseMapDocument(
+      raw({ npcs: [npc({ sprite: { object: 'ab'.repeat(32), characterIndex: 0 } })] }),
+    );
+    expect(doc.npcs[0]?.sprite.object).toBe('ab'.repeat(32));
+  });
+
   it('rejects a non-primitive worldSeeds value', () => {
     expect(() => parseMapDocument(raw({ worldSeeds: { progress: { chapter: 1 } } }))).toThrow(
       '"worldSeeds.progress" must be a boolean, number, or string, got {"chapter":1}.',

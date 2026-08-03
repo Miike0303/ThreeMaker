@@ -152,7 +152,7 @@ describe('parseNpcs cases ported to parseMapDocument (14)', () => {
     [
       'throws when "sprite.object" is not a string (was "sprite.sheet")',
       () => parseMapDocument(raw({ npcs: [npc({ sprite: { object: 1, characterIndex: 1 } })] })),
-      '"npcs[0].sprite.object" must be a non-empty string.',
+      '"npcs[0].sprite.object" must be a 64-character lowercase hex sha256, got 1.',
     ],
     [
       'throws when "sprite.characterIndex" is not an integer (was "sprite.index")',
