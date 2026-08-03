@@ -80,6 +80,7 @@ import {
 import type { FloorSpawn } from './spawn.js';
 import { resolveInitialSpawn } from './spawn.js';
 import { isTauriAvailable } from './tauri-env.js';
+import { resolveViewKeyAction } from './view-input.js';
 import { WalkAnimation } from './walk-animation.js';
 import { createMostRecentHeldDirection } from './walk-input.js';
 
@@ -1493,45 +1494,34 @@ async function renderFixtureMap(
   // structural change to this function's setup, not a local fix.
   await buildNarrativeBundle(sessionOverride?.narrative);
 
+  // View/debug keys (C2 prep: pure resolveViewKeyAction; host applies effects).
+  // Real engine features (camera, zoom, noclip) — available in production;
+  // unlike the 'g' dev map-cycle below.
   window.addEventListener('keydown', (event) => {
     if (event.repeat) return;
-    switch (event.key.toLowerCase()) {
-      case 'p':
+    const action = resolveViewKeyAction(event.key, 'down');
+    if (!action) return;
+    switch (action.kind) {
+      case 'toggle-post-processing':
         postProcessingEnabled = !postProcessingEnabled;
         hd2d.setEnabled(postProcessingEnabled);
         return;
-      case 'c':
-        // Real engine feature (camera mode), not a dev toggle -- available
-        // in production builds, unlike the 'g' dev map-cycle below.
+      case 'cycle-camera-mode':
         cameraMode = cycleCameraMode(cameraMode);
         updateCameraModeIndicator();
         return;
-      case '[':
-        cameraTiltDeg = clampTiltDeg(cameraTiltDeg - CAMERA_TILT_STEP_DEG);
+      case 'tilt':
+        cameraTiltDeg = clampTiltDeg(cameraTiltDeg + action.delta * CAMERA_TILT_STEP_DEG);
         return;
-      case ']':
-        cameraTiltDeg = clampTiltDeg(cameraTiltDeg + CAMERA_TILT_STEP_DEG);
-        return;
-      case '-':
-      case '_':
+      case 'zoom':
         cameraDistance = clampRange(
-          cameraDistance + CAMERA_ZOOM_STEP,
+          cameraDistance + action.delta * CAMERA_ZOOM_STEP,
           CAMERA_MIN_DISTANCE,
           CAMERA_MAX_DISTANCE,
         );
         return;
-      case '=':
-      case '+':
-        cameraDistance = clampRange(
-          cameraDistance - CAMERA_ZOOM_STEP,
-          CAMERA_MIN_DISTANCE,
-          CAMERA_MAX_DISTANCE,
-        );
-        return;
-      case 'control':
-        // Held, not toggled -- see the matching 'keyup' listener below,
-        // which is what actually turns this back off. Repeat keydowns
-        // while held just set the same value again, harmless.
+      case 'noclip-on':
+        // Held, not toggled — keyup applies noclip-off.
         noclipActive = true;
         debugPanel.setNoclipActive(true);
         return;
@@ -1540,13 +1530,12 @@ async function renderFixtureMap(
     }
   });
 
-  // Releasing Ctrl restores normal passability immediately (`withNoclip`,
-  // above) -- including the "don't re-trap" escape hatch if noclip carried
-  // the player into/through a wall. Real engine feature (available in
-  // production, in both fixture and manifest/authored modes), not a dev
-  // toggle -- unlike the 'g' dev map-cycle below.
+  // Releasing Ctrl restores normal passability immediately (`withNoclip`) —
+  // including the "don't re-trap" escape hatch if noclip carried the player
+  // into/through a wall.
   window.addEventListener('keyup', (event) => {
-    if (event.key.toLowerCase() !== 'control') return;
+    const action = resolveViewKeyAction(event.key, 'up');
+    if (action?.kind !== 'noclip-off') return;
     noclipActive = false;
     debugPanel.setNoclipActive(false);
   });
