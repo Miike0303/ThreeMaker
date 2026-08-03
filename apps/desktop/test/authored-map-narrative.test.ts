@@ -281,6 +281,52 @@ describe('loadAuthoredMap -- authored narrative', () => {
     expect(deps.resolveObjectTexture).not.toHaveBeenCalled();
   });
 
+  /**
+   * C1a follow-up: `key in worldSeeds` is true for Object.prototype names
+   * (`toString`, `constructor`, …) even when the document never authored them.
+   * Ownership must use Object.hasOwn so a world_get("toString") without a seed
+   * still fails the load gate.
+   */
+  it('fails when world_get asks for a prototype key that is not an own worldSeeds entry', async () => {
+    const deps = buildDeps({
+      readMapDocumentText: vi.fn(async () =>
+        docText({
+          // Keep real seeds so the fixture's other world_get keys stay valid;
+          // only the injected sidecar below exercises the prototype hole.
+          worldSeeds: { secret_revealed: false },
+        }),
+      ),
+      readSidecarText: vi.fn(async (path: string) => {
+        if (path.endsWith('current.elder.ink')) {
+          return '=== start ===\n{world_get("toString")}\n-> DONE\n';
+        }
+        return SIDECARS[path] ?? null;
+      }),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/world_get\("toString"\)/);
+  });
+
+  it('fails when an NPC onInteract is a prototype name not authored as an own events key', async () => {
+    const deps = buildDeps({
+      readMapDocumentText: vi.fn(async () =>
+        docText({ npcs: [{ ...fixtureEntry('npcs', 0), onInteract: 'toString' }] }),
+      ),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/npc "elder".*"toString"/);
+  });
+
+  it('fails when a trigger event is a prototype name not authored as an own events key', async () => {
+    const deps = buildDeps({
+      readMapDocumentText: vi.fn(async () =>
+        docText({ triggers: [{ ...fixtureEntry('triggers', 0), event: 'constructor' }] }),
+      ),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/trigger "signpost".*"constructor"/);
+  });
+
   it('leaves narrative undefined and reads no sidecar for an authored map with no narrative content', async () => {
     const deps = buildDeps({
       readMapDocumentText: vi.fn(async () =>

@@ -366,7 +366,9 @@ async function loadNarrative(
   }
 
   for (const npc of doc.npcs) {
-    if (!(npc.onInteract in doc.events)) {
+    // Object.hasOwn: `in` is true for Object.prototype names (`toString`, …)
+    // even when the document never authored that event key (C1a follow-up).
+    if (!Object.hasOwn(doc.events, npc.onInteract)) {
       failNarrative(
         mapRelativePath,
         `npc ${JSON.stringify(npc.id)} references onInteract event ${JSON.stringify(npc.onInteract)}, but no such event exists.`,
@@ -375,7 +377,7 @@ async function loadNarrative(
   }
 
   for (const trigger of doc.triggers) {
-    if (!(trigger.event in doc.events)) {
+    if (!Object.hasOwn(doc.events, trigger.event)) {
       failNarrative(
         mapRelativePath,
         `trigger ${JSON.stringify(trigger.id)} references event ${JSON.stringify(trigger.event)}, but no such event exists.`,
@@ -391,7 +393,7 @@ async function loadNarrative(
   for (const [storyId, source] of inkSources) {
     for (const match of source.matchAll(WORLD_GET_CALL_PATTERN)) {
       const key = match[1];
-      if (key !== undefined && !(key in doc.worldSeeds)) {
+      if (key !== undefined && !Object.hasOwn(doc.worldSeeds, key)) {
         failNarrative(
           mapRelativePath,
           `ink sidecar ${JSON.stringify(sidecarPath(mapRelativePath, storyId))} calls world_get("${key}"), but no world seed exists for ${JSON.stringify(key)} -- seed it in the document's "worldSeeds".`,
