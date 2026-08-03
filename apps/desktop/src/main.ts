@@ -81,6 +81,7 @@ import type { FloorSpawn } from './spawn.js';
 import { resolveInitialSpawn } from './spawn.js';
 import { isTauriAvailable } from './tauri-env.js';
 import { WalkAnimation } from './walk-animation.js';
+import { createMostRecentHeldDirection } from './walk-input.js';
 
 // The Roseliam fixture (see fixtures/README.md) ships 3 sample maps; Map007
 // is the nicest of the three for this slice (a dungeon interior with both
@@ -534,57 +535,6 @@ function directionBetween(
   if (to.y > from.y) return 'down';
   if (to.y < from.y) return 'up';
   return undefined;
-}
-
-/** WASD/arrow keys -> the grid direction they move the character in. */
-const MOVE_KEYS: Record<string, Direction> = {
-  w: 'up',
-  arrowup: 'up',
-  s: 'down',
-  arrowdown: 'down',
-  a: 'left',
-  arrowleft: 'left',
-  d: 'right',
-  arrowright: 'right',
-};
-
-/** Tracks currently-held movement keys in press order; the most recently pressed one (still held) wins when several are held at once. */
-function createMostRecentHeldDirection(): {
-  current(): Direction | undefined;
-  /**
-   * Clears every held direction without touching the keydown/keyup
-   * listeners. Movement keys (arrows/WASD) double as dialogue
-   * navigation/advance keys -- if the player holds an arrow to walk into an
-   * NPC, the keydown that opens dialogue never fires a matching keyup, so
-   * the arrow stays "held" for movement purposes. Call this when a script
-   * ends (`script:finished`/`script:failed`) so that stale entry doesn't
-   * immediately auto-walk the player the next idle frame; any key still
-   * physically held re-registers on its next keydown/repeat.
-   */
-  clear(): void;
-} {
-  const held: Direction[] = [];
-
-  window.addEventListener('keydown', (event) => {
-    const direction = MOVE_KEYS[event.key.toLowerCase()];
-    if (!direction) return;
-    const index = held.indexOf(direction);
-    if (index !== -1) held.splice(index, 1);
-    held.push(direction);
-  });
-  window.addEventListener('keyup', (event) => {
-    const direction = MOVE_KEYS[event.key.toLowerCase()];
-    if (!direction) return;
-    const index = held.indexOf(direction);
-    if (index !== -1) held.splice(index, 1);
-  });
-
-  return {
-    current: () => held[held.length - 1],
-    clear: () => {
-      held.length = 0;
-    },
-  };
 }
 
 /**
@@ -1095,6 +1045,13 @@ async function renderFixtureMap(
   );
 
   const heldDirection = createMostRecentHeldDirection();
+  // Walk-input is DOM-free; this host binds key events to press/release.
+  window.addEventListener('keydown', (event) => {
+    heldDirection.press(event.key);
+  });
+  window.addEventListener('keyup', (event) => {
+    heldDirection.release(event.key);
+  });
 
   // Declared before the CameraRig state below on purpose: applyCameraPose()
   // closes over `hd2d`, so the pipeline must exist before any pose is applied.
