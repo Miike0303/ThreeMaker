@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   canBeginMapHop,
+  findManifestMapIndex,
+  type ManifestMapFileEntry,
   type MapHopGuardInput,
   type MapHopRefusal,
   nextManifestMapIndex,
@@ -13,6 +15,10 @@ function guards(partial: Partial<MapHopGuardInput> = {}): MapHopGuardInput {
     activeTraversal: false,
     ...partial,
   };
+}
+
+function maps(...files: string[]): readonly ManifestMapFileEntry[] {
+  return files.map((file) => ({ file }));
 }
 
 describe('canBeginMapHop', () => {
@@ -74,5 +80,65 @@ describe('nextManifestMapIndex', () => {
   it('throws on a non-positive mapCount (programming error, not a content failure)', () => {
     expect(() => nextManifestMapIndex(0, 0)).toThrow(/mapCount/i);
     expect(() => nextManifestMapIndex(0, -1)).toThrow(/mapCount/i);
+  });
+});
+
+/**
+ * transferMap authors often write the basename (`map-b.tmmap.json`) while the
+ * converted game manifest stores a path under the game folder
+ * (`kingdom/map-b.tmmap.json`). Exact match is preferred; unique basename is
+ * accepted; ambiguous basename must not pick silently.
+ */
+describe('findManifestMapIndex', () => {
+  it('returns the exact file match when present', () => {
+    const list = maps('town/map001.tmmap.json', 'town/map002.tmmap.json');
+    expect(findManifestMapIndex(list, 'town/map002.tmmap.json')).toEqual({
+      ok: true,
+      index: 1,
+    });
+  });
+
+  it('matches a unique basename when the authored mapFile omits the folder prefix', () => {
+    const list = maps('kingdom-of-subversion/map007.tmmap.json', 'hub/map001.tmmap.json');
+    expect(findManifestMapIndex(list, 'map007.tmmap.json')).toEqual({
+      ok: true,
+      index: 0,
+    });
+  });
+
+  it('prefers exact path over a same-basename entry elsewhere', () => {
+    const list = maps('a/map.tmmap.json', 'b/map.tmmap.json');
+    expect(findManifestMapIndex(list, 'b/map.tmmap.json')).toEqual({ ok: true, index: 1 });
+  });
+
+  it('refuses when no exact or basename match exists', () => {
+    const list = maps('town/map001.tmmap.json');
+    expect(findManifestMapIndex(list, 'missing.tmmap.json')).toEqual({
+      ok: false,
+      reason: 'not-in-manifest',
+    });
+  });
+
+  it('refuses an ambiguous basename that matches two manifest entries', () => {
+    const list = maps('a/door.tmmap.json', 'b/door.tmmap.json');
+    expect(findManifestMapIndex(list, 'door.tmmap.json')).toEqual({
+      ok: false,
+      reason: 'ambiguous-basename',
+    });
+  });
+
+  it('refuses an empty mapFile (content bug, not a silent first-entry hop)', () => {
+    expect(findManifestMapIndex(maps('a.tmmap.json'), '')).toEqual({
+      ok: false,
+      reason: 'not-in-manifest',
+    });
+  });
+
+  it('normalizes backslashes so Windows-authored paths still match', () => {
+    const list = maps('town/map001.tmmap.json');
+    expect(findManifestMapIndex(list, 'town\\map001.tmmap.json')).toEqual({
+      ok: true,
+      index: 0,
+    });
   });
 });

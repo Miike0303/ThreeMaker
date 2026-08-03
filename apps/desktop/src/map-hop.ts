@@ -63,3 +63,59 @@ export function nextManifestMapIndex(currentIndex: number, mapCount: number): nu
   }
   return (currentIndex + 1) % mapCount;
 }
+
+/** Minimal manifest entry shape needed to resolve a `transferMap.mapFile`. */
+export type ManifestMapFileEntry = {
+  readonly file: string;
+};
+
+export type ManifestMapLookupRefusal = 'not-in-manifest' | 'ambiguous-basename';
+
+export type ManifestMapLookupResult =
+  | { readonly ok: true; readonly index: number }
+  | { readonly ok: false; readonly reason: ManifestMapLookupRefusal };
+
+/** Normalize path separators so authored Windows paths match POSIX manifest entries. */
+function normalizeMapPath(path: string): string {
+  return path.replaceAll('\\', '/');
+}
+
+function basenameOf(path: string): string {
+  const normalized = normalizeMapPath(path);
+  const slash = normalized.lastIndexOf('/');
+  return slash === -1 ? normalized : normalized.slice(slash + 1);
+}
+
+/**
+ * Resolve a `transferMap` / hop target against `manifest.maps[].file`.
+ *
+ * Order:
+ * 1. Exact path match (after `\` → `/` normalization)
+ * 2. Unique basename match (authors often omit the game-folder prefix)
+ * 3. Otherwise refuse — never pick the first of several basename hits
+ */
+export function findManifestMapIndex(
+  maps: readonly ManifestMapFileEntry[],
+  mapFile: string,
+): ManifestMapLookupResult {
+  if (mapFile.length === 0) return { ok: false, reason: 'not-in-manifest' };
+
+  const wanted = normalizeMapPath(mapFile);
+  const exact = maps.findIndex((entry) => normalizeMapPath(entry.file) === wanted);
+  if (exact >= 0) return { ok: true, index: exact };
+
+  const wantedBase = basenameOf(wanted);
+  if (wantedBase.length === 0) return { ok: false, reason: 'not-in-manifest' };
+
+  const basenameHits: number[] = [];
+  for (const [index, entry] of maps.entries()) {
+    if (basenameOf(entry.file) === wantedBase) basenameHits.push(index);
+  }
+  if (basenameHits.length === 1) {
+    const only = basenameHits[0];
+    if (only === undefined) return { ok: false, reason: 'not-in-manifest' };
+    return { ok: true, index: only };
+  }
+  if (basenameHits.length > 1) return { ok: false, reason: 'ambiguous-basename' };
+  return { ok: false, reason: 'not-in-manifest' };
+}

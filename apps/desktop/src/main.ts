@@ -65,7 +65,7 @@ import { createHopStats, recordHopCompleted } from './hop-stats.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
-import { canBeginMapHop, nextManifestMapIndex } from './map-hop.js';
+import { canBeginMapHop, findManifestMapIndex, nextManifestMapIndex } from './map-hop.js';
 import type { MapNarrativeBundle } from './map-narrative-bundle.js';
 import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
@@ -1813,13 +1813,18 @@ async function renderFixtureMap(
       }
 
       const maps = manifestNav.manifest.maps;
-      const targetIndex = maps.findIndex((entry) => entry.file === mapFile);
-      if (targetIndex < 0) {
+      const lookup = findManifestMapIndex(maps, mapFile);
+      if (!lookup.ok) {
+        const detail =
+          lookup.reason === 'ambiguous-basename'
+            ? `matches multiple manifest maps by basename — use the full manifest path`
+            : `is not in the game manifest`;
         console.error(
-          `transferMap / hop target "${mapFile}" is not in the game manifest; staying on the current map.`,
+          `transferMap / hop target "${mapFile}" ${detail}; staying on the current map.`,
         );
         return;
       }
+      const targetIndex = lookup.index;
       const nextEntry = maps[targetIndex];
       if (!nextEntry) return;
 
