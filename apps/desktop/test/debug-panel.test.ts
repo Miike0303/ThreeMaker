@@ -21,6 +21,8 @@ const LOCALES = {
       'debug.elevation': 'Elevation',
       'debug.narrativeSprites': 'NPC sprites',
       'debug.hops': 'Map hops',
+      'debug.lastHopSprites': 'Last hop NPC sprites',
+      'debug.lastHopTextures': 'Last hop floor textures',
     },
   },
 };
@@ -36,6 +38,8 @@ const SNAPSHOT = {
   elevation: 2,
   narrativeSprites: 3,
   hopsCompleted: 2,
+  lastOutgoingNarrativeSprites: 1,
+  lastOutgoingFloorTextureKeys: 4,
 };
 
 describe('formatDebugRows', () => {
@@ -54,7 +58,24 @@ describe('formatDebugRows', () => {
       { label: 'Elevation', value: '2' },
       { label: 'NPC sprites', value: '3' },
       { label: 'Map hops', value: '2' },
+      { label: 'Last hop NPC sprites', value: '1' },
+      { label: 'Last hop floor textures', value: '4' },
     ]);
+  });
+
+  it('exposes last-hop dispose counts for C1 GPU-leak debug-panel contract', () => {
+    const i18n = createI18n(LOCALES, 'en');
+    const rows = formatDebugRows(
+      {
+        ...SNAPSHOT,
+        hopsCompleted: 0,
+        lastOutgoingNarrativeSprites: 0,
+        lastOutgoingFloorTextureKeys: 0,
+      },
+      i18n.t,
+    );
+    expect(rows.find((r) => r.label === 'Last hop NPC sprites')?.value).toBe('0');
+    expect(rows.find((r) => r.label === 'Last hop floor textures')?.value).toBe('0');
   });
 
   it('rounds tilt to the nearest whole degree and zoom to one decimal', () => {

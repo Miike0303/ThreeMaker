@@ -21,6 +21,8 @@
     "debug.elevation": "Elevación",
     "debug.narrativeSprites": "Sprites NPC",
     "debug.hops": "Saltos de mapa",
+    "debug.lastHopSprites": "Sprites NPC del último salto",
+    "debug.lastHopTextures": "Texturas de piso del último salto",
     "debug.controls.title": "Controles",
     "debug.controls.move": "Mover",
     "debug.controls.camera": "Modo de cámara",

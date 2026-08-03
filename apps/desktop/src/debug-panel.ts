@@ -15,6 +15,13 @@ export interface DebugSnapshot {
   readonly narrativeSprites: number;
   /** Successful G-cycle / transferMap hops completed this session. */
   readonly hopsCompleted: number;
+  /**
+   * NPC sprites on the map disposed at the last completed hop (0 before any
+   * hop). PLAN_DEV_2 C1: GPU-leak contract, debug-panel verifiable.
+   */
+  readonly lastOutgoingNarrativeSprites: number;
+  /** Floor texture keys disposed with the outgoing map at the last hop. */
+  readonly lastOutgoingFloorTextureKeys: number;
 }
 
 export interface DebugRow {
@@ -43,6 +50,14 @@ export function formatDebugRows(snapshot: DebugSnapshot, t: I18n['t']): readonly
     { label: t('debug.elevation'), value: String(snapshot.elevation) },
     { label: t('debug.narrativeSprites'), value: String(snapshot.narrativeSprites) },
     { label: t('debug.hops'), value: String(snapshot.hopsCompleted) },
+    {
+      label: t('debug.lastHopSprites'),
+      value: String(snapshot.lastOutgoingNarrativeSprites),
+    },
+    {
+      label: t('debug.lastHopTextures'),
+      value: String(snapshot.lastOutgoingFloorTextureKeys),
+    },
   ];
 }
 
@@ -175,6 +190,8 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
       elevation: 0,
       narrativeSprites: 0,
       hopsCompleted: 0,
+      lastOutgoingNarrativeSprites: 0,
+      lastOutgoingFloorTextureKeys: 0,
     },
     t,
   )) {

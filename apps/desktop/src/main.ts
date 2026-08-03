@@ -1147,6 +1147,8 @@ async function renderFixtureMap(
       elevation: session.floorRouter.elevation.heightAt(session.mover.tile.x, session.mover.tile.y),
       narrativeSprites: bundle?.sprites.length ?? 0,
       hopsCompleted: hopStats.hopsCompleted,
+      lastOutgoingNarrativeSprites: hopStats.lastOutgoingNarrativeSprites,
+      lastOutgoingFloorTextureKeys: hopStats.lastOutgoingFloorTextureKeys,
     };
   }
   debugPanel.update(buildDebugSnapshot());
