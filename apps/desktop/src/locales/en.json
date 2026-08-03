@@ -19,6 +19,8 @@
     "debug.drawCalls": "Draw calls",
     "debug.tile": "Tile",
     "debug.elevation": "Elevation",
+    "debug.narrativeSprites": "NPC sprites",
+    "debug.hops": "Map hops",
     "debug.controls.title": "Controls",
     "debug.controls.move": "Move",
     "debug.controls.camera": "Camera mode",

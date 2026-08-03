@@ -19,6 +19,8 @@ const LOCALES = {
       'debug.drawCalls': 'Draw calls',
       'debug.tile': 'Tile',
       'debug.elevation': 'Elevation',
+      'debug.narrativeSprites': 'NPC sprites',
+      'debug.hops': 'Map hops',
     },
   },
 };
@@ -32,6 +34,8 @@ const SNAPSHOT = {
   drawCalls: 12,
   tile: { x: 10, y: 12 },
   elevation: 2,
+  narrativeSprites: 3,
+  hopsCompleted: 2,
 };
 
 describe('formatDebugRows', () => {
@@ -48,6 +52,8 @@ describe('formatDebugRows', () => {
       { label: 'Draw calls', value: '12' },
       { label: 'Tile', value: '10, 12' },
       { label: 'Elevation', value: '2' },
+      { label: 'NPC sprites', value: '3' },
+      { label: 'Map hops', value: '2' },
     ]);
   });
 

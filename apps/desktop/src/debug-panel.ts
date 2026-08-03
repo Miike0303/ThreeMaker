@@ -11,6 +11,10 @@ export interface DebugSnapshot {
   readonly drawCalls: number;
   readonly tile: { readonly x: number; readonly y: number };
   readonly elevation: number;
+  /** Live NPC sprite meshes from the current map's narrative bundle (0 if none). */
+  readonly narrativeSprites: number;
+  /** Successful G-cycle / transferMap hops completed this session. */
+  readonly hopsCompleted: number;
 }
 
 export interface DebugRow {
@@ -37,6 +41,8 @@ export function formatDebugRows(snapshot: DebugSnapshot, t: I18n['t']): readonly
     { label: t('debug.drawCalls'), value: String(snapshot.drawCalls) },
     { label: t('debug.tile'), value: `${snapshot.tile.x}, ${snapshot.tile.y}` },
     { label: t('debug.elevation'), value: String(snapshot.elevation) },
+    { label: t('debug.narrativeSprites'), value: String(snapshot.narrativeSprites) },
+    { label: t('debug.hops'), value: String(snapshot.hopsCompleted) },
   ];
 }
 
@@ -167,6 +173,8 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
       drawCalls: 0,
       tile: { x: 0, y: 0 },
       elevation: 0,
+      narrativeSprites: 0,
+      hopsCompleted: 0,
     },
     t,
   )) {

@@ -40,6 +40,14 @@ declare global {
       readonly drawCalls: number;
       /** Display name of the currently loaded map. */
       readonly mapName: string;
+      /** Live NPC sprite meshes from the current narrative bundle. */
+      readonly narrativeSprites: number;
+      /** Successful map hops (G-cycle / transferMap) this session. */
+      readonly hopsCompleted: number;
+      /** NPC sprites disposed with the outgoing map on the last hop. */
+      readonly lastHopOutgoingSprites: number;
+      /** Floor texture keys disposed with the outgoing map on the last hop. */
+      readonly lastHopOutgoingFloorTextures: number;
       /** The character's current integer tile position. */
       readonly tile: { readonly x: number; readonly y: number };
       /** The active `CameraMode` (see camera-rig.ts), as its raw string id. */

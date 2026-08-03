@@ -61,6 +61,7 @@ import type { GameManifest } from './game-manifest.js';
 import { parseGameManifest } from './game-manifest.js';
 import { groundYAt } from './ground-y.js';
 import { createHd2dPipeline } from './hd2d-pipeline.js';
+import { createHopStats, recordHopCompleted } from './hop-stats.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
@@ -1035,6 +1036,8 @@ async function renderFixtureMap(
     sessionOverride?.stairLinks ?? [],
     sessionOverride?.spawn ? { spawn: sessionOverride.spawn } : undefined,
   );
+  /** Session-lived hop counters for the debug panel (C1b leak observability). */
+  let hopStats = createHopStats();
   const walkAnimation = new WalkAnimation();
 
   // The render-position handoff selector (design "Render-position handoff"):
@@ -1182,6 +1185,8 @@ async function renderFixtureMap(
       drawCalls: renderer.info.render.drawCalls,
       tile: { x: session.mover.tile.x, y: session.mover.tile.y },
       elevation: session.floorRouter.elevation.heightAt(session.mover.tile.x, session.mover.tile.y),
+      narrativeSprites: bundle?.sprites.length ?? 0,
+      hopsCompleted: hopStats.hopsCompleted,
     };
   }
   debugPanel.update(buildDebugSnapshot());
@@ -1201,6 +1206,18 @@ async function renderFixtureMap(
       },
       get mapName() {
         return session.map.displayName;
+      },
+      get narrativeSprites() {
+        return bundle?.sprites.length ?? 0;
+      },
+      get hopsCompleted() {
+        return hopStats.hopsCompleted;
+      },
+      get lastHopOutgoingSprites() {
+        return hopStats.lastOutgoingNarrativeSprites;
+      },
+      get lastHopOutgoingFloorTextures() {
+        return hopStats.lastOutgoingFloorTextureKeys;
       },
       get tile() {
         return { x: session.mover.tile.x, y: session.mover.tile.y };
@@ -1834,9 +1851,15 @@ async function renderFixtureMap(
         currentMapIndex = targetIndex;
         // Point of no return. Order: dispose outgoing narrative → session →
         // floor textures → create session with arrival spawn → build bundle.
+        const outgoingNarrativeSprites = bundle?.sprites.length ?? 0;
+        const outgoingFloorTextureKeys = currentTextures ? Object.keys(currentTextures).length : 0;
         disposeNarrativeBundle();
         session.dispose();
         disposeFloorTextures(currentTextures);
+        hopStats = recordHopCompleted(hopStats, {
+          outgoingNarrativeSprites,
+          outgoingFloorTextureKeys,
+        });
         currentTextures = nextResult.floorSources[0]?.textures;
 
         let sessionOpts: { readonly spawn: FloorSpawn } | undefined;

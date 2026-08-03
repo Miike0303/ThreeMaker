@@ -1,0 +1,35 @@
+/**
+ * Counters for map hops (G-cycle / transferMap). Pure so vitest can drive
+ * them without a browser. PLAN_DEV_2 C1 exit wants hop GPU disposal
+ * "debug-panel verifiable" — these numbers feed that readout.
+ */
+
+export type HopStats = {
+  readonly hopsCompleted: number;
+  /** NPC sprite meshes on the map that was disposed at the last hop. */
+  readonly lastOutgoingNarrativeSprites: number;
+  /** Floor texture keys disposed with the outgoing map at the last hop. */
+  readonly lastOutgoingFloorTextureKeys: number;
+};
+
+export function createHopStats(): HopStats {
+  return {
+    hopsCompleted: 0,
+    lastOutgoingNarrativeSprites: 0,
+    lastOutgoingFloorTextureKeys: 0,
+  };
+}
+
+export function recordHopCompleted(
+  stats: HopStats,
+  outgoing: {
+    readonly outgoingNarrativeSprites: number;
+    readonly outgoingFloorTextureKeys: number;
+  },
+): HopStats {
+  return {
+    hopsCompleted: stats.hopsCompleted + 1,
+    lastOutgoingNarrativeSprites: outgoing.outgoingNarrativeSprites,
+    lastOutgoingFloorTextureKeys: outgoing.outgoingFloorTextureKeys,
+  };
+}
