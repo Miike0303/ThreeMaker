@@ -7,6 +7,7 @@ import {
   type MapHopGuardInput,
   type MapHopRefusal,
   nextManifestMapIndex,
+  planManifestHop,
   type TransferMapHostRefusal,
 } from '../src/map-hop.js';
 
@@ -258,5 +259,73 @@ describe('decideTransferMapHost', () => {
         y: 0,
       }),
     ).toEqual({ ok: false, reason: 'hop-in-flight' });
+  });
+});
+
+/**
+ * hopToManifestFile pre-flight: guard then resolve. Pure so transferMap /
+ * G-cycle share one tested plan before any dispose/load.
+ */
+describe('planManifestHop', () => {
+  it('returns target index and canonical manifest file when idle and mapFile resolves', () => {
+    expect(
+      planManifestHop({
+        guard: guards(),
+        maps: maps('demo/map-a.tmmap.json', 'demo/map-b.tmmap.json'),
+        mapFile: 'map-b.tmmap.json',
+      }),
+    ).toEqual({ ok: true, index: 1, file: 'demo/map-b.tmmap.json' });
+  });
+
+  it('refuses with hop-guard reason before looking up the mapFile', () => {
+    expect(
+      planManifestHop({
+        guard: guards({ interpreterState: 'waiting-for-dialogue' }),
+        maps: maps('demo/map-b.tmmap.json'),
+        mapFile: 'map-b.tmmap.json',
+      }),
+    ).toEqual({ ok: false, reason: 'interpreter-busy' });
+  });
+
+  it('refuses with lookup reason when the guard passes but mapFile is missing', () => {
+    expect(
+      planManifestHop({
+        guard: guards(),
+        maps: maps('demo/map-a.tmmap.json'),
+        mapFile: 'map-b.tmmap.json',
+      }),
+    ).toEqual({ ok: false, reason: 'not-in-manifest' });
+  });
+
+  it('refuses ambiguous basename after the guard passes', () => {
+    expect(
+      planManifestHop({
+        guard: guards(),
+        maps: maps('a/door.tmmap.json', 'b/door.tmmap.json'),
+        mapFile: 'door.tmmap.json',
+      }),
+    ).toEqual({ ok: false, reason: 'ambiguous-basename' });
+  });
+
+  it('C1b product chain: transferMap host accept + plan resolves A→B basename', () => {
+    const host = decideTransferMapHost({
+      hopPathActive: true,
+      hopInFlight: false,
+      activeTraversal: false,
+      mapFile: 'map-b.tmmap.json',
+      x: 1,
+      y: 1,
+      facing: 'down',
+    });
+    expect(host.ok).toBe(true);
+    if (!host.ok) return;
+
+    const plan = planManifestHop({
+      guard: guards(),
+      maps: maps('demo/map-a.tmmap.json', 'demo/map-b.tmmap.json'),
+      mapFile: host.mapFile,
+    });
+    expect(plan).toEqual({ ok: true, index: 1, file: 'demo/map-b.tmmap.json' });
+    expect(host.arrival).toEqual({ x: 1, y: 1, facing: 'down' });
   });
 });

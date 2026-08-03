@@ -62,12 +62,7 @@ import { createHopStats, recordHopCompleted } from './hop-stats.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
-import {
-  canBeginMapHop,
-  decideTransferMapHost,
-  findManifestMapIndex,
-  nextManifestMapIndex,
-} from './map-hop.js';
+import { decideTransferMapHost, nextManifestMapIndex, planManifestHop } from './map-hop.js';
 import type { MapNarrativeBundle } from './map-narrative-bundle.js';
 import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
@@ -1751,40 +1746,37 @@ async function renderFixtureMap(
     let currentTextures = sessionOverride?.floorSources[0]?.textures;
 
     hopToManifestFile = async (mapFile, arrival, opts) => {
-      const hopGuard = canBeginMapHop({
-        hopInFlight: cyclingManifestMap,
-        interpreterState: bundle?.interpreter.state ?? 'idle',
-        activeTraversal: Boolean(activeTraversal),
-      });
-      if (!hopGuard.ok) {
-        console.error(
-          `Map hop to "${mapFile}" refused (${hopGuard.reason}); staying on the current map.`,
-        );
-        return;
-      }
-
       const maps = manifestNav.manifest.maps;
-      const lookup = findManifestMapIndex(maps, mapFile);
-      if (!lookup.ok) {
+      const plan = planManifestHop({
+        guard: {
+          hopInFlight: cyclingManifestMap,
+          interpreterState: bundle?.interpreter.state ?? 'idle',
+          activeTraversal: Boolean(activeTraversal),
+        },
+        maps,
+        mapFile,
+      });
+      if (!plan.ok) {
         const detail =
-          lookup.reason === 'ambiguous-basename'
+          plan.reason === 'ambiguous-basename'
             ? `matches multiple manifest maps by basename — use the full manifest path`
-            : `is not in the game manifest`;
+            : plan.reason === 'not-in-manifest'
+              ? `is not in the game manifest`
+              : `refused (${plan.reason})`;
         console.error(
           `transferMap / hop target "${mapFile}" ${detail}; staying on the current map.`,
         );
         return;
       }
-      const targetIndex = lookup.index;
-      const nextEntry = maps[targetIndex];
-      if (!nextEntry) return;
+      const targetIndex = plan.index;
+      const targetFile = plan.file;
 
       cyclingManifestMap = true;
       try {
-        const nextResult = await manifestNav.loadEntry(nextEntry.file);
+        const nextResult = await manifestNav.loadEntry(targetFile);
         if (!nextResult) {
           console.error(
-            `Failed to load manifest map "${nextEntry.file}" -- staying on the current map.`,
+            `Failed to load manifest map "${targetFile}" -- staying on the current map.`,
           );
           return;
         }
@@ -1793,7 +1785,7 @@ async function renderFixtureMap(
         // reach session.dispose() (would leave an unrecoverable half-swap).
         if (!isAuthoredResultPlayable(nextResult)) {
           console.error(
-            `Manifest map "${nextEntry.file}" has no standable spawn tile; hop cancelled, staying on the current map.`,
+            `Manifest map "${targetFile}" has no standable spawn tile; hop cancelled, staying on the current map.`,
           );
           // G-cycle advances past unplayable entries so the next press does
           // not retry forever; transferMap does not.
@@ -1846,13 +1838,13 @@ async function renderFixtureMap(
         } catch (error) {
           // Past the point of no return: map is playable but narrative-free.
           console.error(
-            `Manifest map "${nextEntry.file}" loaded, but its authored narrative did not:`,
+            `Manifest map "${targetFile}" loaded, but its authored narrative did not:`,
             error,
           );
           narrativeRoot
             .overlay()
             .showError(
-              `${nextEntry.file}: ${describeAuthoredFailure(error)} -- this map is playable, but WITHOUT its authored NPCs, triggers and events.`,
+              `${targetFile}: ${describeAuthoredFailure(error)} -- this map is playable, but WITHOUT its authored NPCs, triggers and events.`,
             );
           narrativeFailureShown = true;
         }

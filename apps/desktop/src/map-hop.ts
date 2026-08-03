@@ -177,3 +177,37 @@ export function decideTransferMapHost(input: TransferMapHostInput): TransferMapH
 
   return { ok: true, mapFile: input.mapFile, arrival };
 }
+
+/**
+ * Pre-flight for `hopToManifestFile`: hop guard, then resolve `mapFile` to a
+ * canonical manifest entry. Shared by transferMap microtasks and the G-cycle
+ * so neither path can dispose before a refused plan.
+ */
+export type ManifestHopPlanInput = {
+  readonly guard: MapHopGuardInput;
+  readonly maps: readonly ManifestMapFileEntry[];
+  readonly mapFile: string;
+};
+
+export type ManifestHopPlanRefusal = MapHopRefusal | ManifestMapLookupRefusal;
+
+export type ManifestHopPlan =
+  | { readonly ok: true; readonly index: number; readonly file: string }
+  | { readonly ok: false; readonly reason: ManifestHopPlanRefusal };
+
+/**
+ * Plan a manifest hop: may begin → lookup target → return index + stored file.
+ * Does not load or dispose anything.
+ */
+export function planManifestHop(input: ManifestHopPlanInput): ManifestHopPlan {
+  const hopGuard = canBeginMapHop(input.guard);
+  if (!hopGuard.ok) return hopGuard;
+
+  const lookup = findManifestMapIndex(input.maps, input.mapFile);
+  if (!lookup.ok) return lookup;
+
+  const entry = input.maps[lookup.index];
+  if (!entry) return { ok: false, reason: 'not-in-manifest' };
+
+  return { ok: true, index: lookup.index, file: entry.file };
+}
