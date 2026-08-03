@@ -1,0 +1,67 @@
+{
+  "format": "threemaker-map",
+  "version": 4,
+  "id": "transfer-map-b",
+  "name": "Transfer Map B",
+  "width": 6,
+  "height": 6,
+  "tileset": { "slots": {}, "flags": [], "semantics": {} },
+  "floors": [
+    {
+      "id": "floor-0",
+      "baseElevation": 0,
+      "layers": {
+        "tiles": [
+          [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0
+          ],
+          [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0
+          ],
+          [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0
+          ],
+          [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0
+          ]
+        ],
+        "shadows": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0
+        ],
+        "regions": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0
+        ]
+      }
+    }
+  ],
+  "stairLinks": [],
+  "rooms": [],
+  "spawn": { "x": 1, "y": 1, "floor": "floor-0" },
+  "npcs": [
+    {
+      "id": "guard",
+      "x": 4,
+      "y": 4,
+      "floor": "floor-0",
+      "facing": "left",
+      "sprite": {
+        "object": "3f1c9a7b5d2e48c06a1b8f4d9e7c2350a6b4d8e1f39c57024b6d8a0e2c4f6183",
+        "characterIndex": 1
+      },
+      "onInteract": "guard_check"
+    }
+  ],
+  "triggers": [],
+  "events": {
+    "guard_check": [
+      { "type": "showDialogue", "source": { "kind": "ink", "storyId": "guard", "knot": "start" } }
+    ]
+  },
+  "worldSeeds": { "secret_revealed": false }
+}
