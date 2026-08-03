@@ -10,6 +10,7 @@ import {
   nextManifestMapIndex,
   planManifestHop,
   planNextManifestCycle,
+  resolveHopArrival,
   type TransferMapHostRefusal,
 } from '../src/map-hop.js';
 
@@ -366,5 +367,42 @@ describe('planNextManifestCycle', () => {
 
   it('returns undefined for an empty maps list (no cycle to advance)', () => {
     expect(planNextManifestCycle([], 0)).toBeUndefined();
+  });
+});
+
+/**
+ * After a hop plan succeeds and the dest map loads: turn the request
+ * (authored spawn vs transferMap coords) into session spawn + optional facing.
+ */
+describe('resolveHopArrival', () => {
+  const destSpawn = { x: 3, y: 4, floorIndex: 1 };
+
+  it('uses the destination authored spawn for G-cycle (arrival authored)', () => {
+    expect(resolveHopArrival('authored', destSpawn)).toEqual({
+      spawn: { x: 3, y: 4, floorIndex: 1 },
+    });
+  });
+
+  it('returns undefined when G-cycle arrives but dest has no authored spawn', () => {
+    expect(resolveHopArrival('authored', undefined)).toBeUndefined();
+  });
+
+  it('uses transferMap coords and keeps dest floor when present', () => {
+    expect(resolveHopArrival({ x: 1, y: 2, facing: 'down' }, destSpawn)).toEqual({
+      spawn: { x: 1, y: 2, floorIndex: 1 },
+      facing: 'down',
+    });
+  });
+
+  it('defaults floorIndex to 0 when dest spawn is missing on a transfer hop', () => {
+    expect(resolveHopArrival({ x: 5, y: 6 }, undefined)).toEqual({
+      spawn: { x: 5, y: 6, floorIndex: 0 },
+    });
+  });
+
+  it('omits facing when the transfer command did not author one', () => {
+    const resolved = resolveHopArrival({ x: 0, y: 0 }, destSpawn);
+    expect(resolved).toEqual({ spawn: { x: 0, y: 0, floorIndex: 1 } });
+    if (resolved) expect('facing' in resolved).toBe(false);
   });
 });

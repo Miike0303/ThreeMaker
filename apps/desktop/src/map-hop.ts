@@ -232,3 +232,51 @@ export function planNextManifestCycle(
   if (!entry) return undefined;
   return { index, file: entry.file };
 }
+
+/** Destination map spawn after load (matches desktop `FloorSpawn` shape). */
+export type HopDestSpawn = {
+  readonly x: number;
+  readonly y: number;
+  readonly floorIndex: number;
+};
+
+/**
+ * Hop request: G-cycle uses the dest map's authored spawn; transferMap uses
+ * explicit tile coords (and optional facing).
+ */
+export type HopArrivalRequest =
+  | 'authored'
+  | { readonly x: number; readonly y: number; readonly facing?: TransferFacing };
+
+export type HopArrivalResolution = {
+  readonly spawn: HopDestSpawn;
+  readonly facing?: TransferFacing;
+};
+
+/**
+ * Resolve session spawn (and optional facing) after the destination map has
+ * loaded. Pure — main applies `createMapSession` + optional `mover.teleport`.
+ *
+ * - `'authored'`: use dest spawn; `undefined` if the map has none
+ * - transfer coords: land at (x,y); floor from dest spawn or 0; facing optional
+ */
+export function resolveHopArrival(
+  arrival: HopArrivalRequest,
+  destAuthoredSpawn: HopDestSpawn | undefined,
+): HopArrivalResolution | undefined {
+  if (arrival === 'authored') {
+    if (!destAuthoredSpawn) return undefined;
+    return { spawn: destAuthoredSpawn };
+  }
+
+  const spawn: HopDestSpawn = {
+    x: arrival.x,
+    y: arrival.y,
+    floorIndex: destAuthoredSpawn?.floorIndex ?? 0,
+  };
+
+  if (arrival.facing !== undefined) {
+    return { spawn, facing: arrival.facing };
+  }
+  return { spawn };
+}

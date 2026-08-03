@@ -67,6 +67,7 @@ import {
   isMapCycleKey,
   planManifestHop,
   planNextManifestCycle,
+  resolveHopArrival,
 } from './map-hop.js';
 import type { MapNarrativeBundle } from './map-narrative-bundle.js';
 import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
@@ -1817,24 +1818,17 @@ async function renderFixtureMap(
         });
         currentTextures = nextResult.floorSources[0]?.textures;
 
-        let sessionOpts: { readonly spawn: FloorSpawn } | undefined;
-        if (arrival === 'authored') {
-          sessionOpts = nextResult.spawn ? { spawn: nextResult.spawn } : undefined;
-        } else {
-          sessionOpts = {
-            spawn: {
-              x: arrival.x,
-              y: arrival.y,
-              floorIndex: nextResult.spawn?.floorIndex ?? 0,
-            },
-          };
-        }
+        // Pure arrival resolve (G-cycle authored spawn vs transferMap coords).
+        const hopArrival = resolveHopArrival(arrival, nextResult.spawn);
+        const sessionOpts: { readonly spawn: FloorSpawn } | undefined = hopArrival
+          ? { spawn: hopArrival.spawn }
+          : undefined;
 
         session = createMapSession(nextResult.floorSources, nextResult.stairLinks, sessionOpts);
         // transferMap may set facing; FloorSpawn has no facing field, so apply
         // it on the mover after the session exists (same-map teleport pattern).
-        if (arrival !== 'authored' && arrival.facing !== undefined) {
-          session.mover.teleport(arrival.x, arrival.y, arrival.facing);
+        if (hopArrival?.facing !== undefined) {
+          session.mover.teleport(hopArrival.spawn.x, hopArrival.spawn.y, hopArrival.facing);
         }
         try {
           await buildNarrativeBundle(nextResult.narrative);
