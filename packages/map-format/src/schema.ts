@@ -438,6 +438,21 @@ function validateNpcs(
     firstIndexByTile.set(key, index);
   }
 
+  // NPC ids must be unique across the document (not just per floor). Runtime
+  // lookup and authored scripting key by id; a collision silently shadows one
+  // of the entries. C1a follow-up paid 2026-08-02.
+  const firstIndexById = new Map<string, number>();
+  for (const [index, npc] of npcs.entries()) {
+    const firstIndex = firstIndexById.get(npc.id);
+    if (firstIndex !== undefined) {
+      throw new MapFormatError(
+        'malformed',
+        `"npcs[${index}]" (${JSON.stringify(npc.id)}) reuses the same id as "npcs[${firstIndex}]".`,
+      );
+    }
+    firstIndexById.set(npc.id, index);
+  }
+
   return npcs;
 }
 
@@ -503,9 +518,23 @@ function validateTriggers(
   mapWidth: number,
   mapHeight: number,
 ): readonly TriggerDocument[] {
-  return validateNarrativeArray(input, 'triggers').map((entry, index) =>
+  const triggers = validateNarrativeArray(input, 'triggers').map((entry, index) =>
     validateTrigger(entry, index, floorIds, mapWidth, mapHeight),
   );
+
+  const firstIndexById = new Map<string, number>();
+  for (const [index, trig] of triggers.entries()) {
+    const firstIndex = firstIndexById.get(trig.id);
+    if (firstIndex !== undefined) {
+      throw new MapFormatError(
+        'malformed',
+        `"triggers[${index}]" (${JSON.stringify(trig.id)}) reuses the same id as "triggers[${firstIndex}]".`,
+      );
+    }
+    firstIndexById.set(trig.id, index);
+  }
+
+  return triggers;
 }
 
 function validateTrigger(

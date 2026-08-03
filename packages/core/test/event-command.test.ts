@@ -69,6 +69,42 @@ describe('parseEventScript', () => {
     ).toThrow(/"x"/);
   });
 
+  it('rejects transferMap with invalid facing', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: {
+          door: [{ type: 'transferMap', mapFile: 'a.tmmap.json', x: 0, y: 0, facing: 'north' }],
+        },
+      }),
+    ).toThrow(/facing/);
+  });
+
+  it('allows transferMap nested under conditional then/else', () => {
+    const result = parseEventScript({
+      version: 1,
+      events: {
+        gate: [
+          {
+            type: 'conditional',
+            if: { key: 'open', op: 'eq', value: true },
+            then: [{ type: 'transferMap', mapFile: 'map-b.tmmap.json', x: 2, y: 3 }],
+            else: [{ type: 'setWorldVar', key: 'blocked', value: true }],
+          },
+        ],
+      },
+    });
+    expect(result.gate?.[0]).toMatchObject({ type: 'conditional' });
+    // Rename on destructure: biome flags property access named `then` as thenable.
+    const { then: thenBranch } = result.gate?.[0] as { then: unknown[] };
+    expect(thenBranch[0]).toEqual({
+      type: 'transferMap',
+      mapFile: 'map-b.tmmap.json',
+      x: 2,
+      y: 3,
+    });
+  });
+
   it('parses a script with no events', () => {
     expect(parseEventScript({ version: 1, events: {} })).toEqual({});
   });

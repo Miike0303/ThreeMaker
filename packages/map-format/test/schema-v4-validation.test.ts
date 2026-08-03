@@ -115,6 +115,35 @@ describe('map-format v4 entry-level validation (task 1.2)', () => {
     );
   });
 
+  it('rejects two npcs with the same id, naming both entries (C1a follow-up)', () => {
+    expect(() =>
+      parseMapDocument(
+        raw({
+          npcs: [npc({ id: 'elder', x: 0, y: 0 }), npc({ id: 'elder', x: 1, y: 1 })],
+        }),
+      ),
+    ).toThrow('"npcs[1]" ("elder") reuses the same id as "npcs[0]".');
+  });
+
+  it('accepts two npcs with different ids on different tiles', () => {
+    const doc = parseMapDocument(
+      raw({
+        npcs: [npc({ id: 'elder', x: 0, y: 0 }), npc({ id: 'guard', x: 1, y: 1 })],
+      }),
+    );
+    expect(doc.npcs.map((n) => n.id)).toEqual(['elder', 'guard']);
+  });
+
+  it('rejects two triggers with the same id', () => {
+    expect(() =>
+      parseMapDocument(
+        raw({
+          triggers: [trigger({ id: 'gate', x: 0, y: 0 }), trigger({ id: 'gate', x: 1, y: 1 })],
+        }),
+      ),
+    ).toThrow('"triggers[1]" ("gate") reuses the same id as "triggers[0]".');
+  });
+
   it('accepts two npcs on the same x,y of DIFFERENT floors (tile identity is floor-scoped)', () => {
     const doc = parseMapDocument(
       raw({
