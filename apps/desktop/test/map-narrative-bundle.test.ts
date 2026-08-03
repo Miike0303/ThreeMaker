@@ -116,7 +116,11 @@ function floorAt(height: number, baseElevation: number) {
   };
 }
 
-const HOST: EventHost = { moveEntity: vi.fn(), teleport: vi.fn() };
+const HOST: EventHost = {
+  moveEntity: vi.fn(),
+  teleport: vi.fn(),
+  transferMap: vi.fn((_f, _x, _y, _facing, done: () => void) => done()),
+};
 
 /** A session root whose overlay factory throws, so any case that touches session chrome fails loudly instead of silently passing. */
 function createRoot(): NarrativeRoot {

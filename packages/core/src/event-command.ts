@@ -58,13 +58,28 @@ export type TeleportCommand = {
   readonly facing?: CardinalDirection;
 };
 
+/**
+ * Load another map from the game manifest (relative path as in `manifest.maps[].file`)
+ * and place the player at `(x, y)`. Async at the host: like `moveEntity`, the
+ * interpreter blocks until `done()` is called. Remaining script commands after
+ * a `transferMap` are dropped (the hop ends the script).
+ */
+export type TransferMapCommand = {
+  readonly type: 'transferMap';
+  readonly mapFile: string;
+  readonly x: number;
+  readonly y: number;
+  readonly facing?: CardinalDirection;
+};
+
 /** Discriminated union of every event-script command in schema v1. */
 export type EventCommand =
   | MoveEntityCommand
   | ShowDialogueCommand
   | ConditionalCommand
   | SetWorldVarCommand
-  | TeleportCommand;
+  | TeleportCommand
+  | TransferMapCommand;
 
 /** Parsed shape of an event script file: `{ version: 1, events: Record<string, EventCommand[]> }`. */
 export type EventScript = Record<string, EventCommand[]>;
@@ -205,6 +220,24 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
       }
       const parsedFacing = parseCardinalDirection(facing, label, 'facing');
       return { type: 'teleport', entityId, x, y, facing: parsedFacing };
+    }
+    case 'transferMap': {
+      const label = `${path} (transferMap)`;
+      const { mapFile, x, y, facing } = value;
+      if (typeof mapFile !== 'string' || mapFile.length === 0) {
+        fail(`${label} requires a non-empty string "mapFile".`);
+      }
+      if (typeof x !== 'number' || !Number.isInteger(x)) {
+        fail(`${label} "x" must be an integer, got ${JSON.stringify(x)}.`);
+      }
+      if (typeof y !== 'number' || !Number.isInteger(y)) {
+        fail(`${label} "y" must be an integer, got ${JSON.stringify(y)}.`);
+      }
+      if (facing === undefined) {
+        return { type: 'transferMap', mapFile, x, y };
+      }
+      const parsedFacing = parseCardinalDirection(facing, label, 'facing');
+      return { type: 'transferMap', mapFile, x, y, facing: parsedFacing };
     }
     default:
       fail(`${path} has unknown command type ${JSON.stringify(type)}.`);

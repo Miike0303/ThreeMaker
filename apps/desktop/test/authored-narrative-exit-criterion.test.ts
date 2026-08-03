@@ -49,6 +49,7 @@ const SIDECARS: Readonly<Record<string, string>> = {
 const HOST: EventHost = {
   moveEntity: (_entityId, _direction, _steps, done) => done(),
   teleport: vi.fn(),
+  transferMap: (_mapFile, _x, _y, _facing, done) => done(),
 };
 
 /** The committed v4 document + its sidecars, through the REAL loader (only fs is faked, as in every other desktop test). */

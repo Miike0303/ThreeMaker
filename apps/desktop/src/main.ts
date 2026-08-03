@@ -64,6 +64,7 @@ import { createHd2dPipeline } from './hd2d-pipeline.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
+import { canBeginMapHop, nextManifestMapIndex } from './map-hop.js';
 import type { MapNarrativeBundle } from './map-narrative-bundle.js';
 import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
@@ -1291,6 +1292,24 @@ async function renderFixtureMap(
     readonly done: () => void;
   } | null = null;
 
+  /**
+   * Filled once the multi-map manifest path installs hop machinery below.
+   * `transferMap` queues a request and runs it on a microtask after the
+   * interpreter returns to idle (command is terminal; hop uses canBeginMapHop).
+   *
+   * `arrival: 'authored'` uses the destination map's own spawn after load
+   * (G-cycle). A coordinate object is the transferMap path.
+   */
+  let hopToManifestFile:
+    | ((
+        mapFile: string,
+        arrival:
+          | 'authored'
+          | { readonly x: number; readonly y: number; readonly facing?: Direction },
+        opts?: { readonly advanceIndexOnUnplayable?: boolean },
+      ) => Promise<void>)
+    | null = null;
+
   // App-supplied effects for every bundle's interpreter -- session-lived, since
   // it closes over the mutable `session`/`activeEntityMove` rather than over one
   // map's content.
@@ -1318,6 +1337,34 @@ async function renderFixtureMap(
     teleport(entityId, x, y, facing) {
       if (entityId !== 'player') return;
       session.mover.teleport(x, y, facing as Direction | undefined);
+    },
+    transferMap(mapFile, x, y, facing, done) {
+      // End the script first (`done`); hop only after idle. Guarded again
+      // inside hopToManifestFile via canBeginMapHop.
+      if (!hopToManifestFile) {
+        console.error(
+          `transferMap to "${mapFile}" refused: no multi-map manifest hop path is active.`,
+        );
+        done();
+        return;
+      }
+      if (cyclingManifestMap || activeTraversal) {
+        console.error(
+          `transferMap to "${mapFile}" refused (hop or traversal in flight); staying on the current map.`,
+        );
+        done();
+        return;
+      }
+      const arrival = {
+        x,
+        y,
+        ...(facing !== undefined ? { facing: facing as Direction } : {}),
+      } as const;
+      const hop = hopToManifestFile;
+      done();
+      queueMicrotask(() => {
+        void hop(mapFile, arrival);
+      });
     },
   };
 
@@ -1708,12 +1755,11 @@ async function renderFixtureMap(
     });
   }
 
-  // Manifest multi-map cycle (rpgm-whole-game-import): 'g' walks forward
-  // through every map `convert-rpgm-game` produced for the current game,
-  // wrapping back to the first. Production-safe (no `import.meta.env.DEV`
-  // gate) -- these are the game's own real converted maps, not a synthetic
-  // dev demo. Mutually exclusive with the DEV fixture-cycle block above
-  // (`manifestNav` is only ever passed when this branch should own 'g').
+  // Manifest multi-map hop path (rpgm-whole-game-import + C1b transferMap).
+  // Production-safe. Mutually exclusive with the DEV fixture-cycle above
+  // (`manifestNav` is only ever passed when this branch should own hops).
+  // Installed for any multi-map manifest so G-cycle and transferMap share one
+  // dispose/rebuild sequence (design D1 — no second disposal path).
   if (manifestNav && manifestNav.manifest.maps.length > 1) {
     let currentMapIndex = manifestNav.startIndex;
     /**
@@ -1732,112 +1778,123 @@ async function renderFixtureMap(
     // completed hop can dispose the map it is leaving, right after
     // `session.dispose()`. Seeded from the initial map this session was
     // already built with (`sessionOverride`, the authored/manifest path's
-    // own first `loadAuthoredMap` result), so even the very first 'g' press
+    // own first `loadAuthoredMap` result), so even the very first hop
     // frees it correctly.
     let currentTextures = sessionOverride?.floorSources[0]?.textures;
 
-    window.addEventListener('keydown', (event) => {
-      if (event.repeat || event.key.toLowerCase() !== 'g' || cyclingManifestMap) return;
-      // Same guards as the DEV cycle above: never dispose `session` mid-script
-      // or mid-traversal.
-      if (bundle && bundle.interpreter.state !== 'idle') return;
-      if (activeTraversal) return;
+    hopToManifestFile = async (mapFile, arrival, opts) => {
+      const hopGuard = canBeginMapHop({
+        hopInFlight: cyclingManifestMap,
+        interpreterState: bundle?.interpreter.state ?? 'idle',
+        activeTraversal: Boolean(activeTraversal),
+      });
+      if (!hopGuard.ok) {
+        console.error(
+          `Map hop to "${mapFile}" refused (${hopGuard.reason}); staying on the current map.`,
+        );
+        return;
+      }
+
+      const maps = manifestNav.manifest.maps;
+      const targetIndex = maps.findIndex((entry) => entry.file === mapFile);
+      if (targetIndex < 0) {
+        console.error(
+          `transferMap / hop target "${mapFile}" is not in the game manifest; staying on the current map.`,
+        );
+        return;
+      }
+      const nextEntry = maps[targetIndex];
+      if (!nextEntry) return;
+
       cyclingManifestMap = true;
-      void (async () => {
-        try {
-          const maps = manifestNav.manifest.maps;
-          const nextIndex = (currentMapIndex + 1) % maps.length;
-          const nextEntry = maps[nextIndex];
-          if (!nextEntry) return;
-
-          const nextResult = await manifestNav.loadEntry(nextEntry.file);
-          if (!nextResult) {
-            console.error(
-              `Failed to load manifest map "${nextEntry.file}" -- staying on the current map.`,
-            );
-            return;
-          }
-
-          // Same pre-flight check the boot scan runs (`main.ts`'s manifest
-          // loop) -- an unplayable entry (no standable spawn tile; see
-          // `map-playability.ts`'s doc comment, e.g. kingdom-of-subversion's
-          // own Map001) must never reach `session.dispose()` below: doing so
-          // BEFORE `createMapSession` throws would tear down the still-live,
-          // still-displayed session and its textures for nothing, since
-          // `createMapSession` -> `resolveInitialSpawn` would immediately
-          // throw and leave `session`/`currentTextures` in a disposed,
-          // unrecoverable state (caught only by the outer catch, which has
-          // nothing left to restore). Advance `currentMapIndex` anyway so
-          // repeated 'g' presses skip past this entry instead of retrying it
-          // forever, and dispose the just-loaded (never displayed) textures
-          // immediately -- they were decoded but are now unused.
-          if (!isAuthoredResultPlayable(nextResult)) {
-            console.error(
-              `Manifest map "${nextEntry.file}" has no standable spawn tile; skipping it and staying on the current map.`,
-            );
-            currentMapIndex = nextIndex;
-            disposeFloorTextures(nextResult.floorSources[0]?.textures);
-            return;
-          }
-
-          currentMapIndex = nextIndex;
-          // The EXISTING swap sequence, extended -- there is no second disposal
-          // path (design D1). Everything that can still refuse the hop has
-          // already run above (`loadEntry`, which also performs the incoming
-          // map's LOUD narrative cross-validation, and the playability
-          // pre-flight), so this line is the point of no return. Order matters:
-          // the outgoing bundle is disposed BEFORE the incoming one is built,
-          // and the incoming one is built AFTER `createMapSession`, whose floors
-          // and arrival tile it reads.
-          disposeNarrativeBundle();
-          session.dispose();
-          disposeFloorTextures(currentTextures);
-          currentTextures = nextResult.floorSources[0]?.textures;
-          session = createMapSession(
-            nextResult.floorSources,
-            nextResult.stairLinks,
-            nextResult.spawn ? { spawn: nextResult.spawn } : undefined,
+      try {
+        const nextResult = await manifestNav.loadEntry(nextEntry.file);
+        if (!nextResult) {
+          console.error(
+            `Failed to load manifest map "${nextEntry.file}" -- staying on the current map.`,
           );
-          try {
-            await buildNarrativeBundle(nextResult.narrative);
-            if (narrativeFailureShown) {
-              narrativeRoot.overlay().hide();
-              narrativeFailureShown = false;
-            }
-          } catch (error) {
-            // Caught SEPARATELY from the hop's outer catch, and not rethrown:
-            // this is past the point of no return, so there is no previous map
-            // left to roll back to -- the incoming one is already rendered and
-            // playable. What it is NOT is complete: `bundle` stays `undefined`
-            // (the assignment inside `buildNarrativeBundle` never ran), so this
-            // map is being played with its authored NPCs, triggers and events
-            // entirely absent, which is exactly the silent degradation spec R4
-            // forbids. Reachable, not hypothetical: `loadAuthoredMap` checks a
-            // sidecar for EMPTINESS but deliberately does not compile it, so a
-            // syntactically broken `.ink` passes the load's cross-validation and
-            // only throws here, inside `compileInk`, after the swap. The
-            // single-file boot path lets the identical failure reach `main()`'s
-            // status message; this path must be just as loud, so the real
-            // diagnostic goes to the same surface a script failure uses, naming
-            // the map -- the outer catch below only reaches the console.
-            console.error(
-              `Manifest map "${nextEntry.file}" loaded, but its authored narrative did not:`,
-              error,
-            );
-            narrativeRoot
-              .overlay()
-              .showError(
-                `${nextEntry.file}: ${describeAuthoredFailure(error)} -- this map is playable, but WITHOUT its authored NPCs, triggers and events.`,
-              );
-            narrativeFailureShown = true;
-          }
-          focusCameraOnSpawn();
-        } catch (error) {
-          console.error('Failed to cycle to the next manifest map:', error);
-        } finally {
-          cyclingManifestMap = false;
+          return;
         }
-      })();
+
+        // Same pre-flight as the boot scan: unplayable entries must never
+        // reach session.dispose() (would leave an unrecoverable half-swap).
+        if (!isAuthoredResultPlayable(nextResult)) {
+          console.error(
+            `Manifest map "${nextEntry.file}" has no standable spawn tile; hop cancelled, staying on the current map.`,
+          );
+          // G-cycle advances past unplayable entries so the next press does
+          // not retry forever; transferMap does not.
+          if (opts?.advanceIndexOnUnplayable) {
+            currentMapIndex = targetIndex;
+          }
+          disposeFloorTextures(nextResult.floorSources[0]?.textures);
+          return;
+        }
+
+        currentMapIndex = targetIndex;
+        // Point of no return. Order: dispose outgoing narrative → session →
+        // floor textures → create session with arrival spawn → build bundle.
+        disposeNarrativeBundle();
+        session.dispose();
+        disposeFloorTextures(currentTextures);
+        currentTextures = nextResult.floorSources[0]?.textures;
+
+        let sessionOpts: { readonly spawn: FloorSpawn } | undefined;
+        if (arrival === 'authored') {
+          sessionOpts = nextResult.spawn ? { spawn: nextResult.spawn } : undefined;
+        } else {
+          sessionOpts = {
+            spawn: {
+              x: arrival.x,
+              y: arrival.y,
+              floorIndex: nextResult.spawn?.floorIndex ?? 0,
+            },
+          };
+        }
+
+        session = createMapSession(nextResult.floorSources, nextResult.stairLinks, sessionOpts);
+        // transferMap may set facing; FloorSpawn has no facing field, so apply
+        // it on the mover after the session exists (same-map teleport pattern).
+        if (arrival !== 'authored' && arrival.facing !== undefined) {
+          session.mover.teleport(arrival.x, arrival.y, arrival.facing);
+        }
+        try {
+          await buildNarrativeBundle(nextResult.narrative);
+          if (narrativeFailureShown) {
+            narrativeRoot.overlay().hide();
+            narrativeFailureShown = false;
+          }
+        } catch (error) {
+          // Past the point of no return: map is playable but narrative-free.
+          console.error(
+            `Manifest map "${nextEntry.file}" loaded, but its authored narrative did not:`,
+            error,
+          );
+          narrativeRoot
+            .overlay()
+            .showError(
+              `${nextEntry.file}: ${describeAuthoredFailure(error)} -- this map is playable, but WITHOUT its authored NPCs, triggers and events.`,
+            );
+          narrativeFailureShown = true;
+        }
+        focusCameraOnSpawn();
+      } catch (error) {
+        console.error(`Failed to hop to manifest map "${mapFile}":`, error);
+      } finally {
+        cyclingManifestMap = false;
+      }
+    };
+
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat || event.key.toLowerCase() !== 'g') return;
+      const maps = manifestNav.manifest.maps;
+      const nextIndex = nextManifestMapIndex(currentMapIndex, maps.length);
+      const nextEntry = maps[nextIndex];
+      if (!nextEntry) return;
+      // Single load path: hopToManifestFile owns guards + dispose/rebuild.
+      void hopToManifestFile?.(nextEntry.file, 'authored', {
+        advanceIndexOnUnplayable: true,
+      });
     });
   }
 

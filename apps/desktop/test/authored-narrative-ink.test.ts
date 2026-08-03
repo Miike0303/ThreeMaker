@@ -35,6 +35,7 @@ const noopHost: EventHost = {
   teleport: () => {
     /* not exercised by this scenario */
   },
+  transferMap: (_mapFile, _x, _y, _facing, done) => done(),
 };
 
 const ELDER_SCRIPT: readonly EventCommand[] = [

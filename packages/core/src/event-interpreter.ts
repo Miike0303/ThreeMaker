@@ -26,6 +26,20 @@ export interface EventHost {
   moveEntity(entityId: string, direction: CardinalDirection, steps: number, done: () => void): void;
   /** Place `entityId` at `(x, y)`, optionally setting its facing. Immediate, no callback. */
   teleport(entityId: string, x: number, y: number, facing?: CardinalDirection): void;
+  /**
+   * Transfer the player to another map (`mapFile` is a manifest entry path).
+   * Must call `done()` exactly once when the hop is accepted for scheduling
+   * (or refused). The hop itself may complete asynchronously after the
+   * interpreter returns to `idle` — the host owns that sequencing so mid-script
+   * dispose is never required.
+   */
+  transferMap(
+    mapFile: string,
+    x: number,
+    y: number,
+    facing: CardinalDirection | undefined,
+    done: () => void,
+  ): void;
 }
 
 export type EventInterpreterEvents = {
@@ -261,6 +275,20 @@ export class EventInterpreter {
         case 'moveEntity':
           try {
             this.host.moveEntity(command.entityId, command.direction, command.steps, () => {
+              this.continueScript();
+            });
+          } catch (error) {
+            this.failScript(error);
+            return;
+          }
+          return;
+
+        case 'transferMap':
+          // Terminal: drop any remaining commands — a map hop ends the script.
+          this.currentCommands = [];
+          this.currentIndex = 0;
+          try {
+            this.host.transferMap(command.mapFile, command.x, command.y, command.facing, () => {
               this.continueScript();
             });
           } catch (error) {

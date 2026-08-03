@@ -14,12 +14,20 @@ class FakeHost implements EventHost {
     y: number;
     facing?: CardinalDirection;
   }[] = [];
-  /** When true (default), `moveEntity` calls `done()` synchronously. Set to false to hold it open and call `completeMove()` manually. */
+  readonly transferCalls: {
+    mapFile: string;
+    x: number;
+    y: number;
+    facing?: CardinalDirection;
+  }[] = [];
+  /** When true (default), `moveEntity`/`transferMap` call `done()` synchronously. */
   autoComplete = true;
   /** When set, `moveEntity` throws this instead of recording the call. */
   throwOnMove: Error | null = null;
   /** When set, `teleport` throws this instead of recording the call. */
   throwOnTeleport: Error | null = null;
+  /** When set, `transferMap` throws this instead of recording the call. */
+  throwOnTransfer: Error | null = null;
   private pendingDone: (() => void) | null = null;
 
   moveEntity(
@@ -42,7 +50,23 @@ class FakeHost implements EventHost {
     this.teleportCalls.push(facing !== undefined ? { entityId, x, y, facing } : { entityId, x, y });
   }
 
-  /** Simulates the host reporting move completion (e.g. after a partial, blocked move). */
+  transferMap(
+    mapFile: string,
+    x: number,
+    y: number,
+    facing: CardinalDirection | undefined,
+    done: () => void,
+  ): void {
+    if (this.throwOnTransfer) throw this.throwOnTransfer;
+    this.transferCalls.push(facing !== undefined ? { mapFile, x, y, facing } : { mapFile, x, y });
+    if (this.autoComplete) {
+      done();
+      return;
+    }
+    this.pendingDone = done;
+  }
+
+  /** Simulates the host reporting move/transfer completion. */
   completeMove(): void {
     const done = this.pendingDone;
     this.pendingDone = null;
@@ -126,6 +150,50 @@ describe('EventInterpreter', () => {
       interpreter.run([{ type: 'teleport', entityId: 'hero', x: 3, y: 4 }]);
 
       expect(host.teleportCalls).toEqual([{ entityId: 'hero', x: 3, y: 4 }]);
+    });
+  });
+
+  describe('transferMap', () => {
+    it('calls host.transferMap and stays running until done() is called', () => {
+      const { host, interpreter } = setup();
+      host.autoComplete = false;
+
+      interpreter.run([
+        { type: 'transferMap', mapFile: 'map-b.tmmap.json', x: 2, y: 3, facing: 'up' },
+      ]);
+
+      expect(host.transferCalls).toEqual([
+        { mapFile: 'map-b.tmmap.json', x: 2, y: 3, facing: 'up' },
+      ]);
+      expect(interpreter.state).toBe('running');
+
+      host.completeMove();
+      expect(interpreter.state).toBe('idle');
+    });
+
+    it('is terminal: commands after transferMap never run', () => {
+      const { world, host, interpreter } = setup();
+
+      interpreter.run([
+        { type: 'transferMap', mapFile: 'map-b.tmmap.json', x: 0, y: 0 },
+        { type: 'setWorldVar', key: 'shouldNotRun', value: true },
+      ]);
+
+      expect(host.transferCalls).toEqual([{ mapFile: 'map-b.tmmap.json', x: 0, y: 0 }]);
+      expect(world.get('shouldNotRun')).toBeUndefined();
+      expect(interpreter.state).toBe('idle');
+    });
+
+    it('emits script:failed when the host throws', () => {
+      const { host, interpreter } = setup();
+      host.throwOnTransfer = new Error('unknown map');
+      const onFailed = vi.fn();
+      interpreter.signals.on('script:failed', onFailed);
+
+      interpreter.run([{ type: 'transferMap', mapFile: 'missing.tmmap.json', x: 0, y: 0 }]);
+
+      expect(onFailed).toHaveBeenCalledTimes(1);
+      expect(interpreter.state).toBe('idle');
     });
   });
 

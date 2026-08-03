@@ -19,6 +19,13 @@ describe('parseEventScript', () => {
             then: [{ type: 'setWorldVar', key: 'gold', value: 10 }],
             else: [{ type: 'teleport', entityId: 'hero', x: 3, y: 4, facing: 'down' }],
           },
+          {
+            type: 'transferMap',
+            mapFile: 'map-b.tmmap.json',
+            x: 2,
+            y: 3,
+            facing: 'up',
+          },
         ],
         guard: [
           {
@@ -32,6 +39,34 @@ describe('parseEventScript', () => {
     const result = parseEventScript(json);
 
     expect(result).toEqual(json.events);
+  });
+
+  it('parses transferMap without optional facing', () => {
+    const result = parseEventScript({
+      version: 1,
+      events: {
+        door: [{ type: 'transferMap', mapFile: 'other.tmmap.json', x: 0, y: 1 }],
+      },
+    });
+    expect(result.door).toEqual([{ type: 'transferMap', mapFile: 'other.tmmap.json', x: 0, y: 1 }]);
+  });
+
+  it('rejects transferMap with empty mapFile', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: { door: [{ type: 'transferMap', mapFile: '', x: 0, y: 0 }] },
+      }),
+    ).toThrow(/mapFile/);
+  });
+
+  it('rejects transferMap with non-integer tile coords', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: { door: [{ type: 'transferMap', mapFile: 'a.tmmap.json', x: 1.5, y: 0 }] },
+      }),
+    ).toThrow(/"x"/);
   });
 
   it('parses a script with no events', () => {
