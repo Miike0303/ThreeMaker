@@ -992,6 +992,15 @@ async function renderFixtureMap(
   );
   /** Session-lived hop counters for the debug panel (C1b leak observability). */
   let hopStats = createHopStats();
+  /**
+   * Per-map narrative bundle. Declared BEFORE `buildDebugSnapshot` / the first
+   * `debugPanel.update` so those closures do not hit a TDZ `ReferenceError` on
+   * `bundle` (live boot regression: every authored/manifest map failed with
+   * "Cannot access 'bundle' before initialization"). Still assigned later when
+   * narrative wiring attaches; until then it stays `undefined` and `bundle?.`
+   * reads are safe.
+   */
+  let bundle: MapNarrativeBundle | undefined;
   const walkAnimation = new WalkAnimation();
 
   // The render-position handoff selector (design "Render-position handoff"):
@@ -1250,12 +1259,13 @@ async function renderFixtureMap(
   // A map that authors no narrative gets NO bundle at all (spec R5), so reads
   // below are `bundle?.`-guarded rather than flag-gated: nothing is constructed
   // to hide, which is what the deleted `demoMapActive` stood in for.
-  let bundle: MapNarrativeBundle | undefined;
+  // (`bundle` binding is hoisted earlier — next to hopStats — so debug snapshot
+  // init never TDZ-crashes; assignment still happens in this narrative block.)
   /**
    * True for the WHOLE duration of a manifest map hop ('g', below) -- every
    * `await` in it included, both the incoming map's load and its narrative
-   * bundle build. Declared out HERE, beside `bundle`, because the game loop is
-   * what has to honour it: the loop keeps ticking across those awaits, and
+   * bundle build. Declared out HERE, beside the hop path, because the game loop
+   * is what has to honour it: the loop keeps ticking across those awaits, and
    * between the synchronous session swap and the bundle's attachment `bundle` is
    * `undefined`. A step taken inside that window would walk through NPCs (the
    * mover's npc hook has no registry to ask) and would lose any `enter` trigger
