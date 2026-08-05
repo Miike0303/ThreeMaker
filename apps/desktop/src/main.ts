@@ -15,11 +15,13 @@ import {
 } from '@threemaker/gameplay';
 import type { RampCellInput, RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
+import type { PointerSample } from '@threemaker/input';
 import {
   Actions,
   createGamepadTracker,
   directionFromMoveAction,
   isMoveAction,
+  resolvePointerIntent,
   snapshotFromGamepads,
 } from '@threemaker/input';
 import type { RoomDocument } from '@threemaker/map-format';
@@ -82,6 +84,7 @@ import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
 import { createNarrativeRoot } from './narrative-root.js';
 import { withNoclip } from './noclip.js';
+import { pointerTargetFromDialogueHit } from './pointer-host.js';
 import {
   aboveFloorTilemap,
   createRoomTracker,
@@ -1505,6 +1508,44 @@ async function renderFixtureMap(
     if (event.repeat || !bundle) return;
     const action = resolveGameplayKeyAction(event.key, bundle.interpreter.state);
     if (action) applyGameplayKeyAction(action);
+  });
+
+  /**
+   * Pointer → same ActionId path as keyboard/gamepad (C2 WU-03).
+   * Canvas primary = interact; dialogue choice rows = chooseIndex; dialogue
+   * body = interact (advance/confirm via resolveGameplayAction).
+   */
+  function applyPointerSample(sample: PointerSample): void {
+    const intent = resolvePointerIntent(sample);
+    if (!intent) return;
+    if (intent.kind === 'chooseIndex') {
+      applyGameplayKeyAction({ kind: 'chooseIndex', index: intent.index });
+      return;
+    }
+    if (!bundle) return;
+    const action = resolveGameplayAction(intent.edge.action, bundle.interpreter.state);
+    if (action) applyGameplayKeyAction(action);
+  }
+
+  renderer.domElement.addEventListener('pointerdown', (event) => {
+    applyPointerSample({
+      phase: 'down',
+      button: event.button,
+      target: { kind: 'actionable' },
+    });
+  });
+
+  narrativeRoot.overlay().element.addEventListener('pointerdown', (event) => {
+    const attr =
+      event.target instanceof Element
+        ? (event.target.closest('[data-choice-index]')?.getAttribute('data-choice-index') ??
+          undefined)
+        : undefined;
+    applyPointerSample({
+      phase: 'down',
+      button: event.button,
+      target: pointerTargetFromDialogueHit(attr),
+    });
   });
 
   // The booted map's own bundle. Every later one comes from a swap sequence

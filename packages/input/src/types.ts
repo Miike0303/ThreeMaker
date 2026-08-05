@@ -24,8 +24,8 @@ export const Actions = {
 
 /**
  * Device source that can fire an action. Keyboard bindings use this shape
- * today; gamepad is sampled via snapshot (see `gamepad.ts`) and will join
- * the binding table when remapping lands (WU-04).
+ * today; gamepad/pointer are sampled via pure adapters (`gamepad.ts`,
+ * `pointer.ts`) and will join the binding table when remapping lands (WU-04).
  */
 export type KeyboardSource = {
   readonly device: 'keyboard';

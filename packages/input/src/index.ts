@@ -20,6 +20,13 @@ export {
 export type { ActionEdge, KeyboardPhase, MostRecentHeldAction } from './keyboard.js';
 export { createMostRecentHeldAction, resolveKeyboardEdge } from './keyboard.js';
 export type {
+  PointerHitTarget,
+  PointerIntent,
+  PointerPhase,
+  PointerSample,
+} from './pointer.js';
+export { resolvePointerIntent } from './pointer.js';
+export type {
   ActionBinding,
   ActionId,
   DeviceSource,

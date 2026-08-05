@@ -123,6 +123,8 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
       ...options.map((option, index) => {
         const li = document.createElement('li');
         li.className = 'dialogue-choice';
+        // Host pointer layer reads this (no DOM logic in @threemaker/input).
+        li.dataset.choiceIndex = String(index);
         li.classList.toggle('dialogue-choice-highlighted', index === highlightedIndex);
         li.textContent = `${index + 1}. ${option}`;
         return li;
