@@ -37,6 +37,16 @@
     "dialogue.unknownSpeaker": "Someone",
     "dialogue.hint.advance": "E / Enter / Space to continue",
     "dialogue.hint.choice": "1-9 or ↑↓←→ + Enter to choose",
-    "dialogue.error": "Dialogue error — see console for details"
+    "dialogue.error": "Dialogue error — see console for details",
+    "save.systemSpeaker": "System",
+    "save.saved": "Game saved.",
+    "save.failed": "Could not save.",
+    "save.noMap": "Nothing to save — no authored map loaded.",
+    "save.loadFailed": "Load failed",
+    "save.blockedHop": "Cannot save/load while changing maps.",
+    "save.blockedTraversal": "Cannot save/load while on stairs.",
+    "save.blockedBusy": "Cannot load during dialogue or a running event.",
+    "debug.controls.save": "Quick save",
+    "debug.controls.load": "Quick load"
   }
 }

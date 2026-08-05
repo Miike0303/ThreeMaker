@@ -78,6 +78,8 @@ export const CONTROL_ROWS: readonly ControlRow[] = [
   { keys: '- / =', labelKey: 'debug.controls.zoom' },
   { keys: 'P', labelKey: 'debug.controls.postfx' },
   { keys: 'Ctrl', labelKey: 'debug.controls.noclip' },
+  { keys: 'F5', labelKey: 'debug.controls.save' },
+  { keys: 'F9', labelKey: 'debug.controls.load' },
 ];
 
 /** Dev-only cheat-sheet row (mirrors the `g` map-cycle toggle in main.ts, DEV-gated there too). */

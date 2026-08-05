@@ -33,5 +33,9 @@ export function defaultKeyboardBindings(): readonly ActionBinding[] {
     { action: Actions.ViewZoomIn, source: { device: 'keyboard', key: '=' } },
     { action: Actions.ViewZoomIn, source: { device: 'keyboard', key: '+' } },
     { action: Actions.ViewNoclip, source: { device: 'keyboard', key: 'Control' } },
+
+    // System save/load (C3) — F5/F9: common quick-save / quick-load, unused elsewhere
+    { action: Actions.SystemSave, source: { device: 'keyboard', key: 'F5' } },
+    { action: Actions.SystemLoad, source: { device: 'keyboard', key: 'F9' } },
   ];
 }

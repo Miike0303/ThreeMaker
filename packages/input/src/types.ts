@@ -20,6 +20,10 @@ export const Actions = {
   ViewZoomOut: 'view.zoomOut',
   ViewZoomIn: 'view.zoomIn',
   ViewNoclip: 'view.noclip',
+  /** One-shot: write the current session progress (C3). */
+  SystemSave: 'system.save',
+  /** One-shot: load the single-slot save (C3). */
+  SystemLoad: 'system.load',
 } as const;
 
 /**

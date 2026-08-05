@@ -33,6 +33,12 @@ describe('defaultKeyboardBindings', () => {
     expect(table.actionForKeyboardKey('Control')).toBe(Actions.ViewNoclip);
   });
 
+  it('maps F5/F9 to system save/load (C3 quick-save defaults)', () => {
+    expect(table.actionForKeyboardKey('F5')).toBe(Actions.SystemSave);
+    expect(table.actionForKeyboardKey('f5')).toBe(Actions.SystemSave);
+    expect(table.actionForKeyboardKey('F9')).toBe(Actions.SystemLoad);
+  });
+
   it('does not bind dialogue-only keys (Enter/Space/digits stay host/UI)', () => {
     expect(table.actionForKeyboardKey('Enter')).toBeUndefined();
     expect(table.actionForKeyboardKey(' ')).toBeUndefined();

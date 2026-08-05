@@ -21,7 +21,9 @@ export type ViewKeyAction =
    */
   | { readonly kind: 'zoom'; readonly delta: -1 | 1 }
   | { readonly kind: 'noclip-on' }
-  | { readonly kind: 'noclip-off' };
+  | { readonly kind: 'noclip-off' }
+  | { readonly kind: 'save' }
+  | { readonly kind: 'load' };
 
 /**
  * Resolve a raw `KeyboardEvent.key` into a view/debug action.
@@ -52,6 +54,10 @@ export function resolveViewKeyAction(
       return edge.edge === 'pressed' ? { kind: 'zoom', delta: -1 } : undefined;
     case Actions.ViewNoclip:
       return edge.edge === 'pressed' ? { kind: 'noclip-on' } : { kind: 'noclip-off' };
+    case Actions.SystemSave:
+      return edge.edge === 'pressed' ? { kind: 'save' } : undefined;
+    case Actions.SystemLoad:
+      return edge.edge === 'pressed' ? { kind: 'load' } : undefined;
     default:
       return undefined;
   }

@@ -37,6 +37,16 @@
     "dialogue.unknownSpeaker": "Alguien",
     "dialogue.hint.advance": "E / Enter / Espacio para continuar",
     "dialogue.hint.choice": "1-9 o ↑↓←→ + Enter para elegir",
-    "dialogue.error": "Error de diálogo — ver la consola para más detalles"
+    "dialogue.error": "Error de diálogo — ver la consola para más detalles",
+    "save.systemSpeaker": "Sistema",
+    "save.saved": "Partida guardada.",
+    "save.failed": "No se pudo guardar.",
+    "save.noMap": "Nada que guardar — no hay mapa autorado cargado.",
+    "save.loadFailed": "Error al cargar",
+    "save.blockedHop": "No se puede guardar/cargar al cambiar de mapa.",
+    "save.blockedTraversal": "No se puede guardar/cargar en escaleras.",
+    "save.blockedBusy": "No se puede cargar durante un diálogo o evento.",
+    "debug.controls.save": "Guardado rápido",
+    "debug.controls.load": "Carga rápida"
   }
 }

@@ -71,6 +71,7 @@ import {
   validateSavePlacement,
 } from './game-save-apply.js';
 import { captureGameSaveSnapshot } from './game-save-capture.js';
+import { canLoadGameProgress, canSaveGameProgress } from './game-save-gate.js';
 import { loadGameSaveSnapshot, persistGameSaveSnapshot } from './game-save-store.js';
 import type { GameplayKeyAction } from './gameplay-input.js';
 import { resolveGameplayAction, resolveGameplayKeyAction } from './gameplay-input.js';
@@ -1634,10 +1635,13 @@ async function renderFixtureMap(
   // View/debug keys (C2 prep: pure resolveViewKeyAction; host applies effects).
   // Real engine features (camera, zoom, noclip) — available in production;
   // unlike the 'g' dev map-cycle below.
+  // Any key that maps to a game action is consumed (preventDefault) so browser
+  // accelerators — notably F5 reload for system.save — do not race the game.
   window.addEventListener('keydown', (event) => {
     if (event.repeat) return;
     const action = resolveViewKeyAction(event.key, 'down', bindingTable);
     if (!action) return;
+    event.preventDefault();
     switch (action.kind) {
       case 'toggle-post-processing':
         postProcessingEnabled = !postProcessingEnabled;
@@ -1662,6 +1666,12 @@ async function renderFixtureMap(
         noclipActive = true;
         debugPanel.setNoclipActive(true);
         return;
+      case 'save':
+        void saveGameProgress();
+        return;
+      case 'load':
+        void loadGameProgress();
+        return;
       default:
         return;
     }
@@ -1672,7 +1682,9 @@ async function renderFixtureMap(
   // into/through a wall.
   window.addEventListener('keyup', (event) => {
     const action = resolveViewKeyAction(event.key, 'up', bindingTable);
-    if (action?.kind !== 'noclip-off') return;
+    if (!action) return;
+    event.preventDefault();
+    if (action.kind !== 'noclip-off') return;
     noclipActive = false;
     debugPanel.setNoclipActive(false);
   });
@@ -2013,7 +2025,20 @@ async function renderFixtureMap(
   }
 
   async function saveGameProgress(): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const gate = canSaveGameProgress({
+      hopInFlight: cyclingManifestMap,
+      activeTraversal: Boolean(activeTraversal),
+    });
+    if (!gate.ok) {
+      const message =
+        gate.reason === 'hop-in-flight'
+          ? i18n.t('save.blockedHop')
+          : i18n.t('save.blockedTraversal');
+      narrativeRoot.overlay().showError(message);
+      return { ok: false, reason: gate.reason };
+    }
     if (activeMapFile.length === 0) {
+      narrativeRoot.overlay().showError(i18n.t('save.noMap'));
       return { ok: false, reason: 'no authored map identity to save' };
     }
     const snapshot = captureGameSaveSnapshot({
@@ -2024,15 +2049,34 @@ async function renderFixtureMap(
       facing: session.mover.facing,
       world: narrativeRoot.world.snapshot(),
     });
-    if (!snapshot) return { ok: false, reason: 'could not capture runtime snapshot' };
+    if (!snapshot) {
+      narrativeRoot.overlay().showError(i18n.t('save.failed'));
+      return { ok: false, reason: 'could not capture runtime snapshot' };
+    }
     await persistGameSaveSnapshot(snapshot);
+    narrativeRoot.overlay().showLine(i18n.t('save.systemSpeaker'), i18n.t('save.saved'));
     return { ok: true };
   }
 
   async function loadGameProgress(): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const gate = canLoadGameProgress({
+      hopInFlight: cyclingManifestMap,
+      interpreterState: bundle?.interpreter.state ?? 'idle',
+      activeTraversal: Boolean(activeTraversal),
+    });
+    if (!gate.ok) {
+      const message =
+        gate.reason === 'hop-in-flight'
+          ? i18n.t('save.blockedHop')
+          : gate.reason === 'traversal-active'
+            ? i18n.t('save.blockedTraversal')
+            : i18n.t('save.blockedBusy');
+      narrativeRoot.overlay().showError(message);
+      return { ok: false, reason: gate.reason };
+    }
     const loaded = await loadGameSaveSnapshot();
     if (!loaded.ok) {
-      narrativeRoot.overlay().showError(`Load failed: ${loaded.reason}`);
+      narrativeRoot.overlay().showError(`${i18n.t('save.loadFailed')}: ${loaded.reason}`);
       return { ok: false, reason: loaded.reason };
     }
     const snap = loaded.snapshot;

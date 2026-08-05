@@ -115,4 +115,15 @@ describe('applyBindingOverrides / collectBindingOverrides', () => {
       ).actionForKeyboardKey('e'),
     ).toBe(Actions.Interact);
   });
+
+  it('loads a pre-save-action bindings v1 override and still gets F5/F9 from defaults', () => {
+    // Document as written when only interact was remapped (before system.save/load existed).
+    const legacyV1 = serializeInputBindingsDocument([
+      { action: Actions.Interact, source: { device: 'keyboard', key: 'f' } },
+    ]);
+    const table = bindingTableFromPersistedText(legacyV1);
+    expect(table.actionForKeyboardKey('f')).toBe(Actions.Interact);
+    expect(table.actionForKeyboardKey('F5')).toBe(Actions.SystemSave);
+    expect(table.actionForKeyboardKey('F9')).toBe(Actions.SystemLoad);
+  });
 });
