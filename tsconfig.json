@@ -9,6 +9,7 @@
     { "path": "./packages/renderer" },
     { "path": "./packages/gameplay" },
     { "path": "./packages/input" },
+    { "path": "./packages/save" },
     { "path": "./apps/desktop" },
     { "path": "./apps/editor" }
   ]
