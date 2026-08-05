@@ -9,6 +9,7 @@
  * applying dialogue effects.
  */
 
+import type { ActionId } from '@threemaker/input';
 import { Actions, createBindingTable, defaultKeyboardBindings } from '@threemaker/input';
 import type { DialogueKeyAction } from './dialogue-ui.js';
 import { resolveDialogueKeyAction } from './dialogue-ui.js';
@@ -25,6 +26,40 @@ export type GameplayKeyAction = { readonly kind: 'try-interact' } | DialogueKeyA
 const defaultTable = createBindingTable(defaultKeyboardBindings());
 
 /**
+ * Resolve a logical {@link ActionId} (keyboard or gamepad) into a gameplay
+ * intent for the current interpreter state.
+ *
+ * - `idle` → `interact` only
+ * - `running` → nothing
+ * - dialogue wait → `interact` advances / confirms; `move.*` navigates choices
+ */
+export function resolveGameplayAction(
+  actionId: ActionId,
+  interpreterState: GameplayInterpreterState,
+): GameplayKeyAction | undefined {
+  if (interpreterState === 'idle') {
+    return actionId === Actions.Interact ? { kind: 'try-interact' } : undefined;
+  }
+  if (interpreterState === 'running') {
+    return undefined;
+  }
+  if (actionId === Actions.Interact) {
+    return interpreterState === 'waiting-for-choice'
+      ? { kind: 'confirmHighlighted' }
+      : { kind: 'advance' };
+  }
+  if (interpreterState === 'waiting-for-choice') {
+    if (actionId === Actions.MoveUp || actionId === Actions.MoveLeft) {
+      return { kind: 'navigate', delta: -1 };
+    }
+    if (actionId === Actions.MoveDown || actionId === Actions.MoveRight) {
+      return { kind: 'navigate', delta: 1 };
+    }
+  }
+  return undefined;
+}
+
+/**
  * Resolve a raw `KeyboardEvent.key` into a gameplay intent for the current
  * interpreter state, or `undefined` when the key is inert in that state.
  *
@@ -37,9 +72,8 @@ export function resolveGameplayKeyAction(
   interpreterState: GameplayInterpreterState,
 ): GameplayKeyAction | undefined {
   if (interpreterState === 'idle') {
-    return defaultTable.actionForKeyboardKey(key) === Actions.Interact
-      ? { kind: 'try-interact' }
-      : undefined;
+    const actionId = defaultTable.actionForKeyboardKey(key);
+    return actionId !== undefined ? resolveGameplayAction(actionId, interpreterState) : undefined;
   }
   if (interpreterState === 'running') {
     return undefined;

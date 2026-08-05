@@ -23,8 +23,9 @@ export const Actions = {
 } as const;
 
 /**
- * Device source that can fire an action. WU-01 only models keyboard;
- * gamepad and pointer land in later work units on the same shape.
+ * Device source that can fire an action. Keyboard bindings use this shape
+ * today; gamepad is sampled via snapshot (see `gamepad.ts`) and will join
+ * the binding table when remapping lands (WU-04).
  */
 export type KeyboardSource = {
   readonly device: 'keyboard';
@@ -61,6 +62,11 @@ const MOVE_ACTION_TO_DIRECTION: Readonly<Record<string, MoveDirection>> = {
   [Actions.MoveLeft]: 'left',
   [Actions.MoveRight]: 'right',
 };
+
+/** True when `action` is one of the four grid `move.*` actions. */
+export function isMoveAction(action: ActionId): boolean {
+  return Object.hasOwn(MOVE_ACTION_TO_DIRECTION, action);
+}
 
 /** Map a move.* action to a grid direction, or undefined when not a move action. */
 export function directionFromMoveAction(action: ActionId | undefined): MoveDirection | undefined {

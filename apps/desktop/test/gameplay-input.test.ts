@@ -1,5 +1,43 @@
+import { Actions } from '@threemaker/input';
 import { describe, expect, it } from 'vitest';
-import { resolveGameplayKeyAction } from '../src/gameplay-input.js';
+import { resolveGameplayAction, resolveGameplayKeyAction } from '../src/gameplay-input.js';
+
+describe('resolveGameplayAction', () => {
+  it('maps interact to try-interact only while idle', () => {
+    expect(resolveGameplayAction(Actions.Interact, 'idle')).toEqual({ kind: 'try-interact' });
+    expect(resolveGameplayAction(Actions.Interact, 'running')).toBeUndefined();
+    expect(resolveGameplayAction(Actions.MoveUp, 'idle')).toBeUndefined();
+  });
+
+  it('maps interact to advance/confirm during dialogue wait states', () => {
+    expect(resolveGameplayAction(Actions.Interact, 'waiting-for-dialogue')).toEqual({
+      kind: 'advance',
+    });
+    expect(resolveGameplayAction(Actions.Interact, 'waiting-for-choice')).toEqual({
+      kind: 'confirmHighlighted',
+    });
+  });
+
+  it('maps move.* to choice navigation while waiting for a choice', () => {
+    expect(resolveGameplayAction(Actions.MoveUp, 'waiting-for-choice')).toEqual({
+      kind: 'navigate',
+      delta: -1,
+    });
+    expect(resolveGameplayAction(Actions.MoveDown, 'waiting-for-choice')).toEqual({
+      kind: 'navigate',
+      delta: 1,
+    });
+    expect(resolveGameplayAction(Actions.MoveLeft, 'waiting-for-choice')).toEqual({
+      kind: 'navigate',
+      delta: -1,
+    });
+    expect(resolveGameplayAction(Actions.MoveRight, 'waiting-for-choice')).toEqual({
+      kind: 'navigate',
+      delta: 1,
+    });
+    expect(resolveGameplayAction(Actions.MoveUp, 'waiting-for-dialogue')).toBeUndefined();
+  });
+});
 
 describe('resolveGameplayKeyAction', () => {
   it('maps E (any casing) to try-interact only while the interpreter is idle', () => {

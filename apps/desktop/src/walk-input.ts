@@ -13,13 +13,14 @@ import {
   createMostRecentHeldAction,
   defaultKeyboardBindings,
   directionFromMoveAction,
+  isMoveAction,
 } from '@threemaker/input';
 
 const defaultTable = createBindingTable(defaultKeyboardBindings());
 
 function moveActionFromKey(key: string): string | undefined {
   const action = defaultTable.actionForKeyboardKey(key);
-  return action?.startsWith('move.') ? action : undefined;
+  return action !== undefined && isMoveAction(action) ? action : undefined;
 }
 
 /**

@@ -15,6 +15,13 @@ import {
 } from '@threemaker/gameplay';
 import type { RampCellInput, RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
+import {
+  Actions,
+  createGamepadTracker,
+  directionFromMoveAction,
+  isMoveAction,
+  snapshotFromGamepads,
+} from '@threemaker/input';
 import type { RoomDocument } from '@threemaker/map-format';
 import { computeRoomIdGrid } from '@threemaker/map-format';
 import type { FloorVisibilityPolicy, SheetPixelSizes } from '@threemaker/renderer';
@@ -55,7 +62,8 @@ import { buildFloorGameplay, createFloorRouter } from './floor-runtime.js';
 import { disposeFloorTextures } from './floor-textures.js';
 import type { GameManifest } from './game-manifest.js';
 import { parseGameManifest } from './game-manifest.js';
-import { resolveGameplayKeyAction } from './gameplay-input.js';
+import type { GameplayKeyAction } from './gameplay-input.js';
+import { resolveGameplayAction, resolveGameplayKeyAction } from './gameplay-input.js';
 import { groundYAt } from './ground-y.js';
 import { createHd2dPipeline } from './hd2d-pipeline.js';
 import { createHopStats, recordHopCompleted } from './hop-stats.js';
@@ -1058,6 +1066,8 @@ async function renderFixtureMap(
   );
 
   const heldDirection = createMostRecentHeldDirection();
+  // Gamepad is polled each frame (see game loop); pure edge tracker is DOM-free.
+  const gamepadTracker = createGamepadTracker();
   // Walk-input is DOM-free; this host binds key events to press/release.
   window.addEventListener('keydown', (event) => {
     heldDirection.press(event.key);
@@ -1455,13 +1465,10 @@ async function renderFixtureMap(
     if (bundle) subscribeDialogueSignals(bundle.interpreter);
   }
 
-  // Narrative keys (C2 prep: pure resolveGameplayKeyAction; host applies).
-  window.addEventListener('keydown', (event) => {
-    if (event.repeat || !bundle) return;
+  /** Apply a resolved gameplay intent (keyboard or gamepad share this path). */
+  function applyGameplayKeyAction(action: GameplayKeyAction): void {
+    if (!bundle) return;
     const { interpreter } = bundle;
-    const action = resolveGameplayKeyAction(event.key, interpreter.state);
-    if (!action) return;
-
     switch (action.kind) {
       case 'try-interact': {
         const { x, y } = session.mover.tile;
@@ -1491,6 +1498,13 @@ async function renderFixtureMap(
         narrativeRoot.overlay().setHighlightedIndex(highlightedIndex);
         return;
     }
+  }
+
+  // Narrative keys (C2: pure resolveGameplayKeyAction; host applies).
+  window.addEventListener('keydown', (event) => {
+    if (event.repeat || !bundle) return;
+    const action = resolveGameplayKeyAction(event.key, bundle.interpreter.state);
+    if (action) applyGameplayKeyAction(action);
   });
 
   // The booted map's own bundle. Every later one comes from a swap sequence
@@ -1971,6 +1985,20 @@ async function renderFixtureMap(
 
       const interpreterIdle = !bundle || bundle.interpreter.state === 'idle';
 
+      // Gamepad poll (C2 WU-02): same ActionIds as keyboard; edges drive
+      // interact/dialogue/noclip, held move merges with keyboard (keyboard wins).
+      const gamepad = gamepadTracker.sample(snapshotFromGamepads(navigator.getGamepads()));
+      for (const edge of gamepad.edges) {
+        if (edge.action === Actions.ViewNoclip) {
+          noclipActive = edge.edge === 'pressed';
+          debugPanel.setNoclipActive(noclipActive);
+          continue;
+        }
+        if (edge.edge !== 'pressed' || !bundle) continue;
+        const intent = resolveGameplayAction(edge.action, bundle.interpreter.state);
+        if (intent) applyGameplayKeyAction(intent);
+      }
+
       // Input pause (design's data-flow contract): the player's own
       // requestMove is skipped whenever the interpreter isn't idle, so
       // walking is frozen during dialogue/scripts. A moveEntity command in
@@ -1983,7 +2011,8 @@ async function renderFixtureMap(
       // tile it crosses for good. An interpreter-commanded move cannot be in
       // flight there -- the hop refuses to start unless the interpreter is idle.
       if (interpreterIdle && !cyclingManifestMap) {
-        const direction = heldDirection.current();
+        const gamepadMove = gamepad.active.find(isMoveAction);
+        const direction = heldDirection.current() ?? directionFromMoveAction(gamepadMove);
         if (direction) mover.requestMove(direction);
       } else if (activeEntityMove?.mover === mover) {
         mover.requestMove(activeEntityMove.direction);
