@@ -242,11 +242,17 @@ export type HopDestSpawn = {
 
 /**
  * Hop request: G-cycle uses the dest map's authored spawn; transferMap uses
- * explicit tile coords (and optional facing).
+ * explicit tile coords (and optional facing). Save-load may also set floor.
  */
 export type HopArrivalRequest =
   | 'authored'
-  | { readonly x: number; readonly y: number; readonly facing?: TransferFacing };
+  | {
+      readonly x: number;
+      readonly y: number;
+      readonly facing?: TransferFacing;
+      /** Runtime floor index; when omitted, dest authored spawn floor or 0. */
+      readonly floorIndex?: number;
+    };
 
 export type HopArrivalResolution = {
   readonly spawn: HopDestSpawn;
@@ -258,7 +264,7 @@ export type HopArrivalResolution = {
  * loaded. Pure — main applies `createMapSession` + optional `mover.teleport`.
  *
  * - `'authored'`: use dest spawn; `undefined` if the map has none
- * - transfer coords: land at (x,y); floor from dest spawn or 0; facing optional
+ * - transfer/save coords: land at (x,y); floor from request, else dest spawn, else 0
  */
 export function resolveHopArrival(
   arrival: HopArrivalRequest,
@@ -272,7 +278,7 @@ export function resolveHopArrival(
   const spawn: HopDestSpawn = {
     x: arrival.x,
     y: arrival.y,
-    floorIndex: destAuthoredSpawn?.floorIndex ?? 0,
+    floorIndex: arrival.floorIndex ?? destAuthoredSpawn?.floorIndex ?? 0,
   };
 
   if (arrival.facing !== undefined) {

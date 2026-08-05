@@ -33,6 +33,15 @@ declare global {
     };
 
     /**
+     * Minimal game-save surface (C3 WU-02). Always set once a play session
+     * boots — keyboard/UI binding is WU-03; CDP/console can call save/load.
+     */
+    __threemaker_save?: {
+      save(): Promise<{ ok: true } | { ok: false; reason: string }>;
+      load(): Promise<{ ok: true } | { ok: false; reason: string }>;
+    };
+
+    /**
      * Dev-only hook exposing the renderer, so a headless visual check can
      * inspect which backend (WebGPU/WebGL2) actually got used. Only set when
      * `import.meta.env.DEV` (see main.ts); absent in production builds.

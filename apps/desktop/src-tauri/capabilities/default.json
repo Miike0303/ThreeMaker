@@ -9,22 +9,27 @@
       "identifier": "fs:allow-read-text-file",
       "allow": [
         { "path": "$HOME/.threemaker/maps/**" },
-        { "path": "$HOME/.threemaker/input-bindings.json" }
+        { "path": "$HOME/.threemaker/input-bindings.json" },
+        { "path": "$HOME/.threemaker/saves/current.json" }
       ]
     },
     {
       "identifier": "fs:allow-write-text-file",
-      "allow": [{ "path": "$HOME/.threemaker/input-bindings.json" }]
+      "allow": [
+        { "path": "$HOME/.threemaker/input-bindings.json" },
+        { "path": "$HOME/.threemaker/saves/current.json" }
+      ]
     },
     {
       "identifier": "fs:allow-mkdir",
-      "allow": [{ "path": "$HOME/.threemaker" }]
+      "allow": [{ "path": "$HOME/.threemaker" }, { "path": "$HOME/.threemaker/saves" }]
     },
     {
       "identifier": "fs:allow-exists",
       "allow": [
         { "path": "$HOME/.threemaker/maps/**" },
-        { "path": "$HOME/.threemaker/input-bindings.json" }
+        { "path": "$HOME/.threemaker/input-bindings.json" },
+        { "path": "$HOME/.threemaker/saves/current.json" }
       ]
     },
     {

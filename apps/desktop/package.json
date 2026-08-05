@@ -18,6 +18,7 @@
     "@threemaker/map-format": "workspace:*",
     "@threemaker/narrative": "workspace:*",
     "@threemaker/renderer": "workspace:*",
+    "@threemaker/save": "workspace:*",
     "stats-gl": "4.2.2",
     "three": "0.184.0"
   },

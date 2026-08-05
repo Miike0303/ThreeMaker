@@ -59,4 +59,16 @@ export class WorldState {
   snapshot(): Record<string, WorldValue> {
     return Object.fromEntries(this.values);
   }
+
+  /**
+   * Replace every key with `values` (C3 save-load rehydrate).
+   * Does not emit `changed` — bulk load must not wake narrative listeners
+   * mid-hop; callers that need signals re-set keys individually.
+   */
+  replaceAll(values: Readonly<Record<string, WorldValue>>): void {
+    this.values.clear();
+    for (const [key, value] of Object.entries(values)) {
+      this.values.set(key, value);
+    }
+  }
 }

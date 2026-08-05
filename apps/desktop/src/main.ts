@@ -65,6 +65,13 @@ import { buildFloorGameplay, createFloorRouter } from './floor-runtime.js';
 import { disposeFloorTextures } from './floor-textures.js';
 import type { GameManifest } from './game-manifest.js';
 import { parseGameManifest } from './game-manifest.js';
+import {
+  resolveMapFileInCatalog,
+  sameMapLoadNarrativeArrival,
+  validateSavePlacement,
+} from './game-save-apply.js';
+import { captureGameSaveSnapshot } from './game-save-capture.js';
+import { loadGameSaveSnapshot, persistGameSaveSnapshot } from './game-save-store.js';
 import type { GameplayKeyAction } from './gameplay-input.js';
 import { resolveGameplayAction, resolveGameplayKeyAction } from './gameplay-input.js';
 import { groundYAt } from './ground-y.js';
@@ -1341,10 +1348,26 @@ async function renderFixtureMap(
         mapFile: string,
         arrival:
           | 'authored'
-          | { readonly x: number; readonly y: number; readonly facing?: Direction },
+          | {
+              readonly x: number;
+              readonly y: number;
+              readonly facing?: Direction;
+              readonly floorIndex?: number;
+            },
         opts?: { readonly advanceIndexOnUnplayable?: boolean },
       ) => Promise<void>)
     | null = null;
+
+  /**
+   * Active map identity for C3 save (`mapFile` relative to `.threemaker/maps`).
+   * Manifest hops update this; single-file authored mode uses `current.tmmap.json`.
+   * Empty when the session is a DEV fixture with no authored path.
+   */
+  let activeMapFile =
+    manifestNav?.manifest.maps[manifestNav.startIndex]?.file ??
+    (sessionOverride ? 'current.tmmap.json' : '');
+  /** Narrative content for the active map — needed to rebuild after same-map load. */
+  let activeNarrative = sessionOverride?.narrative;
 
   // App-supplied effects for every bundle's interpreter -- session-lived, since
   // it closes over the mutable `session`/`activeEntityMove` rather than over one
@@ -1483,17 +1506,25 @@ async function renderFixtureMap(
    * Builds the incoming map's narrative runtime over the session root, leaving
    * `bundle` undefined when that map authors none (spec R5). Must run AFTER
    * `createMapSession`: each NPC sprite's ground Y comes from ITS OWN floor in
-   * the new session, and the trigger index's already-entered tile is the new
-   * session's arrival spawn + floor.
+   * the new session, and the trigger index's already-entered tile is the
+   * arrival (default: session spawn + current floor; same-map load overrides
+   * with the saved player tile so enter triggers underfoot do not re-fire).
    */
-  async function buildNarrativeBundle(narrative: AuthoredMapNarrative | undefined): Promise<void> {
+  async function buildNarrativeBundle(
+    narrative: AuthoredMapNarrative | undefined,
+    arrivalOverride?: { readonly x: number; readonly y: number; readonly floor: number },
+  ): Promise<void> {
+    const arrival = arrivalOverride ?? {
+      ...session.spawn,
+      floor: session.floorRouter.currentFloor,
+    };
     bundle = await buildMapNarrativeBundle({
       narrative,
       root: narrativeRoot,
       host,
       scene,
       floors: session.floorRouter.floors,
-      arrival: { ...session.spawn, floor: session.floorRouter.currentFloor },
+      arrival,
       resolveObjectTexture: resolveObjectTextureReal,
       tileWorldSize: TILE_WORLD_SIZE,
       heightUnit: HEIGHT_UNIT,
@@ -1903,6 +1934,8 @@ async function renderFixtureMap(
         }
 
         currentMapIndex = targetIndex;
+        activeMapFile = targetFile;
+        activeNarrative = nextResult.narrative;
         // Point of no return. Order: dispose outgoing narrative → session →
         // floor textures → create session with arrival spawn → build bundle.
         const outgoingNarrativeSprites = bundle?.sprites.length ?? 0;
@@ -1965,6 +1998,122 @@ async function renderFixtureMap(
       });
     });
   }
+
+  /**
+   * C3 WU-02: capture/persist/apply game save. Surface is `window.__threemaker_save`
+   * only (keyboard binding is WU-03). Load fails cleanly before mutating state
+   * when mapFile/floor/position cannot be realized.
+   *
+   * World rehydrate runs BEFORE hop/bundle rebuild so `seedIfAbsent` cannot
+   * clobber saved keys (seeds only fill absent keys).
+   */
+  function gameSaveMapCatalog(): readonly string[] {
+    if (manifestNav) return manifestNav.manifest.maps.map((entry) => entry.file);
+    return activeMapFile.length > 0 ? [activeMapFile] : [];
+  }
+
+  async function saveGameProgress(): Promise<{ ok: true } | { ok: false; reason: string }> {
+    if (activeMapFile.length === 0) {
+      return { ok: false, reason: 'no authored map identity to save' };
+    }
+    const snapshot = captureGameSaveSnapshot({
+      mapFile: activeMapFile,
+      x: session.mover.tile.x,
+      y: session.mover.tile.y,
+      floor: session.floorRouter.currentFloor,
+      facing: session.mover.facing,
+      world: narrativeRoot.world.snapshot(),
+    });
+    if (!snapshot) return { ok: false, reason: 'could not capture runtime snapshot' };
+    await persistGameSaveSnapshot(snapshot);
+    return { ok: true };
+  }
+
+  async function loadGameProgress(): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const loaded = await loadGameSaveSnapshot();
+    if (!loaded.ok) {
+      narrativeRoot.overlay().showError(`Load failed: ${loaded.reason}`);
+      return { ok: false, reason: loaded.reason };
+    }
+    const snap = loaded.snapshot;
+
+    const catalog = resolveMapFileInCatalog(snap.mapFile, { files: gameSaveMapCatalog() });
+    if (!catalog.ok) {
+      narrativeRoot.overlay().showError(catalog.message);
+      return { ok: false, reason: catalog.reason };
+    }
+
+    // Same-map path: validate against the live session without disposing first.
+    if (catalog.mapFile === activeMapFile || !hopToManifestFile) {
+      if (catalog.mapFile !== activeMapFile) {
+        const message = `Save mapFile ${JSON.stringify(catalog.mapFile)} cannot be loaded in this session.`;
+        narrativeRoot.overlay().showError(message);
+        return { ok: false, reason: 'map-unresolved' };
+      }
+      const placement = validateSavePlacement(snap, {
+        floorCount: session.floorRouter.floors.length,
+        width: session.map.width,
+        height: session.map.height,
+      });
+      if (!placement.ok) {
+        narrativeRoot.overlay().showError(placement.message);
+        return { ok: false, reason: placement.reason };
+      }
+      // Commit only after validation — world first so bundle seeds skip saved keys.
+      narrativeRoot.world.replaceAll(snap.world);
+      session.floorRouter.currentFloor = snap.floor;
+      session.mover.teleport(snap.x, snap.y, snap.facing);
+      session.applyFloorWindow(snap.x, snap.y);
+      disposeNarrativeBundle();
+      // Arrival = save tile (not boot session.spawn) so underfoot enter triggers
+      // stay deduped until the player leaves and re-enters.
+      await buildNarrativeBundle(activeNarrative, sameMapLoadNarrativeArrival(snap));
+      focusCameraOnSpawn();
+      narrativeRoot.overlay().hide();
+      return { ok: true };
+    }
+
+    // Multi-map: preload for geometry checks without disposing the live session.
+    const preloaded = manifestNav ? await manifestNav.loadEntry(catalog.mapFile) : null;
+    if (!preloaded) {
+      const message = `Save mapFile ${JSON.stringify(catalog.mapFile)} could not be read.`;
+      narrativeRoot.overlay().showError(message);
+      return { ok: false, reason: 'map-unresolved' };
+    }
+    const primary = preloaded.floorSources[0];
+    if (!primary) {
+      disposeFloorTextures(preloaded.floorSources[0]?.textures);
+      narrativeRoot.overlay().showError('Save target map has no floors.');
+      return { ok: false, reason: 'map-unresolved' };
+    }
+    const placement = validateSavePlacement(snap, {
+      floorCount: preloaded.floorSources.length,
+      width: primary.map.width,
+      height: primary.map.height,
+    });
+    if (!placement.ok) {
+      disposeFloorTextures(primary.textures);
+      narrativeRoot.overlay().showError(placement.message);
+      return { ok: false, reason: placement.reason };
+    }
+    // Free preload textures — hop loads a fresh copy after the point of no return.
+    disposeFloorTextures(primary.textures);
+
+    narrativeRoot.world.replaceAll(snap.world);
+    await hopToManifestFile(catalog.mapFile, {
+      x: snap.x,
+      y: snap.y,
+      facing: snap.facing,
+      floorIndex: snap.floor,
+    });
+    narrativeRoot.overlay().hide();
+    return { ok: true };
+  }
+
+  window.__threemaker_save = {
+    save: () => saveGameProgress(),
+    load: () => loadGameProgress(),
+  };
 
   // Custom clock, not `THREE.Clock` (deprecated since three r183) -- reuses
   // the engine's own game loop from `@threemaker/core`.

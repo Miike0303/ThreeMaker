@@ -19,6 +19,7 @@
     { "path": "../../packages/importer-rpgm" },
     { "path": "../../packages/input" },
     { "path": "../../packages/narrative" },
-    { "path": "../../packages/renderer" }
+    { "path": "../../packages/renderer" },
+    { "path": "../../packages/save" }
   ]
 }

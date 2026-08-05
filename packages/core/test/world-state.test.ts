@@ -32,6 +32,18 @@ describe('WorldState', () => {
     expect(world.snapshot()).toEqual({ gold: 10, metCaptain: true });
   });
 
+  it('replaceAll clears prior keys and installs the new snapshot without emitting', () => {
+    const world = new WorldState();
+    const listener = vi.fn();
+    world.signals.on('changed', listener);
+    world.set('old', true);
+    world.replaceAll({ gold: 3, flag: false });
+    expect(world.snapshot()).toEqual({ gold: 3, flag: false });
+    expect(world.has('old')).toBe(false);
+    // One emit from the initial set only — replaceAll is silent.
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   it('snapshot() reflects updates made after it was taken (fresh read, not a live view)', () => {
     const world = new WorldState();
     world.set('gold', 10);

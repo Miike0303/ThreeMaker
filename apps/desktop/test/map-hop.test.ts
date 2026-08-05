@@ -394,6 +394,13 @@ describe('resolveHopArrival', () => {
     });
   });
 
+  it('honours an explicit floorIndex from save-load over dest spawn floor', () => {
+    expect(resolveHopArrival({ x: 1, y: 2, floorIndex: 0, facing: 'up' }, destSpawn)).toEqual({
+      spawn: { x: 1, y: 2, floorIndex: 0 },
+      facing: 'up',
+    });
+  });
+
   it('defaults floorIndex to 0 when dest spawn is missing on a transfer hop', () => {
     expect(resolveHopArrival({ x: 5, y: 6 }, undefined)).toEqual({
       spawn: { x: 5, y: 6, floorIndex: 0 },
