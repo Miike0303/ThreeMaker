@@ -21,6 +21,18 @@ declare global {
     __TAURI_INTERNALS__?: unknown;
 
     /**
+     * Minimal input-remap surface (C2 WU-04). Always set once a play session
+     * boots — not a settings UI; console/CDP can rebind and the host
+     * persists under `~/.threemaker/input-bindings.json` (Tauri) or
+     * localStorage (plain Vite).
+     */
+    __threemaker_input?: {
+      rebindKeyboard(action: string, key: string): void;
+      list(): readonly import('@threemaker/input').ActionBinding[];
+      reset(): void;
+    };
+
+    /**
      * Dev-only hook exposing the renderer, so a headless visual check can
      * inspect which backend (WebGPU/WebGL2) actually got used. Only set when
      * `import.meta.env.DEV` (see main.ts); absent in production builds.

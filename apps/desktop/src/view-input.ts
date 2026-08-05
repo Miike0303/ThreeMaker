@@ -1,16 +1,14 @@
 /**
- * Desktop view/debug key mapping over `@threemaker/input` (PLAN_DEV_2 C2 WU-01).
+ * Desktop view/debug key mapping over `@threemaker/input` (PLAN_DEV_2 C2).
  *
  * Free of DOM so vitest can drive it. The host still owns applying each
  * action (camera rig, HD2D pipeline, noclip flag).
+ *
+ * Binding table is injectable (WU-04); defaults keep existing call sites working.
  */
 
-import {
-  Actions,
-  createBindingTable,
-  defaultKeyboardBindings,
-  resolveKeyboardEdge,
-} from '@threemaker/input';
+import type { BindingTable } from '@threemaker/input';
+import { Actions, defaultBindingTable, resolveKeyboardEdge } from '@threemaker/input';
 
 export type ViewKeyAction =
   | { readonly kind: 'toggle-post-processing' }
@@ -25,16 +23,18 @@ export type ViewKeyAction =
   | { readonly kind: 'noclip-on' }
   | { readonly kind: 'noclip-off' };
 
-const defaultTable = createBindingTable(defaultKeyboardBindings());
-
 /**
  * Resolve a raw `KeyboardEvent.key` into a view/debug action.
  *
  * @param phase - `down` for keydown, `up` for keyup (only Ctrl uses `up`)
  * @returns undefined when the key is not mapped in this phase
  */
-export function resolveViewKeyAction(key: string, phase: 'down' | 'up'): ViewKeyAction | undefined {
-  const edge = resolveKeyboardEdge(key, phase, defaultTable);
+export function resolveViewKeyAction(
+  key: string,
+  phase: 'down' | 'up',
+  table: BindingTable = defaultBindingTable(),
+): ViewKeyAction | undefined {
+  const edge = resolveKeyboardEdge(key, phase, table);
   if (!edge) return undefined;
 
   switch (edge.action) {

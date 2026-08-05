@@ -15,12 +15,13 @@ import {
 } from '@threemaker/gameplay';
 import type { RampCellInput, RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
-import type { PointerSample } from '@threemaker/input';
+import type { ActionBinding, BindingTable, PointerSample } from '@threemaker/input';
 import {
   Actions,
   createGamepadTracker,
   directionFromMoveAction,
   isMoveAction,
+  rebindKeyboard,
   resolvePointerIntent,
   snapshotFromGamepads,
 } from '@threemaker/input';
@@ -71,6 +72,11 @@ import { createHd2dPipeline } from './hd2d-pipeline.js';
 import { createHopStats, recordHopCompleted } from './hop-stats.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
+import {
+  createDefaultInputBindingTable,
+  loadInputBindingTable,
+  saveInputBindingTable,
+} from './input-bindings-store.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
 import {
   decideTransferMapHost,
@@ -1068,7 +1074,34 @@ async function renderFixtureMap(
     500,
   );
 
-  const heldDirection = createMostRecentHeldDirection();
+  // Shared remappable binding table (C2 WU-04): one table for all keyboard seams.
+  let bindingTable: BindingTable = await loadInputBindingTable();
+  let heldDirection = createMostRecentHeldDirection(bindingTable);
+
+  function applyBindingTable(next: BindingTable): void {
+    bindingTable = next;
+    heldDirection = createMostRecentHeldDirection(bindingTable);
+  }
+
+  /**
+   * Minimal remap surface (no settings UI): console / CDP can rebind and the
+   * change is persisted under `~/.threemaker/input-bindings.json` (or
+   * localStorage outside Tauri). Exit criterion C2: remap survives restart.
+   */
+  window.__threemaker_input = {
+    rebindKeyboard(action: string, key: string) {
+      applyBindingTable(rebindKeyboard(bindingTable, action, key));
+      void saveInputBindingTable(bindingTable);
+    },
+    list(): readonly ActionBinding[] {
+      return bindingTable.list();
+    },
+    reset() {
+      applyBindingTable(createDefaultInputBindingTable());
+      void saveInputBindingTable(bindingTable);
+    },
+  };
+
   // Gamepad is polled each frame (see game loop); pure edge tracker is DOM-free.
   const gamepadTracker = createGamepadTracker();
   // Walk-input is DOM-free; this host binds key events to press/release.
@@ -1506,7 +1539,7 @@ async function renderFixtureMap(
   // Narrative keys (C2: pure resolveGameplayKeyAction; host applies).
   window.addEventListener('keydown', (event) => {
     if (event.repeat || !bundle) return;
-    const action = resolveGameplayKeyAction(event.key, bundle.interpreter.state);
+    const action = resolveGameplayKeyAction(event.key, bundle.interpreter.state, bindingTable);
     if (action) applyGameplayKeyAction(action);
   });
 
@@ -1572,7 +1605,7 @@ async function renderFixtureMap(
   // unlike the 'g' dev map-cycle below.
   window.addEventListener('keydown', (event) => {
     if (event.repeat) return;
-    const action = resolveViewKeyAction(event.key, 'down');
+    const action = resolveViewKeyAction(event.key, 'down', bindingTable);
     if (!action) return;
     switch (action.kind) {
       case 'toggle-post-processing':
@@ -1607,7 +1640,7 @@ async function renderFixtureMap(
   // including the "don't re-trap" escape hatch if noclip carried the player
   // into/through a wall.
   window.addEventListener('keyup', (event) => {
-    const action = resolveViewKeyAction(event.key, 'up');
+    const action = resolveViewKeyAction(event.key, 'up', bindingTable);
     if (action?.kind !== 'noclip-off') return;
     noclipActive = false;
     debugPanel.setNoclipActive(false);

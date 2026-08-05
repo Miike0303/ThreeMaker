@@ -7,11 +7,25 @@
     "core:default",
     {
       "identifier": "fs:allow-read-text-file",
-      "allow": [{ "path": "$HOME/.threemaker/maps/**" }]
+      "allow": [
+        { "path": "$HOME/.threemaker/maps/**" },
+        { "path": "$HOME/.threemaker/input-bindings.json" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$HOME/.threemaker/input-bindings.json" }]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "$HOME/.threemaker" }, { "path": "$HOME/.threemaker/**" }]
     },
     {
       "identifier": "fs:allow-exists",
-      "allow": [{ "path": "$HOME/.threemaker/maps/**" }]
+      "allow": [
+        { "path": "$HOME/.threemaker/maps/**" },
+        { "path": "$HOME/.threemaker/input-bindings.json" }
+      ]
     },
     {
       "identifier": "fs:allow-read-file",

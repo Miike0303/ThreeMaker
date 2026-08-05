@@ -1,16 +1,13 @@
 /**
  * Pure gameplay key routing for narrative interaction over `@threemaker/input`
- * (PLAN_DEV_2 C2 WU-01) for the remappable interact action; dialogue keys stay
- * host/UI via {@link resolveDialogueKeyAction}.
+ * for the remappable interact action; dialogue keys stay host/UI via
+ * {@link resolveDialogueKeyAction}.
  *
- * Idle: only the bound interact action starts an NPC/trigger interact.
- * Dialogue states re-use {@link resolveDialogueKeyAction}. Free of DOM so
- * vitest can drive it; the host (`main.ts`) still owns running scripts and
- * applying dialogue effects.
+ * Binding table is injectable (WU-04); defaults keep existing call sites working.
  */
 
-import type { ActionId } from '@threemaker/input';
-import { Actions, createBindingTable, defaultKeyboardBindings } from '@threemaker/input';
+import type { ActionId, BindingTable } from '@threemaker/input';
+import { Actions, defaultBindingTable } from '@threemaker/input';
 import type { DialogueKeyAction } from './dialogue-ui.js';
 import { resolveDialogueKeyAction } from './dialogue-ui.js';
 
@@ -22,8 +19,6 @@ export type GameplayInterpreterState =
   | 'waiting-for-choice';
 
 export type GameplayKeyAction = { readonly kind: 'try-interact' } | DialogueKeyAction;
-
-const defaultTable = createBindingTable(defaultKeyboardBindings());
 
 /**
  * Resolve a logical {@link ActionId} (keyboard or gamepad) into a gameplay
@@ -70,9 +65,10 @@ export function resolveGameplayAction(
 export function resolveGameplayKeyAction(
   key: string,
   interpreterState: GameplayInterpreterState,
+  table: BindingTable = defaultBindingTable(),
 ): GameplayKeyAction | undefined {
   if (interpreterState === 'idle') {
-    const actionId = defaultTable.actionForKeyboardKey(key);
+    const actionId = table.actionForKeyboardKey(key);
     return actionId !== undefined ? resolveGameplayAction(actionId, interpreterState) : undefined;
   }
   if (interpreterState === 'running') {

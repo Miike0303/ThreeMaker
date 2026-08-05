@@ -1,25 +1,25 @@
 /**
  * Desktop walk-input seam: maps raw keys to grid {@link Direction} via the
- * shared `@threemaker/input` action layer (PLAN_DEV_2 C2 WU-01).
+ * shared `@threemaker/input` action layer (PLAN_DEV_2 C2).
  *
  * Free of DOM/`window` so vitest (`environment: 'node'`) can drive press/
  * release without a browser. The desktop host binds keydown/keyup to
  * {@link MostRecentHeldDirection.press}/{@link MostRecentHeldDirection.release}.
+ *
+ * Binding table is injectable (WU-04); defaults keep existing call sites working.
  */
 
 import type { Direction } from '@threemaker/gameplay';
+import type { BindingTable } from '@threemaker/input';
 import {
-  createBindingTable,
   createMostRecentHeldAction,
-  defaultKeyboardBindings,
+  defaultBindingTable,
   directionFromMoveAction,
   isMoveAction,
 } from '@threemaker/input';
 
-const defaultTable = createBindingTable(defaultKeyboardBindings());
-
-function moveActionFromKey(key: string): string | undefined {
-  const action = defaultTable.actionForKeyboardKey(key);
+function moveActionFromKey(key: string, table: BindingTable): string | undefined {
+  const action = table.actionForKeyboardKey(key);
   return action !== undefined && isMoveAction(action) ? action : undefined;
 }
 
@@ -27,8 +27,11 @@ function moveActionFromKey(key: string): string | undefined {
  * Maps a raw `KeyboardEvent.key` (any casing) to a grid {@link Direction},
  * or `undefined` when the key is not a movement key.
  */
-export function directionFromMoveKey(key: string): Direction | undefined {
-  return directionFromMoveAction(moveActionFromKey(key));
+export function directionFromMoveKey(
+  key: string,
+  table: BindingTable = defaultBindingTable(),
+): Direction | undefined {
+  return directionFromMoveAction(moveActionFromKey(key, table));
 }
 
 export type MostRecentHeldDirection = {
@@ -53,8 +56,10 @@ export type MostRecentHeldDirection = {
  * Tracks currently-held movement keys in press order; the most recently
  * pressed one (still held) wins when several are held at once.
  */
-export function createMostRecentHeldDirection(): MostRecentHeldDirection {
-  const held = createMostRecentHeldAction(moveActionFromKey);
+export function createMostRecentHeldDirection(
+  table: BindingTable = defaultBindingTable(),
+): MostRecentHeldDirection {
+  const held = createMostRecentHeldAction((key) => moveActionFromKey(key, table));
 
   return {
     press: (key) => held.press(key),

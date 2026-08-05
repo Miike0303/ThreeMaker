@@ -1,5 +1,20 @@
 export type { BindingTable } from './binding-table.js';
 export { createBindingTable } from './binding-table.js';
+export type {
+  InputBindingsParseFail,
+  InputBindingsParseOk,
+  InputBindingsParseResult,
+} from './bindings-document.js';
+export {
+  applyBindingOverrides,
+  bindingTableFromPersistedText,
+  CURRENT_INPUT_BINDINGS_VERSION,
+  collectBindingOverrides,
+  INPUT_BINDINGS_MAGIC,
+  parseInputBindingsDocument,
+  serializeInputBindingsDocument,
+} from './bindings-document.js';
+export { defaultBindingTable, resetDefaultBindingTableForTests } from './default-table.js';
 export { defaultKeyboardBindings } from './defaults.js';
 export type {
   GamepadLike,
@@ -26,6 +41,7 @@ export type {
   PointerSample,
 } from './pointer.js';
 export { resolvePointerIntent } from './pointer.js';
+export { clearKeyboardSourcesForAction, rebindKeyboard } from './rebind.js';
 export type {
   ActionBinding,
   ActionId,
