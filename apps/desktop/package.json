@@ -14,6 +14,7 @@
     "@threemaker/core": "workspace:*",
     "@threemaker/gameplay": "workspace:*",
     "@threemaker/importer-rpgm": "workspace:*",
+    "@threemaker/input": "workspace:*",
     "@threemaker/map-format": "workspace:*",
     "@threemaker/narrative": "workspace:*",
     "@threemaker/renderer": "workspace:*",

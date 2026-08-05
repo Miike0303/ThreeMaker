@@ -1,10 +1,16 @@
 /**
- * Pure view/debug key mapping extracted from `main.ts` (PLAN_DEV_2 C2 prep:
- * extract existing desktop input before a shared `packages/input` layer).
+ * Desktop view/debug key mapping over `@threemaker/input` (PLAN_DEV_2 C2 WU-01).
  *
  * Free of DOM so vitest can drive it. The host still owns applying each
  * action (camera rig, HD2D pipeline, noclip flag).
  */
+
+import {
+  Actions,
+  createBindingTable,
+  defaultKeyboardBindings,
+  resolveKeyboardEdge,
+} from '@threemaker/input';
 
 export type ViewKeyAction =
   | { readonly kind: 'toggle-post-processing' }
@@ -19,6 +25,8 @@ export type ViewKeyAction =
   | { readonly kind: 'noclip-on' }
   | { readonly kind: 'noclip-off' };
 
+const defaultTable = createBindingTable(defaultKeyboardBindings());
+
 /**
  * Resolve a raw `KeyboardEvent.key` into a view/debug action.
  *
@@ -26,29 +34,24 @@ export type ViewKeyAction =
  * @returns undefined when the key is not mapped in this phase
  */
 export function resolveViewKeyAction(key: string, phase: 'down' | 'up'): ViewKeyAction | undefined {
-  const normalized = key.toLowerCase();
+  const edge = resolveKeyboardEdge(key, phase, defaultTable);
+  if (!edge) return undefined;
 
-  if (phase === 'up') {
-    return normalized === 'control' ? { kind: 'noclip-off' } : undefined;
-  }
-
-  switch (normalized) {
-    case 'p':
-      return { kind: 'toggle-post-processing' };
-    case 'c':
-      return { kind: 'cycle-camera-mode' };
-    case '[':
-      return { kind: 'tilt', delta: -1 };
-    case ']':
-      return { kind: 'tilt', delta: 1 };
-    case '-':
-    case '_':
-      return { kind: 'zoom', delta: 1 };
-    case '=':
-    case '+':
-      return { kind: 'zoom', delta: -1 };
-    case 'control':
-      return { kind: 'noclip-on' };
+  switch (edge.action) {
+    case Actions.ViewTogglePostProcessing:
+      return edge.edge === 'pressed' ? { kind: 'toggle-post-processing' } : undefined;
+    case Actions.ViewCycleCamera:
+      return edge.edge === 'pressed' ? { kind: 'cycle-camera-mode' } : undefined;
+    case Actions.ViewTiltDown:
+      return edge.edge === 'pressed' ? { kind: 'tilt', delta: -1 } : undefined;
+    case Actions.ViewTiltUp:
+      return edge.edge === 'pressed' ? { kind: 'tilt', delta: 1 } : undefined;
+    case Actions.ViewZoomOut:
+      return edge.edge === 'pressed' ? { kind: 'zoom', delta: 1 } : undefined;
+    case Actions.ViewZoomIn:
+      return edge.edge === 'pressed' ? { kind: 'zoom', delta: -1 } : undefined;
+    case Actions.ViewNoclip:
+      return edge.edge === 'pressed' ? { kind: 'noclip-on' } : { kind: 'noclip-off' };
     default:
       return undefined;
   }

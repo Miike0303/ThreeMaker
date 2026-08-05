@@ -8,6 +8,7 @@
     { "path": "./packages/map-format" },
     { "path": "./packages/renderer" },
     { "path": "./packages/gameplay" },
+    { "path": "./packages/input" },
     { "path": "./apps/desktop" },
     { "path": "./apps/editor" }
   ]

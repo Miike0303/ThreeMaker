@@ -1,6 +1,6 @@
 /**
- * Pure walk-input helpers extracted from `main.ts` (PLAN_DEV_2 C2 prep:
- * extract what desktop already does before a shared `packages/input` layer).
+ * Desktop walk-input seam: maps raw keys to grid {@link Direction} via the
+ * shared `@threemaker/input` action layer (PLAN_DEV_2 C2 WU-01).
  *
  * Free of DOM/`window` so vitest (`environment: 'node'`) can drive press/
  * release without a browser. The desktop host binds keydown/keyup to
@@ -8,25 +8,26 @@
  */
 
 import type { Direction } from '@threemaker/gameplay';
+import {
+  createBindingTable,
+  createMostRecentHeldAction,
+  defaultKeyboardBindings,
+  directionFromMoveAction,
+} from '@threemaker/input';
 
-/** WASD/arrow keys → the grid direction they move the character in. */
-const MOVE_KEYS: Readonly<Record<string, Direction>> = {
-  w: 'up',
-  arrowup: 'up',
-  s: 'down',
-  arrowdown: 'down',
-  a: 'left',
-  arrowleft: 'left',
-  d: 'right',
-  arrowright: 'right',
-};
+const defaultTable = createBindingTable(defaultKeyboardBindings());
+
+function moveActionFromKey(key: string): string | undefined {
+  const action = defaultTable.actionForKeyboardKey(key);
+  return action?.startsWith('move.') ? action : undefined;
+}
 
 /**
  * Maps a raw `KeyboardEvent.key` (any casing) to a grid {@link Direction},
  * or `undefined` when the key is not a movement key.
  */
 export function directionFromMoveKey(key: string): Direction | undefined {
-  return MOVE_KEYS[key.toLowerCase()];
+  return directionFromMoveAction(moveActionFromKey(key));
 }
 
 export type MostRecentHeldDirection = {
@@ -52,25 +53,12 @@ export type MostRecentHeldDirection = {
  * pressed one (still held) wins when several are held at once.
  */
 export function createMostRecentHeldDirection(): MostRecentHeldDirection {
-  const held: Direction[] = [];
+  const held = createMostRecentHeldAction(moveActionFromKey);
 
   return {
-    press(key) {
-      const direction = directionFromMoveKey(key);
-      if (!direction) return;
-      const index = held.indexOf(direction);
-      if (index !== -1) held.splice(index, 1);
-      held.push(direction);
-    },
-    release(key) {
-      const direction = directionFromMoveKey(key);
-      if (!direction) return;
-      const index = held.indexOf(direction);
-      if (index !== -1) held.splice(index, 1);
-    },
-    current: () => held[held.length - 1],
-    clear: () => {
-      held.length = 0;
-    },
+    press: (key) => held.press(key),
+    release: (key) => held.release(key),
+    current: () => directionFromMoveAction(held.current()),
+    clear: () => held.clear(),
   };
 }
