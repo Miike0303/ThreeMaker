@@ -27,6 +27,11 @@ export type ToolId =
  * (Slice 5b: loop-crear-jugar -- both are single-click tools, not drags; see
  * `painter-store.ts`'s `pointerDown` for how they short-circuit the stroking
  * state machine entirely, the same way `eyedropper` does).
+ *
+ * PLAN_DEV_2 C2: these are **editor tool ids**, not remappable game
+ * `ActionId`s from `@threemaker/input`. Pointer paint strokes and palette
+ * shortcuts stay host-local; the shared input package is for play-time
+ * actions (move/interact/view), not for map-authoring tools.
  */
 export const TOOL_SHORTCUTS: Readonly<Record<string, ToolId>> = {
   b: 'brush',

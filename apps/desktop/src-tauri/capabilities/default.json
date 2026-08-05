@@ -18,7 +18,7 @@
     },
     {
       "identifier": "fs:allow-mkdir",
-      "allow": [{ "path": "$HOME/.threemaker" }, { "path": "$HOME/.threemaker/**" }]
+      "allow": [{ "path": "$HOME/.threemaker" }]
     },
     {
       "identifier": "fs:allow-exists",
