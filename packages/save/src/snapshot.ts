@@ -1,5 +1,5 @@
+import { GAME_SAVE_MAGIC } from './constants.js';
 import type { GameSaveDocument } from './document.js';
-import { GAME_SAVE_MAGIC } from './document.js';
 import type { GameSaveSnapshot, SaveWorldValue } from './types.js';
 
 function copyWorld(

@@ -9,10 +9,11 @@
  * migration later without rewriting the player/world fields.
  */
 
+import { CURRENT_GAME_SAVE_VERSION, GAME_SAVE_MAGIC } from './constants.js';
+import { migrateSaveDocumentToCurrent } from './migrate.js';
 import type { GameSaveSnapshot, SaveFacing, SaveWorldValue } from './types.js';
 
-export const GAME_SAVE_MAGIC = 'threemaker.game-save' as const;
-export const CURRENT_GAME_SAVE_VERSION = 1 as const;
+export { CURRENT_GAME_SAVE_VERSION, GAME_SAVE_MAGIC } from './constants.js';
 
 export type GameSavePlayerV1 = {
   readonly mapFile: string;
@@ -96,9 +97,8 @@ function parseWorld(raw: unknown): Record<string, SaveWorldValue> | undefined {
  * Validate a decoded JSON value as a game-save document.
  * Never throws — invalid input yields `{ ok: false }`.
  *
- * Only the current version is accepted in WU-01; a migration loop for older
- * versions lands when a second schema version exists (same registry pattern
- * as map-format).
+ * Older known versions are migrated via {@link migrateSaveDocumentToCurrent}
+ * (registry pattern matching map-format). Versions newer than CURRENT fail closed.
  */
 export function parseGameSaveDocument(raw: unknown): GameSaveParseResult {
   if (raw === null || typeof raw !== 'object') {
@@ -111,22 +111,24 @@ export function parseGameSaveDocument(raw: unknown): GameSaveParseResult {
   if (typeof record.version !== 'number' || !Number.isInteger(record.version)) {
     return { ok: false, reason: 'version must be an integer' };
   }
-  if (record.version !== CURRENT_GAME_SAVE_VERSION) {
-    return { ok: false, reason: `unknown or unsupported version ${record.version}` };
+
+  const migrated = migrateSaveDocumentToCurrent(record);
+  if (!migrated.ok) {
+    return { ok: false, reason: migrated.reason };
   }
 
-  const player = parsePlayer(record.player);
+  const player = parsePlayer(migrated.raw.player);
   if (player === undefined) {
     return { ok: false, reason: 'invalid player' };
   }
-  const world = parseWorld(record.world);
+  const world = parseWorld(migrated.raw.world);
   if (world === undefined) {
     return { ok: false, reason: 'invalid world' };
   }
 
   return {
     ok: true,
-    version: record.version,
+    version: CURRENT_GAME_SAVE_VERSION,
     document: {
       magic: GAME_SAVE_MAGIC,
       version: 1,
