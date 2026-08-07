@@ -1,6 +1,6 @@
 [package]
 name = "threemaker-editor"
-version = "0.0.0"
+version = "0.1.0"
 description = "ThreeMaker asset library + tile-painting editor shell"
 edition = "2021"
 publish = false

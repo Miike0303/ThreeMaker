@@ -93,7 +93,12 @@ import {
   saveInputBindingTable,
 } from './input-bindings-store.js';
 import { LIGHT_BUDGET } from './light-budget.js';
-import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
+import {
+  MAP_DIR_RELATIVE,
+  MAP_FILE_RELATIVE,
+  readManifestText,
+  readMapDocumentText,
+} from './map-file.js';
 import {
   decideTransferMapHost,
   isMapCycleKey,
@@ -143,6 +148,12 @@ import { resolveViewKeyAction } from './view-input.js';
 import { WalkAnimation } from './walk-animation.js';
 import { createMostRecentHeldDirection } from './walk-input.js';
 import { createWeatherLayer } from './weather-layer.js';
+import {
+  homeMapsPathToWebRelative,
+  webReadTextFile,
+  webResolveObjectBinary,
+  webResolveObjectTexture,
+} from './web-game-source.js';
 
 // The Roseliam fixture (see fixtures/README.md) ships 3 sample maps; Map007
 // is the nicest of the three for this slice (a dungeon interior with both
@@ -395,6 +406,30 @@ interface ResolvedObjectTexture {
 const ASSET_STORE_OBJECTS_DIR = '.threemaker/asset-store/objects';
 
 /**
+ * Active content source for authored maps/assets (C9 WU-01).
+ * - `tauri`: `$HOME/.threemaker/...` via plugin-fs (desktop shell).
+ * - `web`: static `game/` payload next to the Vite bundle (browser build).
+ * Set once at boot before any load; hop/narrative/props resolvers close over
+ * the same functions so a web session stays on the web source.
+ */
+let activeGameSource: 'tauri' | 'web' = 'tauri';
+
+/** Text under the maps tree (map JSON, ink sidecars, game-defs, manifest). */
+async function readActiveMapText(homeRelativePath: string): Promise<string | null> {
+  if (activeGameSource === 'web') {
+    return webReadTextFile(homeMapsPathToWebRelative(homeRelativePath));
+  }
+  return readMapDocumentText(homeRelativePath);
+}
+
+async function readActiveManifestText(): Promise<string | null> {
+  if (activeGameSource === 'web') {
+    return webReadTextFile('manifest.json');
+  }
+  return readManifestText();
+}
+
+/**
  * Reads one asset-store object's bytes via Tauri fs and decodes it into a
  * texture (rpgm-whole-game-import: multi-map navigation + real player
  * sprite, both below). Deliberately duplicates `authored-map.ts`'s private
@@ -404,8 +439,14 @@ const ASSET_STORE_OBJECTS_DIR = '.threemaker/asset-store/objects';
  * the same "small local duplication over cross-module coupling" call this
  * codebase already makes elsewhere (see `cli.ts`'s `readPlayerStartIfStartMap`
  * ponytail comment, pre-refactor).
+ *
+ * Web source (C9): delegates to `webResolveObjectTexture` (fetch + same blob
+ * decode path) so hops/NPC sheets stay playable without Tauri.
  */
 async function resolveObjectTextureReal(sha256: string): Promise<ResolvedObjectTexture> {
+  if (activeGameSource === 'web') {
+    return webResolveObjectTexture(sha256);
+  }
   const bytes = await readFile(`${ASSET_STORE_OBJECTS_DIR}/${sha256.slice(0, 2)}/${sha256}`, {
     baseDir: BaseDirectory.Home,
   });
@@ -426,6 +467,9 @@ async function resolveObjectTextureReal(sha256: string): Promise<ResolvedObjectT
  * via `GLTFLoader.parse`.
  */
 async function resolveObjectBinaryReal(sha256: string): Promise<Uint8Array> {
+  if (activeGameSource === 'web') {
+    return webResolveObjectBinary(sha256);
+  }
   const bytes = await readFile(`${ASSET_STORE_OBJECTS_DIR}/${sha256.slice(0, 2)}/${sha256}`, {
     baseDir: BaseDirectory.Home,
   });
@@ -454,7 +498,8 @@ function loadAuthoredMapAt(
   const mapRelativePath = `${MAP_DIR_RELATIVE}/${relativeFile}`;
   return loadAuthoredMap({
     mapRelativePath,
-    readMapDocumentText: () => readMapDocumentText(mapRelativePath),
+    readMapDocumentText: () => readActiveMapText(mapRelativePath),
+    readSidecarText: readActiveMapText,
     resolveObjectTexture: resolveObjectTextureReal,
     gameDefsCatalog,
   });
@@ -2971,17 +3016,30 @@ async function main(): Promise<void> {
    */
   let authoredFailure: string | undefined;
 
-  // Authored-load path (loop-crear-jugar, Slice 4a/4b): gated on the real
-  // Tauri host being present (both `tauri dev` and a production build), NOT
-  // on `import.meta.env.DEV` -- an authored map renders the same way in
-  // either. `loadAuthoredMap` returns `null` (after logging why) for "no
-  // file saved yet"/parse failure/read failure, all of which fall through
-  // to the DEV demos/fixture path below, unchanged (spec: "DEV demos remain
-  // fallback"). The player-sprite character sheet is `character-sprite-
-  // placeholder.ts`'s canvas-generated (in-memory, no fs/network) sheet --
-  // Slice 4b replaced the DEV-only Roseliam fixture 4a used here, so this
-  // branch no longer depends on `/@fs/`/`__FIXTURES_DIR__` at all.
-  if (isTauriAvailable()) {
+  // Authored-load path (loop-crear-jugar, Slice 4a/4b + C9 WU-01 web):
+  // Tauri host (`tauri dev` / installed binary) OR a static web payload at
+  // `game/manifest.json` (export-web-game). NOT gated on `import.meta.env.DEV`
+  // -- an authored map renders the same way in either. `loadAuthoredMap`
+  // returns `null` (after logging why) for "no file saved yet"/parse
+  // failure/read failure, all of which fall through to the DEV demos/fixture
+  // path below, unchanged (spec: "DEV demos remain fallback"). A plain
+  // `vite build` without a game payload still ends at `map.noAuthoredMap`.
+  let canLoadAuthored = isTauriAvailable();
+  if (!canLoadAuthored) {
+    try {
+      const webManifest = await webReadTextFile('manifest.json');
+      if (webManifest !== null) {
+        activeGameSource = 'web';
+        canLoadAuthored = true;
+      }
+    } catch (error) {
+      console.error('main: web game source probe failed; treating as no authored map.', error);
+    }
+  } else {
+    activeGameSource = 'tauri';
+  }
+
+  if (canLoadAuthored) {
     // Multi-map (manifest-driven) authored path (rpgm-whole-game-import):
     // takes priority over the single-file authored path below when
     // `convert-rpgm-game`'s manifest exists and lists at least one map.
@@ -2991,7 +3049,7 @@ async function main(): Promise<void> {
     // the single-file path already has relative to the DEV fixture below.
     let manifest: GameManifest | undefined;
     try {
-      const manifestText = await readManifestText();
+      const manifestText = await readActiveManifestText();
       if (manifestText !== null) manifest = parseGameManifest(JSON.parse(manifestText));
     } catch (error) {
       console.error(
@@ -3009,7 +3067,7 @@ async function main(): Promise<void> {
     if (manifest?.gameDefs) {
       try {
         const defsPath = `${MAP_DIR_RELATIVE}/${manifest.gameDefs}`;
-        const defsText = await readMapDocumentText(defsPath);
+        const defsText = await readActiveMapText(defsPath);
         if (defsText === null) {
           throw new Error(
             `main: game defs file ${JSON.stringify(manifest.gameDefs)} is missing (looked up at ${JSON.stringify(defsPath)}).`,
@@ -3106,7 +3164,9 @@ async function main(): Promise<void> {
 
     try {
       const authored = await loadAuthoredMap({
-        readMapDocumentText,
+        mapRelativePath: MAP_FILE_RELATIVE,
+        readMapDocumentText: () => readActiveMapText(MAP_FILE_RELATIVE),
+        readSidecarText: readActiveMapText,
         resolveObjectTexture: resolveObjectTextureReal,
         gameDefsCatalog,
       });
