@@ -174,4 +174,91 @@ describe('loadAuthoredMap', () => {
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });
+
+  it('carries validated lights and per-floor lightMap sha + resolved texture (C6)', async () => {
+    const lightMapSha = 'ab'.repeat(32);
+    const light = {
+      id: 'lamp',
+      kind: 'point' as const,
+      color: '#ffaa00',
+      intensity: 1,
+      range: 5,
+      x: 1,
+      y: 1,
+      floor: 'floor-0',
+    };
+    const base = buildDoc({
+      version: 6,
+      props: [],
+      lights: [light],
+      floors: [
+        {
+          ...buildFloor('floor-0', 0),
+          lightMap: lightMapSha,
+        },
+        buildFloor('floor-1', 3),
+      ],
+      npcs: [],
+      triggers: [],
+      events: {},
+      worldSeeds: {},
+    });
+    // v6 requires an explicit tileset.tilePixelSize (v3 fixtures omit it).
+    const deps = buildDeps({
+      readMapDocumentText: vi.fn(async () =>
+        JSON.stringify({
+          ...base,
+          tileset: { ...base.tileset, tilePixelSize: 48 },
+        }),
+      ),
+      resolveObjectTexture: vi.fn(async (sha256: string) => {
+        if (sha256 === 'sha-missing') throw new Error('object not found');
+        return { texture: stubTexture(sha256), width: 16, height: 16 };
+      }),
+    });
+
+    const result = await loadAuthoredMap(deps);
+
+    expect(result?.lights).toEqual([light]);
+    expect(result?.floorSources[0]?.lightMap).toBe(lightMapSha);
+    expect(result?.floorSources[0]?.lightMapTexture).toEqual(stubTexture(lightMapSha));
+    expect(result?.floorSources[1]?.lightMap).toBeUndefined();
+    expect(result?.floorSources[1]?.lightMapTexture).toBeUndefined();
+    expect(deps.resolveObjectTexture).toHaveBeenCalledWith(lightMapSha);
+  });
+
+  it('fails loudly when a floor lightMap object is missing from the store', async () => {
+    const lightMapSha = 'cd'.repeat(32);
+    const base = buildDoc({
+      version: 6,
+      props: [],
+      lights: [],
+      stairLinks: [],
+      floors: [
+        {
+          ...buildFloor('floor-0', 0),
+          lightMap: lightMapSha,
+        },
+      ],
+      npcs: [],
+      triggers: [],
+      events: {},
+      worldSeeds: {},
+    });
+    const deps = buildDeps({
+      readMapDocumentText: vi.fn(async () =>
+        JSON.stringify({
+          ...base,
+          tileset: { ...base.tileset, tilePixelSize: 48 },
+        }),
+      ),
+      resolveObjectTexture: vi.fn(async (sha256: string) => {
+        if (sha256 === lightMapSha) throw new Error('object not found');
+        if (sha256 === 'sha-missing') throw new Error('object not found');
+        return { texture: stubTexture(sha256), width: 16, height: 16 };
+      }),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/lightMap object/);
+  });
 });

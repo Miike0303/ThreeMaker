@@ -31,6 +31,7 @@ import { BaseDirectory, readFile } from '@tauri-apps/plugin-fs';
 import type { EventCommand, ShowDialogueCommand } from '@threemaker/core';
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import type {
+  LightDocument,
   MapDocument,
   MapEventScripts,
   PropDocument,
@@ -99,6 +100,11 @@ export interface AuthoredMapResult {
    * Required so a future producer cannot drop props silently.
    */
   readonly props: readonly PropDocument[];
+  /**
+   * Validated schema-v6 lights (empty when the map authors none). Required so a
+   * future producer cannot drop lights silently — same discipline as `props`.
+   */
+  readonly lights: readonly LightDocument[];
 }
 
 /** One resolved sheet: the decoded texture plus its pixel size (`buildChunks` needs both). */
@@ -571,13 +577,27 @@ export async function loadAuthoredMap(
   // `world_get` gate provably precede any dialogue.
   const narrative = await loadNarrative(doc, translated, deps);
   const { textures, sheetPixelSizes } = await resolveTileset(doc, deps);
+  // Per-floor baked lightmaps (schema v6): resolve through the same object
+  // seam as NPC sheets / tileset slots. Missing object → loud reject (content
+  // bug), not a silent dark floor — same failure surface as a missing NPC
+  // sheet path that aborts after console diagnostics when the seam throws
+  // and the caller does not catch.
+  const lightMapTextures = await resolveFloorLightMaps(doc, deps);
 
-  const floorSources: readonly FloorSource[] = translated.floorSources.map((source) => ({
-    ...source,
-    textures,
-    sheetPixelSizes,
-    tilePixelSize: doc.tileset.tilePixelSize,
-  }));
+  const floorSources: readonly FloorSource[] = translated.floorSources.map((source, index) => {
+    const floorDoc = doc.floors[index];
+    const lightMapSha = floorDoc?.lightMap;
+    const lightMapTexture =
+      lightMapSha !== undefined ? lightMapTextures.get(lightMapSha) : undefined;
+    return {
+      ...source,
+      textures,
+      sheetPixelSizes,
+      tilePixelSize: doc.tileset.tilePixelSize,
+      ...(lightMapSha !== undefined ? { lightMap: lightMapSha } : {}),
+      ...(lightMapTexture !== undefined ? { lightMapTexture } : {}),
+    };
+  });
 
   return {
     floorSources,
@@ -586,5 +606,41 @@ export async function loadAuthoredMap(
     narrative,
     // Schema-validated; floor ids still strings (map-props resolves against FloorGameplay.floorId).
     props: doc.props,
+    // Schema-validated lights (map-lights enforces budget + runtime attach).
+    lights: doc.lights,
   };
+}
+
+/**
+ * Resolves every distinct per-floor `lightMap` sha once. Throws when the
+ * asset store cannot serve the object — baked lighting is intentional content
+ * and must not degrade to a silently unlit floor.
+ */
+async function resolveFloorLightMaps(
+  doc: MapDocument,
+  deps: AuthoredMapDeps,
+): Promise<Map<string, THREE.Texture>> {
+  const shas = [
+    ...new Set(
+      doc.floors
+        .map((floor) => floor.lightMap)
+        .filter((sha): sha is string => typeof sha === 'string'),
+    ),
+  ];
+  const resolved = new Map<string, THREE.Texture>();
+  await Promise.all(
+    shas.map(async (sha256) => {
+      try {
+        const { texture } = await deps.resolveObjectTexture(sha256);
+        resolved.set(sha256, texture);
+      } catch (error) {
+        const cause = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `authored-map: floor lightMap object ${sha256} is missing or unreadable: ${cause}`,
+          { cause: error instanceof Error ? error : undefined },
+        );
+      }
+    }),
+  );
+  return resolved;
 }

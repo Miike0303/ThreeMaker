@@ -15,6 +15,12 @@ export interface DebugSnapshot {
   readonly narrativeSprites: number;
   /** Live prop instances from the current map's props bundle (0 if none). */
   readonly propInstances: number;
+  /** Live authored light instances from the current map's lights bundle (0 if none). */
+  readonly lightInstances: number;
+  /** Active renderer backend label (`webgpu` / `webgl2`). */
+  readonly backend: string;
+  /** EMA frame time in milliseconds (display-rounded in {@link formatDebugRows}). */
+  readonly frameTimeMs: number;
   /** Successful G-cycle / transferMap hops completed this session. */
   readonly hopsCompleted: number;
   /**
@@ -28,6 +34,8 @@ export interface DebugSnapshot {
   readonly lastOutgoingPropInstances: number;
   /** Distinct prop glTF assets disposed with the outgoing map at the last hop (C5). */
   readonly lastOutgoingPropAssets: number;
+  /** Authored lights disposed with the outgoing map at the last hop (C6). */
+  readonly lastOutgoingLights: number;
   /** Current session inventory counts (display-only; C4). */
   readonly inventory: Readonly<Record<string, number>>;
   /** Current session stat values (display-only; C4). */
@@ -56,10 +64,13 @@ export function formatDebugRows(snapshot: DebugSnapshot, t: I18n['t']): readonly
     { label: t('debug.zoom'), value: snapshot.distance.toFixed(1) },
     { label: t('debug.chunks'), value: String(snapshot.liveChunks) },
     { label: t('debug.drawCalls'), value: String(snapshot.drawCalls) },
+    { label: t('debug.backend'), value: snapshot.backend },
+    { label: t('debug.frameMs'), value: snapshot.frameTimeMs.toFixed(1) },
     { label: t('debug.tile'), value: `${snapshot.tile.x}, ${snapshot.tile.y}` },
     { label: t('debug.elevation'), value: String(snapshot.elevation) },
     { label: t('debug.narrativeSprites'), value: String(snapshot.narrativeSprites) },
     { label: t('debug.props'), value: String(snapshot.propInstances) },
+    { label: t('debug.lights'), value: String(snapshot.lightInstances) },
     { label: t('debug.hops'), value: String(snapshot.hopsCompleted) },
     {
       label: t('debug.lastHopSprites'),
@@ -76,6 +87,10 @@ export function formatDebugRows(snapshot: DebugSnapshot, t: I18n['t']): readonly
     {
       label: t('debug.lastHopPropAssets'),
       value: String(snapshot.lastOutgoingPropAssets),
+    },
+    {
+      label: t('debug.lastHopLights'),
+      value: String(snapshot.lastOutgoingLights),
     },
     {
       label: t('debug.inventory'),
@@ -226,11 +241,15 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
       elevation: 0,
       narrativeSprites: 0,
       propInstances: 0,
+      lightInstances: 0,
+      backend: '',
+      frameTimeMs: 0,
       hopsCompleted: 0,
       lastOutgoingNarrativeSprites: 0,
       lastOutgoingFloorTextureKeys: 0,
       lastOutgoingPropInstances: 0,
       lastOutgoingPropAssets: 0,
+      lastOutgoingLights: 0,
       inventory: {},
       stats: {},
     },

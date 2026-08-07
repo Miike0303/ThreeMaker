@@ -14,6 +14,10 @@
  * `textures` record across every `FloorSource`, since a document has exactly
  * one tileset) -- disposing `floorSources[0].textures` once is enough for
  * the whole result, never one call per floor.
+ *
+ * Optional per-floor lightmap textures (C6) are also floor-owned and freed
+ * here when `floors` is passed — each `lightMapTexture` is distinct and must
+ * be disposed once (never double-free via `StreamingTilemapScene`).
  */
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import type * as THREE from 'three/webgpu';
@@ -21,9 +25,15 @@ import type * as THREE from 'three/webgpu';
 /** A no-op for `undefined` (nothing loaded yet -- the very first map has no "previous" result to dispose) or an empty/falsy slot entry. */
 export function disposeFloorTextures(
   textures: Partial<Record<TileSheetId, THREE.Texture>> | undefined,
+  floors?: readonly { readonly lightMapTexture?: THREE.Texture }[],
 ): void {
-  if (!textures) return;
-  for (const texture of Object.values(textures)) {
-    texture?.dispose();
+  if (textures) {
+    for (const texture of Object.values(textures)) {
+      texture?.dispose();
+    }
+  }
+  if (!floors) return;
+  for (const floor of floors) {
+    floor.lightMapTexture?.dispose();
   }
 }

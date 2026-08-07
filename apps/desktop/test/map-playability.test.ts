@@ -89,6 +89,7 @@ function buildResult(overlayTileId: number | null): AuthoredMapResult {
     spawn: undefined,
     narrative: undefined,
     props: [],
+    lights: [],
   };
 }
 
@@ -108,6 +109,8 @@ describe('isAuthoredResultPlayable', () => {
         stairLinks: [],
         spawn: undefined,
         narrative: undefined,
+        props: [],
+        lights: [],
       }),
     ).toBe(false);
   });

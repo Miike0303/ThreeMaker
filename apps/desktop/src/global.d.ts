@@ -65,6 +65,12 @@ declare global {
       readonly narrativeSprites: number;
       /** Live prop instances from the current props bundle (C5). */
       readonly propInstances: number;
+      /** Live authored light instances from the current lights bundle (C6). */
+      readonly lightInstances: number;
+      /** Active three.js renderer backend after `renderer.init()` (`webgpu` | `webgl2`). */
+      readonly backend: 'webgpu' | 'webgl2';
+      /** Exponential-moving-average frame time in milliseconds. */
+      readonly frameTimeMs: number;
       /** Successful map hops (G-cycle / transferMap) this session. */
       readonly hopsCompleted: number;
       /** NPC sprites disposed with the outgoing map on the last hop. */
@@ -75,6 +81,8 @@ declare global {
       readonly lastHopOutgoingPropInstances: number;
       /** Distinct prop glTF assets disposed with the outgoing map on the last hop (C5). */
       readonly lastHopOutgoingPropAssets: number;
+      /** Authored lights disposed with the outgoing map on the last hop (C6). */
+      readonly lastHopOutgoingLights: number;
       /** The character's current integer tile position. */
       readonly tile: { readonly x: number; readonly y: number };
       /** The active `CameraMode` (see camera-rig.ts), as its raw string id. */

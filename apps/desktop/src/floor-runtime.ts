@@ -122,6 +122,18 @@ export interface FloorSource {
    */
   readonly tilePixelSize?: number;
   /**
+   * Content-addressed sha256 of a baked lightmap PNG (`FloorDocument.lightMap`,
+   * schema v6). Present when the floor authors a lightmap; resolved into
+   * {@link lightMapTexture} by `loadAuthoredMap`.
+   */
+  readonly lightMap?: string;
+  /**
+   * Resolved lightmap texture for this floor. Floor-owned: disposed with the
+   * floor's tileset textures on hop (see `disposeFloorTextures`), never by
+   * `StreamingTilemapScene` (`ownsTextures: false`).
+   */
+  readonly lightMapTexture?: THREE.Texture;
+  /**
    * This floor's own room-id grid (design "Ceilings and Interior Occlusion",
    * obs #117 gotcha), e.g. `@threemaker/map-format`'s `computeRoomIdGrid`
    * output -- 0 = no room. Consumed TWO ways: (1) `session.roomTracker`

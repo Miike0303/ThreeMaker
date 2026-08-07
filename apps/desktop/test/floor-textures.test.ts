@@ -40,4 +40,16 @@ describe('disposeFloorTextures', () => {
   it('is a no-op for undefined (nothing loaded yet on the very first hop)', () => {
     expect(() => disposeFloorTextures(undefined)).not.toThrow();
   });
+
+  it('disposes per-floor lightMapTexture when floors are passed (C6)', () => {
+    const a1 = fakeTexture();
+    const lm0 = fakeTexture();
+    const lm1 = fakeTexture();
+
+    disposeFloorTextures({ A1: a1 }, [{ lightMapTexture: lm0 }, { lightMapTexture: lm1 }]);
+
+    expect(a1.dispose).toHaveBeenCalledTimes(1);
+    expect(lm0.dispose).toHaveBeenCalledTimes(1);
+    expect(lm1.dispose).toHaveBeenCalledTimes(1);
+  });
 });

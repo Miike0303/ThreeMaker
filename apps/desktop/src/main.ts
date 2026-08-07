@@ -28,7 +28,7 @@ import {
   resolvePointerIntent,
   snapshotFromGamepads,
 } from '@threemaker/input';
-import type { PropDocument, RoomDocument } from '@threemaker/map-format';
+import type { LightDocument, PropDocument, RoomDocument } from '@threemaker/map-format';
 import { computeRoomIdGrid } from '@threemaker/map-format';
 import type { FloorVisibilityPolicy, SheetPixelSizes } from '@threemaker/renderer';
 import {
@@ -90,6 +90,7 @@ import {
   loadInputBindingTable,
   saveInputBindingTable,
 } from './input-bindings-store.js';
+import { LIGHT_BUDGET } from './light-budget.js';
 import { MAP_DIR_RELATIVE, readManifestText, readMapDocumentText } from './map-file.js';
 import {
   decideTransferMapHost,
@@ -98,6 +99,8 @@ import {
   planNextManifestCycle,
   resolveHopArrival,
 } from './map-hop.js';
+import type { MapLightsBundle } from './map-lights.js';
+import { buildMapLights } from './map-lights.js';
 import type { MapNarrativeBundle } from './map-narrative-bundle.js';
 import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
@@ -106,6 +109,11 @@ import { buildMapProps } from './map-props.js';
 import { createNarrativeRoot } from './narrative-root.js';
 import { withNoclip } from './noclip.js';
 import { pointerTargetFromDialogueHit } from './pointer-host.js';
+import {
+  mapRendererBackendName,
+  shouldForceWebGL,
+  smoothFrameTimeMs,
+} from './renderer-observability.js';
 import {
   aboveFloorTilemap,
   createRoomTracker,
@@ -707,6 +715,11 @@ interface SessionOverride {
    * caller cannot drop them silently — same discipline as `narrative`.
    */
   readonly props: readonly PropDocument[];
+  /**
+   * Validated schema-v6 lights for this map (empty when none). Required so a
+   * caller cannot drop them silently — same discipline as `props`.
+   */
+  readonly lights: readonly LightDocument[];
 }
 
 /**
@@ -769,12 +782,22 @@ async function renderFixtureMap(
   // is available up front -- every session's tileset materials use it for
   // the HD-2D filtered-environment texture configuration (see
   // `createMapSession` below and `PixelArtTextureOptions`).
-  const renderer = new THREE.WebGPURenderer({ antialias: true });
+  // Dev toggle to verify the WebGL2 floor (`?webgl=1` → forceWebGL).
+  const forceWebGL = shouldForceWebGL(typeof location !== 'undefined' ? location.search : '');
+  const renderer = new THREE.WebGPURenderer({
+    antialias: true,
+    ...(forceWebGL ? { forceWebGL: true } : {}),
+  });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
   await renderer.init();
   const maxAnisotropy = renderer.getMaxAnisotropy();
+  // three r184: after init(), `renderer.backend` is WebGPUBackend or WebGLBackend.
+  const rendererBackend = mapRendererBackendName(renderer.backend);
+  /** EMA frame time (ms); updated in the animation loop — no stats-gl dependency. */
+  let frameTimeMsEma = 0;
+  let lastFrameStampMs = performance.now();
 
   /**
    * Builds one floor's renderer state: chunk data for its whole map (pure,
@@ -809,6 +832,8 @@ async function renderFixtureMap(
       source.rampCells ?? [],
       source.tilePixelSize ?? TILE_SIZE_PX,
     );
+    // C6 intermediate state: lightMap affects tile sheet materials here;
+    // authored THREE lights only visibly affect glTF props until WU-05.
     const tilemap = new StreamingTilemapScene(chunks, source.textures, {
       tileWorldSize: TILE_WORLD_SIZE,
       ownsTextures: false,
@@ -828,6 +853,7 @@ async function renderFixtureMap(
       ...(belowRoomIdGrid
         ? { ceilingCarve: { roomIdGrid: belowRoomIdGrid, mapWidth: source.map.width } }
         : {}),
+      ...(source.lightMapTexture ? { lighting: { lightMap: source.lightMapTexture } } : {}),
     });
     tilemap.group.position.y = source.baseElevation * HEIGHT_UNIT;
     const streamer = new ChunkStreamer({
@@ -1074,6 +1100,11 @@ async function renderFixtureMap(
    */
   let propsBundle: MapPropsBundle | undefined;
   /**
+   * Per-map authored lights bundle (C6). Hoisted next to `propsBundle` for the
+   * same TDZ reason: debug snapshot, hop dispose, and `renderCharacterAt`.
+   */
+  let lightsBundle: MapLightsBundle | undefined;
+  /**
    * Session narrative root (world + inventory + stats + overlay). Declared
    * before `buildDebugSnapshot` so the debug panel can read live inventory/
    * stats without a TDZ on `narrativeRoot` (same reason `bundle` is early).
@@ -1274,11 +1305,15 @@ async function renderFixtureMap(
       elevation: session.floorRouter.elevation.heightAt(session.mover.tile.x, session.mover.tile.y),
       narrativeSprites: bundle?.sprites.length ?? 0,
       propInstances: propsBundle?.count ?? 0,
+      lightInstances: lightsBundle?.count ?? 0,
+      backend: rendererBackend,
+      frameTimeMs: frameTimeMsEma,
       hopsCompleted: hopStats.hopsCompleted,
       lastOutgoingNarrativeSprites: hopStats.lastOutgoingNarrativeSprites,
       lastOutgoingFloorTextureKeys: hopStats.lastOutgoingFloorTextureKeys,
       lastOutgoingPropInstances: hopStats.lastOutgoingPropInstances,
       lastOutgoingPropAssets: hopStats.lastOutgoingPropAssets,
+      lastOutgoingLights: hopStats.lastOutgoingLights,
       inventory: narrativeRoot.inventory.snapshot(),
       stats: narrativeRoot.stats.snapshot(),
     };
@@ -1307,6 +1342,15 @@ async function renderFixtureMap(
       get propInstances() {
         return propsBundle?.count ?? 0;
       },
+      get lightInstances() {
+        return lightsBundle?.count ?? 0;
+      },
+      get backend() {
+        return rendererBackend;
+      },
+      get frameTimeMs() {
+        return frameTimeMsEma;
+      },
       get hopsCompleted() {
         return hopStats.hopsCompleted;
       },
@@ -1321,6 +1365,9 @@ async function renderFixtureMap(
       },
       get lastHopOutgoingPropAssets() {
         return hopStats.lastOutgoingPropAssets;
+      },
+      get lastHopOutgoingLights() {
+        return hopStats.lastOutgoingLights;
       },
       get tile() {
         return { x: session.mover.tile.x, y: session.mover.tile.y };
@@ -1448,6 +1495,8 @@ async function renderFixtureMap(
   let activeNarrative = sessionOverride?.narrative;
   /** Props for the active map — rebuilt on hop / same-map load with the narrative. */
   let activeProps: readonly PropDocument[] = sessionOverride?.props ?? [];
+  /** Lights for the active map — rebuilt on hop / same-map load with props. */
+  let activeLights: readonly LightDocument[] = sessionOverride?.lights ?? [];
 
   // App-supplied effects for every bundle's interpreter -- session-lived, since
   // it closes over the mutable `session`/`activeEntityMove` rather than over one
@@ -1576,6 +1625,11 @@ async function renderFixtureMap(
     propsBundle = undefined;
   }
 
+  function disposeLightsBundle(): void {
+    lightsBundle?.dispose();
+    lightsBundle = undefined;
+  }
+
   /**
    * Builds the incoming map's narrative runtime over the session root, leaving
    * `bundle` undefined when that map authors none (spec R5). Must run AFTER
@@ -1618,6 +1672,49 @@ async function renderFixtureMap(
       tileWorldSize: TILE_WORLD_SIZE,
       heightUnit: HEIGHT_UNIT,
       resolveObjectBinary: resolveObjectBinaryReal,
+    });
+  }
+
+  /**
+   * NPC anchors for attached lights: tile coords + ground Y from each NPC's
+   * own floor. Built from the authored narrative (runtime cross-check vs
+   * light `attach` ids).
+   */
+  function buildNpcLightPositions(
+    narrative: AuthoredMapNarrative | undefined,
+  ): ReadonlyMap<string, { x: number; y: number; floor: number; groundY: number }> {
+    const positions = new Map<string, { x: number; y: number; floor: number; groundY: number }>();
+    if (!narrative) return positions;
+    for (const npc of narrative.npcs) {
+      const floor = session.floorRouter.floors[npc.floor];
+      if (!floor) continue;
+      positions.set(npc.id, {
+        x: npc.x,
+        y: npc.y,
+        floor: npc.floor,
+        groundY: groundYAt(floor.elevation, npc.x, npc.y, HEIGHT_UNIT, floor.baseElevation),
+      });
+    }
+    return positions;
+  }
+
+  /**
+   * Builds this map's authored lights (C6). Empty `lights` → no bundle.
+   * Must run AFTER `createMapSession` (and ideally after narrative, so NPC
+   * attach anchors resolve). Budget exceed → loud throw (never silent drop).
+   */
+  function buildLightsBundle(
+    lights: readonly LightDocument[],
+    narrative: AuthoredMapNarrative | undefined,
+  ): void {
+    lightsBundle = buildMapLights({
+      lights,
+      scene,
+      floors: session.floorRouter.floors,
+      tileWorldSize: TILE_WORLD_SIZE,
+      heightUnit: HEIGHT_UNIT,
+      npcPositions: buildNpcLightPositions(narrative),
+      budget: LIGHT_BUDGET,
     });
   }
 
@@ -1720,6 +1817,7 @@ async function renderFixtureMap(
   // structural change to this function's setup, not a local fix.
   await buildNarrativeBundle(sessionOverride?.narrative);
   await buildPropsBundle(sessionOverride?.props ?? []);
+  buildLightsBundle(sessionOverride?.lights ?? [], sessionOverride?.narrative);
 
   // View/debug keys (C2 prep: pure resolveViewKeyAction; host applies effects).
   // Real engine features (camera, zoom, noclip) — available in production;
@@ -1823,6 +1921,7 @@ async function renderFixtureMap(
     function disposeOutgoingMap(): void {
       disposeNarrativeBundle();
       disposePropsBundle();
+      disposeLightsBundle();
       session.dispose();
     }
 
@@ -1983,6 +2082,8 @@ async function renderFixtureMap(
     // own first `loadAuthoredMap` result), so even the very first hop
     // frees it correctly.
     let currentTextures = sessionOverride?.floorSources[0]?.textures;
+    /** Full floor sources for lightmap dispose (per-floor textures, not shared). */
+    let currentFloorSources = sessionOverride?.floorSources;
 
     hopToManifestFile = async (mapFile, arrival, opts) => {
       const maps = manifestNav.manifest.maps;
@@ -2031,7 +2132,7 @@ async function renderFixtureMap(
           if (opts?.advanceIndexOnUnplayable) {
             currentMapIndex = targetIndex;
           }
-          disposeFloorTextures(nextResult.floorSources[0]?.textures);
+          disposeFloorTextures(nextResult.floorSources[0]?.textures, nextResult.floorSources);
           return;
         }
 
@@ -2039,23 +2140,28 @@ async function renderFixtureMap(
         activeMapFile = targetFile;
         activeNarrative = nextResult.narrative;
         activeProps = nextResult.props;
-        // Point of no return. Order: dispose outgoing narrative/props → session →
-        // floor textures → create session with arrival spawn → build bundles.
+        activeLights = nextResult.lights;
+        // Point of no return. Order: dispose outgoing narrative/props/lights →
+        // session → floor textures (+ lightmaps) → create session → build bundles.
         const outgoingNarrativeSprites = bundle?.sprites.length ?? 0;
         const outgoingFloorTextureKeys = currentTextures ? Object.keys(currentTextures).length : 0;
         const outgoingPropInstances = propsBundle?.count ?? 0;
         const outgoingPropAssets = propsBundle?.assetCount ?? 0;
+        const outgoingLights = lightsBundle?.count ?? 0;
         disposeNarrativeBundle();
         disposePropsBundle();
+        disposeLightsBundle();
         session.dispose();
-        disposeFloorTextures(currentTextures);
+        disposeFloorTextures(currentTextures, currentFloorSources);
         hopStats = recordHopCompleted(hopStats, {
           outgoingNarrativeSprites,
           outgoingFloorTextureKeys,
           outgoingPropInstances,
           outgoingPropAssets,
+          outgoingLights,
         });
         currentTextures = nextResult.floorSources[0]?.textures;
+        currentFloorSources = nextResult.floorSources;
 
         // Pure arrival resolve (G-cycle authored spawn vs transferMap coords).
         const hopArrival = resolveHopArrival(arrival, nextResult.spawn);
@@ -2094,6 +2200,15 @@ async function renderFixtureMap(
           // Past the point of no return: map stays playable without props.
           console.error(
             `Manifest map "${targetFile}" loaded, but its authored props did not:`,
+            error,
+          );
+        }
+        try {
+          buildLightsBundle(nextResult.lights, nextResult.narrative);
+        } catch (error) {
+          // Past the point of no return: map stays playable without lights.
+          console.error(
+            `Manifest map "${targetFile}" loaded, but its authored lights did not:`,
             error,
           );
         }
@@ -2227,10 +2342,12 @@ async function renderFixtureMap(
       session.applyFloorWindow(snap.x, snap.y);
       disposeNarrativeBundle();
       disposePropsBundle();
+      disposeLightsBundle();
       // Arrival = save tile (not boot session.spawn) so underfoot enter triggers
       // stay deduped until the player leaves and re-enters.
       await buildNarrativeBundle(activeNarrative, sameMapLoadNarrativeArrival(snap));
       await buildPropsBundle(activeProps);
+      buildLightsBundle(activeLights, activeNarrative);
       focusCameraOnSpawn();
       narrativeRoot.overlay().hide();
       return { ok: true };
@@ -2245,7 +2362,7 @@ async function renderFixtureMap(
     }
     const primary = preloaded.floorSources[0];
     if (!primary) {
-      disposeFloorTextures(preloaded.floorSources[0]?.textures);
+      disposeFloorTextures(preloaded.floorSources[0]?.textures, preloaded.floorSources);
       narrativeRoot.overlay().showError('Save target map has no floors.');
       return { ok: false, reason: 'map-unresolved' };
     }
@@ -2255,12 +2372,12 @@ async function renderFixtureMap(
       height: primary.map.height,
     });
     if (!placement.ok) {
-      disposeFloorTextures(primary.textures);
+      disposeFloorTextures(primary.textures, preloaded.floorSources);
       narrativeRoot.overlay().showError(placement.message);
       return { ok: false, reason: placement.reason };
     }
     // Free preload textures — hop loads a fresh copy after the point of no return.
-    disposeFloorTextures(primary.textures);
+    disposeFloorTextures(primary.textures, preloaded.floorSources);
 
     // Same store apply as same-map: pre-validate inventory/stats before hop.
     const stores = applyGameSaveSessionStores(snap, {
@@ -2323,6 +2440,8 @@ async function renderFixtureMap(
     target.y += (worldY - target.y) * followAmount;
     target.z += (desiredZ - target.z) * followAmount;
     applyCameraPose();
+    // Player-attached torch / lantern follows the character mesh (torch offset applied inside the bundle).
+    lightsBundle?.updatePlayer(character.mesh.position);
   }
 
   const gameLoop = new GameLoop({
@@ -2547,6 +2666,9 @@ async function renderFixtureMap(
 
   gameLoop.start();
   renderer.setAnimationLoop(() => {
+    const now = performance.now();
+    frameTimeMsEma = smoothFrameTimeMs(frameTimeMsEma, now, lastFrameStampMs);
+    lastFrameStampMs = now;
     stats.begin();
     gameLoop.tick();
     hd2d.render();
@@ -2724,6 +2846,7 @@ async function main(): Promise<void> {
               spawn: authored.spawn,
               narrative: authored.narrative,
               props: authored.props,
+              lights: authored.lights,
             },
             { manifest, loadEntry, startIndex: index },
             sessionStores,
@@ -2770,6 +2893,7 @@ async function main(): Promise<void> {
             spawn: authored.spawn,
             narrative: authored.narrative,
             props: authored.props,
+            lights: authored.lights,
           },
           undefined,
           sessionStores,
