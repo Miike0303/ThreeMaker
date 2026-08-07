@@ -1,18 +1,29 @@
 /**
- * Copy a playable game payload into `apps/desktop/dist/game/` for the static
- * web build (C9 WU-01). Source: `~/.threemaker/maps/**` (manifest, maps, ink
+ * Build a self-contained static web site under `apps/desktop/dist-web/` (C9 WU-02).
+ *
+ * Copies the Vite build from `apps/desktop/dist/` into the out dir, then writes
+ * the playable game payload under `out/game/`. That keeps `dist/` free of the
+ * multi-hundred-MB map/asset payload so Tauri's `frontendDist: "../dist"` does
+ * not bloat the desktop installer.
+ *
+ * Source for the game payload: `~/.threemaker/maps/**` (manifest, maps, ink
  * sidecars) plus only the asset-store objects those maps reference.
  *
  * Usage:
  *   node scripts/export-web-game.mjs [--maps-dir <path>] [--out <path>]
  */
 
-import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const DESKTOP_APP_DIR = resolve(SCRIPT_DIR, '..', 'apps', 'desktop');
+const DEFAULT_DIST_DIR = join(DESKTOP_APP_DIR, 'dist');
+const DEFAULT_OUT_DIR = join(DESKTOP_APP_DIR, 'dist-web');
 
 /**
  * Walk a map document (or any JSON tree) and collect content-addressed
@@ -61,14 +72,7 @@ export function extractAssetSha256Refs(value) {
  */
 export function parseExportArgs(argv) {
   let mapsDir = join(homedir(), '.threemaker', 'maps');
-  let outDir = resolve(
-    dirname(fileURLToPath(import.meta.url)),
-    '..',
-    'apps',
-    'desktop',
-    'dist',
-    'game',
-  );
+  let outDir = DEFAULT_OUT_DIR;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--maps-dir') {
@@ -108,6 +112,35 @@ async function listFilesRecursive(dir) {
 }
 
 /**
+ * Copy Vite `dist/` contents into the web out dir (files only; no nesting of
+ * the `dist` folder name itself).
+ *
+ * @param {string} distDir
+ * @param {string} outDir
+ */
+export async function copyDistIntoOut(distDir, outDir) {
+  await mkdir(outDir, { recursive: true });
+  let entries;
+  try {
+    entries = await readdir(distDir, { withFileTypes: true });
+  } catch (error) {
+    if (/** @type {NodeJS.ErrnoException} */ (error).code === 'ENOENT') {
+      throw new Error(`export-web-game: Vite dist not found at ${distDir} (run vite build first)`);
+    }
+    throw error;
+  }
+  for (const entry of entries) {
+    const src = join(distDir, entry.name);
+    const dest = join(outDir, entry.name);
+    await cp(src, dest, { recursive: true });
+  }
+}
+
+/**
+ * Copy a playable game payload into `outDir` (maps + referenced asset-store
+ * objects). Callers that want the self-contained static site should use
+ * {@link exportWebSite} so the payload lands under `out/game/`.
+ *
  * @param {string} mapsDir
  * @param {string} outDir
  */
@@ -185,10 +218,26 @@ export async function exportWebGame(mapsDir, outDir) {
   return { mapsCopied, objectsCopied, totalBytes };
 }
 
+/**
+ * Self-contained static site: copy Vite `distDir` → `outDir`, then write the
+ * game payload under `outDir/game/`. Does not write into `distDir`.
+ *
+ * @param {string} mapsDir
+ * @param {string} outDir
+ * @param {string} distDir
+ */
+export async function exportWebSite(mapsDir, outDir, distDir) {
+  await copyDistIntoOut(distDir, outDir);
+  const gameOut = join(outDir, 'game');
+  return exportWebGame(mapsDir, gameOut);
+}
+
 const isMain =
   process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 
 if (isMain) {
   const { mapsDir, outDir } = parseExportArgs(process.argv.slice(2));
-  await exportWebGame(mapsDir, outDir);
+  console.log(`export-web-game: dist=${DEFAULT_DIST_DIR}`);
+  console.log(`export-web-game: site-out=${outDir}`);
+  await exportWebSite(mapsDir, outDir, DEFAULT_DIST_DIR);
 }

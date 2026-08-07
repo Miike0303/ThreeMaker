@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "export:web": "vite build && node ../../scripts/export-web-game.mjs",
+    "export:web": "vite build && node ../../scripts/export-web-game.mjs --out dist-web",
     "tauri": "tauri"
   },
   "dependencies": {
