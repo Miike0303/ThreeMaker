@@ -206,7 +206,24 @@ export interface NpcSpriteRef {
   readonly characterIndex: number;
 }
 
-/** One authored NPC (schema v4). `floor` references a stable `FloorDocument.id` like `MapSpawn`; `onInteract` keys into `MapDocument.events`. */
+/**
+ * One stop on an authored NPC day routine. Additive-optional on
+ * {@link NpcDocument.routine} (MapSpawn precedent — no format version bump).
+ */
+export interface NpcRoutineStopDocument {
+  readonly at: number;
+  readonly x: number;
+  readonly y: number;
+  readonly facing: NpcFacing;
+}
+
+/**
+ * One authored NPC (schema v4). `floor` references a stable `FloorDocument.id`
+ * like `MapSpawn`; `onInteract` keys into `MapDocument.events`.
+ *
+ * Optional `routine` is additive (same omit-when-absent convention as
+ * `MapDocument.spawn` / MapSpawn) — no format version bump required.
+ */
 export interface NpcDocument {
   readonly id: string;
   readonly x: number;
@@ -215,6 +232,7 @@ export interface NpcDocument {
   readonly facing: NpcFacing;
   readonly sprite: NpcSpriteRef;
   readonly onInteract: string;
+  readonly routine?: readonly NpcRoutineStopDocument[];
 }
 
 /** One authored trigger (schema v4). `event` keys into `MapDocument.events`. */
@@ -516,6 +534,11 @@ function validateNpcs(
   // permanently unreachable. Scoped PER FLOOR exactly like `validateRooms`' id
   // uniqueness -- the same x,y on two floors is two distinct tiles. The first
   // claimant's index is tracked so the error names both conflicting entries.
+  //
+  // Deliberate relaxation: this uniqueness check applies to BASE positions
+  // only. Routine stops are exempt — two NPCs may be routed through the same
+  // tile at different times, and even at the same time; runtime occupancy
+  // (NpcRegistry) owns the collision surface.
   const firstIndexByTile = new Map<string, number>();
   for (const [index, npc] of npcs.entries()) {
     const key = `${npc.floor} ${npc.x},${npc.y}`;
@@ -575,15 +598,87 @@ function validateNpc(
   if (typeof raw.onInteract !== 'string' || raw.onInteract.length === 0) {
     throw new MapFormatError('malformed', `"${label}.onInteract" must be a non-empty string.`);
   }
-  return {
-    id: raw.id,
-    x,
-    y,
-    floor,
-    facing: raw.facing as NpcFacing,
-    sprite,
-    onInteract: raw.onInteract,
-  };
+  const routine = validateNpcRoutine(raw.routine, label, raw.id, mapWidth, mapHeight);
+  return routine === undefined
+    ? {
+        id: raw.id,
+        x,
+        y,
+        floor,
+        facing: raw.facing as NpcFacing,
+        sprite,
+        onInteract: raw.onInteract,
+      }
+    : {
+        id: raw.id,
+        x,
+        y,
+        floor,
+        facing: raw.facing as NpcFacing,
+        sprite,
+        onInteract: raw.onInteract,
+        routine,
+      };
+}
+
+/**
+ * Optional day-routine stops on an NPC. Absent / undefined → omitted (no
+ * version bump; MapSpawn-style additive field). When present: non-empty
+ * array; each stop has integer `at` in [0, 1440), in-bounds coords, valid
+ * facing; entries must be strictly ascending by `at` (duplicates and
+ * descending order are loud errors that name both indices).
+ */
+function validateNpcRoutine(
+  input: unknown,
+  label: string,
+  npcId: string,
+  mapWidth: number,
+  mapHeight: number,
+): readonly NpcRoutineStopDocument[] | undefined {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input)) {
+    throw new MapFormatError('malformed', `"${label}.routine" must be an array when present.`);
+  }
+  if (input.length === 0) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.routine" must be a non-empty array when present.`,
+    );
+  }
+  const stops: NpcRoutineStopDocument[] = [];
+  for (const [index, entry] of input.entries()) {
+    const stopLabel = `${label}.routine[${index}]`;
+    if (typeof entry !== 'object' || entry === null) {
+      throw new MapFormatError('malformed', `"${stopLabel}" must be an object.`);
+    }
+    const raw = entry as Record<string, unknown>;
+    if (!Number.isInteger(raw.at) || (raw.at as number) < 0 || (raw.at as number) >= 1440) {
+      throw new MapFormatError(
+        'malformed',
+        `"${stopLabel}.at" of ${JSON.stringify(npcId)} must be an integer within [0, 1440), got ${JSON.stringify(raw.at)}.`,
+      );
+    }
+    const at = raw.at as number;
+    const x = validateNarrativeCoord(raw.x, stopLabel, 'x', npcId, mapWidth);
+    const y = validateNarrativeCoord(raw.y, stopLabel, 'y', npcId, mapHeight);
+    if (typeof raw.facing !== 'string' || !NPC_FACINGS.includes(raw.facing as NpcFacing)) {
+      throw new MapFormatError(
+        'malformed',
+        `"${stopLabel}.facing" must be one of ${NPC_FACINGS.join(', ')}, got ${JSON.stringify(raw.facing)}.`,
+      );
+    }
+    if (index > 0) {
+      const prevAt = stops[index - 1]?.at;
+      if (prevAt !== undefined && at <= prevAt) {
+        throw new MapFormatError(
+          'malformed',
+          `"${label}.routine" entries must be strictly ascending by "at": routine[${index - 1}].at=${prevAt} then routine[${index}].at=${at}.`,
+        );
+      }
+    }
+    stops.push({ at, x, y, facing: raw.facing as NpcFacing });
+  }
+  return stops;
 }
 
 /** Content-addressed sha256: exactly 64 lowercase hex chars (shared by NPC sprites and prop glTFs). */

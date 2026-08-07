@@ -32,5 +32,7 @@ export { Node } from './node.js';
 export { PlainTextDialogueProvider } from './plain-text-dialogue-provider.js';
 export type { Listener, SignalSubscriber, Unsubscribe } from './signal-bus.js';
 export { SignalBus } from './signal-bus.js';
+export type { WorldClockOptions } from './world-clock.js';
+export { MINUTES_PER_DAY, WorldClock } from './world-clock.js';
 export type { WorldStateEvents, WorldValue } from './world-state.js';
 export { WorldState } from './world-state.js';

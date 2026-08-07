@@ -21,6 +21,8 @@ export type { InventoryEvents } from './inventory.js';
 export { Inventory } from './inventory.js';
 export type { NpcDefinition, NpcSprite } from './npc-registry.js';
 export { NpcRegistry } from './npc-registry.js';
+export type { RoutineStop } from './npc-routine.js';
+export { routinePositionAt } from './npc-routine.js';
 export { PassabilityGrid } from './passability-grid.js';
 export type {
   StairTraversalFloor,

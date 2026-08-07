@@ -109,3 +109,43 @@ describe('NpcRegistry.npcAdjacentFacing', () => {
     expect(registry.npcAdjacentFacing(0, 3, 5, 'up')).toBeUndefined();
   });
 });
+
+describe('NpcRegistry.moveNpc', () => {
+  it('re-keys occupancy so the old tile is free and the new tile is occupied', () => {
+    const registry = new NpcRegistry([npc({ id: 'elder', x: 3, y: 4, facing: 'down' })]);
+
+    registry.moveNpc('elder', 7, 8, 'up');
+
+    expect(registry.occupies(0, 3, 4)).toBe(false);
+    expect(registry.occupies(0, 7, 8)).toBe(true);
+  });
+
+  it('updates findNpcAt and npcAdjacentFacing to the new position', () => {
+    const registry = new NpcRegistry([npc({ id: 'elder', x: 3, y: 4, facing: 'down' })]);
+
+    registry.moveNpc('elder', 7, 8, 'left');
+
+    expect(registry.findNpcAt(0, 3, 4)).toBeUndefined();
+    expect(registry.findNpcAt(0, 7, 8)?.id).toBe('elder');
+    expect(registry.findNpcAt(0, 7, 8)?.facing).toBe('left');
+    // Player at (7, 9) facing up looks at (7, 8)
+    expect(registry.npcAdjacentFacing(0, 7, 9, 'up')?.id).toBe('elder');
+    expect(registry.npcAdjacentFacing(0, 3, 5, 'up')).toBeUndefined();
+  });
+
+  it('keeps the NPC on its own floor (does not re-key other floors)', () => {
+    const registry = new NpcRegistry([npc({ id: 'upstairs', floor: 1, x: 2, y: 2 })]);
+
+    registry.moveNpc('upstairs', 5, 5, 'right');
+
+    expect(registry.occupies(1, 5, 5)).toBe(true);
+    expect(registry.occupies(0, 5, 5)).toBe(false);
+    expect(registry.findNpcAt(1, 5, 5)?.id).toBe('upstairs');
+  });
+
+  it('throws on unknown id', () => {
+    const registry = new NpcRegistry([npc({ id: 'elder' })]);
+
+    expect(() => registry.moveNpc('ghost', 1, 1, 'down')).toThrow(/unknown npc id|"ghost"/);
+  });
+});

@@ -9,15 +9,19 @@ export interface NpcSprite {
 }
 
 /**
- * One static NPC this registry indexes. The authoring source is a `.tmmap`
+ * One NPC this registry indexes. The authoring source is a `.tmmap`
  * v4 `npcs[]` entry; the composition root translates it (document floor ID ->
  * runtime floor index, content-addressed sheet ref -> resolved sheet) before
  * handing it here.
+ *
+ * `x` / `y` / `facing` are mutable so `moveNpc` can update live occupancy
+ * without rebuilding the registry. `id`, `floor`, `sprite`, and `onInteract`
+ * stay fixed for the session.
  */
 export interface NpcDefinition {
   readonly id: string;
-  readonly x: number;
-  readonly y: number;
+  x: number;
+  y: number;
   /**
    * Runtime floor INDEX this NPC stands on (an index into the session's
    * `floors` array, like `StairLinkRuntime.fromFloor`) -- NOT a `.tmmap`
@@ -27,7 +31,7 @@ export interface NpcDefinition {
    * fails loudly here rather than silently missing every lookup.
    */
   readonly floor: number;
-  readonly facing: Direction;
+  facing: Direction;
   readonly sprite: NpcSprite;
   /** Event id run when a player interacts with this NPC (see `NpcRegistry#findNpcAt`). */
   readonly onInteract: string;
@@ -43,15 +47,15 @@ function tileKey(floor: number, x: number, y: number): string {
 }
 
 /**
- * Indexes static NPC positions for collision and interact lookups.
+ * Indexes NPC positions for collision and interact lookups.
  *
- * ponytail: NPCs are static in this slice -- no movement/schedules; the
- * registry only ever reflects each NPC's definition-time `(x, y)`, matching
- * the design's explicit v1 ceiling.
+ * Occupancy is mutable via {@link NpcRegistry#moveNpc} so day routines can
+ * re-key tiles without reconstructing the registry. Floor is fixed per NPC
+ * for the session — cross-floor routines are out of scope.
  */
 export class NpcRegistry {
   private readonly npcs: readonly NpcDefinition[];
-  private readonly occupiedTiles: ReadonlySet<string>;
+  private readonly occupiedTiles: Set<string>;
 
   constructor(npcs: readonly NpcDefinition[]) {
     for (const npc of npcs) assertFloorIndex(npc.floor, `NpcRegistry: npc "${npc.id}"`);
@@ -113,5 +117,23 @@ export class NpcRegistry {
   ): NpcDefinition | undefined {
     const delta = DIRECTION_DELTA[facing];
     return this.findNpcAt(floor, x + delta.x, y + delta.y);
+  }
+
+  /**
+   * Move an NPC to a new tile on its OWN floor and update facing.
+   * Re-keys occupancy: removes the old `${floor}:${x},${y}` entry and adds
+   * the new one. Cross-floor routines are out of scope — floor is never
+   * changed here. Unknown `id` throws loudly.
+   */
+  moveNpc(id: string, x: number, y: number, facing: Direction): void {
+    const npc = this.npcs.find((entry) => entry.id === id);
+    if (npc === undefined) {
+      throw new Error(`NpcRegistry#moveNpc: unknown npc id ${JSON.stringify(id)}.`);
+    }
+    this.occupiedTiles.delete(tileKey(npc.floor, npc.x, npc.y));
+    npc.x = x;
+    npc.y = y;
+    npc.facing = facing;
+    this.occupiedTiles.add(tileKey(npc.floor, x, y));
   }
 }

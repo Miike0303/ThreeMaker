@@ -23,6 +23,7 @@ export type {
   MapTilesetDocument,
   NpcDocument,
   NpcFacing,
+  NpcRoutineStopDocument,
   NpcSpriteRef,
   PropDocument,
   RampDirection,
