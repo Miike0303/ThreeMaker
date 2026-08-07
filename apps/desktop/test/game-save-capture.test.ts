@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { captureGameSaveSnapshot } from '../src/game-save-capture.js';
 
 describe('captureGameSaveSnapshot', () => {
-  it('copies world and normalizes mapFile separators', () => {
+  it('copies world/inventory/stats and normalizes mapFile separators', () => {
     const world = { met: true as const, gold: 2 };
+    const inventory = { potion: 3 };
+    const stats = { hp: 12 };
     const snap = captureGameSaveSnapshot({
       mapFile: 'demo\\map-a.tmmap.json',
       x: 1,
@@ -11,6 +13,8 @@ describe('captureGameSaveSnapshot', () => {
       floor: 0,
       facing: 'left',
       world,
+      inventory,
+      stats,
     });
     expect(snap).toEqual({
       mapFile: 'demo/map-a.tmmap.json',
@@ -19,9 +23,29 @@ describe('captureGameSaveSnapshot', () => {
       floor: 0,
       facing: 'left',
       world: { met: true, gold: 2 },
+      inventory: { potion: 3 },
+      stats: { hp: 12 },
     });
     world.gold = 99;
+    inventory.potion = 0;
+    stats.hp = 1;
     expect(snap?.world.gold).toBe(2);
+    expect(snap?.inventory.potion).toBe(3);
+    expect(snap?.stats.hp).toBe(12);
+  });
+
+  it('drops zero inventory counts at capture (zeros are not stored)', () => {
+    const snap = captureGameSaveSnapshot({
+      mapFile: 'a.tmmap.json',
+      x: 0,
+      y: 0,
+      floor: 0,
+      facing: 'up',
+      world: {},
+      inventory: { potion: 2, scrap: 0 },
+      stats: {},
+    });
+    expect(snap?.inventory).toEqual({ potion: 2 });
   });
 
   it('rejects empty mapFile, non-integer tiles, bad facing', () => {
@@ -33,6 +57,8 @@ describe('captureGameSaveSnapshot', () => {
         floor: 0,
         facing: 'up',
         world: {},
+        inventory: {},
+        stats: {},
       }),
     ).toBeUndefined();
     expect(
@@ -43,6 +69,8 @@ describe('captureGameSaveSnapshot', () => {
         floor: 0,
         facing: 'up',
         world: {},
+        inventory: {},
+        stats: {},
       }),
     ).toBeUndefined();
     expect(
@@ -53,6 +81,35 @@ describe('captureGameSaveSnapshot', () => {
         floor: 0,
         facing: 'north' as 'up',
         world: {},
+        inventory: {},
+        stats: {},
+      }),
+    ).toBeUndefined();
+  });
+
+  it('rejects invalid inventory or stats values (silently disables save)', () => {
+    expect(
+      captureGameSaveSnapshot({
+        mapFile: 'a.tmmap.json',
+        x: 0,
+        y: 0,
+        floor: 0,
+        facing: 'up',
+        world: {},
+        inventory: { potion: -1 },
+        stats: {},
+      }),
+    ).toBeUndefined();
+    expect(
+      captureGameSaveSnapshot({
+        mapFile: 'a.tmmap.json',
+        x: 0,
+        y: 0,
+        floor: 0,
+        facing: 'up',
+        world: {},
+        inventory: {},
+        stats: { hp: Number.NaN },
       }),
     ).toBeUndefined();
   });

@@ -1,7 +1,8 @@
-import { TriggerIndex } from '@threemaker/gameplay';
-import type { GameSaveSnapshot } from '@threemaker/save';
+import { Inventory, StatBlock, TriggerIndex } from '@threemaker/gameplay';
+import type { GameSaveSnapshot, SaveWorldValue } from '@threemaker/save';
 import { describe, expect, it } from 'vitest';
 import {
+  applyGameSaveSessionStores,
   resolveMapFileInCatalog,
   sameMapLoadNarrativeArrival,
   validateSavePlacement,
@@ -14,6 +15,8 @@ const snap = (partial: Partial<GameSaveSnapshot> = {}): GameSaveSnapshot => ({
   floor: 0,
   facing: 'down',
   world: {},
+  inventory: {},
+  stats: {},
   ...partial,
 });
 
@@ -59,6 +62,133 @@ describe('validateSavePlacement', () => {
     const r2 = validateSavePlacement(snap({ x: 0, y: -1 }), geo);
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.reason).toBe('position-out-of-bounds');
+  });
+});
+
+describe('applyGameSaveSessionStores', () => {
+  function makeStores(seed?: {
+    world?: Record<string, SaveWorldValue>;
+    inventory?: Record<string, number>;
+    stats?: Record<string, number>;
+  }) {
+    // Lightweight stand-ins matching the duck-typed replaceAll surface.
+    const worldMap = new Map<string, SaveWorldValue>(Object.entries(seed?.world ?? {}));
+    const inventory = new Inventory();
+    if (seed?.inventory) inventory.replaceAll(seed.inventory);
+    const stats = new StatBlock([
+      { id: 'hp', name: 'HP', base: 10, min: 0, max: 100 },
+      { id: 'mp', name: 'MP', base: 5, min: 0, max: 50 },
+    ]);
+    if (seed?.stats) stats.replaceAll(seed.stats);
+    return {
+      world: {
+        replaceAll(values: Readonly<Record<string, SaveWorldValue>>) {
+          worldMap.clear();
+          for (const [k, v] of Object.entries(values)) worldMap.set(k, v);
+        },
+        snapshot(): Record<string, SaveWorldValue> {
+          return Object.fromEntries(worldMap);
+        },
+      },
+      inventory,
+      stats,
+    };
+  }
+
+  it('restores world, inventory, and stats from the snapshot', () => {
+    const stores = makeStores({
+      world: { old: true },
+      inventory: { scrap: 9 },
+      stats: { hp: 1, mp: 1 },
+    });
+    const result = applyGameSaveSessionStores(
+      {
+        world: { met: true, gold: 3 },
+        inventory: { potion: 2 },
+        stats: { hp: 40, mp: 20 },
+      },
+      stores,
+    );
+    expect(result).toEqual({ ok: true });
+    expect(stores.world.snapshot()).toEqual({ met: true, gold: 3 });
+    expect(stores.inventory.snapshot()).toEqual({ potion: 2 });
+    expect(stores.stats.snapshot()).toEqual({ hp: 40, mp: 20 });
+  });
+
+  it('fails cleanly on unknown stats without half-applying any store', () => {
+    const stores = makeStores({
+      world: { keep: true },
+      inventory: { potion: 4 },
+      stats: { hp: 30, mp: 15 },
+    });
+    const before = {
+      world: stores.world.snapshot(),
+      inventory: stores.inventory.snapshot(),
+      stats: stores.stats.snapshot(),
+    };
+    const result = applyGameSaveSessionStores(
+      {
+        world: { wiped: true },
+        inventory: { key: 1 },
+        stats: { hp: 50, unknown_stat: 1 },
+      },
+      stores,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('stats-unknown');
+      expect(result.message).toMatch(/unknown_stat/);
+    }
+    expect(stores.world.snapshot()).toEqual(before.world);
+    expect(stores.inventory.snapshot()).toEqual(before.inventory);
+    expect(stores.stats.snapshot()).toEqual(before.stats);
+  });
+
+  it('fails cleanly on bad inventory counts without half-applying', () => {
+    const stores = makeStores({
+      world: { keep: true },
+      inventory: { potion: 4 },
+      stats: { hp: 30, mp: 15 },
+    });
+    const before = {
+      world: stores.world.snapshot(),
+      inventory: stores.inventory.snapshot(),
+      stats: stores.stats.snapshot(),
+    };
+    const result = applyGameSaveSessionStores(
+      {
+        world: { wiped: true },
+        inventory: { potion: -3 },
+        stats: { hp: 1 },
+      },
+      stores,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('inventory-invalid');
+      expect(result.message).toMatch(/potion/);
+    }
+    expect(stores.world.snapshot()).toEqual(before.world);
+    expect(stores.inventory.snapshot()).toEqual(before.inventory);
+    expect(stores.stats.snapshot()).toEqual(before.stats);
+  });
+
+  it('loads a v1-era empty inventory/stats snapshot by clearing session stores', () => {
+    // Migration yields empty stores; apply must clear prior session bags and
+    // reset stats to base (empty record → every def base).
+    const stores = makeStores({
+      world: { leftover: true },
+      inventory: { potion: 7 },
+      stats: { hp: 99, mp: 40 },
+    });
+    const result = applyGameSaveSessionStores(
+      { world: { met_elder: true }, inventory: {}, stats: {} },
+      stores,
+    );
+    expect(result).toEqual({ ok: true });
+    expect(stores.world.snapshot()).toEqual({ met_elder: true });
+    expect(stores.inventory.snapshot()).toEqual({});
+    expect(stores.stats.snapshot()).toEqual({ hp: 10, mp: 5 }); // bases
   });
 });
 

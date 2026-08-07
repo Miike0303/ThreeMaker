@@ -3,10 +3,9 @@
  * Same pattern as `map-format/migrate.ts`: `v(n) -> v(n+1)` steps until
  * {@link CURRENT_GAME_SAVE_VERSION}. Unknown/newer versions fail closed.
  *
- * Production currently has CURRENT = 1 and **no built-in product migrations**.
- * The loop is exercised with a test-only v0→v1 step registered in tests
- * (see `migrate.test.ts`), matching map-format's use of `registerMigration(0, …)`
- * for dispatch coverage without inventing a real product schema.
+ * Production registers the real v1→v2 product migration at module load.
+ * Tests may clear the registry; callers that clear MUST re-register
+ * built-ins afterward (see `migrate.test.ts`).
  */
 
 import { CURRENT_GAME_SAVE_VERSION, GAME_SAVE_MAGIC } from './constants.js';
@@ -22,8 +21,8 @@ export function registerSaveMigration(fromVersion: number, migration: SaveMigrat
 }
 
 /**
- * Clears every registered migration (including any test fixture steps).
- * Production ships with an empty registry until a real v2 exists.
+ * Clears every registered migration (including built-in product steps).
+ * Callers that clear for isolation MUST re-register built-ins afterward.
  */
 export function clearSaveMigrations(): void {
   migrations.clear();
@@ -82,6 +81,23 @@ export function migrateSaveDocumentToCurrent(raw: Record<string, unknown>): Migr
 
   return { ok: true, raw: doc };
 }
+
+/**
+ * Product migration: C3 v1 → C4 v2.
+ *
+ * Lossless for player/world. Adds empty inventory/stats so older saves load
+ * into a clean bag and base stats after apply.
+ */
+export function migrateV1ToV2(doc: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...doc,
+    version: 2,
+    inventory: {},
+    stats: {},
+  };
+}
+
+registerSaveMigration(1, migrateV1ToV2);
 
 /**
  * **TEST FIXTURE ONLY** — not a product schema.

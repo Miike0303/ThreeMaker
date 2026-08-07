@@ -69,6 +69,7 @@ import { disposeFloorTextures } from './floor-textures.js';
 import type { GameManifest } from './game-manifest.js';
 import { parseGameManifest } from './game-manifest.js';
 import {
+  applyGameSaveSessionStores,
   resolveMapFileInCatalog,
   sameMapLoadNarrativeArrival,
   validateSavePlacement,
@@ -2073,6 +2074,8 @@ async function renderFixtureMap(
       floor: session.floorRouter.currentFloor,
       facing: session.mover.facing,
       world: narrativeRoot.world.snapshot(),
+      inventory: narrativeRoot.inventory.snapshot(),
+      stats: narrativeRoot.stats.snapshot(),
     });
     if (!snapshot) {
       narrativeRoot.overlay().showError(i18n.t('save.failed'));
@@ -2128,8 +2131,18 @@ async function renderFixtureMap(
         narrativeRoot.overlay().showError(placement.message);
         return { ok: false, reason: placement.reason };
       }
-      // Commit only after validation — world first so bundle seeds skip saved keys.
-      narrativeRoot.world.replaceAll(snap.world);
+      // Commit only after validation — session stores first (pre-validated so
+      // inventory/stats never half-mutate), then mover/bundle. World rehydrate
+      // before hop/bundle so seedIfAbsent cannot clobber saved keys.
+      const stores = applyGameSaveSessionStores(snap, {
+        world: narrativeRoot.world,
+        inventory: narrativeRoot.inventory,
+        stats: narrativeRoot.stats,
+      });
+      if (!stores.ok) {
+        narrativeRoot.overlay().showError(stores.message);
+        return { ok: false, reason: stores.reason };
+      }
       session.floorRouter.currentFloor = snap.floor;
       session.mover.teleport(snap.x, snap.y, snap.facing);
       session.applyFloorWindow(snap.x, snap.y);
@@ -2168,7 +2181,16 @@ async function renderFixtureMap(
     // Free preload textures — hop loads a fresh copy after the point of no return.
     disposeFloorTextures(primary.textures);
 
-    narrativeRoot.world.replaceAll(snap.world);
+    // Same store apply as same-map: pre-validate inventory/stats before hop.
+    const stores = applyGameSaveSessionStores(snap, {
+      world: narrativeRoot.world,
+      inventory: narrativeRoot.inventory,
+      stats: narrativeRoot.stats,
+    });
+    if (!stores.ok) {
+      narrativeRoot.overlay().showError(stores.message);
+      return { ok: false, reason: stores.reason };
+    }
     await hopToManifestFile(catalog.mapFile, {
       x: snap.x,
       y: snap.y,

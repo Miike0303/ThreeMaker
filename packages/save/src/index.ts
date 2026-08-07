@@ -2,6 +2,7 @@ export { CURRENT_GAME_SAVE_VERSION, GAME_SAVE_MAGIC } from './constants.js';
 export type {
   GameSaveDocument,
   GameSaveDocumentV1,
+  GameSaveDocumentV2,
   GameSaveParseFail,
   GameSaveParseOk,
   GameSaveParseResult,
@@ -18,6 +19,7 @@ export {
   clearSaveMigrations,
   migrateSaveDocumentToCurrent,
   migrateTestFixtureV0ToV1,
+  migrateV1ToV2,
   registerSaveMigration,
 } from './migrate.js';
 export { gameSaveDocumentFromSnapshot, snapshotFromGameSaveDocument } from './snapshot.js';

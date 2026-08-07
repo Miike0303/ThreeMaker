@@ -54,6 +54,8 @@ const sample = {
   floor: 0,
   facing: 'up' as const,
   world: { met_elder: true, gold: 5 },
+  inventory: { potion: 2 },
+  stats: { hp: 20 },
 };
 
 describe('game-save-store', () => {
@@ -92,5 +94,35 @@ describe('game-save-store', () => {
       expect.any(String),
       expect.objectContaining({ baseDir: 'Home' }),
     );
+  });
+
+  it('loads a C3-era v1 save file into a v2 snapshot with empty inventory/stats', async () => {
+    const v1Text = JSON.stringify({
+      magic: 'threemaker.game-save',
+      version: 1,
+      player: {
+        mapFile: 'demo/map-a.tmmap.json',
+        x: 4,
+        y: 5,
+        floor: 0,
+        facing: 'right',
+      },
+      world: { met_elder: true },
+    });
+    const storage = memoryStorage({ [GAME_SAVE_STORAGE_KEY]: v1Text });
+    const loaded = await loadGameSaveSnapshot(storage);
+    expect(loaded).toEqual({
+      ok: true,
+      snapshot: {
+        mapFile: 'demo/map-a.tmmap.json',
+        x: 4,
+        y: 5,
+        floor: 0,
+        facing: 'right',
+        world: { met_elder: true },
+        inventory: {},
+        stats: {},
+      },
+    });
   });
 });

@@ -1,11 +1,13 @@
 /**
- * Pure pre-apply checks for a game save (C3 WU-02).
+ * Pure pre-apply checks for a game save (C3/C4).
  *
  * Document parse already enforces types; the host still must reject saves
  * whose map/placement cannot be realized — never teleport into garbage.
+ * Session stores (world/inventory/stats) are pre-validated then applied
+ * together so a bad stats/inventory payload never half-mutates.
  */
 
-import type { GameSaveSnapshot } from '@threemaker/save';
+import type { GameSaveSnapshot, SaveWorldValue } from '@threemaker/save';
 
 export type MapFileCatalog = {
   /** Map files the running session may load (relative to `.threemaker/maps`). */
@@ -29,6 +31,28 @@ export type PlacementValidateResult =
       readonly reason: 'floor-out-of-range' | 'position-out-of-bounds';
       readonly message: string;
     };
+
+export type ApplySessionStoresResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'inventory-invalid' | 'stats-unknown' | 'stats-invalid';
+      readonly message: string;
+    };
+
+/** Duck-typed session stores — keeps this module free of WorldState class deps. */
+export type GameSaveSessionStores = {
+  readonly world: {
+    replaceAll(values: Readonly<Record<string, SaveWorldValue>>): void;
+  };
+  readonly inventory: {
+    replaceAll(counts: Readonly<Record<string, number>>): void;
+  };
+  readonly stats: {
+    replaceAll(values: Readonly<Record<string, number>>): void;
+    definitions(): readonly { readonly id: string }[];
+  };
+};
 
 function normalize(path: string): string {
   return path.replaceAll('\\', '/');
@@ -107,5 +131,63 @@ export function validateSavePlacement(
       message: `Save position (${snapshot.x}, ${snapshot.y}) is outside map bounds ${geometry.width}x${geometry.height}.`,
     };
   }
+  return { ok: true };
+}
+
+/**
+ * Pre-validate inventory counts and stat ids against the live session, then
+ * replace world / inventory / stats. Validation runs before any mutation so a
+ * corrupt payload never half-applies (e.g. world replaced but stats throw).
+ *
+ * Apply order after validation is inventory → stats → world. Inventory and
+ * stats are the ones that throw on bad payloads; world.replaceAll is always
+ * safe for a parse-validated record. Mutating the throwing stores first after
+ * pre-check is defensive; the pre-check is what actually prevents half-apply.
+ */
+export function applyGameSaveSessionStores(
+  snap: {
+    readonly world: Readonly<Record<string, SaveWorldValue>>;
+    readonly inventory: Readonly<Record<string, number>>;
+    readonly stats: Readonly<Record<string, number>>;
+  },
+  stores: GameSaveSessionStores,
+): ApplySessionStoresResult {
+  for (const [itemId, count] of Object.entries(snap.inventory)) {
+    if (
+      typeof count !== 'number' ||
+      !Number.isFinite(count) ||
+      !Number.isInteger(count) ||
+      count < 0
+    ) {
+      return {
+        ok: false,
+        reason: 'inventory-invalid',
+        message: `Save inventory count for ${JSON.stringify(itemId)} must be a non-negative integer, got ${String(count)}.`,
+      };
+    }
+  }
+
+  const knownStats = new Set(stores.stats.definitions().map((d) => d.id));
+  for (const [statId, value] of Object.entries(snap.stats)) {
+    if (!knownStats.has(statId)) {
+      return {
+        ok: false,
+        reason: 'stats-unknown',
+        message: `Save stats include unknown stat id ${JSON.stringify(statId)}.`,
+      };
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return {
+        ok: false,
+        reason: 'stats-invalid',
+        message: `Save stats value for ${JSON.stringify(statId)} must be finite, got ${String(value)}.`,
+      };
+    }
+  }
+
+  // All checks passed — commit every store.
+  stores.inventory.replaceAll(snap.inventory);
+  stores.stats.replaceAll(snap.stats);
+  stores.world.replaceAll(snap.world);
   return { ok: true };
 }
