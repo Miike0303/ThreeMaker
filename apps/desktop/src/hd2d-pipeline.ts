@@ -3,7 +3,6 @@ import { vignette } from 'three/addons/tsl/display/CRT.js';
 import { dof } from 'three/addons/tsl/display/DepthOfFieldNode.js';
 import {
   add,
-  color,
   emissive,
   float,
   fog,
@@ -16,8 +15,8 @@ import {
 } from 'three/tsl';
 import type * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { RenderPipeline } from 'three/webgpu';
-import type { Hd2dKnobsOverride } from './hd2d-knobs.js';
+import { Color, RenderPipeline } from 'three/webgpu';
+import type { Hd2dKnobs, Hd2dKnobsOverride } from './hd2d-knobs.js';
 import { clampFocusDistance, resolveKnobs } from './hd2d-knobs.js';
 
 // The `add` and `vec4` TSL operators in @types/three@0.185.1 carry overload
@@ -27,6 +26,37 @@ import { clampFocusDistance, resolveKnobs } from './hd2d-knobs.js';
 const addVec4 = add as unknown as (a: Node<'vec4'>, b: Node<'vec4'>) => Node<'vec4'>;
 const vec4FromVec3 = vec4 as unknown as (rgb: Node<'vec3'>, alpha: number) => Node<'vec4'>;
 
+/** Fog uniform trio (color/near/far). Mutable via {@link applyFogUniforms} / `setFog`. */
+export interface FogUniforms {
+  readonly color: { value: Color };
+  readonly near: { value: number };
+  readonly far: { value: number };
+}
+
+/**
+ * Builds fog uniform handles from knob values. Extracted so headless tests can
+ * assert the write path without a real WebGPU renderer / RenderPipeline.
+ */
+export function createFogUniforms(fogKnobs: Hd2dKnobs['fog']): FogUniforms {
+  return {
+    color: uniform(new Color(fogKnobs.color)),
+    near: uniform(fogKnobs.near),
+    far: uniform(fogKnobs.far),
+  };
+}
+
+/** Writes color/near/far into existing fog uniforms (no fogNode rebuild). */
+export function applyFogUniforms(
+  handles: FogUniforms,
+  colorHex: number,
+  near: number,
+  far: number,
+): void {
+  handles.color.value.setHex(colorHex);
+  handles.near.value = near;
+  handles.far.value = far;
+}
+
 export interface Hd2dPipeline {
   readonly pipeline: THREE.RenderPipeline;
   /** Renders through the post-processing chain; while disabled, renders the scene directly (bloom/DoF/vignette off — fog is scene-level and stays active either way). */
@@ -35,6 +65,11 @@ export interface Hd2dPipeline {
   setEnabled(on: boolean): void;
   /** Clamps `distance` to the configured DoF range and writes it to the focus uniform. */
   setFocusDistance(distance: number): void;
+  /**
+   * Updates scene fog color/near/far via uniforms (no fogNode rebuild — avoids
+   * shader recompile stutter). Mirrors {@link setFocusDistance}.
+   */
+  setFog(color: number, near: number, far: number): void;
   /** Disposes the pipeline's GPU resources and clears `scene.fogNode`. */
   dispose(): void;
 }
@@ -68,9 +103,12 @@ export function createHd2dPipeline(
   );
   const withBloom = addVec4(sceneColor, bloomPass);
 
+  // Fog params as uniforms (not baked constants) so weather can densify fog at
+  // runtime without rebuilding fogNode / recompiling the material graph.
+  const fogUniforms = createFogUniforms(resolved.fog);
   scene.fogNode = fog(
-    color(resolved.fog.color),
-    rangeFogFactor(resolved.fog.near, resolved.fog.far),
+    fogUniforms.color as never,
+    rangeFogFactor(fogUniforms.near as never, fogUniforms.far as never),
   );
 
   const focusDistanceUniform = uniform(resolved.dof.focusDistanceMin);
@@ -111,6 +149,9 @@ export function createHd2dPipeline(
         resolved.dof.focusDistanceMin,
         resolved.dof.focusDistanceMax,
       );
+    },
+    setFog(colorHex: number, near: number, far: number) {
+      applyFogUniforms(fogUniforms, colorHex, near, far);
     },
     dispose() {
       pipeline.dispose();

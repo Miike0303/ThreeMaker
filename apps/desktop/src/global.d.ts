@@ -118,6 +118,8 @@ declare global {
       readonly clockMinutes: number;
       /** Current weather mode (`clear` | `rain` | `snow` | `fog`) (C8 session weather). */
       readonly weather: string;
+      /** Whether rain/snow particle mesh is visible (C8 weather visuals). */
+      readonly weatherParticlesVisible: boolean;
     };
   }
 }

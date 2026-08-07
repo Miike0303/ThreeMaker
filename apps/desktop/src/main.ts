@@ -82,6 +82,7 @@ import { loadGameSaveSnapshot, persistGameSaveSnapshot } from './game-save-store
 import type { GameplayKeyAction } from './gameplay-input.js';
 import { resolveGameplayAction, resolveGameplayKeyAction } from './gameplay-input.js';
 import { groundYAt } from './ground-y.js';
+import { DEFAULT_HD2D_KNOBS } from './hd2d-knobs.js';
 import { createHd2dPipeline } from './hd2d-pipeline.js';
 import { createHopStats, recordHopCompleted } from './hop-stats.js';
 import type { Locale } from './i18n.js';
@@ -141,6 +142,7 @@ import { isTauriAvailable } from './tauri-env.js';
 import { resolveViewKeyAction } from './view-input.js';
 import { WalkAnimation } from './walk-animation.js';
 import { createMostRecentHeldDirection } from './walk-input.js';
+import { createWeatherLayer } from './weather-layer.js';
 
 // The Roseliam fixture (see fixtures/README.md) ships 3 sample maps; Map007
 // is the nicest of the three for this slice (a dungeon interior with both
@@ -210,6 +212,13 @@ const CHARACTER_SHEET_COLUMNS = DEFAULT_SHEET_COLUMNS;
 const CHARACTER_SHEET_ROWS = DEFAULT_SHEET_ROWS;
 
 const LOCALE_STORAGE_KEY = 'threemaker:locale';
+
+/**
+ * Fog-mode densification vs HD-2D knob defaults (C8). Applied via `setFog`
+ * uniforms — never by rebuilding fogNode.
+ */
+const FOG_MODE_NEAR_SCALE = 0.35;
+const FOG_MODE_FAR_SCALE = 0.45;
 
 // `import.meta.glob` with `eager: true` turns every `./locales/*.json` file
 // into an entry here at build time -- dropping in a new locale JSON file is
@@ -825,12 +834,13 @@ async function renderFixtureMap(
   let currentWeather: WeatherMode = 'clear';
 
   /**
-   * WU-02 seam: particle/fog visual layer will fill this. No-op in WU-01 so
-   * weather state and ambient dim ship without TSL/scene objects.
+   * Particle mesh + fog densify. Assigned after the session weather layer and
+   * HD-2D pipeline exist; `applyWeather` only runs from world signals / save
+   * load (both after boot wiring).
    */
-  function weatherVisualHook(_mode: WeatherMode): void {
-    /* WU-02: rain/snow/fog particle + fog visual layer */
-  }
+  let weatherVisualHook: (mode: WeatherMode) => void = () => {
+    /* assigned after weatherLayer + hd2d */
+  };
 
   /**
    * Multiplies the CURRENT base setup's ambient (and non-zero directional)
@@ -1206,7 +1216,7 @@ async function renderFixtureMap(
 
   /**
    * Apply a weather mode: store session state, recompose ambient with the
-   * weather dim factor, and invoke the visual hook (no-op until WU-02).
+   * weather dim factor, and invoke the visual hook (particles + fog uniforms).
    */
   function applyWeather(mode: WeatherMode): void {
     currentWeather = mode;
@@ -1268,6 +1278,10 @@ async function renderFixtureMap(
   );
   scene.add(character.mesh);
 
+  // Session-scoped weather particles (C8). Built once next to the character;
+  // hop teardown must NOT dispose this (map-local bundles only).
+  const weatherLayer = createWeatherLayer({ scene });
+
   // The follow target: starts on the character and smoothly chases its world
   // position every frame (see the game loop below) instead of snapping,
   // regardless of which CameraRig mode is active.
@@ -1322,6 +1336,24 @@ async function renderFixtureMap(
   // closes over `hd2d`, so the pipeline must exist before any pose is applied.
   const hd2d = createHd2dPipeline(renderer, scene, camera);
 
+  // Wire the WU-02 visual hook now that both the particle layer and pipeline exist.
+  weatherVisualHook = (mode: WeatherMode): void => {
+    weatherLayer.setMode(mode);
+    if (mode === 'fog') {
+      hd2d.setFog(
+        DEFAULT_HD2D_KNOBS.fog.color,
+        DEFAULT_HD2D_KNOBS.fog.near * FOG_MODE_NEAR_SCALE,
+        DEFAULT_HD2D_KNOBS.fog.far * FOG_MODE_FAR_SCALE,
+      );
+    } else {
+      hd2d.setFog(
+        DEFAULT_HD2D_KNOBS.fog.color,
+        DEFAULT_HD2D_KNOBS.fog.near,
+        DEFAULT_HD2D_KNOBS.fog.far,
+      );
+    }
+  };
+
   // CameraRig runtime state: HD-2D's tilt/distance are adjustable with
   // `[`/`]` and `-`/`=`; `cameraMode` cycles with `c`. See camera-rig.ts.
   let cameraMode: CameraMode = 'hd2d';
@@ -1345,6 +1377,9 @@ async function renderFixtureMap(
         ? Number.POSITIVE_INFINITY
         : camera.position.distanceTo(character.mesh.position),
     );
+    // Anchor weather volume to the camera (not the follow target) so first-
+    // person head placement keeps rain/snow around the lens correctly.
+    weatherLayer.followCamera(camera.position);
   }
 
   /** Re-aims the camera boom at the current session's spawn tile (initial view and map switches). Resets the manual zoom back to the map's auto-fit distance. */
@@ -1422,7 +1457,10 @@ async function renderFixtureMap(
       inventory: narrativeRoot.inventory.snapshot(),
       stats: narrativeRoot.stats.snapshot(),
       clockMinutes: narrativeRoot.clock.minutes,
-      weather: currentWeather,
+      // Particle visibility on the existing Weather row (e.g. `rain (3000)`).
+      weather: weatherLayer.particlesVisible
+        ? `${currentWeather} (${weatherLayer.particleCount})`
+        : currentWeather,
     };
   }
   debugPanel.update(buildDebugSnapshot());
@@ -1536,6 +1574,9 @@ async function renderFixtureMap(
       },
       get weather() {
         return currentWeather;
+      },
+      get weatherParticlesVisible() {
+        return weatherLayer.particlesVisible;
       },
     };
   }
