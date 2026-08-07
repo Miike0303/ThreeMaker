@@ -10,6 +10,16 @@ export type ConditionalOp = 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte';
 
 const CONDITIONAL_OPS: readonly ConditionalOp[] = ['eq', 'neq', 'lt', 'lte', 'gt', 'gte'];
 
+/**
+ * Which store a {@link ConditionalCommand} reads for its `if.key`.
+ * Omitted/`'world'` → {@link WorldState}; `'item'` → inventory count;
+ * `'stat'` → stat value. Defaults to `'world'` when absent so existing
+ * authored documents parse identically.
+ */
+export type ConditionSource = 'world' | 'item' | 'stat';
+
+const CONDITION_SOURCES: readonly ConditionSource[] = ['world', 'item', 'stat'];
+
 /** Where a `showDialogue` command reads its content from. */
 export type DialogueSource =
   | { readonly kind: 'ink'; readonly storyId: string; readonly knot?: string }
@@ -30,7 +40,13 @@ export type ShowDialogueCommand = {
 
 export type ConditionalCommand = {
   readonly type: 'conditional';
-  readonly if: { readonly key: string; readonly op: ConditionalOp; readonly value: WorldValue };
+  readonly if: {
+    readonly key: string;
+    readonly op: ConditionalOp;
+    readonly value: WorldValue;
+    /** Defaults to `'world'` when omitted (back-compat). */
+    readonly source?: ConditionSource;
+  };
   /**
    * Commands to run when `if` matches. Named `then` per the v1 contract
    * (not renameable — the field name is part of the schema, authored as
@@ -72,6 +88,27 @@ export type TransferMapCommand = {
   readonly facing?: CardinalDirection;
 };
 
+/**
+ * Add (positive `amount`) or remove (negative `amount`) items from the
+ * injected inventory store. The store clamps at 0; the command itself only
+ * requires a non-zero integer amount.
+ */
+export type GiveItemCommand = {
+  readonly type: 'giveItem';
+  readonly itemId: string;
+  readonly amount: number;
+};
+
+/**
+ * Adjust a named stat by `delta` via the injected stat store. Clamping (if
+ * any) is the store's concern — core only requires a finite non-zero delta.
+ */
+export type ModifyStatCommand = {
+  readonly type: 'modifyStat';
+  readonly statId: string;
+  readonly delta: number;
+};
+
 /** Discriminated union of every event-script command in schema v1. */
 export type EventCommand =
   | MoveEntityCommand
@@ -79,7 +116,9 @@ export type EventCommand =
   | ConditionalCommand
   | SetWorldVarCommand
   | TeleportCommand
-  | TransferMapCommand;
+  | TransferMapCommand
+  | GiveItemCommand
+  | ModifyStatCommand;
 
 /** Parsed shape of an event script file: `{ version: 1, events: Record<string, EventCommand[]> }`. */
 export type EventScript = Record<string, EventCommand[]>;
@@ -172,7 +211,7 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
       const label = `${path} (conditional)`;
       const { if: condition, then, else: elseBranch } = value;
       if (!isRecord(condition)) fail(`${label} requires an "if" object.`);
-      const { key, op, value: conditionValue } = condition;
+      const { key, op, value: conditionValue, source } = condition;
       if (typeof key !== 'string') fail(`${label} "if.key" must be a string.`);
       if (typeof op !== 'string' || !CONDITIONAL_OPS.includes(op as ConditionalOp)) {
         fail(
@@ -181,6 +220,26 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
       }
       if (!isWorldValue(conditionValue)) {
         fail(`${label} "if.value" must be a boolean, number, or string.`);
+      }
+      let parsedSource: ConditionSource | undefined;
+      if (source !== undefined) {
+        if (typeof source !== 'string' || !CONDITION_SOURCES.includes(source as ConditionSource)) {
+          fail(
+            `${label} "if.source" must be one of ${CONDITION_SOURCES.join(', ')}, got ${JSON.stringify(source)}.`,
+          );
+        }
+        parsedSource = source as ConditionSource;
+      }
+      // item/stat actuals are always numbers (inventory count / stat value);
+      // non-numeric expected values would silently never match (eq) or always
+      // match (neq) at runtime — reject at load time instead.
+      if (
+        (parsedSource === 'item' || parsedSource === 'stat') &&
+        (typeof conditionValue !== 'number' || !Number.isFinite(conditionValue))
+      ) {
+        fail(
+          `${label} "if.value" must be a finite number when "if.source" is ${JSON.stringify(parsedSource)}, got ${JSON.stringify(conditionValue)}.`,
+        );
       }
       if (!Array.isArray(then)) fail(`${label} requires an array "then".`);
       const parsedThen = then.map((command, index) =>
@@ -195,7 +254,12 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
       }
       return {
         type: 'conditional',
-        if: { key, op: op as ConditionalOp, value: conditionValue },
+        if: {
+          key,
+          op: op as ConditionalOp,
+          value: conditionValue,
+          ...(parsedSource !== undefined ? { source: parsedSource } : {}),
+        },
         then: parsedThen,
         ...(parsedElse !== undefined ? { else: parsedElse } : {}),
       };
@@ -252,6 +316,33 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
       }
       const parsedFacing = parseCardinalDirection(facing, label, 'facing');
       return { type: 'transferMap', mapFile: normalizedMapFile, x, y, facing: parsedFacing };
+    }
+    case 'giveItem': {
+      const label = `${path} (giveItem)`;
+      const { itemId, amount } = value;
+      if (typeof itemId !== 'string' || itemId.length === 0) {
+        fail(`${label} requires a non-empty string "itemId".`);
+      }
+      if (
+        typeof amount !== 'number' ||
+        !Number.isFinite(amount) ||
+        !Number.isInteger(amount) ||
+        amount === 0
+      ) {
+        fail(`${label} "amount" must be a non-zero finite integer, got ${JSON.stringify(amount)}.`);
+      }
+      return { type: 'giveItem', itemId, amount };
+    }
+    case 'modifyStat': {
+      const label = `${path} (modifyStat)`;
+      const { statId, delta } = value;
+      if (typeof statId !== 'string' || statId.length === 0) {
+        fail(`${label} requires a non-empty string "statId".`);
+      }
+      if (typeof delta !== 'number' || !Number.isFinite(delta) || delta === 0) {
+        fail(`${label} "delta" must be a non-zero finite number, got ${JSON.stringify(delta)}.`);
+      }
+      return { type: 'modifyStat', statId, delta };
     }
     default:
       fail(`${path} has unknown command type ${JSON.stringify(type)}.`);

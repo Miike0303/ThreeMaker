@@ -6,10 +6,30 @@ import type {
   ShowDialogueCommand,
 } from './event-command.js';
 import { SignalBus, type SignalSubscriber } from './signal-bus.js';
-import type { WorldState } from './world-state.js';
+import type { WorldState, WorldValue } from './world-state.js';
 
 /** Coarse execution state of an {@link EventInterpreter}. */
 export type InterpreterState = 'idle' | 'running' | 'waiting-for-dialogue' | 'waiting-for-choice';
+
+/**
+ * Minimal inventory surface for `giveItem` / item-sourced conditionals.
+ * Satisfied structurally by `@threemaker/gameplay`'s `Inventory` — core
+ * never imports gameplay.
+ */
+export interface ItemStore {
+  count(itemId: string): number;
+  add(itemId: string, delta: number): number;
+}
+
+/**
+ * Minimal stat surface for `modifyStat` / stat-sourced conditionals.
+ * Satisfied structurally by `@threemaker/gameplay`'s `StatBlock` — core
+ * never imports gameplay.
+ */
+export interface StatStore {
+  get(statId: string): number;
+  modify(statId: string, delta: number): number;
+}
 
 /**
  * App-supplied effects for the commands an {@link EventInterpreter} cannot
@@ -61,8 +81,32 @@ export type EventInterpreterEvents = {
   'script:failed': { error: unknown };
 };
 
-function evaluateCondition(world: WorldState, condition: ConditionalCommand['if']): boolean {
-  const actual = world.get(condition.key);
+function evaluateCondition(
+  world: WorldState,
+  items: ItemStore | undefined,
+  stats: StatStore | undefined,
+  condition: ConditionalCommand['if'],
+): boolean {
+  const source = condition.source ?? 'world';
+  let actual: WorldValue | undefined;
+  if (source === 'world') {
+    actual = world.get(condition.key);
+  } else if (source === 'item') {
+    if (items === undefined) {
+      throw new Error(
+        'EventInterpreter: conditional source "item" requires an items store, but none was injected.',
+      );
+    }
+    actual = items.count(condition.key);
+  } else {
+    if (stats === undefined) {
+      throw new Error(
+        'EventInterpreter: conditional source "stat" requires a stats store, but none was injected.',
+      );
+    }
+    actual = stats.get(condition.key);
+  }
+
   const { op, value } = condition;
 
   if (op === 'eq') return actual === value;
@@ -101,6 +145,8 @@ export class EventInterpreter {
   private readonly world: WorldState;
   private readonly host: EventHost;
   private readonly provider: DialogueProvider;
+  private readonly items: ItemStore | undefined;
+  private readonly stats: StatStore | undefined;
 
   private _state: InterpreterState = 'idle';
   private readonly pendingQueue: (readonly EventCommand[])[] = [];
@@ -110,10 +156,20 @@ export class EventInterpreter {
   /** Number of options in the most recently emitted `dialogue:choices`, or `null` when not `waiting-for-choice`. Used to bounds-check `choose()`. */
   private pendingChoiceCount: number | null = null;
 
-  constructor(opts: { world: WorldState; host: EventHost; provider: DialogueProvider }) {
+  constructor(opts: {
+    world: WorldState;
+    host: EventHost;
+    provider: DialogueProvider;
+    /** Optional inventory for `giveItem` / item-sourced conditionals. */
+    items?: ItemStore;
+    /** Optional stats for `modifyStat` / stat-sourced conditionals. */
+    stats?: StatStore;
+  }) {
     this.world = opts.world;
     this.host = opts.host;
     this.provider = opts.provider;
+    this.items = opts.items;
+    this.stats = opts.stats;
     this.signals = this.bus;
   }
 
@@ -255,6 +311,32 @@ export class EventInterpreter {
           this.world.set(command.key, command.value);
           continue;
 
+        case 'giveItem': {
+          if (this.items === undefined) {
+            this.failScript(
+              new Error(
+                'EventInterpreter: giveItem requires an items store, but none was injected.',
+              ),
+            );
+            return;
+          }
+          this.items.add(command.itemId, command.amount);
+          continue;
+        }
+
+        case 'modifyStat': {
+          if (this.stats === undefined) {
+            this.failScript(
+              new Error(
+                'EventInterpreter: modifyStat requires a stats store, but none was injected.',
+              ),
+            );
+            return;
+          }
+          this.stats.modify(command.statId, command.delta);
+          continue;
+        }
+
         case 'teleport':
           try {
             this.host.teleport(command.entityId, command.x, command.y, command.facing);
@@ -265,7 +347,27 @@ export class EventInterpreter {
           continue;
 
         case 'conditional': {
-          const matched = evaluateCondition(this.world, command.if);
+          // Missing item/stat stores fail via script:failed (like host errors).
+          // Numeric-op type mismatches still throw past the interpreter — that
+          // is the existing contract preserved by tests.
+          const source = command.if.source ?? 'world';
+          if (source === 'item' && this.items === undefined) {
+            this.failScript(
+              new Error(
+                'EventInterpreter: conditional source "item" requires an items store, but none was injected.',
+              ),
+            );
+            return;
+          }
+          if (source === 'stat' && this.stats === undefined) {
+            this.failScript(
+              new Error(
+                'EventInterpreter: conditional source "stat" requires a stats store, but none was injected.',
+              ),
+            );
+            return;
+          }
+          const matched = evaluateCondition(this.world, this.items, this.stats, command.if);
           const branch = matched ? command.then : (command.else ?? []);
           this.currentCommands = [...branch, ...this.currentCommands.slice(this.currentIndex)];
           this.currentIndex = 0;

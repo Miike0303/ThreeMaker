@@ -423,4 +423,272 @@ describe('parseEventScript', () => {
       'Invalid Event Script: events.intro[0] (teleport) "facing" must be one of down, left, right, up, got "sideways".',
     );
   });
+
+  describe('giveItem', () => {
+    it('parses a valid giveItem with positive amount', () => {
+      const result = parseEventScript({
+        version: 1,
+        events: {
+          chest: [{ type: 'giveItem', itemId: 'potion', amount: 3 }],
+        },
+      });
+      expect(result.chest).toEqual([{ type: 'giveItem', itemId: 'potion', amount: 3 }]);
+    });
+
+    it('parses giveItem with a negative amount (take)', () => {
+      const result = parseEventScript({
+        version: 1,
+        events: {
+          shop: [{ type: 'giveItem', itemId: 'gold', amount: -5 }],
+        },
+      });
+      expect(result.shop).toEqual([{ type: 'giveItem', itemId: 'gold', amount: -5 }]);
+    });
+
+    it('rejects giveItem with empty itemId', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: { chest: [{ type: 'giveItem', itemId: '', amount: 1 }] },
+        }),
+      ).toThrow(/itemId/);
+    });
+
+    it('rejects giveItem with non-string itemId', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: { chest: [{ type: 'giveItem', itemId: 42, amount: 1 }] },
+        }),
+      ).toThrow(/itemId/);
+    });
+
+    it('rejects giveItem with amount 0', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: { chest: [{ type: 'giveItem', itemId: 'potion', amount: 0 }] },
+        }),
+      ).toThrow(/amount/);
+    });
+
+    it('rejects giveItem with non-integer amount', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: { chest: [{ type: 'giveItem', itemId: 'potion', amount: 1.5 }] },
+        }),
+      ).toThrow(/amount/);
+    });
+
+    it('rejects giveItem with non-finite amount', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: {
+            chest: [{ type: 'giveItem', itemId: 'potion', amount: Number.POSITIVE_INFINITY }],
+          },
+        }),
+      ).toThrow(/amount/);
+    });
+  });
+
+  describe('modifyStat', () => {
+    it('parses a valid modifyStat with positive delta', () => {
+      const result = parseEventScript({
+        version: 1,
+        events: {
+          buff: [{ type: 'modifyStat', statId: 'hp', delta: 10 }],
+        },
+      });
+      expect(result.buff).toEqual([{ type: 'modifyStat', statId: 'hp', delta: 10 }]);
+    });
+
+    it('parses modifyStat with a fractional non-zero delta', () => {
+      const result = parseEventScript({
+        version: 1,
+        events: {
+          buff: [{ type: 'modifyStat', statId: 'speed', delta: -0.5 }],
+        },
+      });
+      expect(result.buff).toEqual([{ type: 'modifyStat', statId: 'speed', delta: -0.5 }]);
+    });
+
+    it('rejects modifyStat with empty statId', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: { buff: [{ type: 'modifyStat', statId: '', delta: 1 }] },
+        }),
+      ).toThrow(/statId/);
+    });
+
+    it('rejects modifyStat with non-string statId', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: { buff: [{ type: 'modifyStat', statId: 7, delta: 1 }] },
+        }),
+      ).toThrow(/statId/);
+    });
+
+    it('rejects modifyStat with delta 0', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: { buff: [{ type: 'modifyStat', statId: 'hp', delta: 0 }] },
+        }),
+      ).toThrow(/delta/);
+    });
+
+    it('rejects modifyStat with non-finite delta', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: { buff: [{ type: 'modifyStat', statId: 'hp', delta: Number.NaN }] },
+        }),
+      ).toThrow(/delta/);
+    });
+  });
+
+  describe('conditional source', () => {
+    it('parses conditional without source (back-compat defaults to world at runtime)', () => {
+      const events = {
+        check: [
+          {
+            type: 'conditional' as const,
+            if: { key: 'metElder' as const, op: 'eq' as const, value: true as const },
+            then: [{ type: 'setWorldVar' as const, key: 'ok', value: true as const }],
+          },
+        ],
+      };
+      const result = parseEventScript({ version: 1, events });
+      expect(result).toEqual(events);
+      const cmd = result.check?.[0];
+      expect(cmd).toMatchObject({
+        type: 'conditional',
+        if: { key: 'metElder', op: 'eq', value: true },
+      });
+      // source is omitted when absent so existing authored JSON round-trips identically
+      expect(cmd && cmd.type === 'conditional' ? cmd.if.source : 'missing').toBeUndefined();
+    });
+
+    it.each(['world', 'item', 'stat'] as const)('parses conditional with source "%s"', (source) => {
+      const result = parseEventScript({
+        version: 1,
+        events: {
+          check: [
+            {
+              type: 'conditional',
+              if: { key: 'foo', op: 'gte', value: 1, source },
+              then: [],
+            },
+          ],
+        },
+      });
+      expect(result.check).toEqual([
+        {
+          type: 'conditional',
+          if: { key: 'foo', op: 'gte', value: 1, source },
+          then: [],
+        },
+      ]);
+    });
+
+    it('rejects conditional with an invalid source string', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: {
+            check: [
+              {
+                type: 'conditional',
+                if: { key: 'foo', op: 'eq', value: 1, source: 'inventory' },
+                then: [],
+              },
+            ],
+          },
+        }),
+      ).toThrow(/source/);
+    });
+
+    it('rejects conditional source: "item" with boolean value', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: {
+            check: [
+              {
+                type: 'conditional',
+                if: { key: 'key', op: 'eq', value: true, source: 'item' },
+                then: [],
+              },
+            ],
+          },
+        }),
+      ).toThrow(
+        'Invalid Event Script: events.check[0] (conditional) "if.value" must be a finite number when "if.source" is "item", got true.',
+      );
+    });
+
+    it('rejects conditional source: "stat" with string value', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: {
+            check: [
+              {
+                type: 'conditional',
+                if: { key: 'hp', op: 'gte', value: 'full', source: 'stat' },
+                then: [],
+              },
+            ],
+          },
+        }),
+      ).toThrow(
+        'Invalid Event Script: events.check[0] (conditional) "if.value" must be a finite number when "if.source" is "stat", got "full".',
+      );
+    });
+
+    it('rejects conditional source: "item" with non-finite number value (NaN)', () => {
+      expect(() =>
+        parseEventScript({
+          version: 1,
+          events: {
+            check: [
+              {
+                type: 'conditional',
+                if: { key: 'key', op: 'eq', value: Number.NaN, source: 'item' },
+                then: [],
+              },
+            ],
+          },
+        }),
+      ).toThrow(
+        'Invalid Event Script: events.check[0] (conditional) "if.value" must be a finite number when "if.source" is "item", got null.',
+      );
+    });
+
+    it('still accepts conditional source: "world" with boolean value', () => {
+      const result = parseEventScript({
+        version: 1,
+        events: {
+          check: [
+            {
+              type: 'conditional',
+              if: { key: 'metElder', op: 'eq', value: true, source: 'world' },
+              then: [],
+            },
+          ],
+        },
+      });
+      expect(result.check).toEqual([
+        {
+          type: 'conditional',
+          if: { key: 'metElder', op: 'eq', value: true, source: 'world' },
+          then: [],
+        },
+      ]);
+    });
+  });
 });

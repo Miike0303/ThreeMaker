@@ -5,19 +5,25 @@ export type {
   CardinalDirection,
   ConditionalCommand,
   ConditionalOp,
+  ConditionSource,
   DialogueSource,
   EventCommand,
   EventScript,
+  GiveItemCommand,
+  ModifyStatCommand,
   MoveEntityCommand,
   SetWorldVarCommand,
   ShowDialogueCommand,
   TeleportCommand,
+  TransferMapCommand,
 } from './event-command.js';
 export { parseEventScript } from './event-command.js';
 export type {
   EventHost,
   EventInterpreterEvents,
   InterpreterState,
+  ItemStore,
+  StatStore,
 } from './event-interpreter.js';
 export { EventInterpreter } from './event-interpreter.js';
 export type { GameLoopOptions } from './game-loop.js';

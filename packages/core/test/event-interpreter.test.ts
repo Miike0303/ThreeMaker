@@ -1,10 +1,44 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DialogueProvider, DialogueStep } from '../src/dialogue-provider.js';
 import type { CardinalDirection, DialogueSource } from '../src/event-command.js';
-import type { EventHost } from '../src/event-interpreter.js';
+import type { EventHost, ItemStore, StatStore } from '../src/event-interpreter.js';
 import { EventInterpreter } from '../src/event-interpreter.js';
 import { PlainTextDialogueProvider } from '../src/plain-text-dialogue-provider.js';
 import { WorldState } from '../src/world-state.js';
+
+/** Minimal in-test ItemStore fake — no gameplay import. */
+class FakeItemStore implements ItemStore {
+  private readonly counts = new Map<string, number>();
+
+  count(itemId: string): number {
+    return this.counts.get(itemId) ?? 0;
+  }
+
+  add(itemId: string, delta: number): number {
+    const next = Math.max(0, this.count(itemId) + delta);
+    this.counts.set(itemId, next);
+    return next;
+  }
+}
+
+/** Minimal in-test StatStore fake — no gameplay import. */
+class FakeStatStore implements StatStore {
+  private readonly values = new Map<string, number>();
+
+  get(statId: string): number {
+    return this.values.get(statId) ?? 0;
+  }
+
+  set(statId: string, value: number): void {
+    this.values.set(statId, value);
+  }
+
+  modify(statId: string, delta: number): number {
+    const next = this.get(statId) + delta;
+    this.values.set(statId, next);
+    return next;
+  }
+}
 
 class FakeHost implements EventHost {
   readonly moveCalls: { entityId: string; direction: CardinalDirection; steps: number }[] = [];
@@ -112,11 +146,17 @@ class FakeProvider implements DialogueProvider {
   }
 }
 
-function setup() {
+function setup(opts?: { items?: ItemStore; stats?: StatStore }) {
   const world = new WorldState();
   const host = new FakeHost();
   const provider = new FakeProvider();
-  const interpreter = new EventInterpreter({ world, host, provider });
+  const interpreter = new EventInterpreter({
+    world,
+    host,
+    provider,
+    ...(opts?.items !== undefined ? { items: opts.items } : {}),
+    ...(opts?.stats !== undefined ? { stats: opts.stats } : {}),
+  });
   return { world, host, provider, interpreter };
 }
 
@@ -357,6 +397,90 @@ describe('EventInterpreter', () => {
     });
   });
 
+  describe('giveItem', () => {
+    it('mutates the item store and continues the script', () => {
+      const items = new FakeItemStore();
+      const { world, interpreter } = setup({ items });
+      const finished = vi.fn();
+      interpreter.signals.on('script:finished', finished);
+
+      interpreter.run([
+        { type: 'giveItem', itemId: 'potion', amount: 3 },
+        { type: 'setWorldVar', key: 'after', value: true },
+      ]);
+
+      expect(items.count('potion')).toBe(3);
+      expect(world.get('after')).toBe(true);
+      expect(interpreter.state).toBe('idle');
+      expect(finished).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes a negative amount through to the store (take)', () => {
+      const items = new FakeItemStore();
+      items.add('potion', 5);
+      const { interpreter } = setup({ items });
+
+      interpreter.run([{ type: 'giveItem', itemId: 'potion', amount: -2 }]);
+
+      expect(items.count('potion')).toBe(3);
+      expect(interpreter.state).toBe('idle');
+    });
+
+    it('fails the script cleanly when no item store was injected', () => {
+      const { world, interpreter } = setup();
+      const failed = vi.fn();
+      interpreter.signals.on('script:failed', failed);
+
+      interpreter.run([
+        { type: 'giveItem', itemId: 'potion', amount: 1 },
+        { type: 'setWorldVar', key: 'after', value: true },
+      ]);
+
+      expect(failed).toHaveBeenCalledTimes(1);
+      expect(failed.mock.calls[0]?.[0].error).toBeInstanceOf(Error);
+      expect(String(failed.mock.calls[0]?.[0].error)).toMatch(/item/i);
+      expect(interpreter.state).toBe('idle');
+      expect(world.has('after')).toBe(false);
+    });
+  });
+
+  describe('modifyStat', () => {
+    it('mutates the stat store and continues the script', () => {
+      const stats = new FakeStatStore();
+      stats.set('hp', 10);
+      const { world, interpreter } = setup({ stats });
+      const finished = vi.fn();
+      interpreter.signals.on('script:finished', finished);
+
+      interpreter.run([
+        { type: 'modifyStat', statId: 'hp', delta: 5 },
+        { type: 'setWorldVar', key: 'after', value: true },
+      ]);
+
+      expect(stats.get('hp')).toBe(15);
+      expect(world.get('after')).toBe(true);
+      expect(interpreter.state).toBe('idle');
+      expect(finished).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails the script cleanly when no stat store was injected', () => {
+      const { world, interpreter } = setup();
+      const failed = vi.fn();
+      interpreter.signals.on('script:failed', failed);
+
+      interpreter.run([
+        { type: 'modifyStat', statId: 'hp', delta: 1 },
+        { type: 'setWorldVar', key: 'after', value: true },
+      ]);
+
+      expect(failed).toHaveBeenCalledTimes(1);
+      expect(failed.mock.calls[0]?.[0].error).toBeInstanceOf(Error);
+      expect(String(failed.mock.calls[0]?.[0].error)).toMatch(/stat/i);
+      expect(interpreter.state).toBe('idle');
+      expect(world.has('after')).toBe(false);
+    });
+  });
+
   describe('conditional', () => {
     it('runs the "then" branch when the condition matches', () => {
       const { world, interpreter } = setup();
@@ -474,6 +598,111 @@ describe('EventInterpreter', () => {
       ).toThrow(
         'EventInterpreter: conditional operator "gt" requires a number for key "gold", got number compared to string.',
       );
+    });
+
+    it('branches on item count via source "item"', () => {
+      const items = new FakeItemStore();
+      items.add('key', 1);
+      const { world, interpreter } = setup({ items });
+
+      interpreter.run([
+        {
+          type: 'conditional',
+          if: { key: 'key', op: 'gte', value: 1, source: 'item' },
+          then: [{ type: 'setWorldVar', key: 'opened', value: true }],
+          else: [{ type: 'setWorldVar', key: 'opened', value: false }],
+        },
+      ]);
+
+      expect(world.get('opened')).toBe(true);
+    });
+
+    it('takes the else branch when item count does not match', () => {
+      const items = new FakeItemStore();
+      const { world, interpreter } = setup({ items });
+
+      interpreter.run([
+        {
+          type: 'conditional',
+          if: { key: 'key', op: 'gte', value: 1, source: 'item' },
+          then: [{ type: 'setWorldVar', key: 'opened', value: true }],
+          else: [{ type: 'setWorldVar', key: 'opened', value: false }],
+        },
+      ]);
+
+      expect(world.get('opened')).toBe(false);
+    });
+
+    it('branches on stat value via source "stat"', () => {
+      const stats = new FakeStatStore();
+      stats.set('hp', 50);
+      const { world, interpreter } = setup({ stats });
+
+      interpreter.run([
+        {
+          type: 'conditional',
+          if: { key: 'hp', op: 'lt', value: 100, source: 'stat' },
+          then: [{ type: 'setWorldVar', key: 'hurt', value: true }],
+          else: [{ type: 'setWorldVar', key: 'hurt', value: false }],
+        },
+      ]);
+
+      expect(world.get('hurt')).toBe(true);
+    });
+
+    it('source "world" (explicit) keeps existing world-var behavior', () => {
+      const { world, interpreter } = setup();
+      world.set('flag', true);
+
+      interpreter.run([
+        {
+          type: 'conditional',
+          if: { key: 'flag', op: 'eq', value: true, source: 'world' },
+          then: [{ type: 'setWorldVar', key: 'ok', value: true }],
+        },
+      ]);
+
+      expect(world.get('ok')).toBe(true);
+    });
+
+    it('fails the script cleanly when source is "item" but no item store was injected', () => {
+      const { world, interpreter } = setup();
+      const failed = vi.fn();
+      interpreter.signals.on('script:failed', failed);
+
+      interpreter.run([
+        {
+          type: 'conditional',
+          if: { key: 'key', op: 'gte', value: 1, source: 'item' },
+          then: [{ type: 'setWorldVar', key: 'after', value: true }],
+        },
+      ]);
+
+      expect(failed).toHaveBeenCalledTimes(1);
+      expect(failed.mock.calls[0]?.[0].error).toBeInstanceOf(Error);
+      expect(String(failed.mock.calls[0]?.[0].error)).toMatch(/item/i);
+      expect(interpreter.state).toBe('idle');
+      expect(world.has('after')).toBe(false);
+    });
+
+    it('fails the script cleanly when source is "stat" but no stat store was injected', () => {
+      const { world, interpreter } = setup();
+      const failed = vi.fn();
+      interpreter.signals.on('script:failed', failed);
+
+      interpreter.run([
+        {
+          type: 'conditional',
+          if: { key: 'hp', op: 'gt', value: 0, source: 'stat' },
+          then: [{ type: 'setWorldVar', key: 'after', value: true }],
+        },
+      ]);
+
+      expect(failed).toHaveBeenCalledTimes(1);
+      expect(failed.mock.calls[0]?.[0].error).toBeInstanceOf(Error);
+      expect(String(failed.mock.calls[0]?.[0].error)).toMatch(/stat/i);
+      expect(interpreter.state).toBe('idle');
+      expect(world.has('after')).toBe(false);
     });
   });
 
