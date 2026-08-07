@@ -574,22 +574,14 @@ export function pointerDown(
     return { state: handleStairLinkClick(state, point, options.newStairLinkId) };
   }
   if (state.tool === 'prop') {
-    // No selected .glb → no-op (panel surfaces the "select a .glb first" hint).
-    // Cancel a stuck stroke first so a lost pointerup cannot block placement.
-    const idle = cancelStroke(state);
-    if (!idle.activePropObject) return { state: idle };
-    return { state: placeProp(idle, { x: point.x, y: point.y }) };
+    // Canvas path: tool must be prop. Shared body with panel "Place at tile".
+    return { state: placePropAtTile(state, { x: point.x, y: point.y }) };
   }
   if (state.tool === 'npc') {
-    // Zero events / no sprite / occupied tile → no-op (panel surfaces why).
-    // Cancel a stuck stroke first — same resilience as prop/trigger.
-    const idle = cancelStroke(state);
-    return { state: placeNpc(idle, { x: point.x, y: point.y }) };
+    return { state: placeNpcAtTile(state, { x: point.x, y: point.y }) };
   }
   if (state.tool === 'trigger') {
-    // Zero events / no event key → no-op (panel surfaces why).
-    const idle = cancelStroke(state);
-    return { state: placeTrigger(idle, { x: point.x, y: point.y }) };
+    return { state: placeTriggerAtTile(state, { x: point.x, y: point.y }) };
   }
   const stroke = beginStroke(state.stroke, state.tool, state.activeLayer, point);
   return { state: { ...state, stroke } };
@@ -1071,6 +1063,22 @@ export function placeProp(
   return applyPropMutation(state, props, { floor: floor.id, id, after: prop });
 }
 
+/**
+ * Shared placement path for the prop tool canvas click and the panel
+ * "Place at tile" button: cancel a stuck stroke, then `placeProp`.
+ *
+ * Unlike canvas routing, this does NOT require the prop tool to be active —
+ * the panel button is an explicit action (live-smoke: large maps make
+ * perspective-plane clicks hostile for automation and humans).
+ */
+export function placePropAtTile(
+  state: PainterState,
+  point: { readonly x: number; readonly y: number },
+): PainterState {
+  const idle = cancelStroke(state);
+  return placeProp(idle, point);
+}
+
 /** Removes the prop `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no such prop exists on the active floor. */
 export function removeProp(state: PainterState, id: string): PainterState {
   if (state.stroke.status === 'stroking') return state;
@@ -1234,6 +1242,21 @@ export function placeNpc(
   return applyNpcMutation(state, npcs, { floor: floor.id, id, after: npc });
 }
 
+/**
+ * Shared placement path for the npc tool canvas click and the panel
+ * "Place at tile" button: cancel a stuck stroke, then `placeNpc`.
+ *
+ * Unlike canvas routing, this does NOT require the npc tool to be active —
+ * the panel button is an explicit action.
+ */
+export function placeNpcAtTile(
+  state: PainterState,
+  point: { readonly x: number; readonly y: number },
+): PainterState {
+  const idle = cancelStroke(state);
+  return placeNpc(idle, point);
+}
+
 /** Removes the NPC `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no such NPC exists on the active floor. */
 export function removeNpc(state: PainterState, id: string): PainterState {
   if (state.stroke.status === 'stroking') return state;
@@ -1357,6 +1380,21 @@ export function placeTrigger(
   };
   const triggers = upsertTrigger(state.triggers, id, trigger);
   return applyTriggerMutation(state, triggers, { floor: floor.id, id, after: trigger });
+}
+
+/**
+ * Shared placement path for the trigger tool canvas click and the panel
+ * "Place at tile" button: cancel a stuck stroke, then `placeTrigger`.
+ *
+ * Unlike canvas routing, this does NOT require the trigger tool to be active —
+ * the panel button is an explicit action.
+ */
+export function placeTriggerAtTile(
+  state: PainterState,
+  point: { readonly x: number; readonly y: number },
+): PainterState {
+  const idle = cancelStroke(state);
+  return placeTrigger(idle, point);
 }
 
 /** Removes the trigger `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no such trigger exists on the active floor. */

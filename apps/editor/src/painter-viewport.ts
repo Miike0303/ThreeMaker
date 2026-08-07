@@ -394,6 +394,17 @@ export class PainterViewport {
     this.recomputePropOverlay();
   }
 
+  /**
+   * Panel "Place at tile" for props — same store path as a prop-tool canvas
+   * click (stroke-cancel + place). Does not require the prop tool to be active.
+   */
+  placePropAtTile(x: number, y: number): void {
+    if (!this.state) return;
+    this.state = painter.placePropAtTile(this.state, { x, y });
+    this.emitState();
+    this.recomputePropOverlay();
+  }
+
   /** Sets the selected NPC sprite sheet sha for the npc tool (c1a follow-up). */
   setActiveNpcSpriteObject(object: string | undefined): void {
     if (!this.state) return;
@@ -427,6 +438,17 @@ export class PainterViewport {
     this.recomputeNpcOverlay();
   }
 
+  /**
+   * Panel "Place at tile" for NPCs — same store path as an npc-tool canvas
+   * click (stroke-cancel + place). Does not require the npc tool to be active.
+   */
+  placeNpcAtTile(x: number, y: number): void {
+    if (!this.state) return;
+    this.state = painter.placeNpcAtTile(this.state, { x, y });
+    this.emitState();
+    this.recomputeNpcOverlay();
+  }
+
   setActiveTriggerOn(on: 'enter' | 'interact'): void {
     if (!this.state) return;
     this.state = painter.setActiveTriggerOn(this.state, on);
@@ -443,6 +465,18 @@ export class PainterViewport {
   removeTrigger(id: string): void {
     if (!this.state) return;
     this.state = painter.removeTrigger(this.state, id);
+    this.emitState();
+    this.recomputeTriggerOverlay();
+  }
+
+  /**
+   * Panel "Place at tile" for triggers — same store path as a trigger-tool
+   * canvas click (stroke-cancel + place). Does not require the trigger tool
+   * to be active.
+   */
+  placeTriggerAtTile(x: number, y: number): void {
+    if (!this.state) return;
+    this.state = painter.placeTriggerAtTile(this.state, { x, y });
     this.emitState();
     this.recomputeTriggerOverlay();
   }

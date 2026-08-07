@@ -172,6 +172,13 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [triggerOverlay, setTriggerOverlay] = useState<readonly TriggerOverlayItem[]>([]);
   const [characterSprites, setCharacterSprites] = useState<readonly AssetRow[]>([]);
   const glbInputRef = useRef<HTMLInputElement | null>(null);
+  // Coordinate placement (complements canvas clicks on large maps).
+  const [propPlaceX, setPropPlaceX] = useState(0);
+  const [propPlaceY, setPropPlaceY] = useState(0);
+  const [npcPlaceX, setNpcPlaceX] = useState(0);
+  const [npcPlaceY, setNpcPlaceY] = useState(0);
+  const [triggerPlaceX, setTriggerPlaceX] = useState(0);
+  const [triggerPlaceY, setTriggerPlaceY] = useState(0);
 
   useEffect(() => {
     listGames()
@@ -592,6 +599,44 @@ export function PainterPanel({ t }: PainterPanelProps) {
           {!painterState.activePropObject && painterState.tool === 'prop' && (
             <p className="painter-props-hint">{t('painter.props.selectHint')}</p>
           )}
+          {/* Explicit place-at-tile: does NOT require the prop tool to be active. */}
+          <div className="painter-place-at-tile">
+            <label>
+              {t('painter.placeAtTile.x')}
+              <input
+                type="number"
+                min={0}
+                max={Math.max(0, painterState.width - 1)}
+                step={1}
+                value={propPlaceX}
+                onChange={(event) => {
+                  const parsed = Number.parseInt(event.target.value, 10);
+                  if (Number.isFinite(parsed)) setPropPlaceX(parsed);
+                }}
+              />
+            </label>
+            <label>
+              {t('painter.placeAtTile.y')}
+              <input
+                type="number"
+                min={0}
+                max={Math.max(0, painterState.height - 1)}
+                step={1}
+                value={propPlaceY}
+                onChange={(event) => {
+                  const parsed = Number.parseInt(event.target.value, 10);
+                  if (Number.isFinite(parsed)) setPropPlaceY(parsed);
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={!painterState.activePropObject}
+              onClick={() => viewportRef.current?.placePropAtTile(propPlaceX, propPlaceY)}
+            >
+              {t('painter.placeAtTile')}
+            </button>
+          </div>
           <ul className="painter-prop-list">
             {painterState.props
               .filter((prop) => prop.floor === painterState.floors[painterState.activeFloor]?.id)
@@ -697,6 +742,48 @@ export function PainterPanel({ t }: PainterPanelProps) {
           {!painterState.activeNpcSpriteObject && painterState.tool === 'npc' && (
             <p className="painter-npcs-hint">{t('painter.npcs.selectSpriteHint')}</p>
           )}
+          {/* Explicit place-at-tile: does NOT require the npc tool to be active. */}
+          <div className="painter-place-at-tile">
+            <label>
+              {t('painter.placeAtTile.x')}
+              <input
+                type="number"
+                min={0}
+                max={Math.max(0, painterState.width - 1)}
+                step={1}
+                value={npcPlaceX}
+                onChange={(event) => {
+                  const parsed = Number.parseInt(event.target.value, 10);
+                  if (Number.isFinite(parsed)) setNpcPlaceX(parsed);
+                }}
+              />
+            </label>
+            <label>
+              {t('painter.placeAtTile.y')}
+              <input
+                type="number"
+                min={0}
+                max={Math.max(0, painterState.height - 1)}
+                step={1}
+                value={npcPlaceY}
+                onChange={(event) => {
+                  const parsed = Number.parseInt(event.target.value, 10);
+                  if (Number.isFinite(parsed)) setNpcPlaceY(parsed);
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={
+                painterState.eventKeys.length === 0 ||
+                !painterState.activeNpcSpriteObject ||
+                !painterState.activeNpcEventKey
+              }
+              onClick={() => viewportRef.current?.placeNpcAtTile(npcPlaceX, npcPlaceY)}
+            >
+              {t('painter.placeAtTile')}
+            </button>
+          </div>
           <ul className="painter-npc-list">
             {painterState.npcs
               .filter((npc) => npc.floor === painterState.floors[painterState.activeFloor]?.id)
@@ -770,6 +857,44 @@ export function PainterPanel({ t }: PainterPanelProps) {
               )}
             </select>
           </label>
+          {/* Explicit place-at-tile: does NOT require the trigger tool to be active. */}
+          <div className="painter-place-at-tile">
+            <label>
+              {t('painter.placeAtTile.x')}
+              <input
+                type="number"
+                min={0}
+                max={Math.max(0, painterState.width - 1)}
+                step={1}
+                value={triggerPlaceX}
+                onChange={(event) => {
+                  const parsed = Number.parseInt(event.target.value, 10);
+                  if (Number.isFinite(parsed)) setTriggerPlaceX(parsed);
+                }}
+              />
+            </label>
+            <label>
+              {t('painter.placeAtTile.y')}
+              <input
+                type="number"
+                min={0}
+                max={Math.max(0, painterState.height - 1)}
+                step={1}
+                value={triggerPlaceY}
+                onChange={(event) => {
+                  const parsed = Number.parseInt(event.target.value, 10);
+                  if (Number.isFinite(parsed)) setTriggerPlaceY(parsed);
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={painterState.eventKeys.length === 0 || !painterState.activeTriggerEventKey}
+              onClick={() => viewportRef.current?.placeTriggerAtTile(triggerPlaceX, triggerPlaceY)}
+            >
+              {t('painter.placeAtTile')}
+            </button>
+          </div>
           <ul className="painter-trigger-list">
             {painterState.triggers
               .filter(

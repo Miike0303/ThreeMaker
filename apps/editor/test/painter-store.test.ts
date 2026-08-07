@@ -12,8 +12,11 @@ import {
   nextPropId,
   nextTriggerId,
   placeNpc,
+  placeNpcAtTile,
   placeProp,
+  placePropAtTile,
   placeTrigger,
+  placeTriggerAtTile,
   pointerDown,
   pointerMove,
   pointerUp,
@@ -1273,6 +1276,35 @@ describe('painter-store: prop tool (C5 WU-04 -- depth-props-hd)', () => {
       { id: 'prop-1', x: 3, y: 3, floor: 'floor-1', object: PROP_OBJECT_A },
     ]);
   });
+
+  /**
+   * Panel "Place at tile" path: same placement + stroke-cancel resilience as
+   * pointerDown for prop, but does not require the prop tool to be active.
+   */
+  it('placePropAtTile lands identically to the prop pointerDown path', () => {
+    const ready = setActivePropObject(
+      createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 }),
+      PROP_OBJECT_A,
+    );
+    // Stuck brush stroke — both paths must cancel it first.
+    let stroking = ready;
+    ({ state: stroking } = pointerDown(stroking, { x: 0, y: 0 }));
+    expect(stroking.stroke.status).toBe('stroking');
+
+    const viaButton = placePropAtTile(stroking, { x: 1, y: 2 });
+    expect(viaButton.tool).toBe(stroking.tool); // explicit action: tool unchanged
+
+    const { state: viaPointer } = pointerDown(setTool(stroking, 'prop'), { x: 1, y: 2 });
+    expect(viaButton.props).toEqual(viaPointer.props);
+    expect(viaButton.props).toEqual([
+      { id: 'prop-1', x: 1, y: 2, floor: 'floor-0', object: PROP_OBJECT_A },
+    ]);
+    expect(viaButton.stroke).toEqual({ status: 'idle' });
+    expect(viaPointer.stroke).toEqual({ status: 'idle' });
+    expect(activeFloorState(viaButton).propCommandStack).toEqual(
+      activeFloorState(viaPointer).propCommandStack,
+    );
+  });
 });
 
 const NPC_SPRITE_A = 'c'.repeat(64);
@@ -1431,6 +1463,38 @@ describe('painter-store: npc tool (c1a follow-up)', () => {
   });
 
   /**
+   * Panel "Place at tile" path: same placement + stroke-cancel resilience as
+   * pointerDown for npc, but does not require the npc tool to be active.
+   */
+  it('placeNpcAtTile lands identically to the npc pointerDown path', () => {
+    const ready = npcReadyState();
+    let stroking = ready;
+    ({ state: stroking } = pointerDown(stroking, { x: 0, y: 0 }));
+    expect(stroking.stroke.status).toBe('stroking');
+
+    const viaButton = placeNpcAtTile(stroking, { x: 1, y: 2 });
+    expect(viaButton.tool).toBe(stroking.tool);
+
+    const { state: viaPointer } = pointerDown(setTool(stroking, 'npc'), { x: 1, y: 2 });
+    expect(viaButton.npcs).toEqual(viaPointer.npcs);
+    expect(viaButton.npcs).toEqual([
+      {
+        id: 'npc-1',
+        x: 1,
+        y: 2,
+        floor: 'floor-0',
+        facing: 'down',
+        sprite: { object: NPC_SPRITE_A, characterIndex: 0 },
+        onInteract: EVENT_TALK,
+      },
+    ]);
+    expect(viaButton.stroke).toEqual({ status: 'idle' });
+    expect(activeFloorState(viaButton).npcCommandStack).toEqual(
+      activeFloorState(viaPointer).npcCommandStack,
+    );
+  });
+
+  /**
    * Live-smoke regression (c1a follow-up): the panel never calls `placeNpc`
    * directly — it writes sprite/event via viewport setters, then the canvas
    * pointer path runs `setTool` + `pointerDown`. A stuck brush stroke must not
@@ -1557,6 +1621,37 @@ describe('painter-store: trigger tool (c1a follow-up)', () => {
       },
     ]);
     expect(next.stroke).toEqual({ status: 'idle' });
+  });
+
+  /**
+   * Panel "Place at tile" path: same placement + stroke-cancel resilience as
+   * pointerDown for trigger, but does not require the trigger tool to be active.
+   */
+  it('placeTriggerAtTile lands identically to the trigger pointerDown path', () => {
+    const ready = triggerReadyState();
+    let stroking = ready;
+    ({ state: stroking } = pointerDown(stroking, { x: 0, y: 0 }));
+    expect(stroking.stroke.status).toBe('stroking');
+
+    const viaButton = placeTriggerAtTile(stroking, { x: 1, y: 2 });
+    expect(viaButton.tool).toBe(stroking.tool);
+
+    const { state: viaPointer } = pointerDown(setTool(stroking, 'trigger'), { x: 1, y: 2 });
+    expect(viaButton.triggers).toEqual(viaPointer.triggers);
+    expect(viaButton.triggers).toEqual([
+      {
+        id: 'trigger-1',
+        x: 1,
+        y: 2,
+        floor: 'floor-0',
+        on: 'enter',
+        event: EVENT_TALK,
+      },
+    ]);
+    expect(viaButton.stroke).toEqual({ status: 'idle' });
+    expect(activeFloorState(viaButton).triggerCommandStack).toEqual(
+      activeFloorState(viaPointer).triggerCommandStack,
+    );
   });
 
   it('removeTrigger deletes; undo/redo restore', () => {
