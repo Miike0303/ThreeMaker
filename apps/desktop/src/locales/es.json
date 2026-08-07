@@ -32,6 +32,7 @@
     "debug.lastHopLights": "Luces del último salto",
     "debug.inventory": "Inventario",
     "debug.stats": "Estadísticas",
+    "debug.clock": "Reloj",
     "debug.controls.title": "Controles",
     "debug.controls.move": "Mover",
     "debug.controls.camera": "Modo de cámara",

@@ -1,6 +1,6 @@
 import { BaseDirectory, readFile } from '@tauri-apps/plugin-fs';
 import type { EventHost } from '@threemaker/core';
-import { GameLoop } from '@threemaker/core';
+import { GameLoop, WorldClock } from '@threemaker/core';
 import type {
   Direction,
   StairTraversalFloor,
@@ -120,9 +120,11 @@ import {
   driveRoomFade,
   resolveFadedRoomId,
 } from './room-state.js';
+import { CLOCK_MINUTES_KEY, resyncClockFromWorldValue, tickSessionClock } from './session-clock.js';
 import {
   baseSceneLightSetup,
   buildSheetLightingOptions,
+  dayNightAmbientFactor,
   mapHasAuthoredLights,
 } from './sheet-tile-lighting.js';
 import type { FloorSpawn } from './spawn.js';
@@ -466,6 +468,13 @@ async function resolvePlayerCharacterTexture(
   }
 }
 
+/**
+ * Simulated minutes advanced per real second (C7 world clock).
+ * 2.5 → a 24-minute real-time day (1440 / 2.5 = 576 s). Knob-style constant
+ * for live tuning without a settings UI yet.
+ */
+const CLOCK_MINUTES_PER_REAL_SECOND = 2.5;
+
 // World-space size of one tile edge; must match everywhere a world position
 // is derived from a tile coordinate (chunk geometry, the character quad).
 const TILE_WORLD_SIZE = 1;
@@ -801,6 +810,20 @@ async function renderFixtureMap(
       directionalLight.intensity = 0;
     }
   }
+  /**
+   * Multiplies the CURRENT base setup's ambient (and non-zero directional)
+   * intensity by the day/night factor. Does NOT touch `sessionLitTiles` or
+   * materials. Known ceiling: the curve is global — interiors with authored
+   * lamps also dim at night; per-map opt-out is deferred.
+   */
+  function applyDayNightAmbient(minutes: number): void {
+    const factor = dayNightAmbientFactor(minutes);
+    const setup = baseSceneLightSetup(sessionLitTiles);
+    ambientLight.intensity = setup.ambient.intensity * factor;
+    if (setup.directional) {
+      directionalLight.intensity = setup.directional.intensity * factor;
+    }
+  }
   applyBaseSceneLights(sessionLitTiles);
 
   // Created (and initialized) before any map session so `getMaxAnisotropy()`
@@ -1131,10 +1154,15 @@ async function renderFixtureMap(
    */
   let lightsBundle: MapLightsBundle | undefined;
   /**
-   * Session narrative root (world + inventory + stats + overlay). Declared
-   * before `buildDebugSnapshot` so the debug panel can read live inventory/
-   * stats without a TDZ on `narrativeRoot` (same reason `bundle` is early).
+   * Session narrative root (world + inventory + stats + clock + overlay).
+   * Declared before `buildDebugSnapshot` so the debug panel can read live
+   * inventory/stats/clock without a TDZ on `narrativeRoot` (same reason
+   * `bundle` is early). Clock is session-scoped: survives hops, never on
+   * the per-map bundle.
    */
+  const sessionClock = new WorldClock({
+    minutesPerRealSecond: CLOCK_MINUTES_PER_REAL_SECOND,
+  });
   const narrativeRoot = createNarrativeRoot({
     // Mounting happens INSIDE the factory: the root owns the overlay's lifetime,
     // this file owns where it lives (narrative-root.ts's own doc comment). Built
@@ -1144,8 +1172,11 @@ async function renderFixtureMap(
       container.appendChild(overlay.element);
       return overlay;
     },
+    clock: sessionClock,
     ...(sessionStores ? { inventory: sessionStores.inventory, stats: sessionStores.stats } : {}),
   });
+  // Boot: dim/brighten immediately for the starting time of day (default 08:00).
+  applyDayNightAmbient(narrativeRoot.clock.minutes);
   const walkAnimation = new WalkAnimation();
 
   // The render-position handoff selector (design "Render-position handoff"):
@@ -1343,6 +1374,7 @@ async function renderFixtureMap(
       lastOutgoingLights: hopStats.lastOutgoingLights,
       inventory: narrativeRoot.inventory.snapshot(),
       stats: narrativeRoot.stats.snapshot(),
+      clockMinutes: narrativeRoot.clock.minutes,
     };
   }
   debugPanel.update(buildDebugSnapshot());
@@ -1450,6 +1482,9 @@ async function renderFixtureMap(
       },
       get dialogueState() {
         return bundle?.interpreter.state ?? 'idle';
+      },
+      get clockMinutes() {
+        return narrativeRoot.clock.minutes;
       },
     };
   }
@@ -1955,6 +1990,7 @@ async function renderFixtureMap(
       session.dispose();
       // DEV cycle targets never author lights — restore unlit base before rebuild.
       applyBaseSceneLights(false);
+      applyDayNightAmbient(narrativeRoot.clock.minutes);
       activeLights = [];
     }
 
@@ -2203,7 +2239,9 @@ async function renderFixtureMap(
           : undefined;
 
         // Apply lit/ambient before createMapSession so buildFloorRender sees it.
+        // Day-night after base so a map entered at night is dark immediately.
         applyBaseSceneLights(mapHasAuthoredLights(nextResult.lights));
+        applyDayNightAmbient(narrativeRoot.clock.minutes);
         session = createMapSession(nextResult.floorSources, nextResult.stairLinks, sessionOpts);
         // transferMap may set facing; FloorSpawn has no facing field, so apply
         // it on the mover after the session exists (same-map teleport pattern).
@@ -2372,6 +2410,11 @@ async function renderFixtureMap(
         narrativeRoot.overlay().showError(stores.message);
         return { ok: false, reason: stores.reason };
       }
+      // replaceAll (load) emits no world signal — explicit clock re-sync is the
+      // documented consequence. Invalid/absent clock.minutes (old saves) leaves
+      // the live clock as-is; always re-apply ambient for the current minute.
+      resyncClockFromWorldValue(narrativeRoot.clock, narrativeRoot.world.get(CLOCK_MINUTES_KEY));
+      applyDayNightAmbient(narrativeRoot.clock.minutes);
       session.floorRouter.currentFloor = snap.floor;
       session.mover.teleport(snap.x, snap.y, snap.facing);
       session.applyFloorWindow(snap.x, snap.y);
@@ -2424,6 +2467,10 @@ async function renderFixtureMap(
       narrativeRoot.overlay().showError(stores.message);
       return { ok: false, reason: stores.reason };
     }
+    // replaceAll (load) emits no world signal — explicit clock re-sync is the
+    // documented consequence. Hop re-applies base lights + day-night after load.
+    resyncClockFromWorldValue(narrativeRoot.clock, narrativeRoot.world.get(CLOCK_MINUTES_KEY));
+    applyDayNightAmbient(narrativeRoot.clock.minutes);
     await hopToManifestFile(catalog.mapFile, {
       x: snap.x,
       y: snap.y,
@@ -2487,6 +2534,13 @@ async function renderFixtureMap(
       // keep playing during stair climbs (mixer updates placed after that
       // return would freeze for the whole traversal).
       propsBundle?.update(dt);
+
+      // Session clock: advance every frame; world write only on crossed minutes
+      // (one final value even if several minutes cross in one tick).
+      const crossedMinutes = tickSessionClock(narrativeRoot.clock, narrativeRoot.world, dt);
+      if (crossedMinutes > 0) {
+        applyDayNightAmbient(narrativeRoot.clock.minutes);
+      }
 
       // (b) During traversal: the walker owns render position + camera
       // target for every frame of the climb/descent (design "Render-position

@@ -69,3 +69,52 @@ export function baseSceneLightSetup(hasLights: boolean): BaseSceneLightSetup {
     directional: { color: 0xffffff, intensity: 3 },
   };
 }
+
+/**
+ * Piecewise-linear day/night ambient intensity factor (C7 WU-02).
+ *
+ * Control points (minute-of-day → factor):
+ * - night 22:00–05:00 → 0.35
+ * - dawn ramp 05:00–07:00 → up to 1.0
+ * - day 07:00–18:00 → 1.0
+ * - dusk ramp 18:00–22:00 → down to 0.35
+ *
+ * Day-wrap: the table ends at 1440 with the same factor as 0 so interpolation
+ * across midnight stays continuous. Exported for tests + WU-04 (routines UI).
+ */
+const DAY_NIGHT_CURVE: readonly (readonly [minute: number, factor: number])[] = [
+  [0, 0.35], // 00:00 night
+  [300, 0.35], // 05:00 night end / dawn start
+  [420, 1.0], // 07:00 day start
+  [1080, 1.0], // 18:00 day end / dusk start
+  [1320, 0.35], // 22:00 night start
+  [1440, 0.35], // end-of-day wrap (= 00:00)
+];
+
+/**
+ * Ambient (and non-zero directional) intensity scale for the given whole
+ * minute of the day. Linear interpolation between {@link DAY_NIGHT_CURVE}
+ * control points; minutes outside `[0, 1440)` wrap modularly.
+ */
+export function dayNightAmbientFactor(minutes: number): number {
+  const day = 1440;
+  let m = minutes;
+  if (!Number.isFinite(m)) return DAY_NIGHT_CURVE[0]?.[1] ?? 0.35;
+  // Modular wrap into [0, 1440).
+  m = ((Math.floor(m) % day) + day) % day;
+
+  for (let i = 0; i < DAY_NIGHT_CURVE.length - 1; i++) {
+    const a = DAY_NIGHT_CURVE[i];
+    const b = DAY_NIGHT_CURVE[i + 1];
+    if (!a || !b) continue;
+    const [m0, f0] = a;
+    const [m1, f1] = b;
+    if (m >= m0 && m <= m1) {
+      if (m1 === m0) return f0;
+      const t = (m - m0) / (m1 - m0);
+      return f0 + t * (f1 - f0);
+    }
+  }
+  // Exact end-of-table or unexpected gap — last control point.
+  return DAY_NIGHT_CURVE[DAY_NIGHT_CURVE.length - 1]?.[1] ?? 0.35;
+}

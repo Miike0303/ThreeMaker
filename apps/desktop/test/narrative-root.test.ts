@@ -12,10 +12,12 @@
  * same split `dialogue-ui.test.ts` already uses.
  */
 
+import { WorldClock } from '@threemaker/core';
 import { Inventory, StatBlock } from '@threemaker/gameplay';
 import { describe, expect, it, vi } from 'vitest';
 import type { DialogueOverlay } from '../src/dialogue-ui.js';
 import { createNarrativeRoot } from '../src/narrative-root.js';
+import { CLOCK_MINUTES_KEY } from '../src/session-clock.js';
 
 /** A DOM-free stand-in: the root never reads the overlay, it only owns it. */
 function fakeOverlay(): DialogueOverlay {
@@ -31,9 +33,14 @@ function fakeOverlay(): DialogueOverlay {
 
 function makeRoot(
   createOverlay: () => DialogueOverlay = fakeOverlay,
-  extras: { inventory?: Inventory; stats?: StatBlock } = {},
+  extras: { inventory?: Inventory; stats?: StatBlock; clock?: WorldClock } = {},
 ) {
-  return createNarrativeRoot({ createOverlay, ...extras });
+  return createNarrativeRoot({
+    createOverlay,
+    inventory: extras.inventory,
+    stats: extras.stats,
+    clock: extras.clock ?? new WorldClock({ minutesPerRealSecond: 1, startMinutes: 480 }),
+  });
 }
 
 describe('createNarrativeRoot', () => {
@@ -65,6 +72,7 @@ describe('createNarrativeRoot', () => {
     root.seedIfAbsent({ secret_revealed: false, coins: 3, lastNpc: 'elder' });
 
     expect(root.world.snapshot()).toEqual({
+      [CLOCK_MINUTES_KEY]: 480,
       secret_revealed: false,
       coins: 3,
       lastNpc: 'elder',
@@ -101,7 +109,11 @@ describe('createNarrativeRoot', () => {
 
     root.seedIfAbsent({ carried: 1, fresh: 'x' });
 
-    expect(root.world.snapshot()).toEqual({ carried: 2, fresh: 'x' });
+    expect(root.world.snapshot()).toEqual({
+      [CLOCK_MINUTES_KEY]: 480,
+      carried: 2,
+      fresh: 'x',
+    });
   });
 
   it('emits no changed signal for a key it skips', () => {
@@ -124,5 +136,27 @@ describe('createNarrativeRoot', () => {
     expect(root.overlay()).toBe(overlay);
     expect(root.overlay()).toBe(overlay);
     expect(createOverlay).toHaveBeenCalledTimes(1);
+  });
+
+  // C7 WU-02: clock is session-scoped; seed clock.minutes before any map seeds.
+  it('seeds clock.minutes from the injected clock at root creation', () => {
+    const clock = new WorldClock({ minutesPerRealSecond: 1, startMinutes: 720 });
+    const root = makeRoot(fakeOverlay, { clock });
+
+    expect(root.clock).toBe(clock);
+    expect(root.world.get(CLOCK_MINUTES_KEY)).toBe(720);
+    expect(root.world.get(CLOCK_MINUTES_KEY)).toBe(clock.minutes);
+  });
+
+  it('does not let a map worldSeed override clock.minutes (seedIfAbsent skip)', () => {
+    const clock = new WorldClock({ minutesPerRealSecond: 1, startMinutes: 480 });
+    const root = makeRoot(fakeOverlay, { clock });
+
+    // A map that wrongly seeds the clock as a string would type-lock fail if
+    // applied — seedIfAbsent must skip the already-present numeric key.
+    root.seedIfAbsent({ [CLOCK_MINUTES_KEY]: 'noon' });
+
+    expect(root.world.get(CLOCK_MINUTES_KEY)).toBe(480);
+    expect(typeof root.world.get(CLOCK_MINUTES_KEY)).toBe('number');
   });
 });

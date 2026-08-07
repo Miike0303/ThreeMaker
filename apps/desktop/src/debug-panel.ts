@@ -1,4 +1,5 @@
 import type { I18n } from './i18n.js';
+import { formatClockMinutes } from './session-clock.js';
 
 /** One frame of the debug overlay's "live values" section (see main.ts's `window.__threemaker_debug`). */
 export interface DebugSnapshot {
@@ -45,6 +46,11 @@ export interface DebugSnapshot {
   readonly inventory: Readonly<Record<string, number>>;
   /** Current session stat values (display-only; C4). */
   readonly stats: Readonly<Record<string, number>>;
+  /**
+   * Simulated clock minutes-of-day (C7). Displayed as HH:MM via
+   * {@link formatClockMinutes} in {@link formatDebugRows}.
+   */
+  readonly clockMinutes: number;
 }
 
 export interface DebugRow {
@@ -110,6 +116,10 @@ export function formatDebugRows(snapshot: DebugSnapshot, t: I18n['t']): readonly
     {
       label: t('debug.stats'),
       value: formatRecordSnapshot(snapshot.stats),
+    },
+    {
+      label: t('debug.clock'),
+      value: formatClockMinutes(snapshot.clockMinutes),
     },
   ];
 }
@@ -264,6 +274,7 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
       lastOutgoingLights: 0,
       inventory: {},
       stats: {},
+      clockMinutes: 0,
     },
     t,
   )) {

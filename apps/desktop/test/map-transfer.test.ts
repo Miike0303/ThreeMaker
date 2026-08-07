@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CardinalDirection, EventHost } from '@threemaker/core';
+import { WorldClock } from '@threemaker/core';
 import { ElevationField } from '@threemaker/gameplay';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
@@ -110,6 +111,7 @@ function createRoot() {
     createOverlay: () => {
       throw new Error('headless: overlay must not build');
     },
+    clock: new WorldClock({ minutesPerRealSecond: 1 }),
   });
 }
 

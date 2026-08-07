@@ -21,9 +21,10 @@
  * first request, then the same instance for the rest of the session.
  */
 
-import { WorldState, type WorldValue } from '@threemaker/core';
+import { type WorldClock, WorldState, type WorldValue } from '@threemaker/core';
 import { Inventory, StatBlock } from '@threemaker/gameplay';
 import type { DialogueOverlay } from './dialogue-ui.js';
+import { CLOCK_MINUTES_KEY } from './session-clock.js';
 
 export interface NarrativeRootDeps {
   /**
@@ -42,6 +43,12 @@ export interface NarrativeRootDeps {
    * and injects it here so map hops never rebuild it.
    */
   readonly stats?: StatBlock;
+  /**
+   * Session world clock (C7). Constructed by the host with the desired
+   * `minutesPerRealSecond`; lives here so it survives map hops. Seeded into
+   * world-state at root creation (see {@link createNarrativeRoot}).
+   */
+  readonly clock: WorldClock;
 }
 
 export interface NarrativeRoot {
@@ -51,6 +58,12 @@ export interface NarrativeRoot {
   readonly inventory: Inventory;
   /** Session stats. Survives every map swap; never replaced. */
   readonly stats: StatBlock;
+  /**
+   * Session world clock. Survives every map swap; never replaced. Advances
+   * from main.ts's game loop; `clock.minutes` is mirrored into world-state
+   * once per crossed simulated minute.
+   */
+  readonly clock: WorldClock;
   /**
    * Applies an authored map's `worldSeeds`, skipping every key the world
    * already holds. Idempotent per key, so loading a second map (or re-entering
@@ -65,12 +78,21 @@ export function createNarrativeRoot(deps: NarrativeRootDeps): NarrativeRoot {
   const world = new WorldState();
   const inventory = deps.inventory ?? new Inventory();
   const stats = deps.stats ?? new StatBlock([]);
+  const clock = deps.clock;
   let overlay: DialogueOverlay | undefined;
+
+  // Seed clock.minutes BEFORE any map bundle/story exists so ink
+  // world_get("clock.minutes") binds and the numeric type-lock is set.
+  // A map's worldSeeds declaring clock.minutes as a string must lose: root
+  // seeds first, and seedIfAbsent skips already-present keys — which does
+  // the right thing automatically.
+  world.set(CLOCK_MINUTES_KEY, clock.minutes);
 
   return {
     world,
     inventory,
     stats,
+    clock,
 
     seedIfAbsent(seeds) {
       for (const [key, value] of Object.entries(seeds)) {

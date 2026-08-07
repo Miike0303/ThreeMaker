@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { EventHost } from '@threemaker/core';
+import { WorldClock } from '@threemaker/core';
 import { ElevationField, Inventory, StatBlock } from '@threemaker/gameplay';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
@@ -123,11 +124,13 @@ const HOST: EventHost = {
 };
 
 /** A session root whose overlay factory throws, so any case that touches session chrome fails loudly instead of silently passing. */
-function createRoot(): NarrativeRoot {
+function createRoot(extras: { inventory?: Inventory; stats?: StatBlock } = {}): NarrativeRoot {
   return createNarrativeRoot({
     createOverlay: () => {
       throw new Error('the bundle must never touch the session overlay');
     },
+    clock: new WorldClock({ minutesPerRealSecond: 1 }),
+    ...extras,
   });
 }
 
@@ -189,10 +192,7 @@ describe('buildMapNarrativeBundle', () => {
   it('wires the session inventory and stats into the EventInterpreter', async () => {
     const inventory = new Inventory();
     const stats = new StatBlock([{ id: 'hp', name: 'HP', base: 10, min: 0, max: 100 }]);
-    const root = createNarrativeRoot({
-      createOverlay: () => {
-        throw new Error('the bundle must never touch the session overlay');
-      },
+    const root = createRoot({
       inventory,
       stats,
     });

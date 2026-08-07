@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { EventHost } from '@threemaker/core';
+import { WorldClock } from '@threemaker/core';
 import type { Direction } from '@threemaker/gameplay';
 import { ElevationField } from '@threemaker/gameplay';
 import * as THREE from 'three/webgpu';
@@ -79,6 +80,7 @@ async function bootAuthoredMap(): Promise<{
     createOverlay: () => {
       throw new Error('a headless run must never build the session overlay');
     },
+    clock: new WorldClock({ minutesPerRealSecond: 1 }),
   });
   const bundle = await buildMapNarrativeBundle({
     narrative: authored.narrative,

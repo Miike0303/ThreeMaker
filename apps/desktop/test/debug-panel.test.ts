@@ -32,6 +32,7 @@ const LOCALES = {
       'debug.lastHopLights': 'Last hop lights',
       'debug.inventory': 'Inventory',
       'debug.stats': 'Stats',
+      'debug.clock': 'Clock',
     },
   },
 };
@@ -59,6 +60,7 @@ const SNAPSHOT = {
   lastOutgoingLights: 2,
   inventory: { potion: 2, key: 1 },
   stats: { hp: 10, mp: 3 },
+  clockMinutes: 480,
 };
 
 describe('formatDebugRows', () => {
@@ -88,6 +90,7 @@ describe('formatDebugRows', () => {
       { label: 'Last hop lights', value: '2' },
       { label: 'Inventory', value: '{key:1,potion:2}' },
       { label: 'Stats', value: '{hp:10,mp:3}' },
+      { label: 'Clock', value: '08:00' },
     ]);
   });
 

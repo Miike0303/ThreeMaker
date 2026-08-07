@@ -114,6 +114,8 @@ declare global {
       readonly targetPosition: { readonly x: number; readonly y: number; readonly z: number };
       /** The demo `EventInterpreter`'s current state, or `'idle'` if the demo content failed to load. */
       readonly dialogueState: string;
+      /** Simulated clock minutes-of-day in `[0, 1440)` (C7 session clock). */
+      readonly clockMinutes: number;
     };
   }
 }

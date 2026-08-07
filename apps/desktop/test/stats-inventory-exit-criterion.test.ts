@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { EventHost } from '@threemaker/core';
+import { WorldClock } from '@threemaker/core';
 import type { Direction } from '@threemaker/gameplay';
 import { ElevationField, Inventory, parseGameDefsJson, StatBlock } from '@threemaker/gameplay';
 import {
@@ -95,6 +96,7 @@ async function bootSession(stores?: {
     },
     inventory,
     stats,
+    clock: new WorldClock({ minutesPerRealSecond: 1 }),
   });
 
   const bundle = await buildMapNarrativeBundle({
@@ -272,6 +274,7 @@ describe('exit criterion: chest → inventory → ink → stat behavior → save
       },
       inventory: freshInventory,
       stats: freshStats,
+      clock: new WorldClock({ minutesPerRealSecond: 1 }),
     });
     expect(freshRoot.inventory.count('brass_key')).toBe(0);
     expect(freshRoot.stats.get('hp')).toBe(10);
