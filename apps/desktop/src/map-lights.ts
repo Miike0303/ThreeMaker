@@ -58,6 +58,12 @@ export interface MapLightsBundle {
    */
   updatePlayer(pos: THREE.Vector3): void;
   /**
+   * Repositions every light with `attach: npcId` to `pos` plus the same torch
+   * offset as {@link MapLightsBundle.updatePlayer}. No-op for unknown npcIds
+   * (and after dispose).
+   */
+  updateNpc(npcId: string, pos: THREE.Vector3): void;
+  /**
    * Removes the `map-lights` group from the scene. Lights have no geometry or
    * textures to free — only the group membership is released. Idempotent.
    */
@@ -67,8 +73,12 @@ export interface MapLightsBundle {
 /** Default spot cone half-angle (radians). Cone params deferred per schema doc. */
 const DEFAULT_SPOT_ANGLE = Math.PI / 6;
 
-/** Torch offset above sprite base for attached lights (player + npc). */
-const ATTACH_HEIGHT_FACTOR = 0.5;
+/**
+ * Torch offset above sprite base for attached lights (player + npc).
+ * Exported so callers never re-state the magic `0.5` when documenting parity;
+ * positioning still applies the offset inside the bundle.
+ */
+export const ATTACH_HEIGHT_FACTOR = 0.5;
 
 /** Default placed-light height in height units when the document omits `height`. */
 const DEFAULT_PLACED_HEIGHT = 1;
@@ -137,6 +147,8 @@ export function buildMapLights(deps: MapLightsBundleDeps): MapLightsBundle | und
   const group = new THREE.Group();
   group.name = 'map-lights';
   const playerLights: THREE.Light[] = [];
+  /** `attach: '<npcId>'` lights, keyed for {@link MapLightsBundle.updateNpc}. */
+  const npcLights = new Map<string, THREE.Light[]>();
 
   try {
     for (const doc of deps.lights) {
@@ -160,6 +172,9 @@ export function buildMapLights(deps: MapLightsBundleDeps): MapLightsBundle | und
             anchor.groundY + offsetY,
             tileCenterToWorld(anchor.y, deps.tileWorldSize),
           );
+          const list = npcLights.get(doc.attach);
+          if (list) list.push(light);
+          else npcLights.set(doc.attach, [light]);
         }
       } else {
         // Placed form: schema guarantees x/y/floor when attach is absent.
@@ -193,6 +208,13 @@ export function buildMapLights(deps: MapLightsBundleDeps): MapLightsBundle | und
   const count = deps.lights.length;
   const attachOffsetY = ATTACH_HEIGHT_FACTOR * deps.heightUnit;
 
+  function placeAttached(light: THREE.Light, pos: THREE.Vector3): void {
+    light.position.set(pos.x, pos.y + attachOffsetY, pos.z);
+    if (light instanceof THREE.SpotLight) {
+      light.target.position.set(light.position.x, light.position.y - 1, light.position.z);
+    }
+  }
+
   return {
     get count() {
       return count;
@@ -200,12 +222,14 @@ export function buildMapLights(deps: MapLightsBundleDeps): MapLightsBundle | und
 
     updatePlayer(pos: THREE.Vector3) {
       if (disposed) return;
-      for (const light of playerLights) {
-        light.position.set(pos.x, pos.y + attachOffsetY, pos.z);
-        if (light instanceof THREE.SpotLight) {
-          light.target.position.set(light.position.x, light.position.y - 1, light.position.z);
-        }
-      }
+      for (const light of playerLights) placeAttached(light, pos);
+    },
+
+    updateNpc(npcId: string, pos: THREE.Vector3) {
+      if (disposed) return;
+      const lights = npcLights.get(npcId);
+      if (!lights) return;
+      for (const light of lights) placeAttached(light, pos);
     },
 
     dispose() {

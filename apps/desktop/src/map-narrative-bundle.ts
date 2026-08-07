@@ -19,8 +19,8 @@
 
 import type { DialogueProvider, DialogueSource, DialogueStep, EventHost } from '@threemaker/core';
 import { EventInterpreter, PlainTextDialogueProvider } from '@threemaker/core';
-import type { NpcDefinition } from '@threemaker/gameplay';
-import { NpcRegistry, TriggerIndex } from '@threemaker/gameplay';
+import type { Direction, NpcDefinition, RoutineStop } from '@threemaker/gameplay';
+import { NpcRegistry, routinePositionAt, TriggerIndex } from '@threemaker/gameplay';
 import type { MapEventScripts } from '@threemaker/map-format';
 import { bindStoryToWorld, compileInk, InkDialogueProvider } from '@threemaker/narrative';
 import type * as THREE from 'three/webgpu';
@@ -30,6 +30,32 @@ import { buildPlaceholderCharacterTexture } from './character-sprite-placeholder
 import type { FloorGameplay } from './floor-runtime.js';
 import { groundYAt } from './ground-y.js';
 import type { NarrativeRoot } from './narrative-root.js';
+
+/** One NPC that actually moved (or re-faced) during {@link MapNarrativeBundle.applyRoutines}. */
+export interface RoutineMove {
+  readonly npcId: string;
+  readonly position: {
+    readonly x: number;
+    readonly y: number;
+    readonly groundY: number;
+  };
+}
+
+/**
+ * One authored routine, coordinate-translated once at bundle build (same
+ * floor-index domain as the NPC base pose). `spriteIndex` indexes
+ * {@link MapNarrativeBundle.sprites} (authored order).
+ */
+interface RoutineBinding {
+  readonly npcId: string;
+  readonly base: RoutineStop;
+  readonly routine: readonly RoutineStop[];
+  readonly spriteIndex: number;
+  readonly floor: number;
+  currentX: number;
+  currentY: number;
+  currentFacing: Direction;
+}
 
 /** One compiled, already-bound Ink story. Spelled via `compileInk`'s return type because `inkjs` is `@threemaker/narrative`'s dependency, not this app's. */
 type CompiledStory = ReturnType<typeof compileInk>;
@@ -102,6 +128,12 @@ export interface MapNarrativeBundleDeps {
   readonly tileWorldSize: number;
   /** Must match the renderer's `heightUnit`, so sprites line up with the ground they stand on. */
   readonly heightUnit: number;
+  /**
+   * Session clock minutes-of-day used for the initial routine application at
+   * build (evening boot / night hop must land NPCs at evening stops, not base).
+   * Defaults to `0` when omitted.
+   */
+  readonly minutes?: number;
 }
 
 export interface MapNarrativeBundle {
@@ -118,8 +150,31 @@ export interface MapNarrativeBundle {
    * needs sprite-by-id lookup; they face these at the camera and dispose them.
    */
   readonly sprites: readonly CharacterSprite[];
+  /**
+   * Place every routined NPC at `routinePositionAt(base, routine, minutes)`.
+   * When the resolved stop differs from the live registry pose: `moveNpc`,
+   * sprite tile + facing. Returns only NPCs that actually moved (for light
+   * follow). Absolute resolution — safe to call after a dialogue-gated skip
+   * (the next call self-heals to the correct stop). Idempotent for a given
+   * minute. NPCs without routines cost nothing.
+   */
+  applyRoutines(minutes: number): readonly RoutineMove[];
   /** Removes and frees everything this bundle owns. Idempotent. */
   dispose(): void;
+}
+
+/**
+ * Crossed-minute seam used by main.ts: skip routine teleports while dialogue
+ * or a cutscene holds the interpreter. `routinePositionAt` is absolute (not
+ * incremental), so the next idle crossed-minute application self-heals — no
+ * missed minutes to replay.
+ */
+export function applyRoutinesIfIdle(
+  bundle: Pick<MapNarrativeBundle, 'interpreter' | 'applyRoutines'>,
+  minutes: number,
+): readonly RoutineMove[] {
+  if (bundle.interpreter.state !== 'idle') return [];
+  return bundle.applyRoutines(minutes);
 }
 
 /**
@@ -261,7 +316,68 @@ export async function buildMapNarrativeBundle(
     throw error;
   }
 
+  // Translate document routines ONCE (same coordinate domain as NPC base:
+  // runtime floor index, tile x/y). Only NPCs that author a routine bind.
+  const routineBindings: RoutineBinding[] = [];
+  for (let spriteIndex = 0; spriteIndex < narrative.npcs.length; spriteIndex++) {
+    const npc = narrative.npcs[spriteIndex];
+    if (!npc?.routine || npc.routine.length === 0) continue;
+    const base: RoutineStop = { at: 0, x: npc.x, y: npc.y, facing: npc.facing };
+    const routine: readonly RoutineStop[] = npc.routine.map((stop) => ({
+      at: stop.at,
+      x: stop.x,
+      y: stop.y,
+      facing: stop.facing,
+    }));
+    routineBindings.push({
+      npcId: npc.id,
+      base,
+      routine,
+      spriteIndex,
+      floor: npc.floor,
+      currentX: npc.x,
+      currentY: npc.y,
+      currentFacing: npc.facing,
+    });
+  }
+
   let disposed = false;
+
+  function applyRoutines(minutes: number): readonly RoutineMove[] {
+    if (disposed) return [];
+    const moved: RoutineMove[] = [];
+    for (const binding of routineBindings) {
+      const stop = routinePositionAt(binding.base, binding.routine, minutes);
+      if (
+        stop.x === binding.currentX &&
+        stop.y === binding.currentY &&
+        stop.facing === binding.currentFacing
+      ) {
+        continue;
+      }
+      npcRegistry.moveNpc(binding.npcId, stop.x, stop.y, stop.facing);
+      const groundY = npcGroundY(binding.floor, stop.x, stop.y, deps);
+      const sprite = sprites[binding.spriteIndex];
+      if (!sprite) {
+        throw new Error(
+          `map-narrative-bundle: applyRoutines missing sprite at index ${binding.spriteIndex} for npc ${JSON.stringify(binding.npcId)}.`,
+        );
+      }
+      sprite.setTilePosition(stop.x, stop.y, deps.tileWorldSize, groundY);
+      sprite.setFrame(stop.facing, 1);
+      binding.currentX = stop.x;
+      binding.currentY = stop.y;
+      binding.currentFacing = stop.facing;
+      moved.push({
+        npcId: binding.npcId,
+        position: { x: stop.x, y: stop.y, groundY },
+      });
+    }
+    return moved;
+  }
+
+  // Evening boot / night hop: land at the CURRENT minute's stop, not base.
+  applyRoutines(deps.minutes ?? 0);
 
   return {
     interpreter,
@@ -269,6 +385,7 @@ export async function buildMapNarrativeBundle(
     triggerIndex,
     events: narrative.events,
     sprites,
+    applyRoutines,
 
     dispose() {
       if (disposed) return;

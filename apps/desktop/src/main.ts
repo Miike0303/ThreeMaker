@@ -12,6 +12,7 @@ import {
   GridMover,
   Inventory,
   parseGameDefsJson,
+  routinePositionAt,
   StairTraversal,
   StairTriggerTracker,
   StatBlock,
@@ -101,8 +102,8 @@ import {
 } from './map-hop.js';
 import type { MapLightsBundle } from './map-lights.js';
 import { buildMapLights } from './map-lights.js';
-import type { MapNarrativeBundle } from './map-narrative-bundle.js';
-import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
+import type { MapNarrativeBundle, RoutineMove } from './map-narrative-bundle.js';
+import { applyRoutinesIfIdle, buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
 import type { MapPropsBundle } from './map-props.js';
 import { buildMapProps } from './map-props.js';
@@ -1721,6 +1722,9 @@ async function renderFixtureMap(
       resolveObjectTexture: resolveObjectTextureReal,
       tileWorldSize: TILE_WORLD_SIZE,
       heightUnit: HEIGHT_UNIT,
+      // Initial routine application: evening boot / night hop land at the
+      // current clock minute's stops, not authored base tiles.
+      minutes: narrativeRoot.clock.minutes,
     });
     if (bundle) subscribeDialogueSignals(bundle.interpreter);
   }
@@ -1740,24 +1744,63 @@ async function renderFixtureMap(
     });
   }
 
+  /** Move attached NPC lanterns for every NPC that actually teleported. */
+  function followNpcLights(moved: readonly RoutineMove[]): void {
+    if (!lightsBundle || moved.length === 0) return;
+    for (const m of moved) {
+      lightsBundle.updateNpc(
+        m.npcId,
+        new THREE.Vector3(
+          tileCenterToWorld(m.position.x, TILE_WORLD_SIZE),
+          m.position.groundY,
+          tileCenterToWorld(m.position.y, TILE_WORLD_SIZE),
+        ),
+      );
+    }
+  }
+
+  /**
+   * Re-apply absolute routine positions for the live clock minute and move
+   * attached lanterns. Used after save load (interpreter is idle under the
+   * existing load gates — no dialogue-gate needed). Idempotent when the
+   * bundle already applied the same minute at build.
+   */
+  function applyRoutinesForClock(): void {
+    if (!bundle) return;
+    followNpcLights(bundle.applyRoutines(narrativeRoot.clock.minutes));
+  }
+
   /**
    * NPC anchors for attached lights: tile coords + ground Y from each NPC's
-   * own floor. Built from the authored narrative (runtime cross-check vs
-   * light `attach` ids).
+   * own floor. Resolves day-routine stops against the live clock so evening
+   * boots / hops place lanterns on the stop the sprite already occupies
+   * (bundle build applies the same minute).
    */
   function buildNpcLightPositions(
     narrative: AuthoredMapNarrative | undefined,
   ): ReadonlyMap<string, { x: number; y: number; floor: number; groundY: number }> {
     const positions = new Map<string, { x: number; y: number; floor: number; groundY: number }>();
     if (!narrative) return positions;
+    const minutes = narrativeRoot.clock.minutes;
     for (const npc of narrative.npcs) {
       const floor = session.floorRouter.floors[npc.floor];
       if (!floor) continue;
+      let x = npc.x;
+      let y = npc.y;
+      if (npc.routine !== undefined && npc.routine.length > 0) {
+        const stop = routinePositionAt(
+          { at: 0, x: npc.x, y: npc.y, facing: npc.facing },
+          npc.routine,
+          minutes,
+        );
+        x = stop.x;
+        y = stop.y;
+      }
       positions.set(npc.id, {
-        x: npc.x,
-        y: npc.y,
+        x,
+        y,
         floor: npc.floor,
-        groundY: groundYAt(floor.elevation, npc.x, npc.y, HEIGHT_UNIT, floor.baseElevation),
+        groundY: groundYAt(floor.elevation, x, y, HEIGHT_UNIT, floor.baseElevation),
       });
     }
     return positions;
@@ -2426,6 +2469,10 @@ async function renderFixtureMap(
       await buildNarrativeBundle(activeNarrative, sameMapLoadNarrativeArrival(snap));
       await buildPropsBundle(activeProps);
       buildLightsBundle(activeLights, activeNarrative);
+      // Interpreter is idle during load (existing gates). Bundle build already
+      // applied current minutes; this re-apply is idempotent and keeps the
+      // save path explicit for NPC poses after clock re-sync.
+      applyRoutinesForClock();
       focusCameraOnSpawn();
       narrativeRoot.overlay().hide();
       return { ok: true };
@@ -2477,6 +2524,9 @@ async function renderFixtureMap(
       facing: snap.facing,
       floorIndex: snap.floor,
     });
+    // Post-hop: interpreter idle; re-apply restored minutes (idempotent with
+    // build-time application that already used the re-synced clock).
+    applyRoutinesForClock();
     narrativeRoot.overlay().hide();
     return { ok: true };
   }
@@ -2540,6 +2590,12 @@ async function renderFixtureMap(
       const crossedMinutes = tickSessionClock(narrativeRoot.clock, narrativeRoot.world, dt);
       if (crossedMinutes > 0) {
         applyDayNightAmbient(narrativeRoot.clock.minutes);
+        // Dialogue gate: skip routine teleports while dialogue/cutscene runs.
+        // routinePositionAt is absolute (not incremental) — the next idle
+        // crossed minute self-heals to the correct stop without replaying gaps.
+        if (bundle) {
+          followNpcLights(applyRoutinesIfIdle(bundle, narrativeRoot.clock.minutes));
+        }
       }
 
       // (b) During traversal: the walker owns render position + camera
