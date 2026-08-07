@@ -5,6 +5,7 @@ import {
   migrateV2ToV3,
   migrateV3ToV4,
   migrateV4ToV5,
+  migrateV5ToV6,
   parseMapDocument,
   registerMigration,
 } from '../src/migrate.js';
@@ -37,6 +38,7 @@ function makeValidDocInput(overrides: Record<string, unknown> = {}): Record<stri
     stairLinks: [],
     rooms: [],
     props: [],
+    lights: [],
     ...overrides,
   };
 }
@@ -97,6 +99,7 @@ describe('parseMapDocument', () => {
     registerMigration(2, migrateV2ToV3);
     registerMigration(3, migrateV3ToV4);
     registerMigration(4, migrateV4ToV5);
+    registerMigration(5, migrateV5ToV6);
   });
 
   it('accepts a document already at the current version, with no migration needed', () => {

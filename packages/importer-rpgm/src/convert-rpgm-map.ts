@@ -99,6 +99,7 @@ export function convertRpgmMap(
     events: {},
     worldSeeds: {},
     props: [],
+    lights: [],
   };
 
   return opts.playerStart === undefined

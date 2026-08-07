@@ -5,6 +5,7 @@ export {
   migrateV2ToV3,
   migrateV3ToV4,
   migrateV4ToV5,
+  migrateV5ToV6,
   parseMapDocument,
   registerMigration,
 } from './migrate.js';
@@ -13,6 +14,7 @@ export type { RampCellInput } from './runtime-bridge.js';
 export { deriveRampCells } from './runtime-bridge.js';
 export type {
   FloorDocument,
+  LightDocument,
   MapDocument,
   MapEventScripts,
   MapFormatErrorCode,

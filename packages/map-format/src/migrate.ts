@@ -153,6 +153,48 @@ export function migrateV4ToV5(doc: Record<string, unknown>): Record<string, unkn
 
 registerMigration(4, migrateV4ToV5);
 
+/**
+ * v5 -> v6 lossless wrap (lighting design, C6 WU-01): a v5 document had no
+ * lights collection and no per-floor lightMap, so migration adds an EMPTY
+ * `lights` array and bumps `version` -- every other field passes through
+ * unmodified via the spread, exactly like `migrateV4ToV5`.
+ *
+ * A document that already carries top-level `lights` or any floor's
+ * `lightMap` while still declaring `version: 5` would migrate "successfully"
+ * with authored lighting content silently discarded -- fail LOUDLY instead,
+ * naming the keys found. Absent keys stay the ordinary v5 case and keep
+ * migrating.
+ */
+export function migrateV5ToV6(doc: Record<string, unknown>): Record<string, unknown> {
+  const carried: string[] = [];
+  if (doc.lights !== undefined) carried.push('lights');
+  const floors = doc.floors;
+  if (Array.isArray(floors)) {
+    for (const floor of floors) {
+      if (
+        typeof floor === 'object' &&
+        floor !== null &&
+        (floor as Record<string, unknown>).lightMap !== undefined
+      ) {
+        carried.push('lightMap');
+        break;
+      }
+    }
+  }
+  if (carried.length > 0) {
+    throw new MapFormatError(
+      'malformed',
+      `Map document declares "version": 5 but already carries v6 content (${carried
+        .map((key) => JSON.stringify(key))
+        .join(', ')}). Set "version" to 6 -- the v5 -> v6 migration would otherwise discard it.`,
+    );
+  }
+
+  return { ...doc, version: 6, lights: [] };
+}
+
+registerMigration(5, migrateV5ToV6);
+
 function readVersion(raw: Record<string, unknown>): number {
   if (typeof raw.version !== 'number' || !Number.isInteger(raw.version)) {
     throw new MapFormatError('malformed', '"version" must be an integer.');

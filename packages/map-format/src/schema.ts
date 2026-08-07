@@ -105,7 +105,7 @@ export interface MapLayers {
 }
 
 export const MAP_FORMAT_MAGIC = 'threemaker-map' as const;
-export const CURRENT_MAP_FORMAT_VERSION = 5;
+export const CURRENT_MAP_FORMAT_VERSION = 6;
 
 /**
  * Default `baseElevation` increment for a newly-added floor (painter "add
@@ -115,12 +115,23 @@ export const CURRENT_MAP_FORMAT_VERSION = 5;
  */
 export const DEFAULT_FLOOR_HEIGHT = 3;
 
-/** One stacked floor: its own stable id (survives reordering/save-reload), vertical offset, and tile/shadow/region layers. */
+/**
+ * One stacked floor: its own stable id (survives reordering/save-reload),
+ * vertical offset, and tile/shadow/region layers.
+ *
+ * Optional `lightMap` is a per-floor scalar (content-addressed sha256 of a
+ * baked lightmap PNG in the asset store), same omission convention as
+ * `spawn?` / `label?`. The collections-required-with-empty-defaults rule
+ * applies to top-level *collections* (`lights`, `props`, …), not to
+ * optional per-floor scalars — omit the key entirely when unauthored.
+ */
 export interface FloorDocument {
   readonly id: string;
   readonly label?: string;
   readonly baseElevation: number;
   readonly layers: MapLayers;
+  /** Content-addressed sha256 of a baked lightmap PNG; omitted when unauthored. */
+  readonly lightMap?: string;
 }
 
 /** One waypoint along a stair-link's authored path; `floor` is the stable `FloorDocument.id` that waypoint sits on. */
@@ -233,6 +244,44 @@ export type PropDocument = {
   readonly animation?: string;
 };
 
+/**
+ * One authored light (schema v6). Exactly one placement form:
+ * - **placed**: `x`, `y`, and `floor` are all present (tile coords in-bounds;
+ *   `floor` is a `FloorDocument.id`). Optional `height` is a finite world-Y
+ *   offset above ground (`>= 0`); when absent the runtime treats it as `1`.
+ * - **attached**: `attach` is present (`'player'` or an `NpcDocument.id` on
+ *   this map) and none of `x` / `y` / `floor` / `height` are set.
+ *
+ * Spot lights: direction / cone parameters are deliberately deferred. A spot
+ * light without them aims straight down with a default cone until a later
+ * format version authors those fields.
+ *
+ * Lights MAY share a tile with anything (no tile-collision checks).
+ */
+export type LightDocument = {
+  readonly id: string;
+  readonly kind: 'point' | 'spot';
+  /** Lowercase `#rrggbb` hex color. */
+  readonly color: string;
+  /** Finite intensity > 0. */
+  readonly intensity: number;
+  /** Finite range > 0 in world units. */
+  readonly range: number;
+  /** Integer tile x; required for the placed form. */
+  readonly x?: number;
+  /** Integer tile y; required for the placed form. */
+  readonly y?: number;
+  /** `FloorDocument.id`; required for the placed form. */
+  readonly floor?: string;
+  /**
+   * Finite world-Y offset above ground (`>= 0`). Placed form only; absent = 1
+   * at runtime. Must not appear on the attached form.
+   */
+  readonly height?: number;
+  /** `'player'` or an `NpcDocument.id`; required for the attached form. */
+  readonly attach?: string;
+};
+
 /** Authored event scripts keyed by event key. Command-level validation is delegated to `@threemaker/core`'s `parseEventScript` (see `validateEvents`). */
 export type MapEventScripts = Readonly<Record<string, readonly EventCommand[]>>;
 
@@ -256,11 +305,13 @@ export interface MapDocument {
   /** Authored player-spawn point (loop-crear-jugar, additive). Omitted entirely when unauthored -- never emitted as an `undefined`-valued key, matching `label`'s optional-field convention. */
   readonly spawn?: MapSpawn;
   /**
-   * Authored narrative content (schema v4) and placed props (schema v5). All
-   * five collections are REQUIRED with empty defaults -- never optional like
-   * `spawn?` -- so every object literal typed as `MapDocument` (this module's
-   * rebuilt shape, the editor's blank document) fails to COMPILE when a field
-   * is not mirrored, instead of dropping it silently.
+   * Authored narrative content (schema v4), placed props (schema v5), and
+   * lights (schema v6). All six collections are REQUIRED with empty defaults
+   * -- never optional like `spawn?` -- so every object literal typed as
+   * `MapDocument` (this module's rebuilt shape, the editor's blank document)
+   * fails to COMPILE when a field is not mirrored, instead of dropping it
+   * silently. Per-floor optional scalars such as `FloorDocument.lightMap?`
+   * are not collections and stay omit-when-absent.
    */
   readonly npcs: readonly NpcDocument[];
   readonly triggers: readonly TriggerDocument[];
@@ -268,6 +319,8 @@ export interface MapDocument {
   readonly worldSeeds: Readonly<Record<string, WorldSeedValue>>;
   /** Authored 3D glTF props (schema v5). Empty for a document with no placed props. */
   readonly props: readonly PropDocument[];
+  /** Authored lights (schema v6). Empty for a document with no lights. */
+  readonly lights: readonly LightDocument[];
 }
 
 export type MapFormatErrorCode = 'bad-magic' | 'unsupported-version' | 'malformed';
@@ -336,6 +389,14 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
   const events = validateEvents(raw.events);
   const worldSeeds = validateWorldSeeds(raw.worldSeeds);
   const props = validateProps(raw.props, floorIds, raw.width as number, raw.height as number);
+  const npcIds = new Set(npcs.map((npc) => npc.id));
+  const lights = validateLights(
+    raw.lights,
+    floorIds,
+    npcIds,
+    raw.width as number,
+    raw.height as number,
+  );
 
   return spawn === undefined
     ? {
@@ -354,6 +415,7 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
         events,
         worldSeeds,
         props,
+        lights,
       }
     : {
         format: MAP_FORMAT_MAGIC,
@@ -372,6 +434,7 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
         events,
         worldSeeds,
         props,
+        lights,
       };
 }
 
@@ -644,6 +707,145 @@ function validateProp(
   };
 }
 
+const LIGHT_KINDS: readonly LightDocument['kind'][] = ['point', 'spot'];
+const LIGHT_COLOR_RE = /^#[0-9a-f]{6}$/;
+
+function validateLights(
+  input: unknown,
+  floorIds: ReadonlySet<string>,
+  npcIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): readonly LightDocument[] {
+  const lights = validateNarrativeArray(input, 'lights').map((entry, index) =>
+    validateLight(entry, index, floorIds, npcIds, mapWidth, mapHeight),
+  );
+
+  // Lights MAY share a tile with anything (including other lights) -- no
+  // duplicate-tile check by design, same as props.
+
+  const firstIndexById = new Map<string, number>();
+  for (const [index, entry] of lights.entries()) {
+    const firstIndex = firstIndexById.get(entry.id);
+    if (firstIndex !== undefined) {
+      throw new MapFormatError(
+        'malformed',
+        `"lights[${index}]" (${JSON.stringify(entry.id)}) reuses the same id as "lights[${firstIndex}]".`,
+      );
+    }
+    firstIndexById.set(entry.id, index);
+  }
+
+  return lights;
+}
+
+function validateLight(
+  input: unknown,
+  index: number,
+  floorIds: ReadonlySet<string>,
+  npcIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): LightDocument {
+  const label = `lights[${index}]`;
+  if (typeof input !== 'object' || input === null) {
+    throw new MapFormatError('malformed', `"${label}" must be an object.`);
+  }
+  const raw = input as Record<string, unknown>;
+  if (typeof raw.id !== 'string' || raw.id.length === 0) {
+    throw new MapFormatError('malformed', `"${label}.id" must be a non-empty string.`);
+  }
+  if (typeof raw.kind !== 'string' || !LIGHT_KINDS.includes(raw.kind as LightDocument['kind'])) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.kind" must be one of ${LIGHT_KINDS.join(', ')}, got ${JSON.stringify(raw.kind)}.`,
+    );
+  }
+  if (typeof raw.color !== 'string' || !LIGHT_COLOR_RE.test(raw.color)) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.color" must be a lowercase #rrggbb hex color, got ${JSON.stringify(raw.color)}.`,
+    );
+  }
+  if (typeof raw.intensity !== 'number' || !Number.isFinite(raw.intensity) || raw.intensity <= 0) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.intensity" must be a finite number > 0, got ${JSON.stringify(raw.intensity)}.`,
+    );
+  }
+  if (typeof raw.range !== 'number' || !Number.isFinite(raw.range) || raw.range <= 0) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}.range" must be a finite number > 0, got ${JSON.stringify(raw.range)}.`,
+    );
+  }
+
+  const hasX = raw.x !== undefined;
+  const hasY = raw.y !== undefined;
+  const hasFloor = raw.floor !== undefined;
+  const hasHeight = raw.height !== undefined;
+  const hasAttach = raw.attach !== undefined;
+  const anyPlacedField = hasX || hasY || hasFloor || hasHeight;
+  const placedComplete = hasX && hasY && hasFloor;
+
+  if (hasAttach && anyPlacedField) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}" (${JSON.stringify(raw.id)}) must be either placed (x, y, floor) or attached (attach), not both.`,
+    );
+  }
+  if (!hasAttach && !placedComplete) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}" (${JSON.stringify(raw.id)}) must be either placed (x, y, floor) or attached (attach).`,
+    );
+  }
+
+  if (hasAttach) {
+    if (typeof raw.attach !== 'string' || (raw.attach !== 'player' && !npcIds.has(raw.attach))) {
+      throw new MapFormatError(
+        'malformed',
+        `"${label}.attach" of ${JSON.stringify(raw.id)} must be "player" or an existing npc id, got ${JSON.stringify(raw.attach)}.`,
+      );
+    }
+    return {
+      id: raw.id,
+      kind: raw.kind as LightDocument['kind'],
+      color: raw.color,
+      intensity: raw.intensity,
+      range: raw.range,
+      attach: raw.attach,
+    };
+  }
+
+  const floor = validateNarrativeFloor(raw.floor, label, raw.id, floorIds);
+  const x = validateNarrativeCoord(raw.x, label, 'x', raw.id, mapWidth);
+  const y = validateNarrativeCoord(raw.y, label, 'y', raw.id, mapHeight);
+
+  let height: number | undefined;
+  if (hasHeight) {
+    if (typeof raw.height !== 'number' || !Number.isFinite(raw.height) || raw.height < 0) {
+      throw new MapFormatError(
+        'malformed',
+        `"${label}.height" must be a finite number >= 0, got ${JSON.stringify(raw.height)}.`,
+      );
+    }
+    height = raw.height;
+  }
+
+  return {
+    id: raw.id,
+    kind: raw.kind as LightDocument['kind'],
+    color: raw.color,
+    intensity: raw.intensity,
+    range: raw.range,
+    x,
+    y,
+    floor,
+    ...(height !== undefined ? { height } : {}),
+  };
+}
+
 function validateTriggers(
   input: unknown,
   floorIds: ReadonlySet<string>,
@@ -793,9 +995,19 @@ function validateFloor(
     );
   }
   const layers = validateLayers(raw.layers, width, height, `floors[${index}].layers`);
-  return raw.label === undefined
-    ? { id: raw.id, baseElevation: raw.baseElevation, layers }
-    : { id: raw.id, label: raw.label, baseElevation: raw.baseElevation, layers };
+  let lightMap: string | undefined;
+  if (raw.lightMap !== undefined) {
+    lightMap = validateSha256Hex(raw.lightMap, `floors[${index}].lightMap`);
+  }
+  // Rebuild without undefined-valued keys so serializeMapDocument never emits
+  // `"lightMap": undefined` (same omit-when-absent convention as `label`/`spawn`).
+  return {
+    id: raw.id,
+    ...(raw.label !== undefined ? { label: raw.label as string } : {}),
+    baseElevation: raw.baseElevation,
+    layers,
+    ...(lightMap !== undefined ? { lightMap } : {}),
+  };
 }
 
 function validateStairLinks(

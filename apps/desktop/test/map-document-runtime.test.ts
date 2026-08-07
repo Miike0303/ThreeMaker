@@ -123,15 +123,17 @@ function buildDevDemoEquivalentDocument(): MapDocument {
       },
     ],
     spawn: { x: 5, y: 5, floor: 'floor-0' },
-    // The four v4 narrative collections + v5 props are REQUIRED (`schema.ts`'s
-    // `MapDocument`), so a literal typed `MapDocument` must mirror them even
-    // when empty. This file is outside `tsc`'s graph (`apps/desktop/tsconfig.json`
-    // uses `include: ["src"]`), so omitting them was invisible to the compiler.
+    // The four v4 narrative collections + v5 props + v6 lights are REQUIRED
+    // (`schema.ts`'s `MapDocument`), so a literal typed `MapDocument` must
+    // mirror them even when empty. This file is outside `tsc`'s graph
+    // (`apps/desktop/tsconfig.json` uses `include: ["src"]`), so omitting them
+    // was invisible to the compiler.
     npcs: [],
     triggers: [],
     events: {},
     worldSeeds: {},
     props: [],
+    lights: [],
   };
 }
 

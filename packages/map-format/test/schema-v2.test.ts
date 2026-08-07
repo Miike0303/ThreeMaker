@@ -51,6 +51,7 @@ function makeV2Fixture(overrides: Record<string, unknown> = {}): Record<string, 
     stairLinks: [],
     rooms: [],
     props: [],
+    lights: [],
     ...overrides,
   };
 }

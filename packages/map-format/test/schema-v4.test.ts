@@ -67,6 +67,7 @@ const BASE: MapDocument = {
   events: {},
   worldSeeds: {},
   props: [],
+  lights: [],
 };
 
 function npc(patch: Partial<NpcDocument>): Partial<MapDocument> {
@@ -117,7 +118,7 @@ describe('map-format v4 closed field list (18 leaves, one case each)', () => {
 });
 
 describe('map-format v3 -> v4 migration (additive, lossless)', () => {
-  /** Strip v4/v5 fields so the input is a true pre-v4 document; overrides apply after. */
+  /** Strip v4/v5/v6 fields so the input is a true pre-v4 document; overrides apply after. */
   function makeV3Raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     const v3: Record<string, unknown> = {
       ...BASE,
@@ -126,6 +127,7 @@ describe('map-format v3 -> v4 migration (additive, lossless)', () => {
     };
     for (const key of NARRATIVE_KEYS) delete v3[key];
     delete v3.props;
+    delete v3.lights;
     return { ...v3, ...overrides };
   }
 
@@ -134,8 +136,8 @@ describe('map-format v3 -> v4 migration (additive, lossless)', () => {
 
     const doc = parseMapDocument(v3);
 
-    // parseMapDocument always walks to CURRENT (v5); the v3->v4 hop still
-    // injects the four narrative defaults, then v4->v5 adds props + tilePixelSize.
+    // parseMapDocument always walks to CURRENT; the v3->v4 hop still injects
+    // the four narrative defaults, then later hops add props/tilePixelSize/lights.
     expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
     // Present, not `undefined`-vs-missing mismatched (spec R1).
     expect(Object.keys(doc)).toEqual(expect.arrayContaining([...NARRATIVE_KEYS]));
@@ -144,11 +146,13 @@ describe('map-format v3 -> v4 migration (additive, lossless)', () => {
     expect(doc.events).toEqual({});
     expect(doc.worldSeeds).toEqual({});
     expect(doc.props).toEqual([]);
+    expect(doc.lights).toEqual([]);
     expect(doc.tileset.tilePixelSize).toBe(48);
 
     const preExisting = { ...doc } as Record<string, unknown>;
     for (const key of NARRATIVE_KEYS) delete preExisting[key];
     delete preExisting.props;
+    delete preExisting.lights;
     const expectedTileset = {
       ...(v3.tileset as Record<string, unknown>),
       tilePixelSize: 48,

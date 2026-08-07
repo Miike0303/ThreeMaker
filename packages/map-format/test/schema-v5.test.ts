@@ -49,11 +49,20 @@ const BASE: MapDocument = {
   events: {},
   worldSeeds: {},
   props: [],
+  lights: [],
 };
 
-/** A valid v4-shaped raw document (no props, no tilePixelSize). */
+/** A valid v4-shaped raw document (no props, no tilePixelSize, no lights). */
 function makeV4Raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  const { props: _p, ...rest } = BASE as MapDocument & { props?: unknown };
+  // Strip v5+ collections so the v4 -> v5 (then v5 -> v6) guards stay quiet.
+  const {
+    props: _p,
+    lights: _l,
+    ...rest
+  } = BASE as MapDocument & {
+    props?: unknown;
+    lights?: unknown;
+  };
   const tileset = { slots: {}, flags: [0], semantics: {} };
   return {
     ...rest,
@@ -87,7 +96,7 @@ describe('map-format v5 props + tilePixelSize preservation', () => {
     };
 
     const doc = parseMapDocument(JSON.parse(serializeMapDocument(input)));
-    expect(doc.version).toBe(5);
+    expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
     expect(doc.props).toEqual([lamp, vase]);
     expect(doc.tileset.tilePixelSize).toBe(96);
   });
@@ -122,7 +131,8 @@ describe('map-format v4 -> v5 migration (additive, lossless)', () => {
     const v4 = makeV4Raw();
     const doc = parseMapDocument(v4);
 
-    expect(doc.version).toBe(5);
+    // parseMapDocument walks the full chain to CURRENT; props land at v5 and remain.
+    expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
     expect(doc.props).toEqual([]);
     expect(doc.tileset.tilePixelSize).toBe(48);
     expect(Object.keys(doc)).toEqual(expect.arrayContaining([...V5_KEYS]));
@@ -165,7 +175,7 @@ describe('map-format v4 -> v5 migration (additive, lossless)', () => {
     expect(() => parseMapDocument(v4)).toThrow('("props", "tilePixelSize")');
   });
 
-  it('walks the full chain from the earliest supported version (v1) to v5', () => {
+  it('walks the full chain from the earliest supported version (v1) through v5 fields', () => {
     const v1 = {
       format: MAP_FORMAT_MAGIC,
       version: 1,
@@ -182,7 +192,7 @@ describe('map-format v4 -> v5 migration (additive, lossless)', () => {
     };
 
     const doc = parseMapDocument(v1);
-    expect(doc.version).toBe(5);
+    expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
     expect(doc.props).toEqual([]);
     expect(doc.tileset.tilePixelSize).toBe(48);
     expect(doc.npcs).toEqual([]);

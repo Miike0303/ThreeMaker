@@ -119,6 +119,8 @@ export function createBlankMapDocument(options: CreateBlankMapDocumentOptions): 
     worldSeeds: {},
     // Schema v5 (depth-props-hd): a blank map authors no props yet.
     props: [],
+    // Schema v6 (lighting): a blank map authors no lights yet.
+    lights: [],
   };
 }
 

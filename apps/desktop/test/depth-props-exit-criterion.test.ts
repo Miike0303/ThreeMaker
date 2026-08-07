@@ -94,6 +94,7 @@ function fixtureMapDocument(): MapDocument {
     events: {},
     worldSeeds: {},
     props: [prop],
+    lights: [],
   };
 }
 

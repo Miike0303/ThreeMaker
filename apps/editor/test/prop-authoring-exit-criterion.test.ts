@@ -17,7 +17,11 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseMapDocument, serializeMapDocument } from '@threemaker/map-format';
+import {
+  CURRENT_MAP_FORMAT_VERSION,
+  parseMapDocument,
+  serializeMapDocument,
+} from '@threemaker/map-format';
 import { describe, expect, it, vi } from 'vitest';
 import {
   type GlbIngestFs,
@@ -116,7 +120,7 @@ describe('exit criterion: editor prop authoring → composed document sha contra
     );
 
     const parsed = parseMapDocument(JSON.parse(serializeMapDocument(composed)));
-    expect(parsed.version).toBe(5);
+    expect(parsed.version).toBe(CURRENT_MAP_FORMAT_VERSION);
     expect(parsed.props).toHaveLength(1);
     expect(parsed.props[0]?.object).toBe(sha256);
     expect(parsed.props[0]).toEqual({

@@ -44,6 +44,7 @@ function raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     events: {},
     worldSeeds: {},
     props: [],
+    lights: [],
     ...overrides,
   };
 }
@@ -289,6 +290,7 @@ const MAXIMAL: MapDocument = {
   },
   worldSeeds: { doorOpen: false, coins: 7, lastNpc: 'elder' },
   props: [],
+  lights: [],
 };
 
 describe('map-format v4 maximal-fixture anti-drop gate (task 1.4)', () => {

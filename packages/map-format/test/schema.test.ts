@@ -40,6 +40,7 @@ function makeValidDocInput(overrides: Record<string, unknown> = {}): Record<stri
     stairLinks: [],
     rooms: [],
     props: [],
+    lights: [],
     ...overrides,
   };
 }

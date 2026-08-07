@@ -54,6 +54,7 @@ function raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     events: {},
     worldSeeds: {},
     props: [],
+    lights: [],
     ...overrides,
   };
 }
