@@ -33,6 +33,7 @@
     "debug.inventory": "Inventario",
     "debug.stats": "Estadísticas",
     "debug.clock": "Reloj",
+    "debug.weather": "Clima",
     "debug.controls.title": "Controles",
     "debug.controls.move": "Mover",
     "debug.controls.camera": "Modo de cámara",

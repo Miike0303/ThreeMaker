@@ -51,6 +51,10 @@ export interface DebugSnapshot {
    * {@link formatClockMinutes} in {@link formatDebugRows}.
    */
   readonly clockMinutes: number;
+  /**
+   * Current weather mode string (C8). Displayed as-is (clear/rain/snow/fog).
+   */
+  readonly weather: string;
 }
 
 export interface DebugRow {
@@ -120,6 +124,10 @@ export function formatDebugRows(snapshot: DebugSnapshot, t: I18n['t']): readonly
     {
       label: t('debug.clock'),
       value: formatClockMinutes(snapshot.clockMinutes),
+    },
+    {
+      label: t('debug.weather'),
+      value: snapshot.weather,
     },
   ];
 }
@@ -275,6 +283,7 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
       inventory: {},
       stats: {},
       clockMinutes: 0,
+      weather: 'clear',
     },
     t,
   )) {

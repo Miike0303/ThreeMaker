@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DialogueOverlay } from '../src/dialogue-ui.js';
 import { createNarrativeRoot } from '../src/narrative-root.js';
 import { CLOCK_MINUTES_KEY } from '../src/session-clock.js';
+import { WEATHER_KEY } from '../src/session-weather.js';
 
 /** A DOM-free stand-in: the root never reads the overlay, it only owns it. */
 function fakeOverlay(): DialogueOverlay {
@@ -73,6 +74,7 @@ describe('createNarrativeRoot', () => {
 
     expect(root.world.snapshot()).toEqual({
       [CLOCK_MINUTES_KEY]: 480,
+      [WEATHER_KEY]: 'clear',
       secret_revealed: false,
       coins: 3,
       lastNpc: 'elder',
@@ -111,6 +113,7 @@ describe('createNarrativeRoot', () => {
 
     expect(root.world.snapshot()).toEqual({
       [CLOCK_MINUTES_KEY]: 480,
+      [WEATHER_KEY]: 'clear',
       carried: 2,
       fresh: 'x',
     });
@@ -158,5 +161,22 @@ describe('createNarrativeRoot', () => {
 
     expect(root.world.get(CLOCK_MINUTES_KEY)).toBe(480);
     expect(typeof root.world.get(CLOCK_MINUTES_KEY)).toBe('number');
+  });
+
+  // C8 WU-01: weather is session-scoped; seed weather.current before any map seeds.
+  it('seeds weather.current to clear at root creation', () => {
+    const root = makeRoot();
+
+    expect(root.world.get(WEATHER_KEY)).toBe('clear');
+    expect(typeof root.world.get(WEATHER_KEY)).toBe('string');
+  });
+
+  it('does not let a map worldSeed override weather.current (seedIfAbsent skip)', () => {
+    const root = makeRoot();
+
+    // Maps set initial weather via enter-trigger setWorldVar, not worldSeeds.
+    root.seedIfAbsent({ [WEATHER_KEY]: 'rain' });
+
+    expect(root.world.get(WEATHER_KEY)).toBe('clear');
   });
 });

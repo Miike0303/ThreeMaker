@@ -25,6 +25,7 @@ import { type WorldClock, WorldState, type WorldValue } from '@threemaker/core';
 import { Inventory, StatBlock } from '@threemaker/gameplay';
 import type { DialogueOverlay } from './dialogue-ui.js';
 import { CLOCK_MINUTES_KEY } from './session-clock.js';
+import { WEATHER_KEY } from './session-weather.js';
 
 export interface NarrativeRootDeps {
   /**
@@ -87,6 +88,12 @@ export function createNarrativeRoot(deps: NarrativeRootDeps): NarrativeRoot {
   // seeds first, and seedIfAbsent skips already-present keys — which does
   // the right thing automatically.
   world.set(CLOCK_MINUTES_KEY, clock.minutes);
+
+  // Seed weather.current as a string type-lock BEFORE any map bundle/story.
+  // Default is clear. Per-map worldSeeds for weather.current are inert:
+  // seedIfAbsent skips this already-present key — maps set initial weather
+  // via an enter-trigger event `setWorldVar` instead (not worldSeeds).
+  world.set(WEATHER_KEY, 'clear');
 
   return {
     world,

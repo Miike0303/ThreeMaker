@@ -123,6 +123,13 @@ import {
 } from './room-state.js';
 import { CLOCK_MINUTES_KEY, resyncClockFromWorldValue, tickSessionClock } from './session-clock.js';
 import {
+  composeAmbientIntensity,
+  parseWeatherMode,
+  WEATHER_KEY,
+  type WeatherMode,
+  weatherDimFactor,
+} from './session-weather.js';
+import {
   baseSceneLightSetup,
   buildSheetLightingOptions,
   dayNightAmbientFactor,
@@ -812,17 +819,37 @@ async function renderFixtureMap(
     }
   }
   /**
+   * Session weather mode (C8). Updated by `applyWeather` on world signal and
+   * after save load. Read by `applyDayNightAmbient` for the weather dim factor.
+   */
+  let currentWeather: WeatherMode = 'clear';
+
+  /**
+   * WU-02 seam: particle/fog visual layer will fill this. No-op in WU-01 so
+   * weather state and ambient dim ship without TSL/scene objects.
+   */
+  function weatherVisualHook(_mode: WeatherMode): void {
+    /* WU-02: rain/snow/fog particle + fog visual layer */
+  }
+
+  /**
    * Multiplies the CURRENT base setup's ambient (and non-zero directional)
-   * intensity by the day/night factor. Does NOT touch `sessionLitTiles` or
-   * materials. Known ceiling: the curve is global — interiors with authored
-   * lamps also dim at night; per-map opt-out is deferred.
+   * intensity by day/night × weather dim factors. Does NOT touch
+   * `sessionLitTiles` or materials. Known ceiling: the curve is global —
+   * interiors with authored lamps also dim at night; per-map opt-out is deferred.
+   * Weather factor reads the session `currentWeather` variable.
    */
   function applyDayNightAmbient(minutes: number): void {
-    const factor = dayNightAmbientFactor(minutes);
+    const dayNight = dayNightAmbientFactor(minutes);
+    const weather = weatherDimFactor(currentWeather);
     const setup = baseSceneLightSetup(sessionLitTiles);
-    ambientLight.intensity = setup.ambient.intensity * factor;
+    ambientLight.intensity = composeAmbientIntensity(setup.ambient.intensity, dayNight, weather);
     if (setup.directional) {
-      directionalLight.intensity = setup.directional.intensity * factor;
+      directionalLight.intensity = composeAmbientIntensity(
+        setup.directional.intensity,
+        dayNight,
+        weather,
+      );
     }
   }
   applyBaseSceneLights(sessionLitTiles);
@@ -1176,7 +1203,26 @@ async function renderFixtureMap(
     clock: sessionClock,
     ...(sessionStores ? { inventory: sessionStores.inventory, stats: sessionStores.stats } : {}),
   });
+
+  /**
+   * Apply a weather mode: store session state, recompose ambient with the
+   * weather dim factor, and invoke the visual hook (no-op until WU-02).
+   */
+  function applyWeather(mode: WeatherMode): void {
+    currentWeather = mode;
+    applyDayNightAmbient(narrativeRoot.clock.minutes);
+    weatherVisualHook(mode);
+  }
+
+  // Weather changes need no dedicated command: authored events use setWorldVar
+  // on weather.current; Ink uses world_set. This subscription is the live glue.
+  narrativeRoot.world.signals.on('changed', ({ key, value }) => {
+    if (key !== WEATHER_KEY) return;
+    applyWeather(parseWeatherMode(value));
+  });
+
   // Boot: dim/brighten immediately for the starting time of day (default 08:00).
+  // Weather defaults to clear (root seed); load re-apply path re-syncs both.
   applyDayNightAmbient(narrativeRoot.clock.minutes);
   const walkAnimation = new WalkAnimation();
 
@@ -1376,6 +1422,7 @@ async function renderFixtureMap(
       inventory: narrativeRoot.inventory.snapshot(),
       stats: narrativeRoot.stats.snapshot(),
       clockMinutes: narrativeRoot.clock.minutes,
+      weather: currentWeather,
     };
   }
   debugPanel.update(buildDebugSnapshot());
@@ -1486,6 +1533,9 @@ async function renderFixtureMap(
       },
       get clockMinutes() {
         return narrativeRoot.clock.minutes;
+      },
+      get weather() {
+        return currentWeather;
       },
     };
   }
@@ -2457,7 +2507,8 @@ async function renderFixtureMap(
       // documented consequence. Invalid/absent clock.minutes (old saves) leaves
       // the live clock as-is; always re-apply ambient for the current minute.
       resyncClockFromWorldValue(narrativeRoot.clock, narrativeRoot.world.get(CLOCK_MINUTES_KEY));
-      applyDayNightAmbient(narrativeRoot.clock.minutes);
+      // Same for weather: replaceAll emits nothing, so re-apply from world.
+      applyWeather(parseWeatherMode(narrativeRoot.world.get(WEATHER_KEY)));
       session.floorRouter.currentFloor = snap.floor;
       session.mover.teleport(snap.x, snap.y, snap.facing);
       session.applyFloorWindow(snap.x, snap.y);
@@ -2517,7 +2568,8 @@ async function renderFixtureMap(
     // replaceAll (load) emits no world signal — explicit clock re-sync is the
     // documented consequence. Hop re-applies base lights + day-night after load.
     resyncClockFromWorldValue(narrativeRoot.clock, narrativeRoot.world.get(CLOCK_MINUTES_KEY));
-    applyDayNightAmbient(narrativeRoot.clock.minutes);
+    // Same for weather: replaceAll emits nothing, so re-apply from world.
+    applyWeather(parseWeatherMode(narrativeRoot.world.get(WEATHER_KEY)));
     await hopToManifestFile(catalog.mapFile, {
       x: snap.x,
       y: snap.y,

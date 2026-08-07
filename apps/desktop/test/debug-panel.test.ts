@@ -33,6 +33,7 @@ const LOCALES = {
       'debug.inventory': 'Inventory',
       'debug.stats': 'Stats',
       'debug.clock': 'Clock',
+      'debug.weather': 'Weather',
     },
   },
 };
@@ -61,6 +62,7 @@ const SNAPSHOT = {
   inventory: { potion: 2, key: 1 },
   stats: { hp: 10, mp: 3 },
   clockMinutes: 480,
+  weather: 'clear',
 };
 
 describe('formatDebugRows', () => {
@@ -91,6 +93,7 @@ describe('formatDebugRows', () => {
       { label: 'Inventory', value: '{key:1,potion:2}' },
       { label: 'Stats', value: '{hp:10,mp:3}' },
       { label: 'Clock', value: '08:00' },
+      { label: 'Weather', value: 'clear' },
     ]);
   });
 

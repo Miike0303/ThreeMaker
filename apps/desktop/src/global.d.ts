@@ -116,6 +116,8 @@ declare global {
       readonly dialogueState: string;
       /** Simulated clock minutes-of-day in `[0, 1440)` (C7 session clock). */
       readonly clockMinutes: number;
+      /** Current weather mode (`clear` | `rain` | `snow` | `fog`) (C8 session weather). */
+      readonly weather: string;
     };
   }
 }
