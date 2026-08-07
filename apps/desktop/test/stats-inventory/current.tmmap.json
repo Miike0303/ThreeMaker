@@ -1,0 +1,142 @@
+{
+  "format": "threemaker-map",
+  "version": 4,
+  "id": "stats-inventory-exit-fixture",
+  "name": "Stats Inventory Exit Criterion Fixture",
+  "width": 6,
+  "height": 6,
+  "tileset": { "slots": {}, "flags": [], "semantics": {} },
+  "floors": [
+    {
+      "id": "floor-0",
+      "baseElevation": 0,
+      "layers": {
+        "tiles": [
+          [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0
+          ],
+          [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0
+          ],
+          [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0
+          ],
+          [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0
+          ]
+        ],
+        "shadows": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0
+        ],
+        "regions": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0
+        ]
+      }
+    }
+  ],
+  "stairLinks": [],
+  "rooms": [],
+  "spawn": { "x": 2, "y": 2, "floor": "floor-0" },
+  "npcs": [
+    {
+      "id": "gatekeeper",
+      "x": 4,
+      "y": 4,
+      "floor": "floor-0",
+      "facing": "left",
+      "sprite": {
+        "object": "3f1c9a7b5d2e48c06a1b8f4d9e7c2350a6b4d8e1f39c57024b6d8a0e2c4f6183",
+        "characterIndex": 0
+      },
+      "onInteract": "gatekeeper_talk"
+    }
+  ],
+  "triggers": [
+    {
+      "id": "brass_chest",
+      "x": 1,
+      "y": 1,
+      "floor": "floor-0",
+      "on": "interact",
+      "event": "chest_open"
+    },
+    {
+      "id": "wound_shrine",
+      "x": 3,
+      "y": 1,
+      "floor": "floor-0",
+      "on": "interact",
+      "event": "wound_self"
+    },
+    {
+      "id": "climb_rope",
+      "x": 5,
+      "y": 1,
+      "floor": "floor-0",
+      "on": "interact",
+      "event": "vitality_check"
+    }
+  ],
+  "events": {
+    "chest_open": [
+      {
+        "type": "conditional",
+        "if": { "key": "chest_opened", "op": "eq", "value": false },
+        "then": [
+          { "type": "giveItem", "itemId": "brass_key", "amount": 1 },
+          { "type": "setWorldVar", "key": "chest_opened", "value": true },
+          {
+            "type": "showDialogue",
+            "source": { "kind": "text", "lines": ["You found a brass key."] }
+          }
+        ],
+        "else": [
+          {
+            "type": "showDialogue",
+            "source": { "kind": "text", "lines": ["The chest is empty."] }
+          }
+        ]
+      }
+    ],
+    "gatekeeper_talk": [
+      {
+        "type": "showDialogue",
+        "source": { "kind": "ink", "storyId": "gatekeeper", "knot": "start" }
+      }
+    ],
+    "wound_self": [
+      { "type": "modifyStat", "statId": "hp", "delta": -6 },
+      {
+        "type": "showDialogue",
+        "source": { "kind": "text", "lines": ["A sharp pain. Your wounds deepen."] }
+      }
+    ],
+    "vitality_check": [
+      {
+        "type": "conditional",
+        "if": { "key": "hp", "op": "gte", "value": 8, "source": "stat" },
+        "then": [
+          { "type": "setWorldVar", "key": "fit_to_climb", "value": true },
+          {
+            "type": "showDialogue",
+            "source": { "kind": "text", "lines": ["You feel fit to climb the rope."] }
+          }
+        ],
+        "else": [
+          { "type": "setWorldVar", "key": "fit_to_climb", "value": false },
+          {
+            "type": "showDialogue",
+            "source": { "kind": "text", "lines": ["You are too weak to climb the rope."] }
+          }
+        ]
+      }
+    ]
+  },
+  "worldSeeds": { "chest_opened": false }
+}

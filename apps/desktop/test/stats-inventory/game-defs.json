@@ -1,0 +1,6 @@
+{
+  "magic": "threemaker.game-defs",
+  "version": 1,
+  "items": [{ "id": "brass_key", "name": "Brass Key" }],
+  "stats": [{ "id": "hp", "name": "Hit Points", "base": 10, "min": 0, "max": 20 }]
+}
