@@ -40,11 +40,20 @@
  * overwriting the single `spawn` value (`setSpawn`/`clearSpawn`) IS the
  * undo, mirroring `activeRoomId`'s plain caller-driven state, not
  * `roomCommandStack`'s push/pop history.
+ *
+ * Prop authoring (C5 WU-04 depth-props-hd): `PainterState.props` mirrors
+ * `MapDocument.props` exactly (flat, top-level, each entry referencing its
+ * floor by stable id -- same shape as `rooms`). Place/delete push a
+ * `PropCommand` onto the active floor's OWN `propCommandStack` (a third
+ * per-floor undo stack alongside tiles + rooms). Scale/rotation/animation
+ * stay JSON-side this WU -- the store only authors the required fields
+ * (id/x/y/floor/object) with schema defaults for the rest.
  */
 
 import type {
   CommandStackState,
   MapSpawn,
+  PropDocument,
   RoomDocument,
   RoomRect,
   SemanticClass,
@@ -91,7 +100,27 @@ export interface RoomCommandStackState {
 
 export const EMPTY_ROOM_COMMAND_STACK: RoomCommandStackState = { undoStack: [], redoStack: [] };
 
-/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"), and (Slice 5a) its own independent room-command stack (`roomCommandStack`) -- a floor's room edits undo/redo separately from its tile edits, never crossing into another floor's history. Structurally parallel to `map-compose.ts`'s `PainterFloorSource` (`{id, label?, baseElevation, layers}`, no command stack) and `PainterFloorInit` below (same fields as this type, minus `commandStack`/`roomCommandStack`) -- three separate types by design, not accidental divergence: each belongs to its own layer (composed-doc source, store-init input, live store state). */
+/**
+ * One prop mutation's before/after `PropDocument` (C5 WU-04 prop-undo model,
+ * local to this module -- same shape as `RoomCommand`). `before`/`after`
+ * absent means "the prop did not exist" (place: `before` absent; remove:
+ * `after` absent).
+ */
+export interface PropCommand {
+  readonly floor: string;
+  readonly id: string;
+  readonly before?: PropDocument;
+  readonly after?: PropDocument;
+}
+
+export interface PropCommandStackState {
+  readonly undoStack: readonly PropCommand[];
+  readonly redoStack: readonly PropCommand[];
+}
+
+export const EMPTY_PROP_COMMAND_STACK: PropCommandStackState = { undoStack: [], redoStack: [] };
+
+/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"), and (Slice 5a) its own independent room-command stack (`roomCommandStack`) -- a floor's room edits undo/redo separately from its tile edits, never crossing into another floor's history -- plus (C5 WU-04) its own prop-command stack. Structurally parallel to `map-compose.ts`'s `PainterFloorSource` (`{id, label?, baseElevation, layers}`, no command stack) and `PainterFloorInit` below (same fields as this type, minus the session-local stacks) -- separate types by design, not accidental divergence: each belongs to its own layer (composed-doc source, store-init input, live store state). */
 export interface PainterFloorState {
   readonly id: string;
   readonly label?: string;
@@ -99,6 +128,7 @@ export interface PainterFloorState {
   readonly layers: TileLayerSet;
   readonly commandStack: CommandStackState;
   readonly roomCommandStack: RoomCommandStackState;
+  readonly propCommandStack: PropCommandStackState;
 }
 
 /** A floor's initial layers, as sourced from a loaded/composed `MapDocument` (see `map-compose.ts`'s `painterFloorsFromDocument`, which returns this exact shape as `PainterFloorSource`) or freshly created for a blank floor -- command stacks are always session-local, never persisted. */
@@ -146,6 +176,15 @@ export interface PainterState {
   readonly pendingStairEntry?: { readonly floor: string; readonly x: number; readonly y: number };
   /** The single authored player-spawn point (Slice 5a), mirroring `MapDocument.spawn` exactly. `undefined` means unauthored (runtime falls back to `findSpawnTile`). */
   readonly spawn?: MapSpawn;
+  /** Every authored prop across every floor (C5 WU-04), mirroring `MapDocument.props` exactly -- flat, top-level, each entry referencing its floor by stable id. */
+  readonly props: readonly PropDocument[];
+  /**
+   * Content-addressed sha256 of the currently selected ingested `.glb` object
+   * used by the 'prop' tool. `undefined` means no glb is selected -- a prop
+   * click is then a no-op (see `pointerDown`). Caller-set via
+   * `setActivePropObject` after `ingestGlbBytes` succeeds.
+   */
+  readonly activePropObject?: string;
 }
 
 export interface CreatePainterStateOptions {
@@ -163,9 +202,13 @@ export interface CreatePainterStateOptions {
   readonly stairLinks?: readonly StairLinkDocument[];
   /** Initial spawn (map load path), matching `MapDocument.spawn`; defaults to unauthored. */
   readonly spawn?: MapSpawn;
+  /** Initial props (map load path), matching `MapDocument.props`; defaults to none authored. */
+  readonly props?: readonly PropDocument[];
+  /** Initial selected prop object sha (session-only; never persisted). */
+  readonly activePropObject?: string;
 }
 
-/** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. Every floor gets a fresh, empty command stack AND room-command stack: undo/redo history is session-local, never carried over from a saved document. */
+/** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. Every floor gets a fresh, empty command stack, room-command stack, AND prop-command stack: undo/redo history is session-local, never carried over from a saved document. */
 export function createPainterState(options: CreatePainterStateOptions): PainterState {
   const {
     floors,
@@ -177,12 +220,15 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     rooms = [],
     stairLinks = [],
     spawn,
+    props = [],
+    activePropObject,
   } = options;
   const base: PainterState = {
     floors: floors.map((floor) => ({
       ...floor,
       commandStack: EMPTY_COMMAND_STACK,
       roomCommandStack: EMPTY_ROOM_COMMAND_STACK,
+      propCommandStack: EMPTY_PROP_COMMAND_STACK,
     })),
     activeFloor,
     width,
@@ -196,8 +242,10 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     semantics,
     rooms,
     stairLinks,
+    props,
   };
-  return spawn === undefined ? base : { ...base, spawn };
+  const withSpawn = spawn === undefined ? base : { ...base, spawn };
+  return activePropObject === undefined ? withSpawn : { ...withSpawn, activePropObject };
 }
 
 /** The floor currently being edited/rendered. Throws if `activeFloor` is out of range -- an internal-invariant violation, never user-reachable (every mutator below keeps `activeFloor` in range). */
@@ -213,7 +261,9 @@ export function activeFloorState(state: PainterState): PainterFloorState {
 
 function replaceActiveFloor(
   state: PainterState,
-  patch: Partial<Pick<PainterFloorState, 'layers' | 'commandStack' | 'roomCommandStack'>>,
+  patch: Partial<
+    Pick<PainterFloorState, 'layers' | 'commandStack' | 'roomCommandStack' | 'propCommandStack'>
+  >,
 ): PainterState {
   const floors = state.floors.map((floor, index) =>
     index === state.activeFloor ? { ...floor, ...patch } : floor,
@@ -249,6 +299,7 @@ export function addFloor(state: PainterState, options: AddFloorOptions): Painter
     layers: createEmptyLayers(state.width, state.height),
     commandStack: EMPTY_COMMAND_STACK,
     roomCommandStack: EMPTY_ROOM_COMMAND_STACK,
+    propCommandStack: EMPTY_PROP_COMMAND_STACK,
   };
   const floors = [...state.floors, floor];
   return { ...state, floors, activeFloor: floors.length - 1 };
@@ -343,9 +394,9 @@ export interface PointerDownOptions {
 
 /**
  * `pointerdown`: eyedropper picks immediately (no stroke) from the active
- * floor; 'spawn-point' and 'stair-link' (Slice 5b) also act immediately with
- * no stroke, same short-circuit shape as eyedropper; every other tool begins
- * a stroke.
+ * floor; 'spawn-point', 'stair-link' (Slice 5b), and 'prop' (C5 WU-04) also
+ * act immediately with no stroke, same short-circuit shape as eyedropper;
+ * every other tool begins a stroke.
  */
 export function pointerDown(
   state: PainterState,
@@ -364,6 +415,11 @@ export function pointerDown(
   }
   if (state.tool === 'stair-link') {
     return { state: handleStairLinkClick(state, point, options.newStairLinkId) };
+  }
+  if (state.tool === 'prop') {
+    // No selected .glb → no-op (panel surfaces the "select a .glb first" hint).
+    if (!state.activePropObject) return { state };
+    return { state: placeProp(state, { x: point.x, y: point.y }) };
   }
   const stroke = beginStroke(state.stroke, state.tool, state.activeLayer, point);
   return { state: { ...state, stroke } };
@@ -767,6 +823,126 @@ export function clearSpawn(state: PainterState): PainterState {
   return rest;
 }
 
+// --- Prop authoring (C5 WU-04) ------------------------------------------
+
+/** First free `prop-N` id across the whole document (schema ids are store-global, not per-floor). */
+export function nextPropId(props: readonly PropDocument[]): string {
+  const used = new Set(props.map((prop) => prop.id));
+  let n = 1;
+  while (used.has(`prop-${n}`)) n += 1;
+  return `prop-${n}`;
+}
+
+/**
+ * Sets (or, with `undefined`, clears) the content-addressed sha of the
+ * currently selected ingested `.glb`. Ignored mid-stroke, same as `setTool`.
+ * `exactOptionalPropertyTypes` requires actually OMITTING the key to clear
+ * it, hence the destructure-to-omit branch.
+ */
+export function setActivePropObject(state: PainterState, object: string | undefined): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (object !== undefined) return { ...state, activePropObject: object };
+  if (state.activePropObject === undefined) return state;
+  const { activePropObject: _activePropObject, ...rest } = state;
+  return rest;
+}
+
+/** Replaces (or removes, if `next` is `undefined`) the prop identified by `id` in `props`, preserving document order; a brand-new id is appended. */
+function upsertProp(
+  props: readonly PropDocument[],
+  id: string,
+  next: PropDocument | undefined,
+): readonly PropDocument[] {
+  const index = props.findIndex((prop) => prop.id === id);
+  if (next === undefined) {
+    return index === -1 ? props : props.filter((_, i) => i !== index);
+  }
+  if (index === -1) return [...props, next];
+  return props.map((prop, i) => (i === index ? next : prop));
+}
+
+/** Commits a prop mutation onto the ACTIVE floor's OWN `propCommandStack` (clears that floor's redo stack, caps at `COMMAND_STACK_CAP` -- same shape as `applyRoomMutation`). */
+function applyPropMutation(
+  state: PainterState,
+  props: readonly PropDocument[],
+  command: PropCommand,
+): PainterState {
+  const floor = activeFloorState(state);
+  const undoStack = [...floor.propCommandStack.undoStack, command].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, { propCommandStack: { undoStack, redoStack: [] } });
+  return { ...withStack, props };
+}
+
+/**
+ * Places a prop on the ACTIVE floor at `point` using `activePropObject` as
+ * the content-addressed glb sha and the next free `prop-N` id. Defaults only
+ * (no scale/rotation/animation) -- those stay JSON-side this WU. Ignored
+ * mid-stroke. A safe no-op when no glb is selected.
+ */
+export function placeProp(
+  state: PainterState,
+  point: { readonly x: number; readonly y: number },
+): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (!state.activePropObject) return state;
+
+  const floor = activeFloorState(state);
+  const id = nextPropId(state.props);
+  // scale/rotationY/animation omitted deliberately -- authoring those stays
+  // JSON-side for now (C5 WU-04 minimal place tool).
+  const prop: PropDocument = {
+    id,
+    x: point.x,
+    y: point.y,
+    floor: floor.id,
+    object: state.activePropObject,
+  };
+  const props = upsertProp(state.props, id, prop);
+  return applyPropMutation(state, props, { floor: floor.id, id, after: prop });
+}
+
+/** Removes the prop `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no such prop exists on the active floor. */
+export function removeProp(state: PainterState, id: string): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const floor = activeFloorState(state);
+  const existing = state.props.find((prop) => prop.floor === floor.id && prop.id === id);
+  if (!existing) return state;
+
+  const props = upsertProp(state.props, id, undefined);
+  return applyPropMutation(state, props, { floor: floor.id, id, before: existing });
+}
+
+export interface PropCommandStepOutcome {
+  readonly state: PainterState;
+  readonly command?: PropCommand;
+}
+
+/** Undoes the most recent prop command on the ACTIVE floor's OWN `propCommandStack`, if any -- never a different floor's (same guarantee as `undoRoom`). */
+export function undoProp(state: PainterState): PropCommandStepOutcome {
+  const floor = activeFloorState(state);
+  const last = floor.propCommandStack.undoStack[floor.propCommandStack.undoStack.length - 1];
+  if (!last) return { state };
+
+  const props = upsertProp(state.props, last.id, last.before);
+  const undoStack = floor.propCommandStack.undoStack.slice(0, -1);
+  const redoStack = [...floor.propCommandStack.redoStack, last].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, { propCommandStack: { undoStack, redoStack } });
+  return { state: { ...withStack, props }, command: last };
+}
+
+/** Re-applies the most recently undone prop command on the ACTIVE floor's OWN `propCommandStack`, if any. */
+export function redoProp(state: PainterState): PropCommandStepOutcome {
+  const floor = activeFloorState(state);
+  const last = floor.propCommandStack.redoStack[floor.propCommandStack.redoStack.length - 1];
+  if (!last) return { state };
+
+  const props = upsertProp(state.props, last.id, last.after);
+  const redoStack = floor.propCommandStack.redoStack.slice(0, -1);
+  const undoStack = [...floor.propCommandStack.undoStack, last].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, { propCommandStack: { undoStack, redoStack } });
+  return { state: { ...withStack, props }, command: last };
+}
+
 // --- Stroke -> touched-cells resolution (per tool) ----------------------
 
 function computeStrokeTouchedCells(
@@ -795,8 +971,10 @@ function computeStrokeTouchedCells(
       return [];
     case 'stair-link':
     case 'spawn-point':
-      // Never reached: `pointerDown` short-circuits both tools before a
-      // stroke is ever begun (Slice 5b), same as 'eyedropper' above.
+    case 'prop':
+      // Never reached: `pointerDown` short-circuits these tools before a
+      // stroke is ever begun (Slice 5b / C5 WU-04), same as 'eyedropper'
+      // above.
       return [];
     case 'room-box':
       // Never reached: `pointerUp` short-circuits a 'room-box' stroke into

@@ -18,6 +18,7 @@ import type {
   MapDocument,
   MapLayers,
   MapSpawn,
+  PropDocument,
   RoomDocument,
   SlotComposition,
   StairLinkDocument,
@@ -256,6 +257,7 @@ export function composeDocumentFromPainterFloors(
   rooms: readonly RoomDocument[] = doc.rooms,
   stairLinks: readonly StairLinkDocument[] = doc.stairLinks,
   spawn: MapSpawn | undefined = doc.spawn,
+  props: readonly PropDocument[] = doc.props,
 ): MapDocument {
   const originalById = new Map(doc.floors.map((floor) => [floor.id, floor] as const));
   const blankLayer = new Array(doc.width * doc.height).fill(0);
@@ -285,6 +287,9 @@ export function composeDocumentFromPainterFloors(
   // reference and ride the spread untouched.
   const composedNpcs = doc.npcs.filter((npc) => floorIds.has(npc.floor));
   const composedTriggers = doc.triggers.filter((trigger) => floorIds.has(trigger.floor));
+  // Schema v5 (depth-props-hd C5 WU-04): props join the same floor-scoped
+  // filter so a deleted floor cannot leave a dangling prop.floor behind.
+  const composedProps = props.filter((prop) => floorIds.has(prop.floor));
 
   const { spawn: _originalSpawn, ...docWithoutSpawn } = doc;
   const base = {
@@ -294,6 +299,7 @@ export function composeDocumentFromPainterFloors(
     rooms: composedRooms,
     npcs: composedNpcs,
     triggers: composedTriggers,
+    props: composedProps,
   };
   return composedSpawn === undefined ? base : { ...base, spawn: composedSpawn };
 }

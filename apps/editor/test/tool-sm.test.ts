@@ -141,3 +141,16 @@ describe('ToolSM: stair-link + spawn-point tools (Slice 5b -- loop-crear-jugar)'
     expect(endStroke(spawnStroking)).toEqual({ status: 'idle' });
   });
 });
+
+describe('ToolSM: prop tool (C5 WU-04 -- depth-props-hd)', () => {
+  it('resolves "O" (case-insensitive) to prop', () => {
+    expect(resolveToolShortcut('o')).toBe('prop');
+    expect(resolveToolShortcut('O')).toBe('prop');
+  });
+
+  it('the generic stroking transitions still work structurally for prop (never actually driven this way -- painter-store.ts short-circuits prop in pointerDown, same as spawn-point)', () => {
+    const propStroking = beginStroke(TOOL_SM_IDLE, 'prop', 0, { x: 1, y: 2 });
+    expect(propStroking).toMatchObject({ status: 'stroking', tool: 'prop' });
+    expect(endStroke(propStroking)).toEqual({ status: 'idle' });
+  });
+});

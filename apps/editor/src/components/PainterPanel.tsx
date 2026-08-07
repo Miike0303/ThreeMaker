@@ -1,13 +1,21 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import type { MapDocument, SemanticClass } from '@threemaker/map-format';
 import type { SheetPixelSize } from '@threemaker/renderer';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { type GameRow, getTileset, listGames, objectPreviewUrl } from '../catalog-client.js';
+import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type GameRow,
+  getTileset,
+  isTauriAvailable,
+  listGames,
+  objectPreviewUrl,
+} from '../catalog-client.js';
 import { formatTemplate } from '../format-template.js';
+import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, seedDemoTiles } from '../map-compose.js';
 import type { PainterState } from '../painter-store.js';
 import type {
+  PropOverlayItem,
   RampGlyphOverlayItem,
   RoomOverlayItem,
   SpawnOverlayItem,
@@ -31,7 +39,33 @@ const TOOLS: readonly { readonly id: ToolId; readonly shortcut: string }[] = [
   { id: 'room-box', shortcut: 'R' },
   { id: 'stair-link', shortcut: 'S' },
   { id: 'spawn-point', shortcut: 'P' },
+  { id: 'prop', shortcut: 'O' },
 ];
+
+/** Short form for content-addressed object display (first 8 hex chars). */
+function shortSha(sha: string): string {
+  return sha.slice(0, 8);
+}
+
+/**
+ * Builds injectable `ingestGlbBytes` deps against the real Tauri asset-store
+ * path. Paths are absolute (from `catalog_asset_store_dir`); capability grants
+ * cover `$HOME/.threemaker/asset-store/objects/**` for write/mkdir/rename/exists.
+ */
+async function buildTauriGlbIngestDeps(): Promise<{ storeRoot: string; fs: GlbIngestFs }> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  const { exists, mkdir, rename, writeFile } = await import('@tauri-apps/plugin-fs');
+  const storeRoot = await invoke<string>('catalog_asset_store_dir');
+  return {
+    storeRoot,
+    fs: {
+      exists: (path) => exists(path),
+      mkdir: (path, options) => mkdir(path, options),
+      writeFile: (path, data) => writeFile(path, data),
+      rename: (from, to) => rename(from, to),
+    },
+  };
+}
 
 const SEMANTIC_CLASSES: readonly SemanticClass[] = [
   'none',
@@ -125,6 +159,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [roomOverlay, setRoomOverlay] = useState<readonly RoomOverlayItem[]>([]);
   const [stairOverlay, setStairOverlay] = useState<readonly StairOverlayItem[]>([]);
   const [spawnOverlay, setSpawnOverlay] = useState<SpawnOverlayItem | undefined>(undefined);
+  const [propOverlay, setPropOverlay] = useState<readonly PropOverlayItem[]>([]);
+  const glbInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     listGames()
@@ -142,6 +178,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       onRoomOverlayChange: setRoomOverlay,
       onStairOverlayChange: setStairOverlay,
       onSpawnOverlayChange: setSpawnOverlay,
+      onPropOverlayChange: setPropOverlay,
     });
     viewportRef.current = viewport;
     return () => {
@@ -149,6 +186,35 @@ export function PainterPanel({ t }: PainterPanelProps) {
       viewportRef.current = null;
     };
   }, []);
+
+  const handleGlbFile = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      // Allow re-selecting the same file later.
+      event.target.value = '';
+      if (!file) return;
+      setStatusMessage(null);
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (!isTauriAvailable()) {
+          setStatusMessage(t('painter.props.ingestNeedsTauri'));
+          return;
+        }
+        const deps = await buildTauriGlbIngestDeps();
+        const result = await ingestGlbBytes(bytes, deps);
+        viewportRef.current?.setActivePropObject(result.sha256);
+        setStatusMessage(
+          formatTemplate(t('painter.props.ingestSuccess'), { sha: shortSha(result.sha256) }),
+        );
+      } catch (err) {
+        console.error('Failed to ingest .glb:', err);
+        const message =
+          err instanceof GlbIngestError ? err.message : t('painter.props.ingestFailed');
+        setStatusMessage(message);
+      }
+    },
+    [t],
+  );
 
   const handleCreateMap = useCallback(async () => {
     if (tilesetAId === undefined || tilesetBId === undefined) return;
@@ -468,6 +534,45 @@ export function PainterPanel({ t }: PainterPanelProps) {
         </div>
       )}
 
+      {mapReady && painterState && (
+        <div className="painter-props">
+          {/* Scale/rotation/animation stay JSON-side this WU (C5 WU-04 minimal). */}
+          <span className="painter-props-heading">{t('painter.props')}</span>
+          <label>
+            {t('painter.props.pickGlb')}
+            <input ref={glbInputRef} type="file" accept=".glb" onChange={handleGlbFile} />
+          </label>
+          <span>
+            {painterState.activePropObject
+              ? formatTemplate(t('painter.props.currentObject'), {
+                  sha: shortSha(painterState.activePropObject),
+                })
+              : t('painter.props.noObject')}
+          </span>
+          {!painterState.activePropObject && painterState.tool === 'prop' && (
+            <p className="painter-props-hint">{t('painter.props.selectHint')}</p>
+          )}
+          <ul className="painter-prop-list">
+            {painterState.props
+              .filter((prop) => prop.floor === painterState.floors[painterState.activeFloor]?.id)
+              .map((prop) => (
+                <li key={prop.id}>
+                  <span>
+                    {formatTemplate(t('painter.props.summary'), {
+                      id: prop.id,
+                      x: prop.x,
+                      y: prop.y,
+                    })}
+                  </span>
+                  <button type="button" onClick={() => viewportRef.current?.removeProp(prop.id)}>
+                    {t('painter.props.remove')}
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+
       {mapReady && painterState && paletteSlots.length > 0 && (
         <div className="painter-palettes">
           {paletteSlots.map((paletteSlot) => (
@@ -601,6 +706,29 @@ export function PainterPanel({ t }: PainterPanelProps) {
             >
               ★
             </span>
+          </div>
+        )}
+        {propOverlay.length > 0 && (
+          <div
+            className="painter-prop-overlay"
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+          >
+            {propOverlay.map((point) => (
+              <span
+                key={point.id}
+                className="painter-prop-marker"
+                role="img"
+                style={{
+                  position: 'absolute',
+                  left: `${point.xFrac * 100}%`,
+                  top: `${point.yFrac * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+                aria-label={formatTemplate(t('painter.props.overlayLabel'), { id: point.id })}
+              >
+                ◆
+              </span>
+            ))}
           </div>
         )}
       </div>

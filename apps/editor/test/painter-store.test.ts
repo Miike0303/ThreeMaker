@@ -8,18 +8,23 @@ import {
   addStairLink,
   clearSpawn,
   createPainterState,
+  nextPropId,
+  placeProp,
   pointerDown,
   pointerMove,
   pointerUp,
   redo,
+  redoProp,
   redoRoom,
   removeFloor,
+  removeProp,
   removeRoom,
   removeRoomRect,
   removeStairLink,
   renameRoom,
   selectFloor,
   setActiveLayer,
+  setActivePropObject,
   setActiveRoomId,
   setFillTileId,
   setPendingStairEntry,
@@ -29,6 +34,7 @@ import {
   setTool,
   toggleStairLinkBidirectional,
   undo,
+  undoProp,
   undoRoom,
 } from '../src/painter-store.js';
 
@@ -1135,5 +1141,118 @@ describe('painter-store: stair-link tool 2-click flow (Slice 5b -- loop-crear-ju
     const result = pointerDown(state, { x: 1, y: 1 });
     expect(result.state.pendingStairEntry).toEqual({ floor: 'floor-1', x: 1, y: 1 });
     expect(result.state.stairLinks).toHaveLength(1);
+  });
+});
+
+const PROP_OBJECT_A = 'a'.repeat(64);
+const PROP_OBJECT_B = 'b'.repeat(64);
+
+describe('painter-store: prop tool (C5 WU-04 -- depth-props-hd)', () => {
+  it('nextPropId returns the first free prop-N id', () => {
+    expect(nextPropId([])).toBe('prop-1');
+    expect(
+      nextPropId([{ id: 'prop-1', x: 0, y: 0, floor: 'floor-0', object: PROP_OBJECT_A }]),
+    ).toBe('prop-2');
+    expect(
+      nextPropId([
+        { id: 'prop-1', x: 0, y: 0, floor: 'floor-0', object: PROP_OBJECT_A },
+        { id: 'prop-3', x: 1, y: 1, floor: 'floor-0', object: PROP_OBJECT_A },
+      ]),
+    ).toBe('prop-2');
+  });
+
+  it('placeProp adds an entry with the next free id, active object, and no optional fields', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setActivePropObject(state, PROP_OBJECT_A);
+    state = placeProp(state, { x: 2, y: 3 });
+
+    expect(state.props).toEqual([
+      { id: 'prop-1', x: 2, y: 3, floor: 'floor-0', object: PROP_OBJECT_A },
+    ]);
+    expect(state.props[0]).not.toHaveProperty('scale');
+    expect(state.props[0]).not.toHaveProperty('rotationY');
+    expect(state.props[0]).not.toHaveProperty('animation');
+  });
+
+  it('placeProp / place with no selected glb is a no-op', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    const afterPlace = placeProp(state, { x: 1, y: 1 });
+    expect(afterPlace).toBe(state);
+
+    state = setTool(state, 'prop');
+    const { state: afterClick } = pointerDown(state, { x: 1, y: 1 });
+    expect(afterClick).toBe(state);
+    expect(afterClick.props).toEqual([]);
+    expect(afterClick.stroke).toEqual({ status: 'idle' });
+  });
+
+  it('pointerDown with the prop tool places on the active floor without starting a stroke', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setActivePropObject(state, PROP_OBJECT_A);
+    state = setTool(state, 'prop');
+    const { state: next } = pointerDown(state, { x: 1, y: 2 });
+
+    expect(next.props).toEqual([
+      { id: 'prop-1', x: 1, y: 2, floor: 'floor-0', object: PROP_OBJECT_A },
+    ]);
+    expect(next.stroke).toEqual({ status: 'idle' });
+  });
+
+  it('a second place gets prop-2 and may share a tile with the first', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setActivePropObject(state, PROP_OBJECT_A);
+    state = placeProp(state, { x: 1, y: 1 });
+    state = setActivePropObject(state, PROP_OBJECT_B);
+    state = placeProp(state, { x: 1, y: 1 });
+
+    expect(state.props.map((p) => p.id)).toEqual(['prop-1', 'prop-2']);
+    expect(state.props[1]).toMatchObject({ x: 1, y: 1, object: PROP_OBJECT_B });
+  });
+
+  it('removeProp deletes the entry; undo/redo restores it', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setActivePropObject(state, PROP_OBJECT_A);
+    state = placeProp(state, { x: 0, y: 0 });
+    state = placeProp(state, { x: 1, y: 1 });
+    state = removeProp(state, 'prop-1');
+    expect(state.props.map((p) => p.id)).toEqual(['prop-2']);
+
+    ({ state } = undoProp(state));
+    // Undo-of-remove re-appends (same as room undo) -- order is not reconstructed.
+    expect(state.props).toContainEqual({
+      id: 'prop-1',
+      x: 0,
+      y: 0,
+      floor: 'floor-0',
+      object: PROP_OBJECT_A,
+    });
+    expect(state.props.map((p) => p.id).sort()).toEqual(['prop-1', 'prop-2']);
+
+    ({ state } = redoProp(state));
+    expect(state.props.map((p) => p.id)).toEqual(['prop-2']);
+  });
+
+  it('undoProp undoes a place as well', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setActivePropObject(state, PROP_OBJECT_A);
+    state = placeProp(state, { x: 2, y: 2 });
+    ({ state } = undoProp(state));
+    expect(state.props).toEqual([]);
+    ({ state } = redoProp(state));
+    expect(state.props).toEqual([
+      { id: 'prop-1', x: 2, y: 2, floor: 'floor-0', object: PROP_OBJECT_A },
+    ]);
+  });
+
+  it('places the prop on whichever floor is active at click time', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addFloor(state, { id: 'floor-1' });
+    state = setActivePropObject(state, PROP_OBJECT_A);
+    state = setTool(state, 'prop');
+    ({ state } = pointerDown(state, { x: 3, y: 3 }));
+
+    expect(state.props).toEqual([
+      { id: 'prop-1', x: 3, y: 3, floor: 'floor-1', object: PROP_OBJECT_A },
+    ]);
   });
 });

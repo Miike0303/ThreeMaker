@@ -19,6 +19,7 @@ import {
 } from './map-compose.js';
 import type { PainterState } from './painter-store.js';
 import * as painter from './painter-store.js';
+import { computePropOverlayPoints } from './prop-overlay.js';
 import { computeRampGlyphCells } from './ramp-glyph.js';
 import { computeRoomOverlayRects, roomRectCorners } from './room-overlay.js';
 import { computeSpawnOverlayPoint } from './spawn-overlay.js';
@@ -93,6 +94,13 @@ export interface SpawnOverlayItem {
   readonly yFrac: number;
 }
 
+/** One prop marker on the active floor, projected to a screen-space fraction (see `prop-overlay.ts`). */
+export interface PropOverlayItem {
+  readonly id: string;
+  readonly xFrac: number;
+  readonly yFrac: number;
+}
+
 export interface PainterViewportCallbacks {
   /** Fired after every painter-store transition (tool switch, stroke commit, undo/redo, semantic assignment...) so the surrounding UI can re-render its toolbar/inspector. */
   readonly onStateChange?: (state: PainterState) => void;
@@ -106,6 +114,8 @@ export interface PainterViewportCallbacks {
   readonly onStairOverlayChange?: (points: readonly StairOverlayItem[]) => void;
   /** Fired whenever the active floor's spawn marker overlay changes: on map load, floor switch, resize, and after any spawn placement/clear (see `recomputeSpawnOverlay`). */
   readonly onSpawnOverlayChange?: (point: SpawnOverlayItem | undefined) => void;
+  /** Fired whenever the active floor's prop markers change: on map load, floor switch, resize, and after any prop place/remove (see `recomputePropOverlay`). */
+  readonly onPropOverlayChange?: (points: readonly PropOverlayItem[]) => void;
 }
 
 /**
@@ -192,6 +202,7 @@ export class PainterViewport {
       semantics: doc.tileset.semantics,
       rooms: doc.rooms,
       stairLinks: doc.stairLinks,
+      props: doc.props,
       ...(doc.spawn !== undefined ? { spawn: doc.spawn } : {}),
     });
 
@@ -203,6 +214,7 @@ export class PainterViewport {
     this.recomputeRoomOverlay();
     this.recomputeStairOverlay();
     this.recomputeSpawnOverlay();
+    this.recomputePropOverlay();
   }
 
   /** Adds a new blank floor on top of the stack and makes it active (spec: "adding a floor"). No-op if no map is loaded. */
@@ -247,6 +259,7 @@ export class PainterViewport {
     this.recomputeRoomOverlay();
     this.recomputeStairOverlay();
     this.recomputeSpawnOverlay();
+    this.recomputePropOverlay();
   }
 
   setTool(tool: ToolId): void {
@@ -339,6 +352,21 @@ export class PainterViewport {
     this.recomputeSpawnOverlay();
   }
 
+  /** Sets the content-addressed sha of the currently selected ingested `.glb` for the prop tool (C5 WU-04). */
+  setActivePropObject(object: string | undefined): void {
+    if (!this.state) return;
+    this.state = painter.setActivePropObject(this.state, object);
+    this.emitState();
+  }
+
+  /** Removes the prop `id` from the active floor (C5 WU-04 panel action). */
+  removeProp(id: string): void {
+    if (!this.state) return;
+    this.state = painter.removeProp(this.state, id);
+    this.emitState();
+    this.recomputePropOverlay();
+  }
+
   undo(): void {
     if (!this.state) return;
     const result = painter.undo(this.state);
@@ -364,6 +392,7 @@ export class PainterViewport {
       this.state.rooms,
       this.state.stairLinks,
       this.state.spawn,
+      this.state.props,
     );
     return {
       ...composed,
@@ -401,6 +430,7 @@ export class PainterViewport {
     if (result.pickedTileId !== undefined) this.callbacks.onPicked?.(result.pickedTileId);
     if (this.state.tool === 'stair-link') this.recomputeStairOverlay();
     if (this.state.tool === 'spawn-point') this.recomputeSpawnOverlay();
+    if (this.state.tool === 'prop') this.recomputePropOverlay();
     this.emitState();
   }
 
@@ -662,6 +692,29 @@ export class PainterViewport {
     );
   }
 
+  /**
+   * Recomputes the active floor's prop marker overlay (C5 WU-04) and pushes
+   * it to `onPropOverlayChange` -- one point glyph per prop on the floor.
+   */
+  private recomputePropOverlay(): void {
+    if (!this.state || !this.cameraPose) return;
+    const activeFloorId = painter.activeFloorState(this.state).id;
+    const points = computePropOverlayPoints(this.state.props, activeFloorId);
+
+    const items: PropOverlayItem[] = [];
+    for (const point of points) {
+      const projected = projectToScreenFraction(
+        { x: point.x + 0.5, y: 0, z: point.y + 0.5 },
+        this.cameraPose,
+        OVERVIEW_FOV_DEG,
+        this.camera.aspect,
+      );
+      if (!projected) continue;
+      items.push({ id: point.id, xFrac: projected.xFrac, yFrac: projected.yFrac });
+    }
+    this.callbacks.onPropOverlayChange?.(items);
+  }
+
   private startRenderLoop(): void {
     if (this.animationHandle !== undefined) return;
     const renderFrame = () => {
@@ -681,6 +734,7 @@ export class PainterViewport {
     this.recomputeRoomOverlay();
     this.recomputeStairOverlay();
     this.recomputeSpawnOverlay();
+    this.recomputePropOverlay();
   }
 
   dispose(): void {

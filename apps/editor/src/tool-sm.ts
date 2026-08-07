@@ -16,17 +16,20 @@ export type ToolId =
   | 'eyedropper'
   | 'room-box'
   | 'stair-link'
-  | 'spawn-point';
+  | 'spawn-point'
+  | 'prop';
 
 /**
  * Unity Tile Palette-style shortcuts (design: "B/U/G-style shortcuts"), plus
  * "I" for eyedropper, "R" for the room-box tool (Slice 5b: techos-y-
  * oclusion-interiores -- drags a rectangle to author a `RoomRect`, same
  * drag-a-box gesture as box-fill, see `painter-store.ts`'s
- * `commitRoomBoxStroke`), and "S"/"P" for the stair-link/spawn-point tools
+ * `commitRoomBoxStroke`), "S"/"P" for the stair-link/spawn-point tools
  * (Slice 5b: loop-crear-jugar -- both are single-click tools, not drags; see
  * `painter-store.ts`'s `pointerDown` for how they short-circuit the stroking
- * state machine entirely, the same way `eyedropper` does).
+ * state machine entirely, the same way `eyedropper` does), and "O" for the
+ * prop tool (C5 WU-04 depth-props-hd -- single-click place of an ingested
+ * `.glb` object, same short-circuit shape as spawn-point).
  *
  * PLAN_DEV_2 C2: these are **editor tool ids**, not remappable game
  * `ActionId`s from `@threemaker/input`. Pointer paint strokes and palette
@@ -41,6 +44,7 @@ export const TOOL_SHORTCUTS: Readonly<Record<string, ToolId>> = {
   r: 'room-box',
   s: 'stair-link',
   p: 'spawn-point',
+  o: 'prop',
 };
 
 /** Resolves a keyboard event's `key` (case-insensitive) to a tool, or `undefined` if it isn't a tool shortcut. */

@@ -12,6 +12,7 @@ import es from '../src/locales/es.json' with { type: 'json' };
 const NEW_KEYS = [
   'painter.tool.stair-link',
   'painter.tool.spawn-point',
+  'painter.tool.prop',
   'painter.stairLinks',
   'painter.stairLink.summary',
   'painter.stairLink.bidirectional',
@@ -24,6 +25,17 @@ const NEW_KEYS = [
   'painter.spawn.summary',
   'painter.spawn.clear',
   'painter.spawn.overlayLabel',
+  'painter.props',
+  'painter.props.pickGlb',
+  'painter.props.currentObject',
+  'painter.props.noObject',
+  'painter.props.selectHint',
+  'painter.props.summary',
+  'painter.props.remove',
+  'painter.props.overlayLabel',
+  'painter.props.ingestSuccess',
+  'painter.props.ingestFailed',
+  'painter.props.ingestNeedsTauri',
 ] as const;
 
 describe('locale strings: stair-link + spawn-point authoring (Slice 5b)', () => {
