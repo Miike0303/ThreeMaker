@@ -28,7 +28,10 @@
         "packages/core/src/event-interpreter.ts",
         "packages/core/test/event-command.test.ts",
         "packages/core/test/event-interpreter.test.ts",
-        "apps/desktop/test/authored-map-narrative.test.ts"
+        "apps/desktop/test/authored-map-narrative.test.ts",
+        "apps/editor/src/painter-store.ts",
+        "apps/editor/test/painter-store.test.ts",
+        "apps/editor/test/map-compose-v4.test.ts"
       ],
       "linter": {
         "rules": {

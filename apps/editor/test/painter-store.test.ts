@@ -2,12 +2,15 @@ import type { RoomDocument, TileLayerSet } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import {
   activeFloorState,
+  addCommand,
+  addEvent,
   addFloor,
   addRoom,
   addRoomRect,
   addStairLink,
   clearSpawn,
   createPainterState,
+  moveCommand,
   nextNpcId,
   nextPropId,
   nextTriggerId,
@@ -25,6 +28,8 @@ import {
   redoProp,
   redoRoom,
   redoTrigger,
+  removeCommand,
+  removeEvent,
   removeFloor,
   removeNpc,
   removeProp,
@@ -32,6 +37,8 @@ import {
   removeRoomRect,
   removeStairLink,
   removeTrigger,
+  removeWorldSeed,
+  renameEvent,
   renameRoom,
   selectFloor,
   setActiveLayer,
@@ -49,12 +56,15 @@ import {
   setSemanticMode,
   setSpawn,
   setTool,
+  setWorldSeed,
   toggleStairLinkBidirectional,
   undo,
   undoNpc,
   undoProp,
   undoRoom,
   undoTrigger,
+  updateCommand,
+  validateEventsDraft,
 } from '../src/painter-store.js';
 
 function makeLayers(width: number, height: number): TileLayerSet {
@@ -1666,5 +1676,243 @@ describe('painter-store: trigger tool (c1a follow-up)', () => {
 
     ({ state } = redoTrigger(state));
     expect(state.triggers.map((t) => t.id)).toEqual(['trigger-2']);
+  });
+});
+
+describe('painter-store: events + worldSeeds (events editor WU-01)', () => {
+  function blank() {
+    return createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+  }
+
+  it('createPainterState seeds events/worldSeeds; eventKeys is derived from events', () => {
+    const state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      events: {
+        intro: [{ type: 'setWorldVar', key: 'started', value: true }],
+      },
+      worldSeeds: { started: false },
+    });
+    expect(state.events.intro).toHaveLength(1);
+    expect(state.worldSeeds).toEqual({ started: false });
+    expect(state.eventKeys).toEqual(['intro']);
+  });
+
+  it('eventKeys option still seeds empty event scripts (npc/trigger placement back-compat)', () => {
+    const state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      eventKeys: [EVENT_TALK, EVENT_GATE],
+    });
+    expect(state.events).toEqual({ [EVENT_TALK]: [], [EVENT_GATE]: [] });
+    expect(state.eventKeys).toEqual([EVENT_TALK, EVENT_GATE]);
+  });
+
+  it('addEvent validates non-empty unique keys and creates an empty command list', () => {
+    let state = blank();
+    state = addEvent(state, 'intro');
+    expect(state.events.intro).toEqual([]);
+    expect(state.eventKeys).toContain('intro');
+
+    expect(addEvent(state, '')).toBe(state);
+    expect(addEvent(state, '   ')).toBe(state);
+    expect(addEvent(state, 'intro')).toBe(state);
+  });
+
+  it('renameEvent renames the script and rewrites npc/trigger refs atomically', () => {
+    let state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      events: { oldKey: [], other: [] },
+      npcs: [
+        {
+          id: 'npc-1',
+          x: 0,
+          y: 0,
+          floor: 'floor-0',
+          facing: 'down',
+          sprite: { object: NPC_SPRITE_A, characterIndex: 0 },
+          onInteract: 'oldKey',
+        },
+      ],
+      triggers: [{ id: 'trigger-1', x: 1, y: 1, floor: 'floor-0', on: 'enter', event: 'oldKey' }],
+      activeNpcEventKey: 'oldKey',
+      activeTriggerEventKey: 'oldKey',
+    });
+    state = renameEvent(state, 'oldKey', 'newKey');
+    expect(state.events).toEqual({ newKey: [], other: [] });
+    expect(state.eventKeys).toEqual(['newKey', 'other']);
+    expect(state.npcs[0]?.onInteract).toBe('newKey');
+    expect(state.triggers[0]?.event).toBe('newKey');
+    expect(state.activeNpcEventKey).toBe('newKey');
+    expect(state.activeTriggerEventKey).toBe('newKey');
+  });
+
+  it('removeEvent is blocked while referenced; works after unreferencing', () => {
+    let state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      events: { talk: [], spare: [] },
+      npcs: [
+        {
+          id: 'npc-1',
+          x: 0,
+          y: 0,
+          floor: 'floor-0',
+          facing: 'down',
+          sprite: { object: NPC_SPRITE_A, characterIndex: 0 },
+          onInteract: 'talk',
+        },
+      ],
+    });
+    const blocked = removeEvent(state, 'talk');
+    expect(blocked).toBe(state);
+    expect(blocked.events.talk).toEqual([]);
+
+    state = removeNpc(state, 'npc-1');
+    state = removeEvent(state, 'talk');
+    expect(state.events).toEqual({ spare: [] });
+    expect(state.eventKeys).toEqual(['spare']);
+  });
+
+  it('removeEvent is also blocked by a trigger reference', () => {
+    let state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      events: { gate: [] },
+      triggers: [{ id: 'trigger-1', x: 0, y: 0, floor: 'floor-0', on: 'enter', event: 'gate' }],
+    });
+    expect(removeEvent(state, 'gate')).toBe(state);
+    state = removeTrigger(state, 'trigger-1');
+    state = removeEvent(state, 'gate');
+    expect(state.events).toEqual({});
+  });
+
+  it('addCommand inserts a minimal default for each of the 8 kinds at the path (incl. nested then/else)', () => {
+    let state = blank();
+    state = addEvent(state, 'script');
+
+    state = addCommand(state, 'script', [0], 'conditional');
+    expect(state.events.script?.[0]).toEqual({
+      type: 'conditional',
+      if: { key: '', op: 'eq', value: false },
+      then: [],
+    });
+
+    state = addCommand(state, 'script', [0, 'then', 0], 'moveEntity');
+    state = addCommand(state, 'script', [0, 'else', 0], 'giveItem');
+    state = addCommand(state, 'script', [1], 'showDialogue');
+    state = addCommand(state, 'script', [2], 'setWorldVar');
+    state = addCommand(state, 'script', [3], 'teleport');
+    state = addCommand(state, 'script', [4], 'transferMap');
+    state = addCommand(state, 'script', [5], 'modifyStat');
+
+    const cmds = state.events.script ?? [];
+    expect(cmds[0]).toMatchObject({
+      type: 'conditional',
+      then: [{ type: 'moveEntity', entityId: '', direction: 'down', steps: 1 }],
+      else: [{ type: 'giveItem', itemId: '', amount: 1 }],
+    });
+    expect(cmds[1]).toEqual({ type: 'showDialogue', source: { kind: 'text', lines: [] } });
+    expect(cmds[2]).toEqual({ type: 'setWorldVar', key: '', value: false });
+    expect(cmds[3]).toEqual({ type: 'teleport', entityId: '', x: 0, y: 0 });
+    expect(cmds[4]).toEqual({ type: 'transferMap', mapFile: '', x: 0, y: 0 });
+    expect(cmds[5]).toEqual({ type: 'modifyStat', statId: '', delta: 1 });
+  });
+
+  it('updateCommand patches fields; moveCommand reorders within bounds; removeCommand drops', () => {
+    let state = blank();
+    state = addEvent(state, 'script');
+    state = addCommand(state, 'script', [0], 'moveEntity');
+    state = addCommand(state, 'script', [1], 'setWorldVar');
+    state = addCommand(state, 'script', [2], 'giveItem');
+
+    state = updateCommand(state, 'script', [0], { entityId: 'player', steps: 3 });
+    expect(state.events.script?.[0]).toEqual({
+      type: 'moveEntity',
+      entityId: 'player',
+      direction: 'down',
+      steps: 3,
+    });
+
+    state = moveCommand(state, 'script', [0], 1);
+    expect(state.events.script?.map((c) => c.type)).toEqual([
+      'setWorldVar',
+      'moveEntity',
+      'giveItem',
+    ]);
+
+    const atTop = moveCommand(state, 'script', [0], -1);
+    expect(atTop).toBe(state);
+    const atBottom = moveCommand(state, 'script', [2], 1);
+    expect(atBottom).toBe(state);
+
+    state = removeCommand(state, 'script', [1]);
+    expect(state.events.script?.map((c) => c.type)).toEqual(['setWorldVar', 'giveItem']);
+  });
+
+  it('updateCommand can patch a nested then-branch command via path', () => {
+    let state = blank();
+    state = addEvent(state, 'script');
+    state = addCommand(state, 'script', [0], 'conditional');
+    state = addCommand(state, 'script', [0, 'then', 0], 'setWorldVar');
+    state = updateCommand(state, 'script', [0, 'then', 0], { key: 'flag', value: true });
+    const root = state.events.script?.[0];
+    expect(root?.type).toBe('conditional');
+    if (root?.type === 'conditional') {
+      expect(root.then[0]).toEqual({ type: 'setWorldVar', key: 'flag', value: true });
+    }
+  });
+
+  it('freshly added eventKeys feed placeNpc / placeTrigger guards (no stale snapshot)', () => {
+    let state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      eventKeys: [],
+    });
+    state = setActiveNpcSpriteObject(state, NPC_SPRITE_A);
+    expect(placeNpc(state, { x: 0, y: 0 })).toBe(state);
+
+    state = addEvent(state, 'brand-new');
+    expect(state.eventKeys).toEqual(['brand-new']);
+    expect(state.activeNpcEventKey).toBe('brand-new');
+    state = placeNpc(state, { x: 0, y: 0 });
+    expect(state.npcs[0]?.onInteract).toBe('brand-new');
+
+    state = addEvent(state, 'trigger-evt');
+    state = setActiveTriggerEventKey(state, 'trigger-evt');
+    state = placeTrigger(state, { x: 1, y: 1 });
+    expect(state.triggers[0]?.event).toBe('trigger-evt');
+  });
+
+  it('setWorldSeed / removeWorldSeed mutate worldSeeds', () => {
+    let state = blank();
+    state = setWorldSeed(state, 'coins', 3);
+    state = setWorldSeed(state, 'open', true);
+    state = setWorldSeed(state, 'name', 'town');
+    expect(state.worldSeeds).toEqual({ coins: 3, open: true, name: 'town' });
+    state = removeWorldSeed(state, 'open');
+    expect(state.worldSeeds).toEqual({ coins: 3, name: 'town' });
+    expect(removeWorldSeed(state, 'missing')).toBe(state);
+  });
+
+  it('validateEventsDraft returns null for valid scripts and a message for invalid ones', () => {
+    expect(
+      validateEventsDraft({
+        ok: [{ type: 'setWorldVar', key: 'a', value: 1 }],
+      }),
+    ).toBeNull();
+
+    const err = validateEventsDraft({
+      bad: [{ type: 'giveItem', itemId: '', amount: 1 }],
+    });
+    expect(typeof err).toBe('string');
+    expect(err).toMatch(/Invalid Event Script/);
   });
 });

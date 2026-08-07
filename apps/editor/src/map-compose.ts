@@ -266,6 +266,11 @@ export function composeDocumentFromPainterFloors(
   // source document so pre-follow-up call sites stay byte-identical.
   npcs: readonly NpcDocument[] = doc.npcs,
   triggers: readonly TriggerDocument[] = doc.triggers,
+  // Live events/worldSeeds (events editor WU-01). Default to the source document
+  // so pre-WU-01 call sites stay byte-identical; when the painter passes live
+  // state, stale-doc entries are NOT resurrected.
+  events: MapDocument['events'] = doc.events,
+  worldSeeds: MapDocument['worldSeeds'] = doc.worldSeeds,
 ): MapDocument {
   const originalById = new Map(doc.floors.map((floor) => [floor.id, floor] as const));
   const blankLayer = new Array(doc.width * doc.height).fill(0);
@@ -293,8 +298,9 @@ export function composeDocumentFromPainterFloors(
   // floor must drop them here too -- `validateNpc`/`validateTrigger` reject a
   // dangling reference on the next parse. Live painter-store arrays are passed
   // in (same shape as `props`) so place/delete survives compose; floor-filter
-  // still applies. `events`/`worldSeeds` carry no floor reference and ride the
-  // spread untouched.
+  // still applies. `events`/`worldSeeds` carry no floor reference; live painter
+  // values are threaded explicitly so edits/deletes survive save (they no
+  // longer ride the spread untouched).
   const composedNpcs = npcs.filter((npc) => floorIds.has(npc.floor));
   const composedTriggers = triggers.filter((trigger) => floorIds.has(trigger.floor));
   // Schema v5 (depth-props-hd C5 WU-04): props join the same floor-scoped
@@ -310,6 +316,8 @@ export function composeDocumentFromPainterFloors(
     npcs: composedNpcs,
     triggers: composedTriggers,
     props: composedProps,
+    events,
+    worldSeeds,
   };
   return composedSpawn === undefined ? base : { ...base, spawn: composedSpawn };
 }

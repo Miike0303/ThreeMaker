@@ -225,7 +225,8 @@ export class PainterViewport {
       props: doc.props,
       npcs: doc.npcs,
       triggers: doc.triggers,
-      eventKeys: Object.keys(doc.events),
+      events: { ...doc.events },
+      worldSeeds: { ...doc.worldSeeds },
       ...(doc.spawn !== undefined ? { spawn: doc.spawn } : {}),
     });
 
@@ -509,6 +510,8 @@ export class PainterViewport {
       this.state.props,
       this.state.npcs,
       this.state.triggers,
+      this.state.events,
+      this.state.worldSeeds,
     );
     return {
       ...composed,

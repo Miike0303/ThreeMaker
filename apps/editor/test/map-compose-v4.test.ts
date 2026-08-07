@@ -114,4 +114,36 @@ describe('composeDocumentFromPainterFloors (v4 narrative content)', () => {
     expect(composed.triggers.map((trigger) => trigger.id)).toEqual(['gate']);
     expect(() => parseMapDocument(JSON.parse(serializeMapDocument(composed)))).not.toThrow();
   });
+
+  it('threads live events/worldSeeds; edited values survive compose→parse and stale-doc values are not resurrected', () => {
+    const doc = authoredDocument();
+    const floors = painterFloorsFromDocument(doc);
+    const liveEvents = {
+      'talk-elder': [
+        { type: 'showDialogue' as const, source: { kind: 'text' as const, lines: ['Hello'] } },
+      ],
+      'new-evt': [{ type: 'setWorldVar' as const, key: 'fresh', value: true }],
+    };
+    const liveSeeds = { gateOpen: true, coins: 99 };
+
+    const composed = composeDocumentFromPainterFloors(
+      doc,
+      floors,
+      doc.rooms,
+      doc.stairLinks,
+      doc.spawn,
+      doc.props,
+      doc.npcs,
+      doc.triggers,
+      liveEvents,
+      liveSeeds,
+    );
+    const reparsed = parseMapDocument(JSON.parse(serializeMapDocument(composed)));
+
+    expect(reparsed.events).toEqual(liveEvents);
+    expect(reparsed.worldSeeds).toEqual(liveSeeds);
+    // Stale doc-only key `open-gate` must not reappear when live events replace it.
+    expect(reparsed.events).not.toHaveProperty('open-gate');
+    expect(reparsed.worldSeeds).not.toHaveProperty('lastNpc');
+  });
 });

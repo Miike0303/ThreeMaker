@@ -12,6 +12,7 @@
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-fs": "2",
+    "@threemaker/core": "workspace:*",
     "@threemaker/importer-rpgm": "workspace:*",
     "@threemaker/map-format": "workspace:*",
     "@threemaker/renderer": "workspace:*",

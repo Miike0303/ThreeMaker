@@ -78,6 +78,9 @@ importers:
       '@tauri-apps/plugin-fs':
         specifier: '2'
         version: 2.5.1
+      '@threemaker/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@threemaker/importer-rpgm':
         specifier: workspace:*
         version: link:../../packages/importer-rpgm

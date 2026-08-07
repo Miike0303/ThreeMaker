@@ -53,14 +53,25 @@
  * mirror `MapDocument.npcs`/`triggers` exactly (flat, top-level, floor by
  * stable id). Place/delete push onto the active floor's OWN
  * `npcCommandStack` / `triggerCommandStack` (fourth and fifth per-floor
- * undo stacks). Event scripts stay JSON-side -- the store only holds
- * `eventKeys` for the panel dropdown + placement guard (a valid
- * `onInteract`/`event` reference requires an existing events key).
- * Routine editing stays JSON-side.
+ * undo stacks). Routine editing stays JSON-side.
+ *
+ * Event-script + worldSeeds authoring (events editor WU-01): `PainterState.
+ * events` / `worldSeeds` mirror `MapDocument.events` / `worldSeeds` exactly
+ * (flat, top-level, no floor scope). `eventKeys` is DERIVED
+ * (`Object.keys(state.events)`) on every mutation that touches `events` --
+ * never a load-time snapshot -- so placeNpc/placeTrigger guards and the
+ * panel dropdown see brand-new keys immediately. Deliberately NO command-
+ * stack undo for events/worldSeeds v1 (same stair-link/spawn precedent:
+ * remove/re-add is the undo). Path addressing for nested commands uses a
+ * flat tagged `CommandPath` (see type doc below).
  */
+
+import type { EventCommand } from '@threemaker/core';
+import { parseEventScript } from '@threemaker/core';
 
 import type {
   CommandStackState,
+  MapEventScripts,
   MapSpawn,
   NpcDocument,
   NpcFacing,
@@ -74,6 +85,7 @@ import type {
   TileDiff,
   TileLayerSet,
   TriggerDocument,
+  WorldSeedValue,
 } from '@threemaker/map-format';
 import {
   applyTileDiff,
@@ -244,9 +256,21 @@ export interface PainterState {
   /** Every authored trigger across every floor (c1a follow-up), mirroring `MapDocument.triggers`. */
   readonly triggers: readonly TriggerDocument[];
   /**
-   * Keys of `MapDocument.events` at map load (session-only mirror). Placement
-   * is a no-op when empty -- a valid `onInteract`/`event` reference requires
-   * an existing events key. Event scripts themselves stay JSON-authored.
+   * Authored event scripts (events editor WU-01), mirroring `MapDocument.events`
+   * exactly. Mutable via `addEvent` / `renameEvent` / `removeEvent` /
+   * `addCommand` / `updateCommand` / `removeCommand` / `moveCommand`.
+   */
+  readonly events: MapEventScripts;
+  /**
+   * Authored world-state seeds (events editor WU-01), mirroring
+   * `MapDocument.worldSeeds`. Mutable via `setWorldSeed` / `removeWorldSeed`.
+   */
+  readonly worldSeeds: Readonly<Record<string, WorldSeedValue>>;
+  /**
+   * Derived selector: `Object.keys(events)`. Kept as a field (always rebuilt
+   * when `events` mutates) so panel dropdowns and placeNpc/placeTrigger
+   * guards keep working without a load-time snapshot that would reject
+   * brand-new keys. Prefer reading this over recomputing at every call site.
    */
   readonly eventKeys: readonly string[];
   /**
@@ -297,9 +321,16 @@ export interface CreatePainterStateOptions {
   /** Initial triggers (map load path), matching `MapDocument.triggers`; defaults to none authored. */
   readonly triggers?: readonly TriggerDocument[];
   /**
-   * Event-script keys available for `onInteract`/`event` dropdowns (from
-   * `Object.keys(doc.events)` on load). Defaults to none -- placement tools
-   * are then disabled until a map with events is loaded.
+   * Initial event scripts (map load path), matching `MapDocument.events`.
+   * When omitted, `eventKeys` (if provided) seeds empty scripts for those
+   * keys so existing npc/trigger placement tests stay terse; otherwise `{}`.
+   */
+  readonly events?: MapEventScripts;
+  /** Initial world seeds (map load path), matching `MapDocument.worldSeeds`; defaults to none. */
+  readonly worldSeeds?: Readonly<Record<string, WorldSeedValue>>;
+  /**
+   * Convenience seed for empty event scripts when `events` is omitted
+   * (npc/trigger placement back-compat). Ignored when `events` is provided.
    */
   readonly eventKeys?: readonly string[];
   /** Initial selected NPC sprite object sha (session-only). */
@@ -332,7 +363,9 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     activePropObject,
     npcs = [],
     triggers = [],
-    eventKeys = [],
+    events: eventsOption,
+    worldSeeds = {},
+    eventKeys: eventKeysOption,
     activeNpcSpriteObject,
     activeNpcCharacterIndex = 0,
     activeNpcFacing = 'down',
@@ -340,6 +373,9 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     activeTriggerOn = 'enter',
     activeTriggerEventKey,
   } = options;
+  const events: MapEventScripts =
+    eventsOption ?? Object.fromEntries((eventKeysOption ?? []).map((key) => [key, [] as const]));
+  const eventKeys = Object.keys(events);
   const defaultEventKey = eventKeys[0];
   const base: PainterState = {
     floors: floors.map((floor) => ({
@@ -365,6 +401,8 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     props,
     npcs,
     triggers,
+    events,
+    worldSeeds,
     eventKeys,
     activeNpcCharacterIndex,
     activeNpcFacing,
@@ -1443,6 +1481,309 @@ export function redoTrigger(state: PainterState): TriggerCommandStepOutcome {
     triggerCommandStack: { undoStack, redoStack },
   });
   return { state: { ...withStack, triggers }, command: last };
+}
+
+// --- Event scripts + worldSeeds (events editor WU-01; no undo stack) ----
+
+/**
+ * Flat tagged path into a nested event-command tree.
+ *
+ * Numbers are indices into the current command array. The tags `'then'` /
+ * `'else'` descend into that branch of the command at the previous index
+ * (which must be a `conditional`). The path always ends on a number — the
+ * index of an existing command (update/remove/move) or the insertion slot
+ * (addCommand).
+ *
+ * Examples (addressing `events.intro[...]`):
+ * - `[0]` — root command 0
+ * - `[0, 'then', 1]` — `intro[0].then[1]`
+ * - `[2, 'else', 0, 'then', 0]` — nested then under else of root[2]
+ */
+export type CommandPathSegment = number | 'then' | 'else';
+export type CommandPath = readonly CommandPathSegment[];
+
+/** Discriminator of every event-script command kind (schema v1). */
+export type EventCommandKind = EventCommand['type'];
+
+function withEvents(state: PainterState, events: MapEventScripts): PainterState {
+  return { ...state, events, eventKeys: Object.keys(events) };
+}
+
+function isEventReferenced(state: PainterState, key: string): boolean {
+  return (
+    state.npcs.some((npc) => npc.onInteract === key) ||
+    state.triggers.some((trigger) => trigger.event === key)
+  );
+}
+
+/** Minimal-valid-ish default for a brand-new command of `kind`. Empty ids where the parser requires non-empty are intentional — WU-02 live validation surfaces them; do not invent fake ids. */
+export function defaultEventCommand(kind: EventCommandKind): EventCommand {
+  switch (kind) {
+    case 'moveEntity':
+      return { type: 'moveEntity', entityId: '', direction: 'down', steps: 1 };
+    case 'showDialogue':
+      return { type: 'showDialogue', source: { kind: 'text', lines: [] } };
+    case 'conditional':
+      return { type: 'conditional', if: { key: '', op: 'eq', value: false }, then: [] };
+    case 'setWorldVar':
+      return { type: 'setWorldVar', key: '', value: false };
+    case 'teleport':
+      return { type: 'teleport', entityId: '', x: 0, y: 0 };
+    case 'transferMap':
+      return { type: 'transferMap', mapFile: '', x: 0, y: 0 };
+    case 'giveItem':
+      return { type: 'giveItem', itemId: '', amount: 1 };
+    case 'modifyStat':
+      return { type: 'modifyStat', statId: '', delta: 1 };
+  }
+}
+
+/**
+ * Rebuild `commands` with a replacement of the array addressed by every
+ * path segment except the last number. `mutate` receives that array and the
+ * final index and returns the next array (or `null` to abort).
+ */
+function mapCommandPath(
+  commands: readonly EventCommand[],
+  path: CommandPath,
+  forInsert: boolean,
+  mutate: (parent: readonly EventCommand[], index: number) => readonly EventCommand[] | null,
+): readonly EventCommand[] | null {
+  if (path.length === 0) return null;
+  const first = path[0];
+  if (typeof first !== 'number') return null;
+
+  if (path.length === 1) {
+    if (forInsert) {
+      if (first < 0 || first > commands.length) return null;
+    } else if (first < 0 || first >= commands.length) {
+      return null;
+    }
+    return mutate(commands, first);
+  }
+
+  const branch = path[1];
+  if (branch !== 'then' && branch !== 'else') return null;
+  const cmd = commands[first];
+  if (cmd?.type !== 'conditional') return null;
+
+  const childPath = path.slice(2);
+  if (childPath.length === 0) return null;
+
+  const childArray: readonly EventCommand[] = branch === 'then' ? cmd.then : (cmd.else ?? []);
+  const nextChild = mapCommandPath(childArray, childPath, forInsert, mutate);
+  if (nextChild === null) return null;
+
+  const nextCmd: EventCommand =
+    branch === 'then' ? { ...cmd, then: nextChild } : { ...cmd, else: nextChild };
+
+  return commands.map((c, i) => (i === first ? nextCmd : c));
+}
+
+/** Adds an empty event script under `key`. No-op when key is empty/whitespace or already exists. */
+export function addEvent(state: PainterState, key: string): PainterState {
+  const trimmed = key.trim();
+  if (trimmed.length === 0) return state;
+  if (Object.hasOwn(state.events, trimmed)) return state;
+  const events: MapEventScripts = { ...state.events, [trimmed]: [] };
+  let next = withEvents(state, events);
+  // First event key auto-selects placement targets (mirrors createPainterState).
+  if (next.activeNpcEventKey === undefined) {
+    next = { ...next, activeNpcEventKey: trimmed };
+  }
+  if (next.activeTriggerEventKey === undefined) {
+    next = { ...next, activeTriggerEventKey: trimmed };
+  }
+  return next;
+}
+
+/**
+ * Renames an event key and rewrites every npc/trigger (and active placement)
+ * reference in the same update so nothing is left dangling. No-op when `from`
+ * is missing, `to` is empty/whitespace/duplicate, or `from === to`.
+ */
+export function renameEvent(state: PainterState, from: string, to: string): PainterState {
+  const trimmedTo = to.trim();
+  if (trimmedTo.length === 0 || from === trimmedTo) return state;
+  if (!Object.hasOwn(state.events, from)) return state;
+  if (Object.hasOwn(state.events, trimmedTo)) return state;
+
+  const events: Record<string, readonly EventCommand[]> = {};
+  for (const [key, commands] of Object.entries(state.events)) {
+    events[key === from ? trimmedTo : key] = commands;
+  }
+  const npcs = state.npcs.map((npc) =>
+    npc.onInteract === from ? { ...npc, onInteract: trimmedTo } : npc,
+  );
+  const triggers = state.triggers.map((trigger) =>
+    trigger.event === from ? { ...trigger, event: trimmedTo } : trigger,
+  );
+  let next = withEvents(state, events);
+  next = { ...next, npcs, triggers };
+  if (next.activeNpcEventKey === from) {
+    next = { ...next, activeNpcEventKey: trimmedTo };
+  }
+  if (next.activeTriggerEventKey === from) {
+    next = { ...next, activeTriggerEventKey: trimmedTo };
+  }
+  return next;
+}
+
+/**
+ * Removes an event script. **Blocked** (no-op) while any npc.onInteract or
+ * trigger.event still references it — the desktop load gate would reject the
+ * map. Unreference first, then remove. No undo stack: re-add is the undo.
+ */
+export function removeEvent(state: PainterState, key: string): PainterState {
+  if (!Object.hasOwn(state.events, key)) return state;
+  if (isEventReferenced(state, key)) return state;
+  const { [key]: _removed, ...rest } = state.events;
+  let next = withEvents(state, rest);
+  if (next.activeNpcEventKey === key) {
+    const { activeNpcEventKey: _a, ...withoutNpcKey } = next;
+    next = withoutNpcKey;
+    const fallback = next.eventKeys[0];
+    if (fallback !== undefined) next = { ...next, activeNpcEventKey: fallback };
+  }
+  if (next.activeTriggerEventKey === key) {
+    const { activeTriggerEventKey: _t, ...withoutTriggerKey } = next;
+    next = withoutTriggerKey;
+    const fallback = next.eventKeys[0];
+    if (fallback !== undefined) next = { ...next, activeTriggerEventKey: fallback };
+  }
+  return next;
+}
+
+/** Inserts a default command of `kind` at `path` inside `eventKey`. */
+export function addCommand(
+  state: PainterState,
+  eventKey: string,
+  path: CommandPath,
+  kind: EventCommandKind,
+): PainterState {
+  const script = state.events[eventKey];
+  if (script === undefined) return state;
+  const command = defaultEventCommand(kind);
+  const nextScript = mapCommandPath(script, path, true, (parent, index) => {
+    const next = [...parent];
+    next.splice(index, 0, command);
+    return next;
+  });
+  if (nextScript === null) return state;
+  return withEvents(state, { ...state.events, [eventKey]: nextScript });
+}
+
+/**
+ * Shallow-merges `patch` onto the command at `path` (type is immutable).
+ * For conditionals, a nested `if` patch is deep-merged onto the existing clause.
+ */
+export function updateCommand(
+  state: PainterState,
+  eventKey: string,
+  path: CommandPath,
+  patch: Readonly<Record<string, unknown>>,
+): PainterState {
+  const script = state.events[eventKey];
+  if (script === undefined) return state;
+  const nextScript = mapCommandPath(script, path, false, (parent, index) => {
+    const current = parent[index];
+    if (!current) return null;
+    let merged: EventCommand;
+    if (current.type === 'conditional' && patch.if !== undefined && isRecord(patch.if)) {
+      const { if: _if, type: _type, ...rest } = patch;
+      merged = {
+        ...current,
+        ...rest,
+        type: 'conditional',
+        if: { ...current.if, ...patch.if },
+      } as EventCommand;
+    } else {
+      const { type: _type, ...rest } = patch;
+      merged = { ...current, ...rest, type: current.type } as EventCommand;
+    }
+    return parent.map((cmd, i) => (i === index ? merged : cmd));
+  });
+  if (nextScript === null) return state;
+  return withEvents(state, { ...state.events, [eventKey]: nextScript });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Removes the command at `path`. */
+export function removeCommand(
+  state: PainterState,
+  eventKey: string,
+  path: CommandPath,
+): PainterState {
+  const script = state.events[eventKey];
+  if (script === undefined) return state;
+  const nextScript = mapCommandPath(script, path, false, (parent, index) => {
+    if (index >= parent.length) return null;
+    return parent.filter((_, i) => i !== index);
+  });
+  if (nextScript === null) return state;
+  return withEvents(state, { ...state.events, [eventKey]: nextScript });
+}
+
+/**
+ * Moves the command at `path` by `delta` (±1 intended) within its parent
+ * array. No-op when the target index is out of bounds.
+ */
+export function moveCommand(
+  state: PainterState,
+  eventKey: string,
+  path: CommandPath,
+  delta: number,
+): PainterState {
+  if (delta === 0) return state;
+  const script = state.events[eventKey];
+  if (script === undefined) return state;
+  const nextScript = mapCommandPath(script, path, false, (parent, index) => {
+    const target = index + delta;
+    if (target < 0 || target >= parent.length) return null;
+    const next = [...parent];
+    const [item] = next.splice(index, 1);
+    if (item === undefined) return null;
+    next.splice(target, 0, item);
+    return next;
+  });
+  if (nextScript === null) return state;
+  return withEvents(state, { ...state.events, [eventKey]: nextScript });
+}
+
+/** Sets or overwrites a world seed. Empty key is a no-op. */
+export function setWorldSeed(
+  state: PainterState,
+  key: string,
+  value: WorldSeedValue,
+): PainterState {
+  if (key.length === 0) return state;
+  return { ...state, worldSeeds: { ...state.worldSeeds, [key]: value } };
+}
+
+/** Removes a world seed key. No-op when missing. */
+export function removeWorldSeed(state: PainterState, key: string): PainterState {
+  if (!Object.hasOwn(state.worldSeeds, key)) return state;
+  const { [key]: _removed, ...rest } = state.worldSeeds;
+  return { ...state, worldSeeds: rest };
+}
+
+/**
+ * Validates a draft events map the same way load-time parsing does
+ * (`parseEventScript({ version: 1, events })`). Returns `null` when valid,
+ * otherwise the thrown error message (WU-02 renders / save-blocks on this).
+ */
+export function validateEventsDraft(
+  events: Readonly<Record<string, readonly EventCommand[]>>,
+): string | null {
+  try {
+    parseEventScript({ version: 1, events });
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
 }
 
 // --- Stroke -> touched-cells resolution (per tool) ----------------------
