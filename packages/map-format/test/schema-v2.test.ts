@@ -46,10 +46,11 @@ function makeV2Fixture(overrides: Record<string, unknown> = {}): Record<string, 
     name: 'V2 Fixture',
     width: 2,
     height: 2,
-    tileset: { slots: {}, flags: [0], semantics: {} },
+    tileset: { slots: {}, flags: [0], semantics: {}, tilePixelSize: 48 },
     floors: [{ id: 'floor-0', baseElevation: 0, layers: makeLayers(size) }],
     stairLinks: [],
     rooms: [],
+    props: [],
     ...overrides,
   };
 }

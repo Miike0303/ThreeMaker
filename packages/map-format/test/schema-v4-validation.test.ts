@@ -32,7 +32,7 @@ function raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     name: 'V4 Validation',
     width: 4,
     height: 4,
-    tileset: { slots: {}, flags: [0], semantics: {} },
+    tileset: { slots: {}, flags: [0], semantics: {}, tilePixelSize: 48 },
     floors: [
       { id: 'floor-0', baseElevation: 0, layers: LAYERS },
       { id: 'floor-1', baseElevation: 3, layers: LAYERS },
@@ -43,6 +43,7 @@ function raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     triggers: [],
     events: {},
     worldSeeds: {},
+    props: [],
     ...overrides,
   };
 }
@@ -226,6 +227,7 @@ const MAXIMAL: MapDocument = {
     slots: { A1: { object: SHEET_A, sourceTilesetId: 7, sourceGameId: 2 } },
     flags: [0],
     semantics: { '5': { class: 'wall' } },
+    tilePixelSize: 48,
   },
   floors: [
     { id: 'floor-0', label: 'Ground', baseElevation: 0, layers: LAYERS },
@@ -286,6 +288,7 @@ const MAXIMAL: MapDocument = {
     'read-sign': [{ type: 'showDialogue', source: { kind: 'text', lines: ['Beware.'] } }],
   },
   worldSeeds: { doorOpen: false, coins: 7, lastNpc: 'elder' },
+  props: [],
 };
 
 describe('map-format v4 maximal-fixture anti-drop gate (task 1.4)', () => {

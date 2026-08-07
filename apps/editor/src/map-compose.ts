@@ -93,7 +93,7 @@ export function createBlankMapDocument(options: CreateBlankMapDocumentOptions): 
     name: options.name,
     width: options.width,
     height: options.height,
-    tileset: { slots: options.slots, flags: options.flags, semantics: {} },
+    tileset: { slots: options.slots, flags: options.flags, semantics: {}, tilePixelSize: 48 },
     floors: [
       {
         id: 'floor-0',
@@ -116,6 +116,8 @@ export function createBlankMapDocument(options: CreateBlankMapDocumentOptions): 
     triggers: [],
     events: {},
     worldSeeds: {},
+    // Schema v5 (depth-props-hd): a blank map authors no props yet.
+    props: [],
   };
 }
 

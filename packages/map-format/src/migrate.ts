@@ -111,6 +111,48 @@ export function migrateV3ToV4(doc: Record<string, unknown>): Record<string, unkn
 
 registerMigration(3, migrateV3ToV4);
 
+/**
+ * v4 -> v5 lossless wrap (depth-props-hd design, C5 WU-01): a v4 document had
+ * no props collection and no tileset tile-pixel-size, so migration adds an
+ * EMPTY `props` array, stamps `tileset.tilePixelSize = 48` (RPG Maker
+ * standard), and bumps `version` -- every other field passes through
+ * unmodified via the spread, exactly like `migrateV3ToV4`.
+ *
+ * A document that already carries either v5 field while still declaring
+ * `version: 4` would migrate "successfully" with authored props or a custom
+ * tilePixelSize silently discarded -- fail LOUDLY instead, naming the keys
+ * found. Absent keys stay the ordinary v4 case and keep migrating.
+ */
+export function migrateV4ToV5(doc: Record<string, unknown>): Record<string, unknown> {
+  const carried: string[] = [];
+  if (doc.props !== undefined) carried.push('props');
+  const tileset = doc.tileset;
+  if (
+    typeof tileset === 'object' &&
+    tileset !== null &&
+    (tileset as Record<string, unknown>).tilePixelSize !== undefined
+  ) {
+    carried.push('tilePixelSize');
+  }
+  if (carried.length > 0) {
+    throw new MapFormatError(
+      'malformed',
+      `Map document declares "version": 4 but already carries v5 content (${carried
+        .map((key) => JSON.stringify(key))
+        .join(', ')}). Set "version" to 5 -- the v4 -> v5 migration would otherwise discard it.`,
+    );
+  }
+
+  const nextTileset =
+    typeof tileset === 'object' && tileset !== null
+      ? { ...(tileset as Record<string, unknown>), tilePixelSize: 48 }
+      : tileset;
+
+  return { ...doc, version: 5, props: [], tileset: nextTileset };
+}
+
+registerMigration(4, migrateV4ToV5);
+
 function readVersion(raw: Record<string, unknown>): number {
   if (typeof raw.version !== 'number' || !Number.isInteger(raw.version)) {
     throw new MapFormatError('malformed', '"version" must be an integer.');

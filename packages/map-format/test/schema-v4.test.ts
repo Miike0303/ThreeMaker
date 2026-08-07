@@ -54,7 +54,7 @@ const BASE: MapDocument = {
   name: 'V4 Fixture',
   width: 2,
   height: 2,
-  tileset: { slots: {}, flags: [0], semantics: {} },
+  tileset: { slots: {}, flags: [0], semantics: {}, tilePixelSize: 48 },
   floors: [
     { id: 'floor-0', baseElevation: 0, layers: LAYERS },
     { id: 'floor-1', baseElevation: 3, layers: LAYERS },
@@ -66,6 +66,7 @@ const BASE: MapDocument = {
   triggers: [],
   events: {},
   worldSeeds: {},
+  props: [],
 };
 
 function npc(patch: Partial<NpcDocument>): Partial<MapDocument> {
@@ -116,23 +117,47 @@ describe('map-format v4 closed field list (18 leaves, one case each)', () => {
 });
 
 describe('map-format v3 -> v4 migration (additive, lossless)', () => {
-  it('adds the four collections at their empty defaults and keeps every v3 key identical', () => {
-    const v3: Record<string, unknown> = { ...BASE, version: 3 };
+  /** Strip v4/v5 fields so the input is a true pre-v4 document; overrides apply after. */
+  function makeV3Raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    const v3: Record<string, unknown> = {
+      ...BASE,
+      version: 3,
+      tileset: { slots: {}, flags: [0], semantics: {} },
+    };
     for (const key of NARRATIVE_KEYS) delete v3[key];
+    delete v3.props;
+    return { ...v3, ...overrides };
+  }
+
+  it('adds the four collections at their empty defaults and keeps every v3 key identical', () => {
+    const v3 = makeV3Raw();
 
     const doc = parseMapDocument(v3);
 
-    expect(doc.version).toBe(4);
+    // parseMapDocument always walks to CURRENT (v5); the v3->v4 hop still
+    // injects the four narrative defaults, then v4->v5 adds props + tilePixelSize.
+    expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
     // Present, not `undefined`-vs-missing mismatched (spec R1).
     expect(Object.keys(doc)).toEqual(expect.arrayContaining([...NARRATIVE_KEYS]));
     expect(doc.npcs).toEqual([]);
     expect(doc.triggers).toEqual([]);
     expect(doc.events).toEqual({});
     expect(doc.worldSeeds).toEqual({});
+    expect(doc.props).toEqual([]);
+    expect(doc.tileset.tilePixelSize).toBe(48);
 
     const preExisting = { ...doc } as Record<string, unknown>;
     for (const key of NARRATIVE_KEYS) delete preExisting[key];
-    expect(preExisting).toEqual({ ...v3, version: 4 });
+    delete preExisting.props;
+    const expectedTileset = {
+      ...(v3.tileset as Record<string, unknown>),
+      tilePixelSize: 48,
+    };
+    expect(preExisting).toEqual({
+      ...v3,
+      version: CURRENT_MAP_FORMAT_VERSION,
+      tileset: expectedTileset,
+    });
   });
 
   // The migration is spread-then-overwrite, so a hand-authored map that carries
@@ -143,9 +168,12 @@ describe('map-format v3 -> v4 migration (additive, lossless)', () => {
   // the 848 real v3 documents on disk: none carries any of these four keys, so
   // failing loudly here cannot reject real data.
   it('rejects a version-3 document that already carries narrative content instead of discarding it', () => {
-    const v3: Record<string, unknown> = { ...BASE, version: 3, npcs: [NPC], worldSeeds: { a: 1 } };
-    v3.triggers = undefined;
-    v3.events = undefined;
+    const v3 = makeV3Raw({
+      npcs: [NPC],
+      worldSeeds: { a: 1 },
+      triggers: undefined,
+      events: undefined,
+    });
 
     expect(() => parseMapDocument(v3)).toThrow(
       'Map document declares "version": 3 but already carries v4 narrative content ("npcs", "worldSeeds"). Set "version" to 4 -- the v3 -> v4 migration would otherwise discard it.',
@@ -153,14 +181,12 @@ describe('map-format v3 -> v4 migration (additive, lossless)', () => {
   });
 
   it('names every narrative key found on a slipped version-3 document', () => {
-    const v3: Record<string, unknown> = {
-      ...BASE,
-      version: 3,
+    const v3 = makeV3Raw({
       npcs: [NPC],
       triggers: [TRIGGER],
       events: {},
       worldSeeds: {},
-    };
+    });
 
     expect(() => parseMapDocument(v3)).toThrow('("npcs", "triggers", "events", "worldSeeds")');
   });

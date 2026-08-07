@@ -34,10 +34,12 @@ function makeValidDocInput(overrides: Record<string, unknown> = {}): Record<stri
       slots: { A1: { object: 'sha-a1' } },
       flags: [0],
       semantics: {},
+      tilePixelSize: 48,
     },
     floors: [{ id: 'floor-0', baseElevation: 0, layers: makeLayers(size) }],
     stairLinks: [],
     rooms: [],
+    props: [],
     ...overrides,
   };
 }
@@ -83,7 +85,9 @@ describe('validateCurrentVersionShape', () => {
     );
     expect(() =>
       validateCurrentVersionShape(
-        makeValidDocInput({ tileset: { slots: {}, flags: 'not-an-array', semantics: {} } }),
+        makeValidDocInput({
+          tileset: { slots: {}, flags: 'not-an-array', semantics: {}, tilePixelSize: 48 },
+        }),
       ),
     ).toThrow(MapFormatError);
   });
@@ -261,6 +265,7 @@ describe('validateCurrentVersionShape', () => {
         semantics: {
           '5': { class: 'ramp', rampDirection: 'south' },
         },
+        tilePixelSize: 48,
       },
     });
 
@@ -286,6 +291,7 @@ describe('validateCurrentVersionShape', () => {
           slots: {},
           flags: [0],
           semantics: { '5': { class: 'ramp' } },
+          tilePixelSize: 48,
         },
       }),
     );

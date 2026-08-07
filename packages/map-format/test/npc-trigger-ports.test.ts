@@ -42,7 +42,7 @@ function raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     name: 'Ports Map',
     width: 8,
     height: 8,
-    tileset: { slots: {}, flags: [0], semantics: {} },
+    tileset: { slots: {}, flags: [0], semantics: {}, tilePixelSize: 48 },
     floors: [
       { id: 'floor-0', baseElevation: 0, layers: LAYERS },
       { id: 'floor-1', baseElevation: 3, layers: LAYERS },
@@ -53,6 +53,7 @@ function raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     triggers: [],
     events: {},
     worldSeeds: {},
+    props: [],
     ...overrides,
   };
 }

@@ -4,6 +4,7 @@ export {
   migrateV1ToV2,
   migrateV2ToV3,
   migrateV3ToV4,
+  migrateV4ToV5,
   parseMapDocument,
   registerMigration,
 } from './migrate.js';
@@ -21,6 +22,7 @@ export type {
   NpcDocument,
   NpcFacing,
   NpcSpriteRef,
+  PropDocument,
   RampDirection,
   RoomDocument,
   RoomRect,

@@ -4,6 +4,7 @@ import {
   migrateV1ToV2,
   migrateV2ToV3,
   migrateV3ToV4,
+  migrateV4ToV5,
   parseMapDocument,
   registerMigration,
 } from '../src/migrate.js';
@@ -31,10 +32,11 @@ function makeValidDocInput(overrides: Record<string, unknown> = {}): Record<stri
     name: 'Test Map',
     width: 2,
     height: 2,
-    tileset: { slots: {}, flags: [0], semantics: {} },
+    tileset: { slots: {}, flags: [0], semantics: {}, tilePixelSize: 48 },
     floors: [{ id: 'floor-0', baseElevation: 0, layers: makeLayers(size) }],
     stairLinks: [],
     rooms: [],
+    props: [],
     ...overrides,
   };
 }
@@ -94,6 +96,7 @@ describe('parseMapDocument', () => {
     registerMigration(1, migrateV1ToV2);
     registerMigration(2, migrateV2ToV3);
     registerMigration(3, migrateV3ToV4);
+    registerMigration(4, migrateV4ToV5);
   });
 
   it('accepts a document already at the current version, with no migration needed', () => {
@@ -141,9 +144,10 @@ describe('parseMapDocument', () => {
   // version BELOW the current one. Both branches are pinned below, by their real
   // messages.
   describe('unsupported versions fail loudly, by message (task 1.3b)', () => {
-    it('rejects a document declaring version 5 as newer than this build supports', () => {
-      expect(() => parseMapDocument(makeValidDocInput({ version: 5 }))).toThrow(
-        `Map document version 5 is newer than the current supported version ${CURRENT_MAP_FORMAT_VERSION}. Upgrade the app to open it.`,
+    it('rejects a document declaring a version newer than this build supports', () => {
+      const tooNew = CURRENT_MAP_FORMAT_VERSION + 1;
+      expect(() => parseMapDocument(makeValidDocInput({ version: tooNew }))).toThrow(
+        `Map document version ${tooNew} is newer than the current supported version ${CURRENT_MAP_FORMAT_VERSION}. Upgrade the app to open it.`,
       );
     });
 
@@ -217,7 +221,10 @@ describe('parseMapDocument', () => {
         name: 'Legacy Map',
         width: 3,
         height: 2,
-        tileset: (v1Input as Record<string, unknown>).tileset,
+        tileset: {
+          ...((v1Input as Record<string, unknown>).tileset as Record<string, unknown>),
+          tilePixelSize: 48,
+        },
         floors: [
           {
             id: 'floor-0',

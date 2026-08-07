@@ -79,6 +79,7 @@ export function convertRpgmMap(
       slots: opts.slots ?? {},
       flags: tileset.flags,
       semantics: {},
+      tilePixelSize: 48,
     },
     floors: [
       {
@@ -97,6 +98,7 @@ export function convertRpgmMap(
     triggers: [],
     events: {},
     worldSeeds: {},
+    props: [],
   };
 
   return opts.playerStart === undefined

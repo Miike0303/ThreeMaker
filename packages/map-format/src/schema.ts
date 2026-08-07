@@ -86,6 +86,12 @@ export interface MapTilesetDocument {
   /** RPGM per-tile-id flags bitfield, merged per-slot from each slot's source tileset. */
   readonly flags: readonly number[];
   readonly semantics: SemanticOverrides;
+  /**
+   * Pixel size of one tile in the sheet textures (schema v5). Decouples HD
+   * texture resolution from the logical RPGM tile grid. Integer in [8, 1024];
+   * 48 is the RPG Maker standard and the v4 -> v5 migration default.
+   */
+  readonly tilePixelSize: number;
 }
 
 /** One tile layer: row-major tile ids, length `width * height`, `0` = empty. */
@@ -99,7 +105,7 @@ export interface MapLayers {
 }
 
 export const MAP_FORMAT_MAGIC = 'threemaker-map' as const;
-export const CURRENT_MAP_FORMAT_VERSION = 4;
+export const CURRENT_MAP_FORMAT_VERSION = 5;
 
 /**
  * Default `baseElevation` increment for a newly-added floor (painter "add
@@ -210,6 +216,23 @@ export interface TriggerDocument {
   readonly event: string;
 }
 
+/**
+ * One authored 3D glTF prop placed on a map (schema v5). `floor` references a
+ * stable `FloorDocument.id` like `NpcDocument`; `object` is the content-
+ * addressed sha256 of a `.glb` in the asset store. Optional `scale` /
+ * `rotationY` / `animation` default to 1 / 0 / none when absent.
+ */
+export type PropDocument = {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly floor: string;
+  readonly object: string;
+  readonly scale?: number;
+  readonly rotationY?: number;
+  readonly animation?: string;
+};
+
 /** Authored event scripts keyed by event key. Command-level validation is delegated to `@threemaker/core`'s `parseEventScript` (see `validateEvents`). */
 export type MapEventScripts = Readonly<Record<string, readonly EventCommand[]>>;
 
@@ -233,16 +256,18 @@ export interface MapDocument {
   /** Authored player-spawn point (loop-crear-jugar, additive). Omitted entirely when unauthored -- never emitted as an `undefined`-valued key, matching `label`'s optional-field convention. */
   readonly spawn?: MapSpawn;
   /**
-   * Authored narrative content (schema v4). All four are REQUIRED with empty
-   * defaults -- never optional like `spawn?` -- so every object literal typed
-   * as `MapDocument` (this module's rebuilt shape, the editor's blank
-   * document) fails to COMPILE when a field is not mirrored, instead of
-   * dropping it silently.
+   * Authored narrative content (schema v4) and placed props (schema v5). All
+   * five collections are REQUIRED with empty defaults -- never optional like
+   * `spawn?` -- so every object literal typed as `MapDocument` (this module's
+   * rebuilt shape, the editor's blank document) fails to COMPILE when a field
+   * is not mirrored, instead of dropping it silently.
    */
   readonly npcs: readonly NpcDocument[];
   readonly triggers: readonly TriggerDocument[];
   readonly events: MapEventScripts;
   readonly worldSeeds: Readonly<Record<string, WorldSeedValue>>;
+  /** Authored 3D glTF props (schema v5). Empty for a document with no placed props. */
+  readonly props: readonly PropDocument[];
 }
 
 export type MapFormatErrorCode = 'bad-magic' | 'unsupported-version' | 'malformed';
@@ -310,6 +335,7 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
   );
   const events = validateEvents(raw.events);
   const worldSeeds = validateWorldSeeds(raw.worldSeeds);
+  const props = validateProps(raw.props, floorIds, raw.width as number, raw.height as number);
 
   return spawn === undefined
     ? {
@@ -327,6 +353,7 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
         triggers,
         events,
         worldSeeds,
+        props,
       }
     : {
         format: MAP_FORMAT_MAGIC,
@@ -344,6 +371,7 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
         triggers,
         events,
         worldSeeds,
+        props,
       };
 }
 
@@ -495,24 +523,125 @@ function validateNpc(
   };
 }
 
+/** Content-addressed sha256: exactly 64 lowercase hex chars (shared by NPC sprites and prop glTFs). */
+function validateSha256Hex(input: unknown, label: string): string {
+  if (typeof input !== 'string' || !/^[0-9a-f]{64}$/.test(input)) {
+    throw new MapFormatError(
+      'malformed',
+      `"${label}" must be a 64-character lowercase hex sha256, got ${JSON.stringify(input)}.`,
+    );
+  }
+  return input;
+}
+
 function validateNpcSprite(input: unknown, label: string): NpcSpriteRef {
   if (typeof input !== 'object' || input === null) {
     throw new MapFormatError('malformed', `"${label}.sprite" must be an object.`);
   }
   const raw = input as Record<string, unknown>;
-  if (typeof raw.object !== 'string' || !/^[0-9a-f]{64}$/.test(raw.object)) {
-    throw new MapFormatError(
-      'malformed',
-      `"${label}.sprite.object" must be a 64-character lowercase hex sha256, got ${JSON.stringify(raw.object)}.`,
-    );
-  }
+  const object = validateSha256Hex(raw.object, `${label}.sprite.object`);
   if (!Number.isInteger(raw.characterIndex) || (raw.characterIndex as number) < 0) {
     throw new MapFormatError(
       'malformed',
       `"${label}.sprite.characterIndex" must be a non-negative integer, got ${JSON.stringify(raw.characterIndex)}.`,
     );
   }
-  return { object: raw.object, characterIndex: raw.characterIndex as number };
+  return { object, characterIndex: raw.characterIndex as number };
+}
+
+function validateProps(
+  input: unknown,
+  floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): readonly PropDocument[] {
+  const props = validateNarrativeArray(input, 'props').map((entry, index) =>
+    validateProp(entry, index, floorIds, mapWidth, mapHeight),
+  );
+
+  // Unlike npcs, two props MAY share a tile (e.g. a lamp on a table) -- no
+  // duplicate-tile check by design.
+
+  // Prop ids must be unique across the document (not just per floor). Runtime
+  // lookup keys by id; a collision silently shadows one of the entries.
+  const firstIndexById = new Map<string, number>();
+  for (const [index, entry] of props.entries()) {
+    const firstIndex = firstIndexById.get(entry.id);
+    if (firstIndex !== undefined) {
+      throw new MapFormatError(
+        'malformed',
+        `"props[${index}]" (${JSON.stringify(entry.id)}) reuses the same id as "props[${firstIndex}]".`,
+      );
+    }
+    firstIndexById.set(entry.id, index);
+  }
+
+  return props;
+}
+
+function validateProp(
+  input: unknown,
+  index: number,
+  floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
+): PropDocument {
+  const label = `props[${index}]`;
+  if (typeof input !== 'object' || input === null) {
+    throw new MapFormatError('malformed', `"${label}" must be an object.`);
+  }
+  const raw = input as Record<string, unknown>;
+  if (typeof raw.id !== 'string' || raw.id.length === 0) {
+    throw new MapFormatError('malformed', `"${label}.id" must be a non-empty string.`);
+  }
+  const floor = validateNarrativeFloor(raw.floor, label, raw.id, floorIds);
+  const x = validateNarrativeCoord(raw.x, label, 'x', raw.id, mapWidth);
+  const y = validateNarrativeCoord(raw.y, label, 'y', raw.id, mapHeight);
+  const object = validateSha256Hex(raw.object, `${label}.object`);
+
+  let scale: number | undefined;
+  if (raw.scale !== undefined) {
+    if (typeof raw.scale !== 'number' || !Number.isFinite(raw.scale) || raw.scale <= 0) {
+      throw new MapFormatError(
+        'malformed',
+        `"${label}.scale" must be a finite number > 0, got ${JSON.stringify(raw.scale)}.`,
+      );
+    }
+    scale = raw.scale;
+  }
+
+  let rotationY: number | undefined;
+  if (raw.rotationY !== undefined) {
+    if (typeof raw.rotationY !== 'number' || !Number.isFinite(raw.rotationY)) {
+      throw new MapFormatError(
+        'malformed',
+        `"${label}.rotationY" must be a finite number, got ${JSON.stringify(raw.rotationY)}.`,
+      );
+    }
+    rotationY = raw.rotationY;
+  }
+
+  let animation: string | undefined;
+  if (raw.animation !== undefined) {
+    if (typeof raw.animation !== 'string' || raw.animation.length === 0) {
+      throw new MapFormatError(
+        'malformed',
+        `"${label}.animation" must be a non-empty string when present, got ${JSON.stringify(raw.animation)}.`,
+      );
+    }
+    animation = raw.animation;
+  }
+
+  return {
+    id: raw.id,
+    x,
+    y,
+    floor,
+    object,
+    ...(scale !== undefined ? { scale } : {}),
+    ...(rotationY !== undefined ? { rotationY } : {}),
+    ...(animation !== undefined ? { animation } : {}),
+  };
 }
 
 function validateTriggers(
@@ -951,10 +1080,21 @@ function validateTileset(input: unknown): MapTilesetDocument {
   if (typeof raw.semantics !== 'object' || raw.semantics === null) {
     throw new MapFormatError('malformed', '"tileset.semantics" must be an object.');
   }
+  if (
+    !Number.isInteger(raw.tilePixelSize) ||
+    (raw.tilePixelSize as number) < 8 ||
+    (raw.tilePixelSize as number) > 1024
+  ) {
+    throw new MapFormatError(
+      'malformed',
+      `"tileset.tilePixelSize" must be an integer in [8, 1024], got ${JSON.stringify(raw.tilePixelSize)}.`,
+    );
+  }
   return {
     slots: raw.slots as SlotComposition,
     flags: raw.flags as readonly number[],
     semantics: raw.semantics as SemanticOverrides,
+    tilePixelSize: raw.tilePixelSize as number,
   };
 }
 

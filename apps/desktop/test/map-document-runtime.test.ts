@@ -71,7 +71,7 @@ function buildDevDemoEquivalentDocument(): MapDocument {
     name: 'Dev Demo',
     width: FLOOR_SIZE,
     height: FLOOR_SIZE,
-    tileset: { slots: {}, flags: [], semantics: RAMP_SEMANTICS },
+    tileset: { slots: {}, flags: [], semantics: RAMP_SEMANTICS, tilePixelSize: 48 },
     floors: [
       {
         id: 'floor-0',
@@ -123,7 +123,7 @@ function buildDevDemoEquivalentDocument(): MapDocument {
       },
     ],
     spawn: { x: 5, y: 5, floor: 'floor-0' },
-    // The four v4 narrative collections are REQUIRED (`schema.ts`'s
+    // The four v4 narrative collections + v5 props are REQUIRED (`schema.ts`'s
     // `MapDocument`), so a literal typed `MapDocument` must mirror them even
     // when empty. This file is outside `tsc`'s graph (`apps/desktop/tsconfig.json`
     // uses `include: ["src"]`), so omitting them was invisible to the compiler.
@@ -131,6 +131,7 @@ function buildDevDemoEquivalentDocument(): MapDocument {
     triggers: [],
     events: {},
     worldSeeds: {},
+    props: [],
   };
 }
 
