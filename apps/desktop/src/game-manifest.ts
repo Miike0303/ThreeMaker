@@ -33,6 +33,13 @@ export interface GameManifest {
   readonly maps: readonly ManifestMapEntry[];
   /** Game-level, not per-map -- the player's own sprite doesn't change per map. Absent when the batch conversion had no `--store` catalog or couldn't resolve the game's lead actor sheet (fail-soft: caller falls back to the placeholder sprite). */
   readonly actorSheet?: ManifestActorSheet;
+  /**
+   * Optional path relative to `MAP_DIR_RELATIVE` (same resolution as
+   * `maps[].file`) to a game-defs JSON document validated by
+   * `@threemaker/gameplay`'s `parseGameDefsJson`. Absent → empty defs /
+   * empty StatBlock at session boot.
+   */
+  readonly gameDefs?: string;
 }
 
 function normalizeManifestFile(file: string): string {
@@ -81,7 +88,7 @@ export function parseGameManifest(json: unknown): GameManifest {
   if (!json || typeof json !== 'object') {
     throw new Error('Invalid manifest: expected an object.');
   }
-  const { maps, actorSheet } = json as Record<string, unknown>;
+  const { maps, actorSheet, gameDefs } = json as Record<string, unknown>;
   if (!Array.isArray(maps)) {
     throw new Error('Invalid manifest: "maps" must be an array.');
   }
@@ -101,8 +108,17 @@ export function parseGameManifest(json: unknown): GameManifest {
     firstIndexByFile.set(entry.file, index);
   }
 
+  if (gameDefs !== undefined) {
+    if (typeof gameDefs !== 'string' || gameDefs.length === 0) {
+      throw new Error(
+        `Invalid manifest gameDefs: expected a non-empty string, got ${JSON.stringify(gameDefs)}.`,
+      );
+    }
+  }
+
   return {
     maps: parsedMaps,
     ...(actorSheet !== undefined ? { actorSheet: parseActorSheet(actorSheet) } : {}),
+    ...(gameDefs !== undefined ? { gameDefs: normalizeManifestFile(gameDefs) } : {}),
   };
 }

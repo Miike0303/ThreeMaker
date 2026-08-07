@@ -23,6 +23,8 @@ const LOCALES = {
       'debug.hops': 'Map hops',
       'debug.lastHopSprites': 'Last hop NPC sprites',
       'debug.lastHopTextures': 'Last hop floor textures',
+      'debug.inventory': 'Inventory',
+      'debug.stats': 'Stats',
     },
   },
 };
@@ -40,6 +42,8 @@ const SNAPSHOT = {
   hopsCompleted: 2,
   lastOutgoingNarrativeSprites: 1,
   lastOutgoingFloorTextureKeys: 4,
+  inventory: { potion: 2, key: 1 },
+  stats: { hp: 10, mp: 3 },
 };
 
 describe('formatDebugRows', () => {
@@ -60,6 +64,8 @@ describe('formatDebugRows', () => {
       { label: 'Map hops', value: '2' },
       { label: 'Last hop NPC sprites', value: '1' },
       { label: 'Last hop floor textures', value: '4' },
+      { label: 'Inventory', value: '{key:1,potion:2}' },
+      { label: 'Stats', value: '{hp:10,mp:3}' },
     ]);
   });
 

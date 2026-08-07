@@ -5,6 +5,22 @@ function isWorldValue(value: unknown): value is WorldValue {
   return typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string';
 }
 
+/**
+ * Structural inventory surface for the `item_count` ink external (mirrors
+ * core's ItemStore / gameplay's Inventory without importing either package).
+ */
+export type StoryItemStore = {
+  count(id: string): number;
+};
+
+/**
+ * Structural stat surface for the `stat_get` ink external (mirrors core's
+ * StatStore / gameplay's StatBlock without importing either package).
+ */
+export type StoryStatStore = {
+  get(id: string): number;
+};
+
 /** Options for {@link bindStoryToWorld}. */
 export type BindStoryToWorldOptions = {
   /**
@@ -27,16 +43,31 @@ export type BindStoryToWorldOptions = {
    * `world_get`/`world_set` externals.
    */
   readonly observedVariables?: readonly string[];
+  /**
+   * Optional inventory for `EXTERNAL item_count(itemId)`. When omitted and a
+   * story calls `item_count`, binding still installs the external but throws
+   * a precise error (same fail-loud style as unseeded `world_get`) — never
+   * a silent 0.
+   */
+  readonly items?: StoryItemStore;
+  /**
+   * Optional stats for `EXTERNAL stat_get(statId)`. When omitted and a story
+   * calls `stat_get`, throws a precise error rather than a silent 0.
+   */
+  readonly stats?: StoryStatStore;
 };
 
 /**
- * Binds `story`'s `world_get`/`world_set` external functions to `world`, and
+ * Binds `story`'s `world_get`/`world_set` external functions to `world`,
+ * optionally `item_count`/`stat_get` to inventory/stat stores, and
  * optionally mirrors declared ink variables into world-state as they change.
  *
- * `story`'s ink source must declare both externals:
+ * `story`'s ink source must declare the world externals it uses:
  * ```
  * EXTERNAL world_get(key)
  * EXTERNAL world_set(key, value)
+ * EXTERNAL item_count(itemId)
+ * EXTERNAL stat_get(statId)
  * ```
  * `world_get` reads `world.get(key)` and throws if `key` was never set —
  * inkjs converts a bound external function's `undefined` return into ink
@@ -51,6 +82,10 @@ export type BindStoryToWorldOptions = {
  * SEPARATE, one-way channel (ink var change -> world-state key), never the
  * reverse, so there's no sync loop between the two mechanisms.
  *
+ * `item_count` / `stat_get` always bind so a missing store fails with a
+ * precise message rather than inkjs's opaque unbound-external error or a
+ * silent 0. When the store is present they delegate to `count` / `get`.
+ *
  * Mirrored variable values must be a {@link WorldValue} (boolean, number, or
  * string); a variable that becomes a non-primitive ink value (e.g. a `LIST`)
  * throws, since `WorldState` cannot represent it — same "fail loudly on
@@ -61,7 +96,7 @@ export type BindStoryToWorldOptions = {
  * internal assertion.
  */
 export function bindStoryToWorld(story: Story, options: BindStoryToWorldOptions): void {
-  const { storyId, world, observedVariables = [] } = options;
+  const { storyId, world, observedVariables = [], items, stats } = options;
 
   story.BindExternalFunction('world_get', (key: string) => {
     if (!world.has(key)) {
@@ -73,6 +108,23 @@ export function bindStoryToWorld(story: Story, options: BindStoryToWorldOptions)
   });
   story.BindExternalFunction('world_set', (key: string, value: WorldValue) => {
     world.set(key, value);
+  });
+
+  story.BindExternalFunction('item_count', (itemId: string) => {
+    if (!items) {
+      throw new Error(
+        `story-runtime: item_count("${itemId}") called but no items store was bound — pass items when binding the story.`,
+      );
+    }
+    return items.count(itemId);
+  });
+  story.BindExternalFunction('stat_get', (statId: string) => {
+    if (!stats) {
+      throw new Error(
+        `story-runtime: stat_get("${statId}") called but no stats store was bound — pass stats when binding the story.`,
+      );
+    }
+    return stats.get(statId);
   });
 
   for (const variableName of observedVariables) {

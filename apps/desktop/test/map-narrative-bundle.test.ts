@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { EventHost } from '@threemaker/core';
-import { ElevationField } from '@threemaker/gameplay';
+import { ElevationField, Inventory, StatBlock } from '@threemaker/gameplay';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthoredMapNarrative } from '../src/authored-map.js';
@@ -183,6 +183,27 @@ describe('buildMapNarrativeBundle', () => {
     bundle.interpreter.choose(0);
 
     expect(root.world.get('secret_revealed')).toBe(true);
+  });
+
+  // C4: giveItem / modifyStat need the session stores on the interpreter.
+  it('wires the session inventory and stats into the EventInterpreter', async () => {
+    const inventory = new Inventory();
+    const stats = new StatBlock([{ id: 'hp', name: 'HP', base: 10, min: 0, max: 100 }]);
+    const root = createNarrativeRoot({
+      createOverlay: () => {
+        throw new Error('the bundle must never touch the session overlay');
+      },
+      inventory,
+      stats,
+    });
+    const { bundle } = await build({}, { root });
+    if (!bundle) throw new Error('expected a narrative bundle');
+
+    bundle.interpreter.run([{ type: 'giveItem', itemId: 'potion', amount: 2 }]);
+    expect(inventory.count('potion')).toBe(2);
+
+    bundle.interpreter.run([{ type: 'modifyStat', statId: 'hp', delta: -3 }]);
+    expect(stats.get('hp')).toBe(7);
   });
 
   // The v4 schema accepts `{kind:'text'}` dialogue sources, so the bundle's

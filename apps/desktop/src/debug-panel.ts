@@ -22,6 +22,10 @@ export interface DebugSnapshot {
   readonly lastOutgoingNarrativeSprites: number;
   /** Floor texture keys disposed with the outgoing map at the last hop. */
   readonly lastOutgoingFloorTextureKeys: number;
+  /** Current session inventory counts (display-only; C4). */
+  readonly inventory: Readonly<Record<string, number>>;
+  /** Current session stat values (display-only; C4). */
+  readonly stats: Readonly<Record<string, number>>;
 }
 
 export interface DebugRow {
@@ -58,7 +62,22 @@ export function formatDebugRows(snapshot: DebugSnapshot, t: I18n['t']): readonly
       label: t('debug.lastHopTextures'),
       value: String(snapshot.lastOutgoingFloorTextureKeys),
     },
+    {
+      label: t('debug.inventory'),
+      value: formatRecordSnapshot(snapshot.inventory),
+    },
+    {
+      label: t('debug.stats'),
+      value: formatRecordSnapshot(snapshot.stats),
+    },
   ];
+}
+
+/** Compact `{a:1,b:2}` readout; empty object as `{}`. */
+function formatRecordSnapshot(record: Readonly<Record<string, number>>): string {
+  const keys = Object.keys(record).sort();
+  if (keys.length === 0) return '{}';
+  return `{${keys.map((k) => `${k}:${record[k]}`).join(',')}}`;
 }
 
 /** One control-cheat-sheet row: a key/chord plus its localized action description. */
@@ -194,6 +213,8 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
       hopsCompleted: 0,
       lastOutgoingNarrativeSprites: 0,
       lastOutgoingFloorTextureKeys: 0,
+      inventory: {},
+      stats: {},
     },
     t,
   )) {

@@ -5,6 +5,8 @@
  * `WorldState` holds authored world data whose whole point is to outlive the
  * map that set it, the seed set must be applied once per session rather than
  * once per map, and the dialogue overlay is a single piece of session chrome.
+ * Session inventory and stats (C4) live here for the same reason: map hops
+ * tear down the per-map narrative bundle, but inventory/stats must survive.
  *
  * Everything narrative that is per-map -- compiled Ink stories, the dialogue
  * provider, the `EventInterpreter`, NPCs, triggers and NPC sprites -- lives in
@@ -20,6 +22,7 @@
  */
 
 import { WorldState, type WorldValue } from '@threemaker/core';
+import { Inventory, StatBlock } from '@threemaker/gameplay';
 import type { DialogueOverlay } from './dialogue-ui.js';
 
 export interface NarrativeRootDeps {
@@ -28,11 +31,26 @@ export interface NarrativeRootDeps {
    * Called at most once, on the first `overlay()` call.
    */
   readonly createOverlay: () => DialogueOverlay;
+  /**
+   * Session inventory. Defaults to a fresh empty {@link Inventory}. Built
+   * once by the host (always empty at session start until giveItem runs).
+   */
+  readonly inventory?: Inventory;
+  /**
+   * Session stats. Defaults to an empty {@link StatBlock} (zero stats).
+   * When the host loads game-defs, it constructs the block from those stats
+   * and injects it here so map hops never rebuild it.
+   */
+  readonly stats?: StatBlock;
 }
 
 export interface NarrativeRoot {
   /** Session-scoped world data. Survives every map swap; never replaced. */
   readonly world: WorldState;
+  /** Session inventory. Survives every map swap; never replaced. */
+  readonly inventory: Inventory;
+  /** Session stats. Survives every map swap; never replaced. */
+  readonly stats: StatBlock;
   /**
    * Applies an authored map's `worldSeeds`, skipping every key the world
    * already holds. Idempotent per key, so loading a second map (or re-entering
@@ -45,10 +63,14 @@ export interface NarrativeRoot {
 
 export function createNarrativeRoot(deps: NarrativeRootDeps): NarrativeRoot {
   const world = new WorldState();
+  const inventory = deps.inventory ?? new Inventory();
+  const stats = deps.stats ?? new StatBlock([]);
   let overlay: DialogueOverlay | undefined;
 
   return {
     world,
+    inventory,
+    stats,
 
     seedIfAbsent(seeds) {
       for (const [key, value] of Object.entries(seeds)) {

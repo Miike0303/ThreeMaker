@@ -50,8 +50,10 @@ import { MAP_FILE_RELATIVE, readMapDocumentText } from './map-file.js';
  * narrative bundle (C1a design D1) to compile and wire. Every reference in
  * here is already proven to resolve: each `npcs[].onInteract` and
  * `triggers[].event` names a real key of `events`, each `showDialogue` ink
- * story has a source in `inkSources`, and each `world_get` key those sources
- * read has a `worldSeeds` entry.
+ * story has a source in `inkSources`, each `world_get` key those sources
+ * read has a `worldSeeds` entry, and every `giveItem`/`modifyStat`/item-or-
+ * stat conditional id (plus ink `item_count`/`stat_get`) is present in the
+ * session game-defs catalog when one is loaded.
  */
 export interface AuthoredMapNarrative {
   readonly npcs: readonly TranslatedNpc[];
@@ -61,6 +63,23 @@ export interface AuthoredMapNarrative {
   /** Raw `.ink` source per story id, read from the `<map>.<storyId>.ink` sidecar next to the map (design D7). Compilation is the bundle's job, not this loader's. */
   readonly inkSources: ReadonlyMap<string, string>;
 }
+
+/**
+ * Session game-defs id sets used at load time to cross-validate authored
+ * `giveItem`/`modifyStat`/item-stat conditionals and ink `item_count`/
+ * `stat_get` calls. Empty sets (default) accept maps that use none of those
+ * features; any usage of an unknown id fails loudly.
+ */
+export interface GameDefsCatalog {
+  readonly itemIds: ReadonlySet<string>;
+  readonly statIds: ReadonlySet<string>;
+}
+
+/** Empty catalog: zero known items/stats. Valid with zero item/stat usage. */
+export const EMPTY_GAME_DEFS_CATALOG: GameDefsCatalog = {
+  itemIds: new Set(),
+  statIds: new Set(),
+};
 
 /** Full translator output, ready for `createMapSession(floorSources, stairLinks, {spawn})`. */
 export interface AuthoredMapResult {
@@ -107,6 +126,12 @@ export interface AuthoredMapDeps {
   readonly mapRelativePath?: string;
   /** Reads one `.ink` sidecar's text by home-relative path, `null` when it does not exist. Defaults to `map-file.ts`'s home-relative reader -- the same helper the map document itself is read through. */
   readonly readSidecarText?: (relativePath: string) => Promise<string | null>;
+  /**
+   * Loaded game-defs item/stat ids for catalog cross-validation (C4).
+   * Defaults to {@link EMPTY_GAME_DEFS_CATALOG} (no ids valid) so maps that
+   * never use items/stats still load, and any unknown id fails loudly.
+   */
+  readonly gameDefsCatalog?: GameDefsCatalog;
 }
 
 const ASSET_STORE_OBJECTS_DIR = '.threemaker/asset-store/objects';
@@ -231,6 +256,12 @@ function sidecarPath(mapRelativePath: string, storyId: string): string {
 /** Matches an ink `world_get("key")` external call, capturing the key. Ported verbatim from the since-deleted `demo-content.ts`. */
 const WORLD_GET_CALL_PATTERN = /world_get\(\s*"([^"]+)"\s*\)/g;
 
+/** Matches an ink `item_count("id")` external call, capturing the item id. */
+const ITEM_COUNT_CALL_PATTERN = /item_count\(\s*"([^"]+)"\s*\)/g;
+
+/** Matches an ink `stat_get("id")` external call, capturing the stat id. */
+const STAT_GET_CALL_PATTERN = /stat_get\(\s*"([^"]+)"\s*\)/g;
+
 /** Recursively collects every `showDialogue` command, including branches nested inside `conditional` commands -- ported from the since-deleted `demo-content.ts`'s `collectDialogueSources`. A nested reference is exactly as dangling as a top-level one. */
 function collectDialogueSources(commands: readonly EventCommand[]): ShowDialogueCommand[] {
   const result: ShowDialogueCommand[] = [];
@@ -243,6 +274,54 @@ function collectDialogueSources(commands: readonly EventCommand[]): ShowDialogue
     }
   }
   return result;
+}
+
+/**
+ * Walks event commands (including nested `then`/`else`) and fails when a
+ * `giveItem`/`modifyStat` or item/stat-sourced conditional names an id
+ * absent from the loaded game-defs catalog.
+ */
+function assertCatalogCommandRefs(
+  commands: readonly EventCommand[],
+  eventKey: string,
+  catalog: GameDefsCatalog,
+  mapRelativePath: string,
+): void {
+  for (const command of commands) {
+    if (command.type === 'giveItem') {
+      if (!catalog.itemIds.has(command.itemId)) {
+        failNarrative(
+          mapRelativePath,
+          `event ${JSON.stringify(eventKey)} giveItem references unknown item id ${JSON.stringify(command.itemId)}.`,
+        );
+      }
+    } else if (command.type === 'modifyStat') {
+      if (!catalog.statIds.has(command.statId)) {
+        failNarrative(
+          mapRelativePath,
+          `event ${JSON.stringify(eventKey)} modifyStat references unknown stat id ${JSON.stringify(command.statId)}.`,
+        );
+      }
+    } else if (command.type === 'conditional') {
+      const source = command.if.source ?? 'world';
+      if (source === 'item' && !catalog.itemIds.has(command.if.key)) {
+        failNarrative(
+          mapRelativePath,
+          `event ${JSON.stringify(eventKey)} conditional source "item" references unknown item id ${JSON.stringify(command.if.key)}.`,
+        );
+      }
+      if (source === 'stat' && !catalog.statIds.has(command.if.key)) {
+        failNarrative(
+          mapRelativePath,
+          `event ${JSON.stringify(eventKey)} conditional source "stat" references unknown stat id ${JSON.stringify(command.if.key)}.`,
+        );
+      }
+      assertCatalogCommandRefs(command.then, eventKey, catalog, mapRelativePath);
+      if (command.else) {
+        assertCatalogCommandRefs(command.else, eventKey, catalog, mapRelativePath);
+      }
+    }
+  }
 }
 
 /**
@@ -287,7 +366,11 @@ function describeCause(error: unknown): string {
  * - every `npcs[].onInteract` and `triggers[].event` must name a real
  *   `events` key;
  * - every `world_get("key")` a sidecar reads (extracted by regex, not by
- *   compiling the story) must have a `worldSeeds` entry.
+ *   compiling the story) must have a `worldSeeds` entry;
+ * - every `giveItem`/`modifyStat` and item/stat-sourced conditional (including
+ *   nested `then`/`else`) must name an id in the session game-defs catalog;
+ * - every `item_count("id")` / `stat_get("id")` a sidecar reads must name an
+ *   id in that catalog's items / stats respectively.
  *
  * Returns `undefined` for a map that authors no narrative at all, so a plain
  * imported map gets no interpreter (spec R5). Never degrades a REFERENCE
@@ -312,6 +395,7 @@ async function loadNarrative(
 
   const mapRelativePath = deps.mapRelativePath ?? MAP_FILE_RELATIVE;
   const readSidecarText = deps.readSidecarText ?? readMapDocumentText;
+  const catalog = deps.gameDefsCatalog ?? EMPTY_GAME_DEFS_CATALOG;
 
   const stories = [...requiredInkStories(doc.events)];
 
@@ -400,6 +484,31 @@ async function loadNarrative(
         );
       }
     }
+    for (const match of source.matchAll(ITEM_COUNT_CALL_PATTERN)) {
+      const itemId = match[1];
+      if (itemId !== undefined && !catalog.itemIds.has(itemId)) {
+        failNarrative(
+          mapRelativePath,
+          `ink sidecar ${JSON.stringify(sidecarPath(mapRelativePath, storyId))} calls item_count("${itemId}"), but no game-defs item exists for ${JSON.stringify(itemId)}.`,
+        );
+      }
+    }
+    for (const match of source.matchAll(STAT_GET_CALL_PATTERN)) {
+      const statId = match[1];
+      if (statId !== undefined && !catalog.statIds.has(statId)) {
+        failNarrative(
+          mapRelativePath,
+          `ink sidecar ${JSON.stringify(sidecarPath(mapRelativePath, storyId))} calls stat_get("${statId}"), but no game-defs stat exists for ${JSON.stringify(statId)}.`,
+        );
+      }
+    }
+  }
+
+  // Catalog cross-check for event commands (C4): walk every script including
+  // nested conditionals. Maps that never use items/stats load with an empty
+  // catalog (back-compat).
+  for (const [eventKey, commands] of Object.entries(doc.events)) {
+    assertCatalogCommandRefs(commands, eventKey, catalog, mapRelativePath);
   }
 
   return {

@@ -10,8 +10,11 @@ import type {
 import {
   DIRECTION_DELTA,
   GridMover,
+  Inventory,
+  parseGameDefsJson,
   StairTraversal,
   StairTriggerTracker,
+  StatBlock,
 } from '@threemaker/gameplay';
 import type { RampCellInput, RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
@@ -39,8 +42,8 @@ import {
 } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
-import type { AuthoredMapNarrative, AuthoredMapResult } from './authored-map.js';
-import { loadAuthoredMap } from './authored-map.js';
+import type { AuthoredMapNarrative, AuthoredMapResult, GameDefsCatalog } from './authored-map.js';
+import { EMPTY_GAME_DEFS_CATALOG, loadAuthoredMap } from './authored-map.js';
 import type { CameraMode } from './camera-rig.js';
 import { clampTiltDeg, computeCameraPose, cycleCameraMode } from './camera-rig.js';
 import {
@@ -395,12 +398,16 @@ async function resolveObjectTextureReal(sha256: string): Promise<ResolvedObjectT
  * the shared `current.tmmap.json` instead of next to itself -- a "no sidecar
  * exists" failure naming the wrong directory.
  */
-function loadAuthoredMapAt(relativeFile: string): Promise<AuthoredMapResult | null> {
+function loadAuthoredMapAt(
+  relativeFile: string,
+  gameDefsCatalog: GameDefsCatalog = EMPTY_GAME_DEFS_CATALOG,
+): Promise<AuthoredMapResult | null> {
   const mapRelativePath = `${MAP_DIR_RELATIVE}/${relativeFile}`;
   return loadAuthoredMap({
     mapRelativePath,
     readMapDocumentText: () => readMapDocumentText(mapRelativePath),
     resolveObjectTexture: resolveObjectTextureReal,
+    gameDefsCatalog,
   });
 }
 
@@ -703,11 +710,22 @@ interface ManifestNav {
   readonly startIndex: number;
 }
 
+/**
+ * Session inventory/stats for {@link renderFixtureMap}. Built once at boot
+ * from optional game-defs; empty Inventory + empty StatBlock when no defs.
+ * Survives map hops because the narrative root holds the same instances.
+ */
+interface SessionNarrativeStores {
+  readonly inventory: Inventory;
+  readonly stats: StatBlock;
+}
+
 async function renderFixtureMap(
   container: HTMLElement,
   data: FixtureMapData,
   sessionOverride?: SessionOverride,
   manifestNav?: ManifestNav,
+  sessionStores?: SessionNarrativeStores,
 ): Promise<void> {
   const {
     map: fixtureMap,
@@ -1026,6 +1044,22 @@ async function renderFixtureMap(
    * reads are safe.
    */
   let bundle: MapNarrativeBundle | undefined;
+  /**
+   * Session narrative root (world + inventory + stats + overlay). Declared
+   * before `buildDebugSnapshot` so the debug panel can read live inventory/
+   * stats without a TDZ on `narrativeRoot` (same reason `bundle` is early).
+   */
+  const narrativeRoot = createNarrativeRoot({
+    // Mounting happens INSIDE the factory: the root owns the overlay's lifetime,
+    // this file owns where it lives (narrative-root.ts's own doc comment). Built
+    // lazily on first use, so a narrative-free session never adds it to the DOM.
+    createOverlay: () => {
+      const overlay = createDialogueOverlay(i18n.t);
+      container.appendChild(overlay.element);
+      return overlay;
+    },
+    ...(sessionStores ? { inventory: sessionStores.inventory, stats: sessionStores.stats } : {}),
+  });
   const walkAnimation = new WalkAnimation();
 
   // The render-position handoff selector (design "Render-position handoff"):
@@ -1213,6 +1247,8 @@ async function renderFixtureMap(
       hopsCompleted: hopStats.hopsCompleted,
       lastOutgoingNarrativeSprites: hopStats.lastOutgoingNarrativeSprites,
       lastOutgoingFloorTextureKeys: hopStats.lastOutgoingFloorTextureKeys,
+      inventory: narrativeRoot.inventory.snapshot(),
+      stats: narrativeRoot.stats.snapshot(),
     };
   }
   debugPanel.update(buildDebugSnapshot());
@@ -1433,17 +1469,6 @@ async function renderFixtureMap(
       });
     },
   };
-
-  const narrativeRoot = createNarrativeRoot({
-    // Mounting happens INSIDE the factory: the root owns the overlay's lifetime,
-    // this file owns where it lives (narrative-root.ts's own doc comment). Built
-    // lazily on first use, so a narrative-free session never adds it to the DOM.
-    createOverlay: () => {
-      const overlay = createDialogueOverlay(i18n.t);
-      container.appendChild(overlay.element);
-      return overlay;
-    },
-  });
 
   let highlightedIndex = 0;
   let pendingChoiceCount = 0;
@@ -2507,6 +2532,47 @@ async function main(): Promise<void> {
       );
     }
 
+    // Session item/stat stores (C4). Always created; StatBlock rebuilt from
+    // game-defs when the manifest names a defs file. Empty when no defs.
+    let gameDefsCatalog: GameDefsCatalog = EMPTY_GAME_DEFS_CATALOG;
+    const sessionInventory = new Inventory();
+    let sessionStats = new StatBlock([]);
+
+    if (manifest?.gameDefs) {
+      try {
+        const defsPath = `${MAP_DIR_RELATIVE}/${manifest.gameDefs}`;
+        const defsText = await readMapDocumentText(defsPath);
+        if (defsText === null) {
+          throw new Error(
+            `main: game defs file ${JSON.stringify(manifest.gameDefs)} is missing (looked up at ${JSON.stringify(defsPath)}).`,
+          );
+        }
+        const defs = parseGameDefsJson(defsText);
+        gameDefsCatalog = {
+          itemIds: new Set(defs.items.map((item) => item.id)),
+          statIds: new Set(defs.stats.map((stat) => stat.id)),
+        };
+        sessionStats = new StatBlock(defs.stats);
+      } catch (error) {
+        // Same loud surface as a bad map path: log and abandon multi-map so we
+        // never silently boot with empty defs when a path was declared.
+        console.error(
+          'main: the game defs file failed to load/validate; falling back to the single authored map.',
+          error,
+        );
+        authoredFailure = describeAuthoredFailure(error);
+        manifest = undefined;
+      }
+    }
+
+    const sessionStores: SessionNarrativeStores = {
+      inventory: sessionInventory,
+      stats: sessionStats,
+    };
+
+    // loadEntry closes over the session catalog so hops re-validate the same way.
+    const loadEntry = (relativeFile: string) => loadAuthoredMapAt(relativeFile, gameDefsCatalog);
+
     if (manifest) {
       // Try every manifest map, in order, until one actually renders --
       // NOT just `maps[0]`. A real RPG Maker project's very first map
@@ -2519,7 +2585,7 @@ async function main(): Promise<void> {
         const entry = manifest.maps[index];
         if (!entry) continue;
         try {
-          const authored = await loadAuthoredMapAt(entry.file);
+          const authored = await loadEntry(entry.file);
           if (!authored) {
             throw new Error(`loadAuthoredMap returned null for manifest entry "${entry.file}".`);
           }
@@ -2550,7 +2616,8 @@ async function main(): Promise<void> {
               spawn: authored.spawn,
               narrative: authored.narrative,
             },
-            { manifest, loadEntry: loadAuthoredMapAt, startIndex: index },
+            { manifest, loadEntry, startIndex: index },
+            sessionStores,
           );
           return;
         } catch (error) {
@@ -2568,7 +2635,11 @@ async function main(): Promise<void> {
     }
 
     try {
-      const authored = await loadAuthoredMap();
+      const authored = await loadAuthoredMap({
+        readMapDocumentText,
+        resolveObjectTexture: resolveObjectTextureReal,
+        gameDefsCatalog,
+      });
       if (authored) {
         const primaryFloor = authored.floorSources[0];
         if (!primaryFloor) throw new Error('loadAuthoredMap returned no floors.');
@@ -2590,6 +2661,8 @@ async function main(): Promise<void> {
             spawn: authored.spawn,
             narrative: authored.narrative,
           },
+          undefined,
+          sessionStores,
         );
         return;
       }

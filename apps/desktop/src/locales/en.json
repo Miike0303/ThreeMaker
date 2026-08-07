@@ -23,6 +23,8 @@
     "debug.hops": "Map hops",
     "debug.lastHopSprites": "Last hop NPC sprites",
     "debug.lastHopTextures": "Last hop floor textures",
+    "debug.inventory": "Inventory",
+    "debug.stats": "Stats",
     "debug.controls.title": "Controls",
     "debug.controls.move": "Move",
     "debug.controls.camera": "Camera mode",

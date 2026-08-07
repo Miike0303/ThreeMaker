@@ -103,4 +103,46 @@ describe('parseGameManifest', () => {
       }),
     ).toThrow(/file/i);
   });
+
+  it('parses an optional gameDefs path', () => {
+    const manifest = parseGameManifest({
+      maps: [{ mapId: 1, name: 'Town', file: 'map001.tmmap.json', slotsResolved: 0 }],
+      gameDefs: 'game-defs.json',
+    });
+
+    expect(manifest.gameDefs).toBe('game-defs.json');
+  });
+
+  it('normalizes backslashes in gameDefs the same way as map files', () => {
+    const manifest = parseGameManifest({
+      maps: [{ mapId: 1, name: 'Town', file: 'map001.tmmap.json', slotsResolved: 0 }],
+      gameDefs: 'data\\game-defs.json',
+    });
+
+    expect(manifest.gameDefs).toBe('data/game-defs.json');
+  });
+
+  it('omits gameDefs when absent', () => {
+    const manifest = parseGameManifest({
+      maps: [{ mapId: 1, name: 'Town', file: 'map001.tmmap.json', slotsResolved: 0 }],
+    });
+
+    expect(manifest.gameDefs).toBeUndefined();
+  });
+
+  it('throws when gameDefs is present but not a non-empty string', () => {
+    expect(() =>
+      parseGameManifest({
+        maps: [{ mapId: 1, name: 'Town', file: 'map001.tmmap.json', slotsResolved: 0 }],
+        gameDefs: '',
+      }),
+    ).toThrow(/gameDefs/i);
+
+    expect(() =>
+      parseGameManifest({
+        maps: [{ mapId: 1, name: 'Town', file: 'map001.tmmap.json', slotsResolved: 0 }],
+        gameDefs: 42,
+      }),
+    ).toThrow(/gameDefs/i);
+  });
 });

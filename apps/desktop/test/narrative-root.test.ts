@@ -12,6 +12,7 @@
  * same split `dialogue-ui.test.ts` already uses.
  */
 
+import { Inventory, StatBlock } from '@threemaker/gameplay';
 import { describe, expect, it, vi } from 'vitest';
 import type { DialogueOverlay } from '../src/dialogue-ui.js';
 import { createNarrativeRoot } from '../src/narrative-root.js';
@@ -28,11 +29,36 @@ function fakeOverlay(): DialogueOverlay {
   };
 }
 
-function makeRoot(createOverlay: () => DialogueOverlay = fakeOverlay) {
-  return createNarrativeRoot({ createOverlay });
+function makeRoot(
+  createOverlay: () => DialogueOverlay = fakeOverlay,
+  extras: { inventory?: Inventory; stats?: StatBlock } = {},
+) {
+  return createNarrativeRoot({ createOverlay, ...extras });
 }
 
 describe('createNarrativeRoot', () => {
+  it('exposes session inventory and stats that default to empty stores', () => {
+    const root = makeRoot();
+
+    expect(root.inventory).toBeInstanceOf(Inventory);
+    expect(root.stats).toBeInstanceOf(StatBlock);
+    expect(root.inventory.snapshot()).toEqual({});
+    expect(root.stats.snapshot()).toEqual({});
+  });
+
+  it('keeps injected inventory and stats as the same session instances', () => {
+    const inventory = new Inventory();
+    const stats = new StatBlock([{ id: 'hp', name: 'HP', base: 10, min: 0, max: 100 }]);
+    inventory.add('potion', 2);
+
+    const root = makeRoot(fakeOverlay, { inventory, stats });
+
+    expect(root.inventory).toBe(inventory);
+    expect(root.stats).toBe(stats);
+    expect(root.inventory.count('potion')).toBe(2);
+    expect(root.stats.get('hp')).toBe(10);
+  });
+
   it('seeds every key the world does not hold yet', () => {
     const root = makeRoot();
 

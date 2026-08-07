@@ -10,6 +10,8 @@
  * - it never constructs a `WorldState` -- it uses `root.world`, and seeds it
  *   BEFORE compiling/binding any story, since `bindStoryToWorld`'s `world_get`
  *   hard-throws on a key the world does not hold yet (`story-runtime.ts`);
+ * - session inventory/stats also come from `root` (not constructed here) so
+ *   map hops keep the same stores on the interpreter and ink externals;
  * - `dispose()` owns exactly the NPC sheet textures loaded here and the meshes
  *   added to the scene. FLOOR textures are disposed by the swap sequence's own
  *   `disposeFloorTextures`; a second path over them would double-free.
@@ -174,7 +176,13 @@ export async function buildMapNarrativeBundle(
   const stories = new Map<string, CompiledStory>();
   for (const [storyId, source] of narrative.inkSources) {
     const story = compileInk(source);
-    bindStoryToWorld(story, { storyId, world: root.world });
+    // Session stores from the root: same instances across map hops (C4).
+    bindStoryToWorld(story, {
+      storyId,
+      world: root.world,
+      items: root.inventory,
+      stats: root.stats,
+    });
     stories.set(storyId, story);
   }
 
@@ -182,6 +190,8 @@ export async function buildMapNarrativeBundle(
     world: root.world,
     host: deps.host,
     provider: new MapDialogueProvider(stories),
+    items: root.inventory,
+    stats: root.stats,
   });
 
   // Bridges the document's content-addressed sheet ref to `NpcDefinition`'s

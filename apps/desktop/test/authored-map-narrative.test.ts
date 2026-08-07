@@ -340,4 +340,212 @@ describe('loadAuthoredMap -- authored narrative', () => {
     expect(result?.narrative).toBeUndefined();
     expect(deps.readSidecarText).not.toHaveBeenCalled();
   });
+
+  // --- C4: game-defs catalog cross-validation (item/stat ids) ---
+
+  const CATALOG = {
+    itemIds: new Set(['potion', 'key']),
+    statIds: new Set(['hp', 'mp']),
+  };
+
+  /** Minimal narrative map with no NPCs/triggers/ink — only events (text sources). */
+  function itemStatDoc(events: RawDoc): string {
+    return docText({
+      npcs: [],
+      triggers: [],
+      events,
+      worldSeeds: {},
+    });
+  }
+
+  it('loads giveItem/modifyStat and item/stat conditionals when ids are in the catalog', async () => {
+    const deps = buildDeps({
+      gameDefsCatalog: CATALOG,
+      readMapDocumentText: vi.fn(async () =>
+        itemStatDoc({
+          chest: [
+            { type: 'giveItem', itemId: 'potion', amount: 1 },
+            { type: 'modifyStat', statId: 'hp', delta: 5 },
+            {
+              type: 'conditional',
+              if: { key: 'key', op: 'gt', value: 0, source: 'item' },
+              then: [{ type: 'setWorldVar', key: 'opened', value: true }],
+              else: [{ type: 'modifyStat', statId: 'mp', delta: -1 }],
+            },
+            {
+              type: 'conditional',
+              if: { key: 'hp', op: 'gte', value: 1, source: 'stat' },
+              then: [{ type: 'giveItem', itemId: 'key', amount: 1 }],
+            },
+          ],
+        }),
+      ),
+    });
+
+    const result = await loadAuthoredMap(deps);
+    expect(result?.narrative?.events.chest).toHaveLength(4);
+  });
+
+  it('loads maps that never use items/stats with an empty catalog (back-compat)', async () => {
+    const deps = buildDeps();
+    const result = await loadAuthoredMap(deps);
+    expect(result?.narrative).toBeDefined();
+  });
+
+  it('fails loudly on unknown giveItem itemId, naming map, event, and id', async () => {
+    const deps = buildDeps({
+      gameDefsCatalog: CATALOG,
+      readMapDocumentText: vi.fn(async () =>
+        itemStatDoc({
+          chest: [{ type: 'giveItem', itemId: 'ghost_potion', amount: 1 }],
+        }),
+      ),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/giveItem.*unknown item id "ghost_potion"/);
+  });
+
+  it('fails loudly on unknown modifyStat statId', async () => {
+    const deps = buildDeps({
+      gameDefsCatalog: CATALOG,
+      readMapDocumentText: vi.fn(async () =>
+        itemStatDoc({
+          buff: [{ type: 'modifyStat', statId: 'strength', delta: 1 }],
+        }),
+      ),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/modifyStat.*unknown stat id "strength"/);
+  });
+
+  it('fails loudly on unknown conditional source item id', async () => {
+    const deps = buildDeps({
+      gameDefsCatalog: CATALOG,
+      readMapDocumentText: vi.fn(async () =>
+        itemStatDoc({
+          check: [
+            {
+              type: 'conditional',
+              if: { key: 'missing_item', op: 'gt', value: 0, source: 'item' },
+              then: [{ type: 'setWorldVar', key: 'ok', value: true }],
+            },
+          ],
+        }),
+      ),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(
+      /conditional source "item".*unknown item id "missing_item"/,
+    );
+  });
+
+  it('fails loudly on unknown conditional source stat id', async () => {
+    const deps = buildDeps({
+      gameDefsCatalog: CATALOG,
+      readMapDocumentText: vi.fn(async () =>
+        itemStatDoc({
+          check: [
+            {
+              type: 'conditional',
+              if: { key: 'missing_stat', op: 'gt', value: 0, source: 'stat' },
+              then: [{ type: 'setWorldVar', key: 'ok', value: true }],
+            },
+          ],
+        }),
+      ),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(
+      /conditional source "stat".*unknown stat id "missing_stat"/,
+    );
+  });
+
+  it('walks nested then/else for catalog refs', async () => {
+    const deps = buildDeps({
+      gameDefsCatalog: CATALOG,
+      readMapDocumentText: vi.fn(async () =>
+        itemStatDoc({
+          nest: [
+            {
+              type: 'conditional',
+              if: { key: 'opened', op: 'eq', value: false },
+              then: [
+                {
+                  type: 'conditional',
+                  if: { key: 'flag', op: 'eq', value: true },
+                  then: [{ type: 'giveItem', itemId: 'nested_bad', amount: 1 }],
+                },
+              ],
+              else: [{ type: 'modifyStat', statId: 'also_bad', delta: 1 }],
+            },
+          ],
+        }),
+      ),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/unknown item id "nested_bad"/);
+  });
+
+  it('fails loudly when ink item_count names an unknown item id', async () => {
+    const deps = buildDeps({
+      gameDefsCatalog: CATALOG,
+      readMapDocumentText: vi.fn(async () =>
+        itemStatDoc({
+          scan: [{ type: 'showDialogue', source: { kind: 'ink', storyId: 'itemscan' } }],
+        }),
+      ),
+      readSidecarText: vi.fn(async (path: string) => {
+        if (path.endsWith('.itemscan.ink')) {
+          return 'EXTERNAL item_count(itemId)\n{item_count("ghost")}\n-> END\n';
+        }
+        return null;
+      }),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/item_count\("ghost"\).*no game-defs item/);
+  });
+
+  it('fails loudly when ink stat_get names an unknown stat id', async () => {
+    const deps = buildDeps({
+      gameDefsCatalog: CATALOG,
+      readMapDocumentText: vi.fn(async () =>
+        itemStatDoc({
+          scan: [{ type: 'showDialogue', source: { kind: 'ink', storyId: 'statscan' } }],
+        }),
+      ),
+      readSidecarText: vi.fn(async (path: string) => {
+        if (path.endsWith('.statscan.ink')) {
+          return 'EXTERNAL stat_get(statId)\n{stat_get("ghost_stat")}\n-> END\n';
+        }
+        return null;
+      }),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(
+      /stat_get\("ghost_stat"\).*no game-defs stat/,
+    );
+  });
+
+  it('accepts ink item_count/stat_get when ids are in the catalog', async () => {
+    const deps = buildDeps({
+      gameDefsCatalog: CATALOG,
+      readMapDocumentText: vi.fn(async () =>
+        itemStatDoc({
+          scan: [{ type: 'showDialogue', source: { kind: 'ink', storyId: 'okscan' } }],
+        }),
+      ),
+      readSidecarText: vi.fn(async (path: string) => {
+        if (path.endsWith('.okscan.ink')) {
+          return (
+            'EXTERNAL item_count(itemId)\nEXTERNAL stat_get(statId)\n' +
+            '{item_count("potion")} {stat_get("hp")}\n-> END\n'
+          );
+        }
+        return null;
+      }),
+    });
+
+    const result = await loadAuthoredMap(deps);
+    expect(result?.narrative?.inkSources.get('okscan')).toContain('item_count("potion")');
+  });
 });

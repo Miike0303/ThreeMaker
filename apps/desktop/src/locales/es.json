@@ -23,6 +23,8 @@
     "debug.hops": "Saltos de mapa",
     "debug.lastHopSprites": "Sprites NPC del último salto",
     "debug.lastHopTextures": "Texturas de piso del último salto",
+    "debug.inventory": "Inventario",
+    "debug.stats": "Estadísticas",
     "debug.controls.title": "Controles",
     "debug.controls.move": "Mover",
     "debug.controls.camera": "Modo de cámara",
