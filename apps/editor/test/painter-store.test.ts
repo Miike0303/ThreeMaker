@@ -239,8 +239,8 @@ describe('painter-store: eyedropper', () => {
   });
 });
 
-describe('painter-store: setTool/setActiveLayer guard mid-stroke', () => {
-  it('ignores a tool switch while a stroke is in progress', () => {
+describe('painter-store: setTool/setActiveLayer mid-stroke', () => {
+  it('cancels a stuck stroke and switches tool (live editor resilience)', () => {
     let state = createPainterState({
       ...oneFloor(3, 3),
       width: 3,
@@ -248,8 +248,10 @@ describe('painter-store: setTool/setActiveLayer guard mid-stroke', () => {
       fillTileId: 1,
     });
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    expect(state.stroke.status).toBe('stroking');
     const switched = setTool(state, 'flood-fill');
-    expect(switched).toBe(state);
+    expect(switched.stroke).toEqual({ status: 'idle' });
+    expect(switched.tool).toBe('flood-fill');
   });
 
   it('ignores an active-layer switch while a stroke is in progress', () => {
@@ -1426,6 +1428,50 @@ describe('painter-store: npc tool (c1a follow-up)', () => {
       },
     ]);
     expect(next.stroke).toEqual({ status: 'idle' });
+  });
+
+  /**
+   * Live-smoke regression (c1a follow-up): the panel never calls `placeNpc`
+   * directly — it writes sprite/event via viewport setters, then the canvas
+   * pointer path runs `setTool` + `pointerDown`. A stuck brush stroke must not
+   * drop the sprite write or block the tool switch (that asymmetry let trigger
+   * place on load defaults while NPC never landed).
+   */
+  it('viewport-surface path: sprite/event setters then pointerDown place after a stuck stroke', () => {
+    let state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      eventKeys: [EVENT_TALK, EVENT_GATE],
+      fillTileId: 1,
+    });
+    // Begin a brush stroke and never pointerUp — simulates a lost pointerup.
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    expect(state.stroke.status).toBe('stroking');
+    expect(state.activeNpcSpriteObject).toBeUndefined();
+
+    // Same order as PainterPanel → PainterViewport public methods.
+    state = setActiveNpcSpriteObject(state, NPC_SPRITE_A);
+    state = setActiveNpcEventKey(state, EVENT_GATE);
+    state = setTool(state, 'npc');
+    expect(state.stroke).toEqual({ status: 'idle' });
+    expect(state.tool).toBe('npc');
+    expect(state.activeNpcSpriteObject).toBe(NPC_SPRITE_A);
+    expect(state.activeNpcEventKey).toBe(EVENT_GATE);
+
+    const { state: placed } = pointerDown(state, { x: 2, y: 3 });
+    expect(placed.npcs).toEqual([
+      {
+        id: 'npc-1',
+        x: 2,
+        y: 3,
+        floor: 'floor-0',
+        facing: 'down',
+        sprite: { object: NPC_SPRITE_A, characterIndex: 0 },
+        onInteract: EVENT_GATE,
+      },
+    ]);
+    expect(placed.stroke).toEqual({ status: 'idle' });
   });
 
   it('removeNpc deletes; undo/redo restore', () => {

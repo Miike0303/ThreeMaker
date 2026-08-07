@@ -188,6 +188,18 @@ export function PainterPanel({ t }: PainterPanelProps) {
       .catch((err) => console.error('Failed to load character sprites for the painter:', err));
   }, []);
 
+  // Mirror event-key load defaults: when the character catalog arrives and no
+  // sprite is selected yet, pick the first sheet so NPC placement is not a
+  // silent no-op (trigger only needs the defaulted event key; NPC also needs
+  // a sprite). handleLoad/handleCreateMap also call this after loadMap.
+  useEffect(() => {
+    if (!mapReady || characterSprites.length === 0) return;
+    const current = viewportRef.current?.painterState;
+    if (!current || current.activeNpcSpriteObject) return;
+    const first = characterSprites[0]?.sha256;
+    if (first) viewportRef.current?.setActiveNpcSpriteObject(first);
+  }, [mapReady, characterSprites]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -266,13 +278,17 @@ export function PainterPanel({ t }: PainterPanelProps) {
       );
       const { textures, sheetPixelSizes } = await loadSlotTextures(doc);
       viewportRef.current?.loadMap(doc, textures, sheetPixelSizes, GROUND_TILE_ID);
+      // loadMap resets session selection; re-default the first catalog sprite
+      // so NPC place is available immediately (same role as eventKeys[0]).
+      const firstSprite = characterSprites[0]?.sha256;
+      if (firstSprite) viewportRef.current?.setActiveNpcSpriteObject(firstSprite);
       setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
       setMapReady(true);
     } catch (err) {
       console.error('Failed to create the painter demo map:', err);
       setStatusMessage(t('painter.createFailed'));
     }
-  }, [tilesetAId, tilesetBId, t]);
+  }, [tilesetAId, tilesetBId, t, characterSprites]);
 
   const handleSave = useCallback(async () => {
     const doc = viewportRef.current?.currentDocument();
@@ -295,6 +311,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
       }
       const { textures, sheetPixelSizes } = await loadSlotTextures(doc);
       viewportRef.current?.loadMap(doc, textures, sheetPixelSizes, GROUND_TILE_ID);
+      const firstSprite = characterSprites[0]?.sha256;
+      if (firstSprite) viewportRef.current?.setActiveNpcSpriteObject(firstSprite);
       setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
       setMapReady(true);
       setStatusMessage(t('painter.loadSuccess'));
@@ -302,7 +320,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       console.error('Failed to load the map:', err);
       setStatusMessage(t('painter.loadFailed'));
     }
-  }, [t]);
+  }, [t, characterSprites]);
 
   return (
     <div className="painter-panel">
@@ -608,6 +626,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
           <label>
             {t('painter.npcs.sprite')}
             <select
+              name="npc-sprite"
               value={painterState.activeNpcSpriteObject ?? ''}
               onChange={(event) => {
                 const value = event.target.value;
@@ -656,6 +675,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
           <label>
             {t('painter.npcs.event')}
             <select
+              name="npc-event"
               value={painterState.activeNpcEventKey ?? ''}
               disabled={painterState.eventKeys.length === 0}
               onChange={(event) => {
@@ -731,6 +751,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
           <label>
             {t('painter.triggers.event')}
             <select
+              name="trigger-event"
               value={painterState.activeTriggerEventKey ?? ''}
               disabled={painterState.eventKeys.length === 0}
               onChange={(event) => {

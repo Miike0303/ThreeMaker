@@ -486,10 +486,25 @@ export function setSemanticClass(state: PainterState, cls: SemanticClass): Paint
   return { ...state, semanticClass: cls };
 }
 
-/** Switches the active tool. Ignored mid-stroke (a stroke commits/cancels via pointerup before the tool can change). */
+/**
+ * Cancels an in-progress stroke without committing tiles. Single-click tools
+ * (npc/trigger/prop/…) and tool/selection switches must never be permanently
+ * blocked by a lost pointerup leaving `stroke.status === 'stroking'`.
+ */
+export function cancelStroke(state: PainterState): PainterState {
+  if (state.stroke.status !== 'stroking') return state;
+  return { ...state, stroke: TOOL_SM_IDLE };
+}
+
+/**
+ * Switches the active tool. Any in-progress stroke is cancelled first so a
+ * stuck stroke cannot freeze the tool on brush forever (live editor: Escape
+ * does not clear stroke; only pointerup does).
+ */
 export function setTool(state: PainterState, tool: ToolId): PainterState {
-  if (state.stroke.status === 'stroking') return state;
-  return { ...state, tool };
+  const idle = cancelStroke(state);
+  if (idle.tool === tool) return idle;
+  return { ...idle, tool };
 }
 
 /** Switches the active editable layer (0-3). Ignored mid-stroke, same as `setTool`. */
@@ -560,16 +575,21 @@ export function pointerDown(
   }
   if (state.tool === 'prop') {
     // No selected .glb → no-op (panel surfaces the "select a .glb first" hint).
-    if (!state.activePropObject) return { state };
-    return { state: placeProp(state, { x: point.x, y: point.y }) };
+    // Cancel a stuck stroke first so a lost pointerup cannot block placement.
+    const idle = cancelStroke(state);
+    if (!idle.activePropObject) return { state: idle };
+    return { state: placeProp(idle, { x: point.x, y: point.y }) };
   }
   if (state.tool === 'npc') {
     // Zero events / no sprite / occupied tile → no-op (panel surfaces why).
-    return { state: placeNpc(state, { x: point.x, y: point.y }) };
+    // Cancel a stuck stroke first — same resilience as prop/trigger.
+    const idle = cancelStroke(state);
+    return { state: placeNpc(idle, { x: point.x, y: point.y }) };
   }
   if (state.tool === 'trigger') {
     // Zero events / no event key → no-op (panel surfaces why).
-    return { state: placeTrigger(state, { x: point.x, y: point.y }) };
+    const idle = cancelStroke(state);
+    return { state: placeTrigger(idle, { x: point.x, y: point.y }) };
   }
   const stroke = beginStroke(state.stroke, state.tool, state.activeLayer, point);
   return { state: { ...state, stroke } };
@@ -1103,37 +1123,45 @@ export function nextNpcId(npcs: readonly NpcDocument[]): string {
   return `npc-${n}`;
 }
 
-/** Sets (or, with `undefined`, clears) the selected NPC sprite sheet sha. Ignored mid-stroke. */
+/**
+ * Sets (or, with `undefined`, clears) the selected NPC sprite sheet sha.
+ * Cancels a stuck stroke first so panel selection cannot be silently dropped
+ * while `stroke.status === 'stroking'` (live-smoke regression: select looked
+ * set in the DOM while placeNpc still saw no sprite).
+ */
 export function setActiveNpcSpriteObject(
   state: PainterState,
   object: string | undefined,
 ): PainterState {
-  if (state.stroke.status === 'stroking') return state;
-  if (object !== undefined) return { ...state, activeNpcSpriteObject: object };
-  if (state.activeNpcSpriteObject === undefined) return state;
-  const { activeNpcSpriteObject: _activeNpcSpriteObject, ...rest } = state;
+  const idle = cancelStroke(state);
+  if (object !== undefined) return { ...idle, activeNpcSpriteObject: object };
+  if (idle.activeNpcSpriteObject === undefined) return idle;
+  const { activeNpcSpriteObject: _activeNpcSpriteObject, ...rest } = idle;
   return rest;
 }
 
-/** Sets the character index for the next placed NPC. Ignored mid-stroke. */
+/** Sets the character index for the next placed NPC. Cancels a stuck stroke first. */
 export function setActiveNpcCharacterIndex(state: PainterState, index: number): PainterState {
-  if (state.stroke.status === 'stroking') return state;
-  if (!Number.isInteger(index) || index < 0) return state;
-  return { ...state, activeNpcCharacterIndex: index };
+  const idle = cancelStroke(state);
+  if (!Number.isInteger(index) || index < 0) return idle;
+  return { ...idle, activeNpcCharacterIndex: index };
 }
 
-/** Sets the facing for the next placed NPC. Ignored mid-stroke. */
+/** Sets the facing for the next placed NPC. Cancels a stuck stroke first. */
 export function setActiveNpcFacing(state: PainterState, facing: NpcFacing): PainterState {
-  if (state.stroke.status === 'stroking') return state;
-  return { ...state, activeNpcFacing: facing };
+  const idle = cancelStroke(state);
+  return { ...idle, activeNpcFacing: facing };
 }
 
-/** Sets (or clears) the event key for the next placed NPC's `onInteract`. Ignored mid-stroke. */
+/**
+ * Sets (or clears) the event key for the next placed NPC's `onInteract`.
+ * Cancels a stuck stroke first (same reason as `setActiveNpcSpriteObject`).
+ */
 export function setActiveNpcEventKey(state: PainterState, key: string | undefined): PainterState {
-  if (state.stroke.status === 'stroking') return state;
-  if (key !== undefined) return { ...state, activeNpcEventKey: key };
-  if (state.activeNpcEventKey === undefined) return state;
-  const { activeNpcEventKey: _activeNpcEventKey, ...rest } = state;
+  const idle = cancelStroke(state);
+  if (key !== undefined) return { ...idle, activeNpcEventKey: key };
+  if (idle.activeNpcEventKey === undefined) return idle;
+  const { activeNpcEventKey: _activeNpcEventKey, ...rest } = idle;
   return rest;
 }
 
@@ -1258,21 +1286,21 @@ export function nextTriggerId(triggers: readonly TriggerDocument[]): string {
   return `trigger-${n}`;
 }
 
-/** Sets the `on` mode for the next placed trigger. Ignored mid-stroke. */
+/** Sets the `on` mode for the next placed trigger. Cancels a stuck stroke first. */
 export function setActiveTriggerOn(state: PainterState, on: 'enter' | 'interact'): PainterState {
-  if (state.stroke.status === 'stroking') return state;
-  return { ...state, activeTriggerOn: on };
+  const idle = cancelStroke(state);
+  return { ...idle, activeTriggerOn: on };
 }
 
-/** Sets (or clears) the event key for the next placed trigger. Ignored mid-stroke. */
+/** Sets (or clears) the event key for the next placed trigger. Cancels a stuck stroke first. */
 export function setActiveTriggerEventKey(
   state: PainterState,
   key: string | undefined,
 ): PainterState {
-  if (state.stroke.status === 'stroking') return state;
-  if (key !== undefined) return { ...state, activeTriggerEventKey: key };
-  if (state.activeTriggerEventKey === undefined) return state;
-  const { activeTriggerEventKey: _activeTriggerEventKey, ...rest } = state;
+  const idle = cancelStroke(state);
+  if (key !== undefined) return { ...idle, activeTriggerEventKey: key };
+  if (idle.activeTriggerEventKey === undefined) return idle;
+  const { activeTriggerEventKey: _activeTriggerEventKey, ...rest } = idle;
   return rest;
 }
 
