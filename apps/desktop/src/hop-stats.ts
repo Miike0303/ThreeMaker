@@ -10,6 +10,10 @@ export type HopStats = {
   readonly lastOutgoingNarrativeSprites: number;
   /** Floor texture keys disposed with the outgoing map at the last hop. */
   readonly lastOutgoingFloorTextureKeys: number;
+  /** Prop instances disposed with the outgoing map at the last hop (C5). */
+  readonly lastOutgoingPropInstances: number;
+  /** Distinct prop glTF assets disposed with the outgoing map at the last hop (C5). */
+  readonly lastOutgoingPropAssets: number;
 };
 
 export function createHopStats(): HopStats {
@@ -17,6 +21,8 @@ export function createHopStats(): HopStats {
     hopsCompleted: 0,
     lastOutgoingNarrativeSprites: 0,
     lastOutgoingFloorTextureKeys: 0,
+    lastOutgoingPropInstances: 0,
+    lastOutgoingPropAssets: 0,
   };
 }
 
@@ -25,11 +31,15 @@ export function recordHopCompleted(
   outgoing: {
     readonly outgoingNarrativeSprites: number;
     readonly outgoingFloorTextureKeys: number;
+    readonly outgoingPropInstances?: number;
+    readonly outgoingPropAssets?: number;
   },
 ): HopStats {
   return {
     hopsCompleted: stats.hopsCompleted + 1,
     lastOutgoingNarrativeSprites: outgoing.outgoingNarrativeSprites,
     lastOutgoingFloorTextureKeys: outgoing.outgoingFloorTextureKeys,
+    lastOutgoingPropInstances: outgoing.outgoingPropInstances ?? 0,
+    lastOutgoingPropAssets: outgoing.outgoingPropAssets ?? 0,
   };
 }

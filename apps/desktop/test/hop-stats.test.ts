@@ -7,6 +7,8 @@ describe('hop-stats', () => {
       hopsCompleted: 0,
       lastOutgoingNarrativeSprites: 0,
       lastOutgoingFloorTextureKeys: 0,
+      lastOutgoingPropInstances: 0,
+      lastOutgoingPropAssets: 0,
     });
   });
 
@@ -14,11 +16,15 @@ describe('hop-stats', () => {
     const a = recordHopCompleted(createHopStats(), {
       outgoingNarrativeSprites: 2,
       outgoingFloorTextureKeys: 4,
+      outgoingPropInstances: 3,
+      outgoingPropAssets: 1,
     });
     expect(a).toEqual({
       hopsCompleted: 1,
       lastOutgoingNarrativeSprites: 2,
       lastOutgoingFloorTextureKeys: 4,
+      lastOutgoingPropInstances: 3,
+      lastOutgoingPropAssets: 1,
     });
 
     const b = recordHopCompleted(a, {
@@ -28,5 +34,8 @@ describe('hop-stats', () => {
     expect(b.hopsCompleted).toBe(2);
     expect(b.lastOutgoingNarrativeSprites).toBe(1);
     expect(b.lastOutgoingFloorTextureKeys).toBe(3);
+    // Omitted prop counters default to 0 (maps without props).
+    expect(b.lastOutgoingPropInstances).toBe(0);
+    expect(b.lastOutgoingPropAssets).toBe(0);
   });
 });

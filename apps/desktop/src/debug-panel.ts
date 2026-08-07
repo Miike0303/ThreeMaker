@@ -13,6 +13,8 @@ export interface DebugSnapshot {
   readonly elevation: number;
   /** Live NPC sprite meshes from the current map's narrative bundle (0 if none). */
   readonly narrativeSprites: number;
+  /** Live prop instances from the current map's props bundle (0 if none). */
+  readonly propInstances: number;
   /** Successful G-cycle / transferMap hops completed this session. */
   readonly hopsCompleted: number;
   /**
@@ -22,6 +24,10 @@ export interface DebugSnapshot {
   readonly lastOutgoingNarrativeSprites: number;
   /** Floor texture keys disposed with the outgoing map at the last hop. */
   readonly lastOutgoingFloorTextureKeys: number;
+  /** Prop instances disposed with the outgoing map at the last hop (C5). */
+  readonly lastOutgoingPropInstances: number;
+  /** Distinct prop glTF assets disposed with the outgoing map at the last hop (C5). */
+  readonly lastOutgoingPropAssets: number;
   /** Current session inventory counts (display-only; C4). */
   readonly inventory: Readonly<Record<string, number>>;
   /** Current session stat values (display-only; C4). */
@@ -53,6 +59,7 @@ export function formatDebugRows(snapshot: DebugSnapshot, t: I18n['t']): readonly
     { label: t('debug.tile'), value: `${snapshot.tile.x}, ${snapshot.tile.y}` },
     { label: t('debug.elevation'), value: String(snapshot.elevation) },
     { label: t('debug.narrativeSprites'), value: String(snapshot.narrativeSprites) },
+    { label: t('debug.props'), value: String(snapshot.propInstances) },
     { label: t('debug.hops'), value: String(snapshot.hopsCompleted) },
     {
       label: t('debug.lastHopSprites'),
@@ -61,6 +68,14 @@ export function formatDebugRows(snapshot: DebugSnapshot, t: I18n['t']): readonly
     {
       label: t('debug.lastHopTextures'),
       value: String(snapshot.lastOutgoingFloorTextureKeys),
+    },
+    {
+      label: t('debug.lastHopPropInstances'),
+      value: String(snapshot.lastOutgoingPropInstances),
+    },
+    {
+      label: t('debug.lastHopPropAssets'),
+      value: String(snapshot.lastOutgoingPropAssets),
     },
     {
       label: t('debug.inventory'),
@@ -210,9 +225,12 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
       tile: { x: 0, y: 0 },
       elevation: 0,
       narrativeSprites: 0,
+      propInstances: 0,
       hopsCompleted: 0,
       lastOutgoingNarrativeSprites: 0,
       lastOutgoingFloorTextureKeys: 0,
+      lastOutgoingPropInstances: 0,
+      lastOutgoingPropAssets: 0,
       inventory: {},
       stats: {},
     },

@@ -83,7 +83,13 @@ function buildResult(overlayTileId: number | null): AuthoredMapResult {
   // content) -- mirrored here by hand because `apps/desktop/tsconfig.json`
   // uses `include: ["src"]`, so this file is outside `tsc`'s graph and the
   // compiler cannot report the omission.
-  return { floorSources: [floorSource], stairLinks: [], spawn: undefined, narrative: undefined };
+  return {
+    floorSources: [floorSource],
+    stairLinks: [],
+    spawn: undefined,
+    narrative: undefined,
+    props: [],
+  };
 }
 
 describe('isAuthoredResultPlayable', () => {

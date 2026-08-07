@@ -28,7 +28,7 @@ import {
   resolvePointerIntent,
   snapshotFromGamepads,
 } from '@threemaker/input';
-import type { RoomDocument } from '@threemaker/map-format';
+import type { PropDocument, RoomDocument } from '@threemaker/map-format';
 import { computeRoomIdGrid } from '@threemaker/map-format';
 import type { FloorVisibilityPolicy, SheetPixelSizes } from '@threemaker/renderer';
 import {
@@ -101,6 +101,8 @@ import {
 import type { MapNarrativeBundle } from './map-narrative-bundle.js';
 import { buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
+import type { MapPropsBundle } from './map-props.js';
+import { buildMapProps } from './map-props.js';
 import { createNarrativeRoot } from './narrative-root.js';
 import { withNoclip } from './noclip.js';
 import { pointerTargetFromDialogueHit } from './pointer-host.js';
@@ -383,6 +385,19 @@ async function resolveObjectTextureReal(sha256: string): Promise<ResolvedObjectT
   } finally {
     URL.revokeObjectURL(blobUrl);
   }
+}
+
+/**
+ * Reads one asset-store object's raw bytes (glTF/glb props). Same path
+ * convention as `resolveObjectTextureReal` (`objects/{sha256[:2]}/{sha256}`)
+ * but WITHOUT the PNG blob/decode step — the props runtime parses the bytes
+ * via `GLTFLoader.parse`.
+ */
+async function resolveObjectBinaryReal(sha256: string): Promise<Uint8Array> {
+  const bytes = await readFile(`${ASSET_STORE_OBJECTS_DIR}/${sha256.slice(0, 2)}/${sha256}`, {
+    baseDir: BaseDirectory.Home,
+  });
+  return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
 }
 
 /**
@@ -687,6 +702,11 @@ interface SessionOverride {
    * forward it would silently boot a narrative-free map.
    */
   readonly narrative: AuthoredMapNarrative | undefined;
+  /**
+   * Validated schema-v5 props for this map (empty when none). Required so a
+   * caller cannot drop them silently — same discipline as `narrative`.
+   */
+  readonly props: readonly PropDocument[];
 }
 
 /**
@@ -1048,6 +1068,12 @@ async function renderFixtureMap(
    */
   let bundle: MapNarrativeBundle | undefined;
   /**
+   * Per-map glTF props bundle (C5). Hoisted next to `bundle` for the same TDZ
+   * reason: debug snapshot + hop dispose read it before the later wiring block
+   * assigns it.
+   */
+  let propsBundle: MapPropsBundle | undefined;
+  /**
    * Session narrative root (world + inventory + stats + overlay). Declared
    * before `buildDebugSnapshot` so the debug panel can read live inventory/
    * stats without a TDZ on `narrativeRoot` (same reason `bundle` is early).
@@ -1247,9 +1273,12 @@ async function renderFixtureMap(
       tile: { x: session.mover.tile.x, y: session.mover.tile.y },
       elevation: session.floorRouter.elevation.heightAt(session.mover.tile.x, session.mover.tile.y),
       narrativeSprites: bundle?.sprites.length ?? 0,
+      propInstances: propsBundle?.count ?? 0,
       hopsCompleted: hopStats.hopsCompleted,
       lastOutgoingNarrativeSprites: hopStats.lastOutgoingNarrativeSprites,
       lastOutgoingFloorTextureKeys: hopStats.lastOutgoingFloorTextureKeys,
+      lastOutgoingPropInstances: hopStats.lastOutgoingPropInstances,
+      lastOutgoingPropAssets: hopStats.lastOutgoingPropAssets,
       inventory: narrativeRoot.inventory.snapshot(),
       stats: narrativeRoot.stats.snapshot(),
     };
@@ -1275,6 +1304,9 @@ async function renderFixtureMap(
       get narrativeSprites() {
         return bundle?.sprites.length ?? 0;
       },
+      get propInstances() {
+        return propsBundle?.count ?? 0;
+      },
       get hopsCompleted() {
         return hopStats.hopsCompleted;
       },
@@ -1283,6 +1315,12 @@ async function renderFixtureMap(
       },
       get lastHopOutgoingFloorTextures() {
         return hopStats.lastOutgoingFloorTextureKeys;
+      },
+      get lastHopOutgoingPropInstances() {
+        return hopStats.lastOutgoingPropInstances;
+      },
+      get lastHopOutgoingPropAssets() {
+        return hopStats.lastOutgoingPropAssets;
       },
       get tile() {
         return { x: session.mover.tile.x, y: session.mover.tile.y };
@@ -1408,6 +1446,8 @@ async function renderFixtureMap(
     (sessionOverride ? 'current.tmmap.json' : '');
   /** Narrative content for the active map — needed to rebuild after same-map load. */
   let activeNarrative = sessionOverride?.narrative;
+  /** Props for the active map — rebuilt on hop / same-map load with the narrative. */
+  let activeProps: readonly PropDocument[] = sessionOverride?.props ?? [];
 
   // App-supplied effects for every bundle's interpreter -- session-lived, since
   // it closes over the mutable `session`/`activeEntityMove` rather than over one
@@ -1531,6 +1571,11 @@ async function renderFixtureMap(
     bundle = undefined;
   }
 
+  function disposePropsBundle(): void {
+    propsBundle?.dispose();
+    propsBundle = undefined;
+  }
+
   /**
    * Builds the incoming map's narrative runtime over the session root, leaving
    * `bundle` undefined when that map authors none (spec R5). Must run AFTER
@@ -1559,6 +1604,21 @@ async function renderFixtureMap(
       heightUnit: HEIGHT_UNIT,
     });
     if (bundle) subscribeDialogueSignals(bundle.interpreter);
+  }
+
+  /**
+   * Builds this map's glTF prop instances (C5). Empty `props` → no bundle.
+   * Must run AFTER `createMapSession` so each prop's ground Y samples its floor.
+   */
+  async function buildPropsBundle(props: readonly PropDocument[]): Promise<void> {
+    propsBundle = await buildMapProps({
+      props,
+      scene,
+      floors: session.floorRouter.floors,
+      tileWorldSize: TILE_WORLD_SIZE,
+      heightUnit: HEIGHT_UNIT,
+      resolveObjectBinary: resolveObjectBinaryReal,
+    });
   }
 
   /** Apply a resolved gameplay intent (keyboard or gamepad share this path). */
@@ -1659,6 +1719,7 @@ async function renderFixtureMap(
   // by one `catch` around the whole of `renderFixtureMap`), which is a
   // structural change to this function's setup, not a local fix.
   await buildNarrativeBundle(sessionOverride?.narrative);
+  await buildPropsBundle(sessionOverride?.props ?? []);
 
   // View/debug keys (C2 prep: pure resolveViewKeyAction; host applies effects).
   // Real engine features (camera, zoom, noclip) — available in production;
@@ -1761,6 +1822,7 @@ async function renderFixtureMap(
      */
     function disposeOutgoingMap(): void {
       disposeNarrativeBundle();
+      disposePropsBundle();
       session.dispose();
     }
 
@@ -1976,16 +2038,22 @@ async function renderFixtureMap(
         currentMapIndex = targetIndex;
         activeMapFile = targetFile;
         activeNarrative = nextResult.narrative;
-        // Point of no return. Order: dispose outgoing narrative → session →
-        // floor textures → create session with arrival spawn → build bundle.
+        activeProps = nextResult.props;
+        // Point of no return. Order: dispose outgoing narrative/props → session →
+        // floor textures → create session with arrival spawn → build bundles.
         const outgoingNarrativeSprites = bundle?.sprites.length ?? 0;
         const outgoingFloorTextureKeys = currentTextures ? Object.keys(currentTextures).length : 0;
+        const outgoingPropInstances = propsBundle?.count ?? 0;
+        const outgoingPropAssets = propsBundle?.assetCount ?? 0;
         disposeNarrativeBundle();
+        disposePropsBundle();
         session.dispose();
         disposeFloorTextures(currentTextures);
         hopStats = recordHopCompleted(hopStats, {
           outgoingNarrativeSprites,
           outgoingFloorTextureKeys,
+          outgoingPropInstances,
+          outgoingPropAssets,
         });
         currentTextures = nextResult.floorSources[0]?.textures;
 
@@ -2019,6 +2087,15 @@ async function renderFixtureMap(
               `${targetFile}: ${describeAuthoredFailure(error)} -- this map is playable, but WITHOUT its authored NPCs, triggers and events.`,
             );
           narrativeFailureShown = true;
+        }
+        try {
+          await buildPropsBundle(nextResult.props);
+        } catch (error) {
+          // Past the point of no return: map stays playable without props.
+          console.error(
+            `Manifest map "${targetFile}" loaded, but its authored props did not:`,
+            error,
+          );
         }
         focusCameraOnSpawn();
       } catch (error) {
@@ -2149,9 +2226,11 @@ async function renderFixtureMap(
       session.mover.teleport(snap.x, snap.y, snap.facing);
       session.applyFloorWindow(snap.x, snap.y);
       disposeNarrativeBundle();
+      disposePropsBundle();
       // Arrival = save tile (not boot session.spawn) so underfoot enter triggers
       // stay deduped until the player leaves and re-enters.
       await buildNarrativeBundle(activeNarrative, sameMapLoadNarrativeArrival(snap));
+      await buildPropsBundle(activeProps);
       focusCameraOnSpawn();
       narrativeRoot.overlay().hide();
       return { ok: true };
@@ -2249,6 +2328,11 @@ async function renderFixtureMap(
   const gameLoop = new GameLoop({
     onTick(dt) {
       const { mover } = session;
+
+      // Prop animation mixers tick BEFORE the traversal early-return so clips
+      // keep playing during stair climbs (mixer updates placed after that
+      // return would freeze for the whole traversal).
+      propsBundle?.update(dt);
 
       // (b) During traversal: the walker owns render position + camera
       // target for every frame of the climb/descent (design "Render-position
@@ -2639,6 +2723,7 @@ async function main(): Promise<void> {
               stairLinks: authored.stairLinks,
               spawn: authored.spawn,
               narrative: authored.narrative,
+              props: authored.props,
             },
             { manifest, loadEntry, startIndex: index },
             sessionStores,
@@ -2684,6 +2769,7 @@ async function main(): Promise<void> {
             stairLinks: authored.stairLinks,
             spawn: authored.spawn,
             narrative: authored.narrative,
+            props: authored.props,
           },
           undefined,
           sessionStores,

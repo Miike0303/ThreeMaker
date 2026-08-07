@@ -30,7 +30,12 @@
 import { BaseDirectory, readFile } from '@tauri-apps/plugin-fs';
 import type { EventCommand, ShowDialogueCommand } from '@threemaker/core';
 import type { TileSheetId } from '@threemaker/importer-rpgm';
-import type { MapDocument, MapEventScripts, WorldSeedValue } from '@threemaker/map-format';
+import type {
+  MapDocument,
+  MapEventScripts,
+  PropDocument,
+  WorldSeedValue,
+} from '@threemaker/map-format';
 import { parseMapDocument } from '@threemaker/map-format';
 import type { SheetPixelSizes } from '@threemaker/renderer';
 import { loadSheetTexture } from '@threemaker/renderer';
@@ -88,6 +93,12 @@ export interface AuthoredMapResult {
   readonly spawn: TranslatedSpawn | undefined;
   /** Cross-validated authored narrative, or `undefined` when this map authors none (spec R5: a content-free map gets no interpreter and behaves exactly as before). Required, never optional, so a future `AuthoredMapResult` producer cannot drop it silently. */
   readonly narrative: AuthoredMapNarrative | undefined;
+  /**
+   * Validated schema-v5 props (empty when the map authors none). No re-validation
+   * here — `parseMapDocument` already checked ids/floors/sha/scale/animation.
+   * Required so a future producer cannot drop props silently.
+   */
+  readonly props: readonly PropDocument[];
 }
 
 /** One resolved sheet: the decoded texture plus its pixel size (`buildChunks` needs both). */
@@ -573,5 +584,7 @@ export async function loadAuthoredMap(
     stairLinks: translated.stairLinks,
     spawn: translated.spawn,
     narrative,
+    // Schema-validated; floor ids still strings (map-props resolves against FloorGameplay.floorId).
+    props: doc.props,
   };
 }

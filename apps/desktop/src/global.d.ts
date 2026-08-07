@@ -63,12 +63,18 @@ declare global {
       readonly mapName: string;
       /** Live NPC sprite meshes from the current narrative bundle. */
       readonly narrativeSprites: number;
+      /** Live prop instances from the current props bundle (C5). */
+      readonly propInstances: number;
       /** Successful map hops (G-cycle / transferMap) this session. */
       readonly hopsCompleted: number;
       /** NPC sprites disposed with the outgoing map on the last hop. */
       readonly lastHopOutgoingSprites: number;
       /** Floor texture keys disposed with the outgoing map on the last hop. */
       readonly lastHopOutgoingFloorTextures: number;
+      /** Prop instances disposed with the outgoing map on the last hop (C5). */
+      readonly lastHopOutgoingPropInstances: number;
+      /** Distinct prop glTF assets disposed with the outgoing map on the last hop (C5). */
+      readonly lastHopOutgoingPropAssets: number;
       /** The character's current integer tile position. */
       readonly tile: { readonly x: number; readonly y: number };
       /** The active `CameraMode` (see camera-rig.ts), as its raw string id. */
