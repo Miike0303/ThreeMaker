@@ -1,7 +1,7 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import type { MapDocument, NpcFacing, SemanticClass } from '@threemaker/map-format';
 import type { SheetPixelSize } from '@threemaker/renderer';
-import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type AssetRow,
   type GameRow,
@@ -11,11 +11,18 @@ import {
   listGames,
   objectPreviewUrl,
 } from '../catalog-client.js';
+import {
+  canSavePainterDocument,
+  defaultWorldSeedValue,
+  parseWorldValue,
+  type WorldValueKind,
+  worldValueKind,
+} from '../event-form-helpers.js';
 import { formatTemplate } from '../format-template.js';
 import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, seedDemoTiles } from '../map-compose.js';
-import type { PainterState } from '../painter-store.js';
+import { isEventReferenced, type PainterState, validateEventsDraft } from '../painter-store.js';
 import type {
   NpcOverlayItem,
   PropOverlayItem,
@@ -28,6 +35,7 @@ import type {
 import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
 import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
 import type { ToolId } from '../tool-sm.js';
+import { CommandList } from './CommandForm.js';
 import { GameTilesetPicker } from './GameTilesetPicker.js';
 import { TilePalette } from './TilePalette.js';
 
@@ -179,6 +187,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [npcPlaceY, setNpcPlaceY] = useState(0);
   const [triggerPlaceX, setTriggerPlaceX] = useState(0);
   const [triggerPlaceY, setTriggerPlaceY] = useState(0);
+  // Events section UI (events editor WU-02).
+  const [selectedEventKey, setSelectedEventKey] = useState<string | undefined>(undefined);
+  const [newEventKey, setNewEventKey] = useState('');
+  const [newWorldSeedKey, setNewWorldSeedKey] = useState('');
+  const [newWorldSeedKind, setNewWorldSeedKind] = useState<WorldValueKind>('boolean');
 
   useEffect(() => {
     listGames()
@@ -298,6 +311,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
   }, [tilesetAId, tilesetBId, t, characterSprites]);
 
   const handleSave = useCallback(async () => {
+    const liveState = viewportRef.current?.painterState;
+    if (liveState) {
+      const block = canSavePainterDocument(liveState);
+      if (block !== null) {
+        setStatusMessage(block);
+        return;
+      }
+    }
     const doc = viewportRef.current?.currentDocument();
     if (!doc) return;
     try {
@@ -308,6 +329,23 @@ export function PainterPanel({ t }: PainterPanelProps) {
       setStatusMessage(t('painter.saveFailed'));
     }
   }, [t]);
+
+  // Keep selected event key in sync with the live eventKeys list.
+  useEffect(() => {
+    if (!painterState) {
+      setSelectedEventKey(undefined);
+      return;
+    }
+    if (selectedEventKey !== undefined && painterState.eventKeys.includes(selectedEventKey)) {
+      return;
+    }
+    setSelectedEventKey(painterState.eventKeys[0]);
+  }, [painterState, selectedEventKey]);
+
+  const eventsValidationError = useMemo(
+    () => (painterState ? validateEventsDraft(painterState.events) : null),
+    [painterState],
+  );
 
   const handleLoad = useCallback(async () => {
     try {
@@ -659,10 +697,202 @@ export function PainterPanel({ t }: PainterPanelProps) {
       )}
 
       {mapReady && painterState && (
+        <div className="painter-events">
+          <span className="painter-events-heading">{t('painter.events')}</span>
+          {eventsValidationError !== null && (
+            <p className="painter-events-validation-error" role="alert">
+              {eventsValidationError}
+            </p>
+          )}
+          <div className="painter-events-keys">
+            <ul className="painter-events-key-list">
+              {painterState.eventKeys.map((key) => {
+                const referenced = isEventReferenced(painterState, key);
+                return (
+                  <li key={key}>
+                    <button
+                      type="button"
+                      className={
+                        key === selectedEventKey ? 'painter-events-key-selected' : undefined
+                      }
+                      onClick={() => setSelectedEventKey(key)}
+                    >
+                      {key}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={referenced}
+                      title={
+                        referenced
+                          ? t('painter.events.deleteReferenced')
+                          : t('painter.events.delete')
+                      }
+                      onClick={() => {
+                        viewportRef.current?.removeEvent(key);
+                        if (selectedEventKey === key) setSelectedEventKey(undefined);
+                      }}
+                    >
+                      {t('painter.events.delete')}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="painter-events-add-event">
+              <input
+                type="text"
+                value={newEventKey}
+                placeholder={t('painter.events.addPlaceholder')}
+                onChange={(event) => setNewEventKey(event.target.value)}
+              />
+              <button
+                type="button"
+                disabled={newEventKey.trim() === ''}
+                onClick={() => {
+                  const key = newEventKey.trim();
+                  if (key === '') return;
+                  viewportRef.current?.addEvent(key);
+                  setSelectedEventKey(key);
+                  setNewEventKey('');
+                }}
+              >
+                {t('painter.events.add')}
+              </button>
+            </div>
+          </div>
+
+          {selectedEventKey !== undefined && painterState.events[selectedEventKey] !== undefined ? (
+            <div className="painter-events-script">
+              <span className="painter-events-script-heading">
+                {formatTemplate(t('painter.events.commandsFor'), { key: selectedEventKey })}
+              </span>
+              <CommandList
+                t={t}
+                basePath={[]}
+                commands={painterState.events[selectedEventKey] ?? []}
+                onUpdate={(path, patch) =>
+                  viewportRef.current?.updateCommand(selectedEventKey, path, patch)
+                }
+                onRemove={(path) => viewportRef.current?.removeCommand(selectedEventKey, path)}
+                onMove={(path, delta) =>
+                  viewportRef.current?.moveCommand(selectedEventKey, path, delta)
+                }
+                onAdd={(path, kind) =>
+                  viewportRef.current?.addCommand(selectedEventKey, path, kind)
+                }
+              />
+            </div>
+          ) : (
+            <p className="painter-events-hint">{t('painter.events.noSelection')}</p>
+          )}
+
+          <div className="painter-events-world-seeds">
+            <span className="painter-events-world-seeds-heading">
+              {t('painter.events.worldSeeds')}
+            </span>
+            <ul className="painter-events-world-seed-list">
+              {Object.entries(painterState.worldSeeds).map(([key, value]) => {
+                const kind = worldValueKind(value);
+                return (
+                  <li key={key}>
+                    <span className="painter-events-world-seed-key">{key}</span>
+                    <label>
+                      {t('painter.events.worldValueType')}
+                      <select
+                        value={kind}
+                        onChange={(event) => {
+                          const next = event.target.value as WorldValueKind;
+                          viewportRef.current?.setWorldSeed(key, defaultWorldSeedValue(next));
+                        }}
+                      >
+                        <option value="boolean">
+                          {t('painter.events.worldValueType.boolean')}
+                        </option>
+                        <option value="number">{t('painter.events.worldValueType.number')}</option>
+                        <option value="string">{t('painter.events.worldValueType.string')}</option>
+                      </select>
+                    </label>
+                    {kind === 'boolean' ? (
+                      <label>
+                        {t('painter.events.field.value')}
+                        <input
+                          type="checkbox"
+                          checked={value === true}
+                          onChange={(event) =>
+                            viewportRef.current?.setWorldSeed(key, event.target.checked)
+                          }
+                        />
+                      </label>
+                    ) : kind === 'number' ? (
+                      <label>
+                        {t('painter.events.field.value')}
+                        <input
+                          type="number"
+                          value={typeof value === 'number' ? value : 0}
+                          onChange={(event) =>
+                            viewportRef.current?.setWorldSeed(
+                              key,
+                              parseWorldValue('number', event.target.value),
+                            )
+                          }
+                        />
+                      </label>
+                    ) : (
+                      <label>
+                        {t('painter.events.field.value')}
+                        <input
+                          type="text"
+                          value={typeof value === 'string' ? value : String(value)}
+                          onChange={(event) =>
+                            viewportRef.current?.setWorldSeed(key, event.target.value)
+                          }
+                        />
+                      </label>
+                    )}
+                    <button type="button" onClick={() => viewportRef.current?.removeWorldSeed(key)}>
+                      {t('painter.events.worldSeeds.remove')}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="painter-events-add-world-seed">
+              <input
+                type="text"
+                value={newWorldSeedKey}
+                placeholder={t('painter.events.worldSeeds.keyPlaceholder')}
+                onChange={(event) => setNewWorldSeedKey(event.target.value)}
+              />
+              <select
+                value={newWorldSeedKind}
+                onChange={(event) => setNewWorldSeedKind(event.target.value as WorldValueKind)}
+                aria-label={t('painter.events.worldValueType')}
+              >
+                <option value="boolean">{t('painter.events.worldValueType.boolean')}</option>
+                <option value="number">{t('painter.events.worldValueType.number')}</option>
+                <option value="string">{t('painter.events.worldValueType.string')}</option>
+              </select>
+              <button
+                type="button"
+                disabled={newWorldSeedKey.trim() === ''}
+                onClick={() => {
+                  const key = newWorldSeedKey.trim();
+                  if (key === '') return;
+                  viewportRef.current?.setWorldSeed(key, defaultWorldSeedValue(newWorldSeedKind));
+                  setNewWorldSeedKey('');
+                }}
+              >
+                {t('painter.events.worldSeeds.add')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mapReady && painterState && (
         <div className="painter-npcs">
           {/* Routine editing stays JSON-side (c1a follow-up minimal). Event
-              scripts themselves stay JSON-authored — dialog/event editor is a
-              separate future work item. */}
+              scripts are authored in the Events section above. */}
           <span className="painter-npcs-heading">{t('painter.npcs')}</span>
           <p className="painter-npcs-events-hint">{t('painter.npcs.eventsHint')}</p>
           {painterState.eventKeys.length === 0 && (
@@ -808,7 +1038,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
 
       {mapReady && painterState && (
         <div className="painter-triggers">
-          {/* Event scripts stay JSON-authored — dialog/event editor is future work. */}
+          {/* Event scripts are authored in the Events section above. */}
           <span className="painter-triggers-heading">{t('painter.triggers')}</span>
           <p className="painter-triggers-events-hint">{t('painter.triggers.eventsHint')}</p>
           {painterState.eventKeys.length === 0 && (

@@ -1509,7 +1509,8 @@ function withEvents(state: PainterState, events: MapEventScripts): PainterState 
   return { ...state, events, eventKeys: Object.keys(events) };
 }
 
-function isEventReferenced(state: PainterState, key: string): boolean {
+/** True when any NPC `onInteract` or trigger `event` still points at `key` (removeEvent no-op guard). */
+export function isEventReferenced(state: PainterState, key: string): boolean {
   return (
     state.npcs.some((npc) => npc.onInteract === key) ||
     state.triggers.some((trigger) => trigger.event === key)

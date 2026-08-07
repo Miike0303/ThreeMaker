@@ -1,5 +1,11 @@
 import type { RampDirection, TileSheetId } from '@threemaker/importer-rpgm';
-import type { MapDocument, NpcFacing, SemanticClass, TileDiff } from '@threemaker/map-format';
+import type {
+  MapDocument,
+  NpcFacing,
+  SemanticClass,
+  TileDiff,
+  WorldSeedValue,
+} from '@threemaker/map-format';
 import type { ChunkBuildData, SheetPixelSizes } from '@threemaker/renderer';
 import {
   buildChunks,
@@ -480,6 +486,66 @@ export class PainterViewport {
     this.state = painter.placeTriggerAtTile(this.state, { x, y });
     this.emitState();
     this.recomputeTriggerOverlay();
+  }
+
+  // --- Event scripts + worldSeeds (events editor WU-02; no overlay recompute) ---
+
+  addEvent(key: string): void {
+    if (!this.state) return;
+    this.state = painter.addEvent(this.state, key);
+    this.emitState();
+  }
+
+  renameEvent(from: string, to: string): void {
+    if (!this.state) return;
+    this.state = painter.renameEvent(this.state, from, to);
+    this.emitState();
+  }
+
+  removeEvent(key: string): void {
+    if (!this.state) return;
+    this.state = painter.removeEvent(this.state, key);
+    this.emitState();
+  }
+
+  addCommand(eventKey: string, path: painter.CommandPath, kind: painter.EventCommandKind): void {
+    if (!this.state) return;
+    this.state = painter.addCommand(this.state, eventKey, path, kind);
+    this.emitState();
+  }
+
+  updateCommand(
+    eventKey: string,
+    path: painter.CommandPath,
+    patch: Readonly<Record<string, unknown>>,
+  ): void {
+    if (!this.state) return;
+    this.state = painter.updateCommand(this.state, eventKey, path, patch);
+    this.emitState();
+  }
+
+  removeCommand(eventKey: string, path: painter.CommandPath): void {
+    if (!this.state) return;
+    this.state = painter.removeCommand(this.state, eventKey, path);
+    this.emitState();
+  }
+
+  moveCommand(eventKey: string, path: painter.CommandPath, delta: number): void {
+    if (!this.state) return;
+    this.state = painter.moveCommand(this.state, eventKey, path, delta);
+    this.emitState();
+  }
+
+  setWorldSeed(key: string, value: WorldSeedValue): void {
+    if (!this.state) return;
+    this.state = painter.setWorldSeed(this.state, key, value);
+    this.emitState();
+  }
+
+  removeWorldSeed(key: string): void {
+    if (!this.state) return;
+    this.state = painter.removeWorldSeed(this.state, key);
+    this.emitState();
   }
 
   undo(): void {
