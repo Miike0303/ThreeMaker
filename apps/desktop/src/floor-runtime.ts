@@ -116,6 +116,12 @@ export interface FloorSource {
   readonly sheetPixelSizes: SheetPixelSizes;
   readonly rampCells?: readonly RampCellInput[];
   /**
+   * Document `tileset.tilePixelSize` (default 48 when omitted). Threaded into
+   * `buildChunks` so HD sheets keep correct UV grid addressing. Fixture /
+   * synthetic maps omit this and fall back to the renderer's 48px default.
+   */
+  readonly tilePixelSize?: number;
+  /**
    * This floor's own room-id grid (design "Ceilings and Interior Occlusion",
    * obs #117 gotcha), e.g. `@threemaker/map-format`'s `computeRoomIdGrid`
    * output -- 0 = no room. Consumed TWO ways: (1) `session.roomTracker`

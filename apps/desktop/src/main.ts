@@ -39,6 +39,7 @@ import {
   loadSheetTexture,
   OcclusionFloorPolicy,
   StreamingTilemapScene,
+  TILE_SIZE_PX,
 } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
@@ -786,6 +787,7 @@ async function renderFixtureMap(
       DEFAULT_CHUNK_SIZE,
       undefined,
       source.rampCells ?? [],
+      source.tilePixelSize ?? TILE_SIZE_PX,
     );
     const tilemap = new StreamingTilemapScene(chunks, source.textures, {
       tileWorldSize: TILE_WORLD_SIZE,

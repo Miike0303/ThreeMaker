@@ -5,7 +5,6 @@ import { computeAutotileQuarterOrigins } from './autotile-tables.js';
 import type { SheetPixelSize, SheetPixelSizes, UvRect } from './types.js';
 import { TILE_SIZE_PX } from './types.js';
 
-const QUARTER_SIZE_PX = TILE_SIZE_PX / 2;
 const AUTOTILE_SHEETS: readonly AutotileSheetId[] = ['A1', 'A2', 'A3', 'A4'];
 
 function isAutotileSheet(sheet: TileSheetId): sheet is AutotileSheetId {
@@ -13,12 +12,12 @@ function isAutotileSheet(sheet: TileSheetId): sheet is AutotileSheetId {
 }
 
 /**
- * Inset, in source-image pixels, applied to all 4 sides of every UV rect
- * this module produces before converting to UV space. Nearest quads share a
- * texture (all tiles of a sheet live on the one bound texture), so without
- * an inset, sampling right at a shared UV boundary can pick up a sliver of
- * the *neighboring* tile's pixels -- visible as a thin seam line between
- * tiles.
+ * Base inset, in source-image pixels at the default 48px tile size, applied
+ * to all 4 sides of every UV rect this module produces before converting to
+ * UV space. Nearest quads share a texture (all tiles of a sheet live on the
+ * one bound texture), so without an inset, sampling right at a shared UV
+ * boundary can pick up a sliver of the *neighboring* tile's pixels --
+ * visible as a thin seam line between tiles.
  *
  * A plain (non-mipmapped) texture only ever samples the base level, where
  * half a texel of margin is already enough headroom. The mipmapped
@@ -42,12 +41,20 @@ function isAutotileSheet(sheet: TileSheetId): sheet is AutotileSheetId {
  * before mip generation (or hand-building a shorter, tile-aware mip chain);
  * out of scope for this slice -- see the ponytail note on
  * `PixelArtTextureOptions.mipmaps` in `pixel-art-texture.ts`.
+ *
+ * Effective inset scales with `tilePixelSize / TILE_SIZE_PX` so the UV-space
+ * inset ratio stays identical at every resolution (1px @ 48 → 2px @ 96).
  */
-// Trade-off: the inset is flat per rect, so 24px autotile quarter-rects lose
-// twice the proportional edge content of 48px full tiles (22/24 vs 46/48
-// visible). Acceptable at current art scale; a per-rect-size inset is the
-// refinement if quarter edges ever look visibly cropped.
-const TILE_UV_INSET_PX = 1;
+// Trade-off: the inset is flat per rect (scaled only by tile size, not by
+// rect size), so autotile quarter-rects lose twice the proportional edge
+// content of full tiles (e.g. 22/24 vs 46/48 visible at 48px). Acceptable
+// at current art scale; a per-rect-size inset is the refinement if quarter
+// edges ever look visibly cropped.
+const TILE_UV_INSET_BASE_PX = 1;
+
+function effectiveInsetPx(tilePixelSize: number): number {
+  return TILE_UV_INSET_BASE_PX * (tilePixelSize / TILE_SIZE_PX);
+}
 
 function pixelRectToUv(
   x: number,
@@ -55,14 +62,15 @@ function pixelRectToUv(
   w: number,
   h: number,
   pixelSize: SheetPixelSize,
+  insetPx: number,
 ): UvRect {
   // Image space has Y growing downward; three.js texture UV space has V
   // growing upward. Flip once here so every caller gets ready-to-use UVs.
   return {
-    u0: (x + TILE_UV_INSET_PX) / pixelSize.width,
-    u1: (x + w - TILE_UV_INSET_PX) / pixelSize.width,
-    v0: 1 - (y + h - TILE_UV_INSET_PX) / pixelSize.height,
-    v1: 1 - (y + TILE_UV_INSET_PX) / pixelSize.height,
+    u0: (x + insetPx) / pixelSize.width,
+    u1: (x + w - insetPx) / pixelSize.width,
+    v0: 1 - (y + h - insetPx) / pixelSize.height,
+    v1: 1 - (y + insetPx) / pixelSize.height,
   };
 }
 
@@ -75,14 +83,21 @@ function computeAutotileQuads(
   tileId: number,
   sheet: AutotileSheetId,
   pixelSize: SheetPixelSize,
+  tilePixelSize: number,
 ): readonly [UvRect, UvRect, UvRect, UvRect] {
-  const origins = computeAutotileQuarterOrigins(tileId, sheet);
+  const quarterSizePx = tilePixelSize / 2;
+  const insetPx = effectiveInsetPx(tilePixelSize);
+  const origins = computeAutotileQuarterOrigins(tileId, sheet, 0, tilePixelSize);
   return origins.map((origin) =>
-    pixelRectToUv(origin.x, origin.y, QUARTER_SIZE_PX, QUARTER_SIZE_PX, pixelSize),
+    pixelRectToUv(origin.x, origin.y, quarterSizePx, quarterSizePx, pixelSize, insetPx),
   ) as unknown as [UvRect, UvRect, UvRect, UvRect];
 }
 
-function computeGridUv(tileId: number, pixelSize: SheetPixelSize): UvRect | null {
+function computeGridUv(
+  tileId: number,
+  pixelSize: SheetPixelSize,
+  tilePixelSize: number,
+): UvRect | null {
   const localIndex = getLocalTileIndex(tileId);
   if (localIndex === null) return null;
 
@@ -100,11 +115,18 @@ function computeGridUv(tileId: number, pixelSize: SheetPixelSize): UvRect | null
   // A5's 512 ids) than the shipped image typically uses -- ids beyond the
   // image are wrapped instead of reading out of bounds. Real map data is
   // not expected to reference those ids.
-  const cols = Math.max(1, Math.floor(pixelSize.width / TILE_SIZE_PX));
-  const rows = Math.max(1, Math.floor(pixelSize.height / TILE_SIZE_PX));
-  const pixelX = (col % cols) * TILE_SIZE_PX;
-  const pixelY = (row % rows) * TILE_SIZE_PX;
-  return pixelRectToUv(pixelX, pixelY, TILE_SIZE_PX, TILE_SIZE_PX, pixelSize);
+  const cols = Math.max(1, Math.floor(pixelSize.width / tilePixelSize));
+  const rows = Math.max(1, Math.floor(pixelSize.height / tilePixelSize));
+  const pixelX = (col % cols) * tilePixelSize;
+  const pixelY = (row % rows) * tilePixelSize;
+  return pixelRectToUv(
+    pixelX,
+    pixelY,
+    tilePixelSize,
+    tilePixelSize,
+    pixelSize,
+    effectiveInsetPx(tilePixelSize),
+  );
 }
 
 export interface TileUv {
@@ -122,8 +144,16 @@ export interface TileUv {
  * sheet's image, given the pixel sizes of the sheets actually loaded.
  * Returns `null` for an empty tile (id 0), an id outside all known sheet
  * ranges, or a sheet whose pixel size was not provided (not loaded/unused).
+ *
+ * `tilePixelSize` is the document's per-tile edge length in source-image
+ * pixels (`MapDocument.tileset.tilePixelSize`, default `TILE_SIZE_PX` = 48).
+ * HD sheets (e.g. 96) keep the same logical grid and UV ratios as 48px art.
  */
-export function computeTileUv(tileId: number, sheetPixelSizes: SheetPixelSizes): TileUv | null {
+export function computeTileUv(
+  tileId: number,
+  sheetPixelSizes: SheetPixelSizes,
+  tilePixelSize: number = TILE_SIZE_PX,
+): TileUv | null {
   if (tileId === 0) return null;
 
   const sheet = getTileSheet(tileId);
@@ -133,9 +163,9 @@ export function computeTileUv(tileId: number, sheetPixelSizes: SheetPixelSizes):
   if (!pixelSize) return null;
 
   if (isAutotile(tileId) && isAutotileSheet(sheet)) {
-    return { sheet, quads: computeAutotileQuads(tileId, sheet, pixelSize) };
+    return { sheet, quads: computeAutotileQuads(tileId, sheet, pixelSize, tilePixelSize) };
   }
 
-  const uv = computeGridUv(tileId, pixelSize);
+  const uv = computeGridUv(tileId, pixelSize, tilePixelSize);
   return uv ? { sheet, quads: [uv] } : null;
 }

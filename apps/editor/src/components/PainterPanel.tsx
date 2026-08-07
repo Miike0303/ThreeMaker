@@ -53,6 +53,7 @@ interface PaletteSlotInfo {
   readonly slot: TileSheetId;
   readonly imageUrl: string;
   readonly pixelSize: SheetPixelSize;
+  readonly tilePixelSize: number;
 }
 
 /**
@@ -75,7 +76,12 @@ async function buildPaletteSlots(
     const pixelSize = sheetPixelSizes[slot];
     if (!pixelSize) continue;
     const imageUrl = await objectPreviewUrl(source.object, 'png');
-    slots.push({ slot, imageUrl, pixelSize });
+    slots.push({
+      slot,
+      imageUrl,
+      pixelSize,
+      tilePixelSize: doc.tileset.tilePixelSize,
+    });
   }
   return slots;
 }
@@ -471,6 +477,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
               sheet={paletteSlot.slot}
               imageUrl={paletteSlot.imageUrl}
               pixelSize={paletteSlot.pixelSize}
+              tilePixelSize={paletteSlot.tilePixelSize}
               selectedTileId={painterState.fillTileId}
               onSelect={(tileId) => viewportRef.current?.setFillTileId(tileId)}
               tileAriaLabel={(tileId) => formatTemplate(t('painter.paletteTile'), { id: tileId })}

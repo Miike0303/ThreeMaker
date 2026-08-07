@@ -457,7 +457,15 @@ export class PainterViewport {
   private rebuildActiveFloorScene(): void {
     if (!this.doc || !this.state) return;
     const { map, tileset } = this.renderableSnapshot(this.doc, this.state);
-    const chunks = buildChunks(map, tileset, this.sheetPixelSizes);
+    const chunks = buildChunks(
+      map,
+      tileset,
+      this.sheetPixelSizes,
+      DEFAULT_CHUNK_SIZE,
+      undefined,
+      undefined,
+      this.doc.tileset.tilePixelSize,
+    );
 
     this.tilemap?.dispose();
     this.tilemap = new StreamingTilemapScene(chunks, this.textures, {
@@ -475,7 +483,15 @@ export class PainterViewport {
     const dirtyKeys = computeDirtyChunkKeys(diff.cells, map, tileset, DEFAULT_CHUNK_SIZE);
     if (dirtyKeys.size === 0) return;
 
-    const rebuilt = buildChunks(map, tileset, this.sheetPixelSizes, DEFAULT_CHUNK_SIZE, dirtyKeys);
+    const rebuilt = buildChunks(
+      map,
+      tileset,
+      this.sheetPixelSizes,
+      DEFAULT_CHUNK_SIZE,
+      dirtyKeys,
+      undefined,
+      this.doc.tileset.tilePixelSize,
+    );
     const rebuiltKeys = new Set(rebuilt.map((chunk) => chunkKey(chunk.chunkX, chunk.chunkY)));
     const cleared: ChunkBuildData[] = [];
     for (const key of dirtyKeys) {

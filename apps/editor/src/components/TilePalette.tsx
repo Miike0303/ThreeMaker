@@ -18,12 +18,14 @@ export interface TilePaletteProps {
   readonly sheet: TileSheetId;
   readonly imageUrl: string;
   readonly pixelSize: SheetPixelSize;
+  /** Document `tileset.tilePixelSize` (default 48). Scales crop math for HD sheets. */
+  readonly tilePixelSize?: number;
   readonly selectedTileId: number;
   readonly onSelect: (tileId: number) => void;
   readonly tileAriaLabel: (tileId: number) => string;
 }
 
-/** On-screen swatch size in px -- independent of the source image's 48px tile size, just a compact display scale. */
+/** On-screen swatch size in px -- independent of the source image's tile size, just a compact display scale. */
 const THUMBNAIL_PX = 28;
 
 export function TilePalette({
@@ -31,14 +33,15 @@ export function TilePalette({
   sheet,
   imageUrl,
   pixelSize,
+  tilePixelSize = TILE_SIZE_PX,
   selectedTileId,
   onSelect,
   tileAriaLabel,
 }: TilePaletteProps) {
-  const cells = computePaletteCells(sheet, pixelSize);
-  const cols = computePaletteColumns(sheet, pixelSize);
-  const backgroundWidth = (pixelSize.width / TILE_SIZE_PX) * THUMBNAIL_PX;
-  const backgroundHeight = (pixelSize.height / TILE_SIZE_PX) * THUMBNAIL_PX;
+  const cells = computePaletteCells(sheet, pixelSize, tilePixelSize);
+  const cols = computePaletteColumns(sheet, pixelSize, tilePixelSize);
+  const backgroundWidth = (pixelSize.width / tilePixelSize) * THUMBNAIL_PX;
+  const backgroundHeight = (pixelSize.height / tilePixelSize) * THUMBNAIL_PX;
 
   return (
     <div className="tile-palette-group">
@@ -61,7 +64,7 @@ export function TilePalette({
               width: THUMBNAIL_PX,
               height: THUMBNAIL_PX,
               backgroundImage: `url(${imageUrl})`,
-              backgroundPosition: `-${(cell.x / TILE_SIZE_PX) * THUMBNAIL_PX}px -${(cell.y / TILE_SIZE_PX) * THUMBNAIL_PX}px`,
+              backgroundPosition: `-${(cell.x / tilePixelSize) * THUMBNAIL_PX}px -${(cell.y / tilePixelSize) * THUMBNAIL_PX}px`,
               backgroundSize: `${backgroundWidth}px ${backgroundHeight}px`,
             }}
             onClick={() => onSelect(cell.tileId)}

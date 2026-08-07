@@ -441,7 +441,7 @@ export const WATERFALL_AUTOTILE_TABLE: AutotileTable = [
 /** One of the 4 sheets whose map tile ids encode an autotile shape. */
 export type AutotileSheetId = 'A1' | 'A2' | 'A3' | 'A4';
 
-/** Pixel offset (top-left corner) of one 24x24 quarter-tile within its sheet image. */
+/** Pixel offset (top-left corner) of one quarter-tile within its sheet image. At the default 48px tile size a quarter is 24×24; scales with `tilePixelSize / 2`. */
 export interface QuarterOrigin {
   readonly x: number;
   readonly y: number;
@@ -449,8 +449,6 @@ export interface QuarterOrigin {
 
 /** Destination-quadrant order every 4-quarter result follows: image-space row-major. */
 export type QuarterOrigins = readonly [QuarterOrigin, QuarterOrigin, QuarterOrigin, QuarterOrigin];
-
-const QUARTER_SIZE_PX = TILE_SIZE_PX / 2;
 
 interface AutotileAddress {
   readonly bx: number;
@@ -536,22 +534,28 @@ function resolveAddress(
 
 /**
  * Resolves the 4 source-sheet quarter-tile pixel origins (top-left corner of
- * each 24x24 quarter, in image-space pixels) that compose one autotile map
- * tile id, in destination order [top-left, top-right, bottom-left,
- * bottom-right].
+ * each quarter, in image-space pixels) that compose one autotile map tile
+ * id, in destination order [top-left, top-right, bottom-left, bottom-right].
+ * Quarter edge length is `tilePixelSize / 2` (24px at the default 48).
  *
  * `animationFrame` only affects A1 (water/waterfall): this slice always
  * passes/defaults to 0 (the first frame) -- water animation is deferred, see
  * `resolveA1`.
+ *
+ * `tilePixelSize` is the document's per-tile edge length in source-image
+ * pixels (default `TILE_SIZE_PX` = 48). Fractional halves are fine -- these
+ * origins feed UV ratios, not integer raster ops.
  */
 export function computeAutotileQuarterOrigins(
   tileId: number,
   sheet: AutotileSheetId,
   animationFrame = 0,
+  tilePixelSize: number = TILE_SIZE_PX,
 ): QuarterOrigins {
   const kind = getAutotileKind(tileId);
   const shape = getAutotileShape(tileId);
   const { bx, by, table } = resolveAddress(sheet, kind, animationFrame);
+  const quarterSizePx = tilePixelSize / 2;
 
   // Defensive only: real map data never emits a shape index beyond the
   // selected table's legal range (e.g. A3/A4 wall shapes are always 0-15),
@@ -560,7 +564,7 @@ export function computeAutotileQuarterOrigins(
   const entry = table[shape % table.length] as AutotileTableEntry;
 
   return entry.map(([qsx, qsy]) => ({
-    x: (bx * 2 + qsx) * QUARTER_SIZE_PX,
-    y: (by * 2 + qsy) * QUARTER_SIZE_PX,
+    x: (bx * 2 + qsx) * quarterSizePx,
+    y: (by * 2 + qsy) * quarterSizePx,
   })) as unknown as QuarterOrigins;
 }

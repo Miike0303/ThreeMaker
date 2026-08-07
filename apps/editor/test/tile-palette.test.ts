@@ -49,6 +49,25 @@ describe('computePlainGridDimensions', () => {
   it('never reports fewer than 1 col/row for a degenerate (near-zero) pixel size', () => {
     expect(computePlainGridDimensions('B', { width: 1, height: 1 })).toEqual({ cols: 1, rows: 1 });
   });
+
+  it('matches cell count for a 96px sheet with tilePixelSize 96 vs a 48px sheet with 48', () => {
+    // Same logical 16×16 tile grid: 768@48 and 1536@96 must yield the same
+    // cols/rows (and therefore the same clickable cell count).
+    const at48 = computePlainGridDimensions('B', { width: 768, height: 768 }, 48);
+    const at96 = computePlainGridDimensions('B', { width: 1536, height: 1536 }, 96);
+    expect(at96).toEqual(at48);
+    expect(at96).toEqual({ cols: 16, rows: 16 });
+    expect(computePaletteCells('B', { width: 1536, height: 1536 }, 96)).toHaveLength(
+      computePaletteCells('B', { width: 768, height: 768 }, 48).length,
+    );
+  });
+
+  it('sizes palette cell pixel rects with the document tilePixelSize', () => {
+    const cells = computePaletteCells('B', { width: 1536, height: 1536 }, 96);
+    const cell = cells.find((c) => c.tileId === 77);
+    // Same logical cell as the 48px Map007 regression, scaled 2× in pixels.
+    expect(cell).toEqual({ tileId: 77, x: 480, y: 864, width: 96, height: 96 });
+  });
 });
 
 describe('computePaletteCells - plain sheets (B/C/D/E/A5)', () => {

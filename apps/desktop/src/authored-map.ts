@@ -565,6 +565,7 @@ export async function loadAuthoredMap(
     ...source,
     textures,
     sheetPixelSizes,
+    tilePixelSize: doc.tileset.tilePixelSize,
   }));
 
   return {

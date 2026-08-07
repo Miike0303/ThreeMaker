@@ -163,4 +163,72 @@ describe('computeTileUv', () => {
       expect(result?.quads[0]?.v1).toBeCloseTo(1 - (528 + INSET) / 768);
     });
   });
+
+  describe('tilePixelSize (HD sheets)', () => {
+    // 96px-per-tile sheet with the same logical grid as GRID_SHEET_SIZES
+    // (16×16 tiles): pixel dimensions are exactly 2×.
+    const GRID_SHEET_SIZES_96: SheetPixelSizes = {
+      B: { width: 1536, height: 1536 },
+    };
+    const AUTOTILE_SHEET_SIZES_96: SheetPixelSizes = {
+      A2: { width: 1536, height: 1152 },
+    };
+
+    it('produces UV rects with identical ratios at 96px vs 48px for the same tile ids', () => {
+      // Sheet is 2× pixels, same layout: UV-space rects must match byte-for-byte
+      // in ratio space (within floating-point tolerance).
+      for (const tileId of [1, 16, 77, 130] as const) {
+        const at48 = computeTileUv(tileId, GRID_SHEET_SIZES, 48);
+        const at96 = computeTileUv(tileId, GRID_SHEET_SIZES_96, 96);
+        expect(at96?.sheet).toBe(at48?.sheet);
+        expect(at96?.quads).toHaveLength(at48?.quads.length ?? 0);
+        const q48 = at48?.quads[0];
+        const q96 = at96?.quads[0];
+        expect(q96?.u0).toBeCloseTo(q48?.u0 ?? NaN);
+        expect(q96?.u1).toBeCloseTo(q48?.u1 ?? NaN);
+        expect(q96?.v0).toBeCloseTo(q48?.v0 ?? NaN);
+        expect(q96?.v1).toBeCloseTo(q48?.v1 ?? NaN);
+      }
+    });
+
+    it('keeps UV-space inset identical at 96px and 48px for same-layout sheets', () => {
+      // Effective inset scales with tilePixelSize / 48 so the UV-space inset
+      // ratio is resolution-independent (1px @ 48 → 2px @ 96 on a 2× sheet).
+      const at48 = computeTileUv(1, GRID_SHEET_SIZES, 48);
+      const at96 = computeTileUv(1, GRID_SHEET_SIZES_96, 96);
+      // Tile 1 is col=1,row=0 → full-tile span 1/16 of the sheet in U.
+      // Inset delta on each side (in UV space) must match.
+      const insetU48 = (at48?.quads[0]?.u0 ?? 0) - 48 / 768;
+      const insetU96 = (at96?.quads[0]?.u0 ?? 0) - 96 / 1536;
+      expect(insetU96).toBeCloseTo(insetU48);
+      expect(insetU48).toBeCloseTo(INSET / 768);
+    });
+
+    it('maps autotile quads with identical UV ratios at 96px vs 48px', () => {
+      const at48 = computeTileUv(2816, AUTOTILE_SHEET_SIZES, 48);
+      const at96 = computeTileUv(2816, AUTOTILE_SHEET_SIZES_96, 96);
+      expect(at96?.quads).toHaveLength(4);
+      for (let i = 0; i < 4; i++) {
+        expect(at96?.quads[i]?.u0).toBeCloseTo(at48?.quads[i]?.u0 ?? NaN);
+        expect(at96?.quads[i]?.u1).toBeCloseTo(at48?.quads[i]?.u1 ?? NaN);
+        expect(at96?.quads[i]?.v0).toBeCloseTo(at48?.quads[i]?.v0 ?? NaN);
+        expect(at96?.quads[i]?.v1).toBeCloseTo(at48?.quads[i]?.v1 ?? NaN);
+      }
+    });
+
+    it('keeps floor() edge behavior for a non-multiple sheet width at tilePixelSize 48', () => {
+      // 100px-wide sheet: floor(100/48) = 2 cols — same defensive wrap as today.
+      const narrow: SheetPixelSizes = { B: { width: 100, height: 48 } };
+      const result = computeTileUv(1, narrow, 48);
+      // col=1 wraps within 2 cols → pixelX = 48, tile span still 48px.
+      expect(result?.quads[0]?.u0).toBeCloseTo((48 + INSET) / 100);
+      expect(result?.quads[0]?.u1).toBeCloseTo((96 - INSET) / 100);
+    });
+
+    it('defaults tilePixelSize to 48 (byte-identical to the pre-parameterization path)', () => {
+      const explicit = computeTileUv(77, GRID_SHEET_SIZES, 48);
+      const defaulted = computeTileUv(77, GRID_SHEET_SIZES);
+      expect(defaulted).toEqual(explicit);
+    });
+  });
 });

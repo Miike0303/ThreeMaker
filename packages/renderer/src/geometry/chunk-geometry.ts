@@ -14,7 +14,7 @@ import type {
   StarStackData,
   TileBuildData,
 } from './types.js';
-import { DEFAULT_CHUNK_SIZE } from './types.js';
+import { DEFAULT_CHUNK_SIZE, TILE_SIZE_PX } from './types.js';
 
 /**
  * Marks every map cell that carries a star-bit ("upper layer") tile on any
@@ -161,6 +161,7 @@ export function buildChunks(
   chunkSize: number = DEFAULT_CHUNK_SIZE,
   onlyChunks?: ReadonlySet<string>,
   rampCells?: readonly RampCellInput[],
+  tilePixelSize: number = TILE_SIZE_PX,
 ): ChunkBuildData[] {
   if (chunkSize <= 0) {
     throw new Error(`chunkSize must be a positive number, got ${chunkSize}.`);
@@ -204,7 +205,7 @@ export function buildChunks(
           const tileId = layer[y * map.width + x] ?? 0;
           if (tileId === 0) continue;
 
-          const tileUv = computeTileUv(tileId, sheetPixelSizes);
+          const tileUv = computeTileUv(tileId, sheetPixelSizes, tilePixelSize);
           if (!tileUv) continue;
 
           const flags = decodeTileFlags(tileset.flags[tileId] ?? 0);

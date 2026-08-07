@@ -97,10 +97,11 @@ export interface PaletteGridDimensions {
 export function computePlainGridDimensions(
   sheet: PlainSheetId,
   pixelSize: SheetPixelSize,
+  tilePixelSize: number = TILE_SIZE_PX,
 ): PaletteGridDimensions {
-  const cols = Math.min(16, Math.max(1, Math.floor(pixelSize.width / TILE_SIZE_PX)));
+  const cols = Math.min(16, Math.max(1, Math.floor(pixelSize.width / tilePixelSize)));
   const maxRows = Math.max(1, Math.ceil(PLAIN_SHEET_MAX_LOCAL_INDEX[sheet] / 16));
-  const rows = Math.min(maxRows, Math.max(1, Math.floor(pixelSize.height / TILE_SIZE_PX)));
+  const rows = Math.min(maxRows, Math.max(1, Math.floor(pixelSize.height / tilePixelSize)));
   return { cols, rows };
 }
 
@@ -142,8 +143,9 @@ const AUTOTILE_KIND_COUNT_CAP: Readonly<Record<AutotileSheetId, number>> = {
 export function computeAutotileKindCount(
   sheet: AutotileSheetId,
   pixelSize: SheetPixelSize,
+  tilePixelSize: number = TILE_SIZE_PX,
 ): number {
-  const rowHeightPx = AUTOTILE_ROW_TILE_HEIGHT[sheet] * TILE_SIZE_PX;
+  const rowHeightPx = AUTOTILE_ROW_TILE_HEIGHT[sheet] * tilePixelSize;
   const rows = Math.max(1, Math.floor(pixelSize.height / rowHeightPx));
   return Math.min(rows * 8, AUTOTILE_KIND_COUNT_CAP[sheet]);
 }
@@ -165,8 +167,14 @@ export function resolveAutotileKindTileId(sheet: AutotileSheetId, kind: number):
 function computeAutotileSwatchOrigin(
   kind: number,
   sheet: AutotileSheetId,
+  tilePixelSize: number,
 ): { readonly x: number; readonly y: number } {
-  const origins = computeAutotileQuarterOrigins(resolveAutotileKindTileId(sheet, kind), sheet);
+  const origins = computeAutotileQuarterOrigins(
+    resolveAutotileKindTileId(sheet, kind),
+    sheet,
+    0,
+    tilePixelSize,
+  );
   return {
     x: Math.min(...origins.map((origin) => origin.x)),
     y: Math.min(...origins.map((origin) => origin.y)),
@@ -174,9 +182,13 @@ function computeAutotileSwatchOrigin(
 }
 
 /** Number of columns a palette grid should render for `sheet` -- the real image's column count for plain sheets, always 8 (kinds per row) for autotile sheets. */
-export function computePaletteColumns(sheet: TileSheetId, pixelSize: SheetPixelSize): number {
+export function computePaletteColumns(
+  sheet: TileSheetId,
+  pixelSize: SheetPixelSize,
+  tilePixelSize: number = TILE_SIZE_PX,
+): number {
   if (isAutotileSheet(sheet)) return 8;
-  return computePlainGridDimensions(sheet, pixelSize).cols;
+  return computePlainGridDimensions(sheet, pixelSize, tilePixelSize).cols;
 }
 
 /** One clickable/renderable palette cell: the tile id it selects, and the source-image pixel rect its thumbnail should crop from. */
@@ -197,33 +209,34 @@ export interface PaletteCell {
 export function computePaletteCells(
   sheet: TileSheetId,
   pixelSize: SheetPixelSize,
+  tilePixelSize: number = TILE_SIZE_PX,
 ): readonly PaletteCell[] {
   if (isAutotileSheet(sheet)) {
-    const kindCount = computeAutotileKindCount(sheet, pixelSize);
+    const kindCount = computeAutotileKindCount(sheet, pixelSize, tilePixelSize);
     const cells: PaletteCell[] = [];
     for (let kind = 0; kind < kindCount; kind++) {
-      const origin = computeAutotileSwatchOrigin(kind, sheet);
+      const origin = computeAutotileSwatchOrigin(kind, sheet, tilePixelSize);
       cells.push({
         tileId: resolveAutotileKindTileId(sheet, kind),
         x: origin.x,
         y: origin.y,
-        width: TILE_SIZE_PX,
-        height: TILE_SIZE_PX,
+        width: tilePixelSize,
+        height: tilePixelSize,
       });
     }
     return cells;
   }
 
-  const { cols, rows } = computePlainGridDimensions(sheet, pixelSize);
+  const { cols, rows } = computePlainGridDimensions(sheet, pixelSize, tilePixelSize);
   const cells: PaletteCell[] = [];
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       cells.push({
         tileId: SHEET_BASE_ID[sheet] + resolvePlainLocalIndex(col, row),
-        x: col * TILE_SIZE_PX,
-        y: row * TILE_SIZE_PX,
-        width: TILE_SIZE_PX,
-        height: TILE_SIZE_PX,
+        x: col * tilePixelSize,
+        y: row * tilePixelSize,
+        width: tilePixelSize,
+        height: tilePixelSize,
       });
     }
   }

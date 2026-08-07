@@ -140,4 +140,33 @@ describe('computeAutotileQuarterOrigins', () => {
     // shape >= 16 for A3, but malformed input should not throw.
     expect(() => computeAutotileQuarterOrigins(4352 + 16, 'A3')).not.toThrow();
   });
+
+  describe('tilePixelSize (HD sheets)', () => {
+    it('scales A2 kind 0 shape 0 quarter origins exactly 2× in pixels at 96px', () => {
+      const at48 = computeAutotileQuarterOrigins(2816, 'A2', 0, 48);
+      const at96 = computeAutotileQuarterOrigins(2816, 'A2', 0, 96);
+      expect(at48).toEqual([
+        { x: 48, y: 96 },
+        { x: 24, y: 96 },
+        { x: 48, y: 72 },
+        { x: 24, y: 72 },
+      ]);
+      expect(at96).toEqual([
+        { x: 96, y: 192 },
+        { x: 48, y: 192 },
+        { x: 96, y: 144 },
+        { x: 48, y: 144 },
+      ]);
+      for (let i = 0; i < 4; i++) {
+        expect(at96[i]?.x).toBe((at48[i]?.x ?? 0) * 2);
+        expect(at96[i]?.y).toBe((at48[i]?.y ?? 0) * 2);
+      }
+    });
+
+    it('defaults tilePixelSize to 48 (identical to the pre-parameterization path)', () => {
+      expect(computeAutotileQuarterOrigins(2816, 'A2')).toEqual(
+        computeAutotileQuarterOrigins(2816, 'A2', 0, 48),
+      );
+    });
+  });
 });

@@ -1,7 +1,13 @@
 import type { RpgmMap, RpgmTileset, TileSheetId } from '@threemaker/importer-rpgm';
 import { parseMap, parseTilesets } from '@threemaker/importer-rpgm';
 import type { SheetPixelSizes } from '@threemaker/renderer';
-import { buildChunks, loadSheetTexture, TilemapScene } from '@threemaker/renderer';
+import {
+  buildChunks,
+  DEFAULT_CHUNK_SIZE,
+  loadSheetTexture,
+  TILE_SIZE_PX,
+  TilemapScene,
+} from '@threemaker/renderer';
 import * as THREE from 'three';
 import { mzFixtureImageUrl, mzFixtureJsonUrl } from './fixture-paths.js';
 import { computeOverviewCameraDistance, computeOverviewCameraPose } from './viewer-camera.js';
@@ -95,7 +101,17 @@ export class EditorViewport {
       }),
     );
 
-    const chunks = buildChunks(map, tileset, sheetPixelSizes);
+    // Fixture RPGM sheets are 48px/tile; MapDocument.tileset.tilePixelSize
+    // threads through the painter path (painter-viewport) for authored HD maps.
+    const chunks = buildChunks(
+      map,
+      tileset,
+      sheetPixelSizes,
+      DEFAULT_CHUNK_SIZE,
+      undefined,
+      undefined,
+      TILE_SIZE_PX,
+    );
     this.tilemap?.dispose();
     this.tilemap = new TilemapScene(chunks, textures, { tileWorldSize: TILE_WORLD_SIZE });
     this.scene.add(this.tilemap.group);
