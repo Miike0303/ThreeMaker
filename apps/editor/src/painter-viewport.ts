@@ -1,5 +1,5 @@
 import type { RampDirection, TileSheetId } from '@threemaker/importer-rpgm';
-import type { MapDocument, SemanticClass, TileDiff } from '@threemaker/map-format';
+import type { MapDocument, NpcFacing, SemanticClass, TileDiff } from '@threemaker/map-format';
 import type { ChunkBuildData, SheetPixelSizes } from '@threemaker/renderer';
 import {
   buildChunks,
@@ -17,6 +17,7 @@ import {
   toRenderableMap,
   toRenderableTileset,
 } from './map-compose.js';
+import { computeNpcOverlayPoints } from './npc-overlay.js';
 import type { PainterState } from './painter-store.js';
 import * as painter from './painter-store.js';
 import { computePropOverlayPoints } from './prop-overlay.js';
@@ -26,6 +27,7 @@ import { computeSpawnOverlayPoint } from './spawn-overlay.js';
 import { computeStairOverlayPoints } from './stair-overlay.js';
 import type { TilePoint, ToolId } from './tool-sm.js';
 import { resolveToolShortcut } from './tool-sm.js';
+import { computeTriggerOverlayPoints } from './trigger-overlay.js';
 import type { OverviewCameraPose } from './viewer-camera.js';
 import {
   computeOverviewCameraDistance,
@@ -101,6 +103,20 @@ export interface PropOverlayItem {
   readonly yFrac: number;
 }
 
+/** One NPC marker on the active floor, projected to a screen-space fraction (see `npc-overlay.ts`). */
+export interface NpcOverlayItem {
+  readonly id: string;
+  readonly xFrac: number;
+  readonly yFrac: number;
+}
+
+/** One trigger marker on the active floor, projected to a screen-space fraction (see `trigger-overlay.ts`). */
+export interface TriggerOverlayItem {
+  readonly id: string;
+  readonly xFrac: number;
+  readonly yFrac: number;
+}
+
 export interface PainterViewportCallbacks {
   /** Fired after every painter-store transition (tool switch, stroke commit, undo/redo, semantic assignment...) so the surrounding UI can re-render its toolbar/inspector. */
   readonly onStateChange?: (state: PainterState) => void;
@@ -116,6 +132,10 @@ export interface PainterViewportCallbacks {
   readonly onSpawnOverlayChange?: (point: SpawnOverlayItem | undefined) => void;
   /** Fired whenever the active floor's prop markers change: on map load, floor switch, resize, and after any prop place/remove (see `recomputePropOverlay`). */
   readonly onPropOverlayChange?: (points: readonly PropOverlayItem[]) => void;
+  /** Fired whenever the active floor's NPC markers change (c1a follow-up). */
+  readonly onNpcOverlayChange?: (points: readonly NpcOverlayItem[]) => void;
+  /** Fired whenever the active floor's trigger markers change (c1a follow-up). */
+  readonly onTriggerOverlayChange?: (points: readonly TriggerOverlayItem[]) => void;
 }
 
 /**
@@ -203,6 +223,9 @@ export class PainterViewport {
       rooms: doc.rooms,
       stairLinks: doc.stairLinks,
       props: doc.props,
+      npcs: doc.npcs,
+      triggers: doc.triggers,
+      eventKeys: Object.keys(doc.events),
       ...(doc.spawn !== undefined ? { spawn: doc.spawn } : {}),
     });
 
@@ -215,6 +238,8 @@ export class PainterViewport {
     this.recomputeStairOverlay();
     this.recomputeSpawnOverlay();
     this.recomputePropOverlay();
+    this.recomputeNpcOverlay();
+    this.recomputeTriggerOverlay();
   }
 
   /** Adds a new blank floor on top of the stack and makes it active (spec: "adding a floor"). No-op if no map is loaded. */
@@ -260,6 +285,8 @@ export class PainterViewport {
     this.recomputeStairOverlay();
     this.recomputeSpawnOverlay();
     this.recomputePropOverlay();
+    this.recomputeNpcOverlay();
+    this.recomputeTriggerOverlay();
   }
 
   setTool(tool: ToolId): void {
@@ -367,6 +394,59 @@ export class PainterViewport {
     this.recomputePropOverlay();
   }
 
+  /** Sets the selected NPC sprite sheet sha for the npc tool (c1a follow-up). */
+  setActiveNpcSpriteObject(object: string | undefined): void {
+    if (!this.state) return;
+    this.state = painter.setActiveNpcSpriteObject(this.state, object);
+    this.emitState();
+  }
+
+  setActiveNpcCharacterIndex(index: number): void {
+    if (!this.state) return;
+    this.state = painter.setActiveNpcCharacterIndex(this.state, index);
+    this.emitState();
+  }
+
+  setActiveNpcFacing(facing: NpcFacing): void {
+    if (!this.state) return;
+    this.state = painter.setActiveNpcFacing(this.state, facing);
+    this.emitState();
+  }
+
+  setActiveNpcEventKey(key: string | undefined): void {
+    if (!this.state) return;
+    this.state = painter.setActiveNpcEventKey(this.state, key);
+    this.emitState();
+  }
+
+  /** Removes the NPC `id` from the active floor (c1a follow-up panel action). */
+  removeNpc(id: string): void {
+    if (!this.state) return;
+    this.state = painter.removeNpc(this.state, id);
+    this.emitState();
+    this.recomputeNpcOverlay();
+  }
+
+  setActiveTriggerOn(on: 'enter' | 'interact'): void {
+    if (!this.state) return;
+    this.state = painter.setActiveTriggerOn(this.state, on);
+    this.emitState();
+  }
+
+  setActiveTriggerEventKey(key: string | undefined): void {
+    if (!this.state) return;
+    this.state = painter.setActiveTriggerEventKey(this.state, key);
+    this.emitState();
+  }
+
+  /** Removes the trigger `id` from the active floor (c1a follow-up panel action). */
+  removeTrigger(id: string): void {
+    if (!this.state) return;
+    this.state = painter.removeTrigger(this.state, id);
+    this.emitState();
+    this.recomputeTriggerOverlay();
+  }
+
   undo(): void {
     if (!this.state) return;
     const result = painter.undo(this.state);
@@ -393,6 +473,8 @@ export class PainterViewport {
       this.state.stairLinks,
       this.state.spawn,
       this.state.props,
+      this.state.npcs,
+      this.state.triggers,
     );
     return {
       ...composed,
@@ -431,6 +513,8 @@ export class PainterViewport {
     if (this.state.tool === 'stair-link') this.recomputeStairOverlay();
     if (this.state.tool === 'spawn-point') this.recomputeSpawnOverlay();
     if (this.state.tool === 'prop') this.recomputePropOverlay();
+    if (this.state.tool === 'npc') this.recomputeNpcOverlay();
+    if (this.state.tool === 'trigger') this.recomputeTriggerOverlay();
     this.emitState();
   }
 
@@ -715,6 +799,46 @@ export class PainterViewport {
     this.callbacks.onPropOverlayChange?.(items);
   }
 
+  /** Recomputes the active floor's NPC marker overlay (c1a follow-up). */
+  private recomputeNpcOverlay(): void {
+    if (!this.state || !this.cameraPose) return;
+    const activeFloorId = painter.activeFloorState(this.state).id;
+    const points = computeNpcOverlayPoints(this.state.npcs, activeFloorId);
+
+    const items: NpcOverlayItem[] = [];
+    for (const point of points) {
+      const projected = projectToScreenFraction(
+        { x: point.x + 0.5, y: 0, z: point.y + 0.5 },
+        this.cameraPose,
+        OVERVIEW_FOV_DEG,
+        this.camera.aspect,
+      );
+      if (!projected) continue;
+      items.push({ id: point.id, xFrac: projected.xFrac, yFrac: projected.yFrac });
+    }
+    this.callbacks.onNpcOverlayChange?.(items);
+  }
+
+  /** Recomputes the active floor's trigger marker overlay (c1a follow-up). */
+  private recomputeTriggerOverlay(): void {
+    if (!this.state || !this.cameraPose) return;
+    const activeFloorId = painter.activeFloorState(this.state).id;
+    const points = computeTriggerOverlayPoints(this.state.triggers, activeFloorId);
+
+    const items: TriggerOverlayItem[] = [];
+    for (const point of points) {
+      const projected = projectToScreenFraction(
+        { x: point.x + 0.5, y: 0, z: point.y + 0.5 },
+        this.cameraPose,
+        OVERVIEW_FOV_DEG,
+        this.camera.aspect,
+      );
+      if (!projected) continue;
+      items.push({ id: point.id, xFrac: projected.xFrac, yFrac: projected.yFrac });
+    }
+    this.callbacks.onTriggerOverlayChange?.(items);
+  }
+
   private startRenderLoop(): void {
     if (this.animationHandle !== undefined) return;
     const renderFrame = () => {
@@ -735,6 +859,8 @@ export class PainterViewport {
     this.recomputeStairOverlay();
     this.recomputeSpawnOverlay();
     this.recomputePropOverlay();
+    this.recomputeNpcOverlay();
+    this.recomputeTriggerOverlay();
   }
 
   dispose(): void {

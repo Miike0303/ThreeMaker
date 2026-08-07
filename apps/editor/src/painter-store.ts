@@ -48,11 +48,22 @@
  * per-floor undo stack alongside tiles + rooms). Scale/rotation/animation
  * stay JSON-side this WU -- the store only authors the required fields
  * (id/x/y/floor/object) with schema defaults for the rest.
+ *
+ * NPC + trigger authoring (c1a follow-up): `PainterState.npcs`/`triggers`
+ * mirror `MapDocument.npcs`/`triggers` exactly (flat, top-level, floor by
+ * stable id). Place/delete push onto the active floor's OWN
+ * `npcCommandStack` / `triggerCommandStack` (fourth and fifth per-floor
+ * undo stacks). Event scripts stay JSON-side -- the store only holds
+ * `eventKeys` for the panel dropdown + placement guard (a valid
+ * `onInteract`/`event` reference requires an existing events key).
+ * Routine editing stays JSON-side.
  */
 
 import type {
   CommandStackState,
   MapSpawn,
+  NpcDocument,
+  NpcFacing,
   PropDocument,
   RoomDocument,
   RoomRect,
@@ -62,6 +73,7 @@ import type {
   TileCellDiff,
   TileDiff,
   TileLayerSet,
+  TriggerDocument,
 } from '@threemaker/map-format';
 import {
   applyTileDiff,
@@ -120,7 +132,47 @@ export interface PropCommandStackState {
 
 export const EMPTY_PROP_COMMAND_STACK: PropCommandStackState = { undoStack: [], redoStack: [] };
 
-/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"), and (Slice 5a) its own independent room-command stack (`roomCommandStack`) -- a floor's room edits undo/redo separately from its tile edits, never crossing into another floor's history -- plus (C5 WU-04) its own prop-command stack. Structurally parallel to `map-compose.ts`'s `PainterFloorSource` (`{id, label?, baseElevation, layers}`, no command stack) and `PainterFloorInit` below (same fields as this type, minus the session-local stacks) -- separate types by design, not accidental divergence: each belongs to its own layer (composed-doc source, store-init input, live store state). */
+/**
+ * One NPC mutation's before/after `NpcDocument` (c1a follow-up, same shape as
+ * `PropCommand`). `before`/`after` absent means "the NPC did not exist"
+ * (place: `before` absent; remove: `after` absent).
+ */
+export interface NpcCommand {
+  readonly floor: string;
+  readonly id: string;
+  readonly before?: NpcDocument;
+  readonly after?: NpcDocument;
+}
+
+export interface NpcCommandStackState {
+  readonly undoStack: readonly NpcCommand[];
+  readonly redoStack: readonly NpcCommand[];
+}
+
+export const EMPTY_NPC_COMMAND_STACK: NpcCommandStackState = { undoStack: [], redoStack: [] };
+
+/**
+ * One trigger mutation's before/after `TriggerDocument` (c1a follow-up, same
+ * shape as `PropCommand`).
+ */
+export interface TriggerCommand {
+  readonly floor: string;
+  readonly id: string;
+  readonly before?: TriggerDocument;
+  readonly after?: TriggerDocument;
+}
+
+export interface TriggerCommandStackState {
+  readonly undoStack: readonly TriggerCommand[];
+  readonly redoStack: readonly TriggerCommand[];
+}
+
+export const EMPTY_TRIGGER_COMMAND_STACK: TriggerCommandStackState = {
+  undoStack: [],
+  redoStack: [],
+};
+
+/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"), and (Slice 5a) its own independent room-command stack (`roomCommandStack`) -- a floor's room edits undo/redo separately from its tile edits, never crossing into another floor's history -- plus (C5 WU-04) its own prop-command stack and (c1a follow-up) npc/trigger command stacks. Structurally parallel to `map-compose.ts`'s `PainterFloorSource` (`{id, label?, baseElevation, layers}`, no command stack) and `PainterFloorInit` below (same fields as this type, minus the session-local stacks) -- separate types by design, not accidental divergence: each belongs to its own layer (composed-doc source, store-init input, live store state). */
 export interface PainterFloorState {
   readonly id: string;
   readonly label?: string;
@@ -129,6 +181,8 @@ export interface PainterFloorState {
   readonly commandStack: CommandStackState;
   readonly roomCommandStack: RoomCommandStackState;
   readonly propCommandStack: PropCommandStackState;
+  readonly npcCommandStack: NpcCommandStackState;
+  readonly triggerCommandStack: TriggerCommandStackState;
 }
 
 /** A floor's initial layers, as sourced from a loaded/composed `MapDocument` (see `map-compose.ts`'s `painterFloorsFromDocument`, which returns this exact shape as `PainterFloorSource`) or freshly created for a blank floor -- command stacks are always session-local, never persisted. */
@@ -185,6 +239,38 @@ export interface PainterState {
    * `setActivePropObject` after `ingestGlbBytes` succeeds.
    */
   readonly activePropObject?: string;
+  /** Every authored NPC across every floor (c1a follow-up), mirroring `MapDocument.npcs`. */
+  readonly npcs: readonly NpcDocument[];
+  /** Every authored trigger across every floor (c1a follow-up), mirroring `MapDocument.triggers`. */
+  readonly triggers: readonly TriggerDocument[];
+  /**
+   * Keys of `MapDocument.events` at map load (session-only mirror). Placement
+   * is a no-op when empty -- a valid `onInteract`/`event` reference requires
+   * an existing events key. Event scripts themselves stay JSON-authored.
+   */
+  readonly eventKeys: readonly string[];
+  /**
+   * Content-addressed sha256 of the currently selected character sprite sheet
+   * for the 'npc' tool. `undefined` means no sprite is selected -- an NPC
+   * click is then a no-op. Caller-set via `setActiveNpcSpriteObject`.
+   */
+  readonly activeNpcSpriteObject?: string;
+  /** Character index within the selected sprite sheet (default 0). */
+  readonly activeNpcCharacterIndex: number;
+  /** Facing for the next placed NPC (default `'down'`). */
+  readonly activeNpcFacing: NpcFacing;
+  /**
+   * Event key written into the next placed NPC's `onInteract`. Must be one of
+   * `eventKeys` (or placement is a no-op).
+   */
+  readonly activeNpcEventKey?: string;
+  /** `on` mode for the next placed trigger (default `'enter'`). */
+  readonly activeTriggerOn: 'enter' | 'interact';
+  /**
+   * Event key written into the next placed trigger's `event`. Must be one of
+   * `eventKeys` (or placement is a no-op).
+   */
+  readonly activeTriggerEventKey?: string;
 }
 
 export interface CreatePainterStateOptions {
@@ -206,9 +292,31 @@ export interface CreatePainterStateOptions {
   readonly props?: readonly PropDocument[];
   /** Initial selected prop object sha (session-only; never persisted). */
   readonly activePropObject?: string;
+  /** Initial NPCs (map load path), matching `MapDocument.npcs`; defaults to none authored. */
+  readonly npcs?: readonly NpcDocument[];
+  /** Initial triggers (map load path), matching `MapDocument.triggers`; defaults to none authored. */
+  readonly triggers?: readonly TriggerDocument[];
+  /**
+   * Event-script keys available for `onInteract`/`event` dropdowns (from
+   * `Object.keys(doc.events)` on load). Defaults to none -- placement tools
+   * are then disabled until a map with events is loaded.
+   */
+  readonly eventKeys?: readonly string[];
+  /** Initial selected NPC sprite object sha (session-only). */
+  readonly activeNpcSpriteObject?: string;
+  /** Initial character index (default 0). */
+  readonly activeNpcCharacterIndex?: number;
+  /** Initial NPC facing (default `'down'`). */
+  readonly activeNpcFacing?: NpcFacing;
+  /** Initial NPC event key; defaults to the first of `eventKeys` when present. */
+  readonly activeNpcEventKey?: string;
+  /** Initial trigger `on` mode (default `'enter'`). */
+  readonly activeTriggerOn?: 'enter' | 'interact';
+  /** Initial trigger event key; defaults to the first of `eventKeys` when present. */
+  readonly activeTriggerEventKey?: string;
 }
 
-/** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. Every floor gets a fresh, empty command stack, room-command stack, AND prop-command stack: undo/redo history is session-local, never carried over from a saved document. */
+/** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. Every floor gets a fresh, empty command stack, room-command stack, prop-command stack, AND npc/trigger command stacks: undo/redo history is session-local, never carried over from a saved document. */
 export function createPainterState(options: CreatePainterStateOptions): PainterState {
   const {
     floors,
@@ -222,13 +330,25 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     spawn,
     props = [],
     activePropObject,
+    npcs = [],
+    triggers = [],
+    eventKeys = [],
+    activeNpcSpriteObject,
+    activeNpcCharacterIndex = 0,
+    activeNpcFacing = 'down',
+    activeNpcEventKey,
+    activeTriggerOn = 'enter',
+    activeTriggerEventKey,
   } = options;
+  const defaultEventKey = eventKeys[0];
   const base: PainterState = {
     floors: floors.map((floor) => ({
       ...floor,
       commandStack: EMPTY_COMMAND_STACK,
       roomCommandStack: EMPTY_ROOM_COMMAND_STACK,
       propCommandStack: EMPTY_PROP_COMMAND_STACK,
+      npcCommandStack: EMPTY_NPC_COMMAND_STACK,
+      triggerCommandStack: EMPTY_TRIGGER_COMMAND_STACK,
     })),
     activeFloor,
     width,
@@ -243,9 +363,21 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     rooms,
     stairLinks,
     props,
+    npcs,
+    triggers,
+    eventKeys,
+    activeNpcCharacterIndex,
+    activeNpcFacing,
+    activeTriggerOn,
   };
-  const withSpawn = spawn === undefined ? base : { ...base, spawn };
-  return activePropObject === undefined ? withSpawn : { ...withSpawn, activePropObject };
+  let next: PainterState = spawn === undefined ? base : { ...base, spawn };
+  if (activePropObject !== undefined) next = { ...next, activePropObject };
+  if (activeNpcSpriteObject !== undefined) next = { ...next, activeNpcSpriteObject };
+  const npcEvent = activeNpcEventKey ?? defaultEventKey;
+  if (npcEvent !== undefined) next = { ...next, activeNpcEventKey: npcEvent };
+  const triggerEvent = activeTriggerEventKey ?? defaultEventKey;
+  if (triggerEvent !== undefined) next = { ...next, activeTriggerEventKey: triggerEvent };
+  return next;
 }
 
 /** The floor currently being edited/rendered. Throws if `activeFloor` is out of range -- an internal-invariant violation, never user-reachable (every mutator below keeps `activeFloor` in range). */
@@ -262,7 +394,15 @@ export function activeFloorState(state: PainterState): PainterFloorState {
 function replaceActiveFloor(
   state: PainterState,
   patch: Partial<
-    Pick<PainterFloorState, 'layers' | 'commandStack' | 'roomCommandStack' | 'propCommandStack'>
+    Pick<
+      PainterFloorState,
+      | 'layers'
+      | 'commandStack'
+      | 'roomCommandStack'
+      | 'propCommandStack'
+      | 'npcCommandStack'
+      | 'triggerCommandStack'
+    >
   >,
 ): PainterState {
   const floors = state.floors.map((floor, index) =>
@@ -300,6 +440,8 @@ export function addFloor(state: PainterState, options: AddFloorOptions): Painter
     commandStack: EMPTY_COMMAND_STACK,
     roomCommandStack: EMPTY_ROOM_COMMAND_STACK,
     propCommandStack: EMPTY_PROP_COMMAND_STACK,
+    npcCommandStack: EMPTY_NPC_COMMAND_STACK,
+    triggerCommandStack: EMPTY_TRIGGER_COMMAND_STACK,
   };
   const floors = [...state.floors, floor];
   return { ...state, floors, activeFloor: floors.length - 1 };
@@ -394,9 +536,9 @@ export interface PointerDownOptions {
 
 /**
  * `pointerdown`: eyedropper picks immediately (no stroke) from the active
- * floor; 'spawn-point', 'stair-link' (Slice 5b), and 'prop' (C5 WU-04) also
- * act immediately with no stroke, same short-circuit shape as eyedropper;
- * every other tool begins a stroke.
+ * floor; 'spawn-point', 'stair-link' (Slice 5b), 'prop' (C5 WU-04), and
+ * 'npc'/'trigger' (c1a follow-up) also act immediately with no stroke, same
+ * short-circuit shape as eyedropper; every other tool begins a stroke.
  */
 export function pointerDown(
   state: PainterState,
@@ -420,6 +562,14 @@ export function pointerDown(
     // No selected .glb → no-op (panel surfaces the "select a .glb first" hint).
     if (!state.activePropObject) return { state };
     return { state: placeProp(state, { x: point.x, y: point.y }) };
+  }
+  if (state.tool === 'npc') {
+    // Zero events / no sprite / occupied tile → no-op (panel surfaces why).
+    return { state: placeNpc(state, { x: point.x, y: point.y }) };
+  }
+  if (state.tool === 'trigger') {
+    // Zero events / no event key → no-op (panel surfaces why).
+    return { state: placeTrigger(state, { x: point.x, y: point.y }) };
   }
   const stroke = beginStroke(state.stroke, state.tool, state.activeLayer, point);
   return { state: { ...state, stroke } };
@@ -943,6 +1093,292 @@ export function redoProp(state: PainterState): PropCommandStepOutcome {
   return { state: { ...withStack, props }, command: last };
 }
 
+// --- NPC authoring (c1a follow-up) ---------------------------------------
+
+/** First free `npc-N` id across the whole document (schema ids are store-global, not per-floor). */
+export function nextNpcId(npcs: readonly NpcDocument[]): string {
+  const used = new Set(npcs.map((npc) => npc.id));
+  let n = 1;
+  while (used.has(`npc-${n}`)) n += 1;
+  return `npc-${n}`;
+}
+
+/** Sets (or, with `undefined`, clears) the selected NPC sprite sheet sha. Ignored mid-stroke. */
+export function setActiveNpcSpriteObject(
+  state: PainterState,
+  object: string | undefined,
+): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (object !== undefined) return { ...state, activeNpcSpriteObject: object };
+  if (state.activeNpcSpriteObject === undefined) return state;
+  const { activeNpcSpriteObject: _activeNpcSpriteObject, ...rest } = state;
+  return rest;
+}
+
+/** Sets the character index for the next placed NPC. Ignored mid-stroke. */
+export function setActiveNpcCharacterIndex(state: PainterState, index: number): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (!Number.isInteger(index) || index < 0) return state;
+  return { ...state, activeNpcCharacterIndex: index };
+}
+
+/** Sets the facing for the next placed NPC. Ignored mid-stroke. */
+export function setActiveNpcFacing(state: PainterState, facing: NpcFacing): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  return { ...state, activeNpcFacing: facing };
+}
+
+/** Sets (or clears) the event key for the next placed NPC's `onInteract`. Ignored mid-stroke. */
+export function setActiveNpcEventKey(state: PainterState, key: string | undefined): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (key !== undefined) return { ...state, activeNpcEventKey: key };
+  if (state.activeNpcEventKey === undefined) return state;
+  const { activeNpcEventKey: _activeNpcEventKey, ...rest } = state;
+  return rest;
+}
+
+function upsertNpc(
+  npcs: readonly NpcDocument[],
+  id: string,
+  next: NpcDocument | undefined,
+): readonly NpcDocument[] {
+  const index = npcs.findIndex((npc) => npc.id === id);
+  if (next === undefined) {
+    return index === -1 ? npcs : npcs.filter((_, i) => i !== index);
+  }
+  if (index === -1) return [...npcs, next];
+  return npcs.map((npc, i) => (i === index ? next : npc));
+}
+
+function applyNpcMutation(
+  state: PainterState,
+  npcs: readonly NpcDocument[],
+  command: NpcCommand,
+): PainterState {
+  const floor = activeFloorState(state);
+  const undoStack = [...floor.npcCommandStack.undoStack, command].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, { npcCommandStack: { undoStack, redoStack: [] } });
+  return { ...withStack, npcs };
+}
+
+/**
+ * Places an NPC on the ACTIVE floor at `point` using the active sprite /
+ * facing / event key and the next free `npc-N` id. No-ops when:
+ * - mid-stroke,
+ * - `eventKeys` is empty (cannot author a dangling `onInteract`),
+ * - no sprite / event key is selected,
+ * - another NPC already occupies that base tile on this floor (schema
+ *   per-floor uniqueness — never author an invalid doc).
+ * Routine is omitted deliberately (JSON-side).
+ */
+export function placeNpc(
+  state: PainterState,
+  point: { readonly x: number; readonly y: number },
+): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (state.eventKeys.length === 0) return state;
+  if (!state.activeNpcSpriteObject) return state;
+  if (!state.activeNpcEventKey || !state.eventKeys.includes(state.activeNpcEventKey)) {
+    return state;
+  }
+
+  const floor = activeFloorState(state);
+  const occupied = state.npcs.some(
+    (npc) => npc.floor === floor.id && npc.x === point.x && npc.y === point.y,
+  );
+  if (occupied) return state;
+
+  const id = nextNpcId(state.npcs);
+  // routine omitted deliberately -- authoring stays JSON-side (c1a follow-up).
+  const npc: NpcDocument = {
+    id,
+    x: point.x,
+    y: point.y,
+    floor: floor.id,
+    facing: state.activeNpcFacing,
+    sprite: {
+      object: state.activeNpcSpriteObject,
+      characterIndex: state.activeNpcCharacterIndex,
+    },
+    onInteract: state.activeNpcEventKey,
+  };
+  const npcs = upsertNpc(state.npcs, id, npc);
+  return applyNpcMutation(state, npcs, { floor: floor.id, id, after: npc });
+}
+
+/** Removes the NPC `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no such NPC exists on the active floor. */
+export function removeNpc(state: PainterState, id: string): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const floor = activeFloorState(state);
+  const existing = state.npcs.find((npc) => npc.floor === floor.id && npc.id === id);
+  if (!existing) return state;
+
+  const npcs = upsertNpc(state.npcs, id, undefined);
+  return applyNpcMutation(state, npcs, { floor: floor.id, id, before: existing });
+}
+
+export interface NpcCommandStepOutcome {
+  readonly state: PainterState;
+  readonly command?: NpcCommand;
+}
+
+/** Undoes the most recent NPC command on the ACTIVE floor's OWN `npcCommandStack`, if any. */
+export function undoNpc(state: PainterState): NpcCommandStepOutcome {
+  const floor = activeFloorState(state);
+  const last = floor.npcCommandStack.undoStack[floor.npcCommandStack.undoStack.length - 1];
+  if (!last) return { state };
+
+  const npcs = upsertNpc(state.npcs, last.id, last.before);
+  const undoStack = floor.npcCommandStack.undoStack.slice(0, -1);
+  const redoStack = [...floor.npcCommandStack.redoStack, last].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, { npcCommandStack: { undoStack, redoStack } });
+  return { state: { ...withStack, npcs }, command: last };
+}
+
+/** Re-applies the most recently undone NPC command on the ACTIVE floor's OWN `npcCommandStack`, if any. */
+export function redoNpc(state: PainterState): NpcCommandStepOutcome {
+  const floor = activeFloorState(state);
+  const last = floor.npcCommandStack.redoStack[floor.npcCommandStack.redoStack.length - 1];
+  if (!last) return { state };
+
+  const npcs = upsertNpc(state.npcs, last.id, last.after);
+  const redoStack = floor.npcCommandStack.redoStack.slice(0, -1);
+  const undoStack = [...floor.npcCommandStack.undoStack, last].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, { npcCommandStack: { undoStack, redoStack } });
+  return { state: { ...withStack, npcs }, command: last };
+}
+
+// --- Trigger authoring (c1a follow-up) -----------------------------------
+
+/** First free `trigger-N` id across the whole document. */
+export function nextTriggerId(triggers: readonly TriggerDocument[]): string {
+  const used = new Set(triggers.map((trigger) => trigger.id));
+  let n = 1;
+  while (used.has(`trigger-${n}`)) n += 1;
+  return `trigger-${n}`;
+}
+
+/** Sets the `on` mode for the next placed trigger. Ignored mid-stroke. */
+export function setActiveTriggerOn(state: PainterState, on: 'enter' | 'interact'): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  return { ...state, activeTriggerOn: on };
+}
+
+/** Sets (or clears) the event key for the next placed trigger. Ignored mid-stroke. */
+export function setActiveTriggerEventKey(
+  state: PainterState,
+  key: string | undefined,
+): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (key !== undefined) return { ...state, activeTriggerEventKey: key };
+  if (state.activeTriggerEventKey === undefined) return state;
+  const { activeTriggerEventKey: _activeTriggerEventKey, ...rest } = state;
+  return rest;
+}
+
+function upsertTrigger(
+  triggers: readonly TriggerDocument[],
+  id: string,
+  next: TriggerDocument | undefined,
+): readonly TriggerDocument[] {
+  const index = triggers.findIndex((trigger) => trigger.id === id);
+  if (next === undefined) {
+    return index === -1 ? triggers : triggers.filter((_, i) => i !== index);
+  }
+  if (index === -1) return [...triggers, next];
+  return triggers.map((trigger, i) => (i === index ? next : trigger));
+}
+
+function applyTriggerMutation(
+  state: PainterState,
+  triggers: readonly TriggerDocument[],
+  command: TriggerCommand,
+): PainterState {
+  const floor = activeFloorState(state);
+  const undoStack = [...floor.triggerCommandStack.undoStack, command].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, {
+    triggerCommandStack: { undoStack, redoStack: [] },
+  });
+  return { ...withStack, triggers };
+}
+
+/**
+ * Places a trigger on the ACTIVE floor at `point` using the active `on`
+ * mode / event key and the next free `trigger-N` id. No-ops when mid-stroke,
+ * `eventKeys` is empty, or no valid event key is selected.
+ */
+export function placeTrigger(
+  state: PainterState,
+  point: { readonly x: number; readonly y: number },
+): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (state.eventKeys.length === 0) return state;
+  if (!state.activeTriggerEventKey || !state.eventKeys.includes(state.activeTriggerEventKey)) {
+    return state;
+  }
+
+  const floor = activeFloorState(state);
+  const id = nextTriggerId(state.triggers);
+  const trigger: TriggerDocument = {
+    id,
+    x: point.x,
+    y: point.y,
+    floor: floor.id,
+    on: state.activeTriggerOn,
+    event: state.activeTriggerEventKey,
+  };
+  const triggers = upsertTrigger(state.triggers, id, trigger);
+  return applyTriggerMutation(state, triggers, { floor: floor.id, id, after: trigger });
+}
+
+/** Removes the trigger `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no such trigger exists on the active floor. */
+export function removeTrigger(state: PainterState, id: string): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const floor = activeFloorState(state);
+  const existing = state.triggers.find(
+    (trigger) => trigger.floor === floor.id && trigger.id === id,
+  );
+  if (!existing) return state;
+
+  const triggers = upsertTrigger(state.triggers, id, undefined);
+  return applyTriggerMutation(state, triggers, { floor: floor.id, id, before: existing });
+}
+
+export interface TriggerCommandStepOutcome {
+  readonly state: PainterState;
+  readonly command?: TriggerCommand;
+}
+
+/** Undoes the most recent trigger command on the ACTIVE floor's OWN `triggerCommandStack`, if any. */
+export function undoTrigger(state: PainterState): TriggerCommandStepOutcome {
+  const floor = activeFloorState(state);
+  const last = floor.triggerCommandStack.undoStack[floor.triggerCommandStack.undoStack.length - 1];
+  if (!last) return { state };
+
+  const triggers = upsertTrigger(state.triggers, last.id, last.before);
+  const undoStack = floor.triggerCommandStack.undoStack.slice(0, -1);
+  const redoStack = [...floor.triggerCommandStack.redoStack, last].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, {
+    triggerCommandStack: { undoStack, redoStack },
+  });
+  return { state: { ...withStack, triggers }, command: last };
+}
+
+/** Re-applies the most recently undone trigger command on the ACTIVE floor's OWN `triggerCommandStack`, if any. */
+export function redoTrigger(state: PainterState): TriggerCommandStepOutcome {
+  const floor = activeFloorState(state);
+  const last = floor.triggerCommandStack.redoStack[floor.triggerCommandStack.redoStack.length - 1];
+  if (!last) return { state };
+
+  const triggers = upsertTrigger(state.triggers, last.id, last.after);
+  const redoStack = floor.triggerCommandStack.redoStack.slice(0, -1);
+  const undoStack = [...floor.triggerCommandStack.undoStack, last].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, {
+    triggerCommandStack: { undoStack, redoStack },
+  });
+  return { state: { ...withStack, triggers }, command: last };
+}
+
 // --- Stroke -> touched-cells resolution (per tool) ----------------------
 
 function computeStrokeTouchedCells(
@@ -972,9 +1408,11 @@ function computeStrokeTouchedCells(
     case 'stair-link':
     case 'spawn-point':
     case 'prop':
+    case 'npc':
+    case 'trigger':
       // Never reached: `pointerDown` short-circuits these tools before a
-      // stroke is ever begun (Slice 5b / C5 WU-04), same as 'eyedropper'
-      // above.
+      // stroke is ever begun (Slice 5b / C5 WU-04 / c1a follow-up), same as
+      // 'eyedropper' above.
       return [];
     case 'room-box':
       // Never reached: `pointerUp` short-circuits a 'room-box' stroke into

@@ -1,11 +1,13 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
-import type { MapDocument, SemanticClass } from '@threemaker/map-format';
+import type { MapDocument, NpcFacing, SemanticClass } from '@threemaker/map-format';
 import type { SheetPixelSize } from '@threemaker/renderer';
 import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
+  type AssetRow,
   type GameRow,
   getTileset,
   isTauriAvailable,
+  listAssets,
   listGames,
   objectPreviewUrl,
 } from '../catalog-client.js';
@@ -15,11 +17,13 @@ import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, seedDemoTiles } from '../map-compose.js';
 import type { PainterState } from '../painter-store.js';
 import type {
+  NpcOverlayItem,
   PropOverlayItem,
   RampGlyphOverlayItem,
   RoomOverlayItem,
   SpawnOverlayItem,
   StairOverlayItem,
+  TriggerOverlayItem,
 } from '../painter-viewport.js';
 import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
 import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
@@ -40,7 +44,11 @@ const TOOLS: readonly { readonly id: ToolId; readonly shortcut: string }[] = [
   { id: 'stair-link', shortcut: 'S' },
   { id: 'spawn-point', shortcut: 'P' },
   { id: 'prop', shortcut: 'O' },
+  { id: 'npc', shortcut: 'N' },
+  { id: 'trigger', shortcut: 'T' },
 ];
+
+const NPC_FACINGS: readonly NpcFacing[] = ['down', 'left', 'right', 'up'];
 
 /** Short form for content-addressed object display (first 8 hex chars). */
 function shortSha(sha: string): string {
@@ -160,12 +168,24 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [stairOverlay, setStairOverlay] = useState<readonly StairOverlayItem[]>([]);
   const [spawnOverlay, setSpawnOverlay] = useState<SpawnOverlayItem | undefined>(undefined);
   const [propOverlay, setPropOverlay] = useState<readonly PropOverlayItem[]>([]);
+  const [npcOverlay, setNpcOverlay] = useState<readonly NpcOverlayItem[]>([]);
+  const [triggerOverlay, setTriggerOverlay] = useState<readonly TriggerOverlayItem[]>([]);
+  const [characterSprites, setCharacterSprites] = useState<readonly AssetRow[]>([]);
   const glbInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     listGames()
       .then(setGames)
       .catch((err) => console.error('Failed to load games for the painter:', err));
+  }, []);
+
+  useEffect(() => {
+    // Character sheets already live in the catalog/asset-store from imports
+    // (unlike props, which use the glb-ingest path). First page is enough for
+    // a minimal sprite picker; the full catalog browser covers the rest.
+    listAssets({ type: 'character' }, 0)
+      .then((page) => setCharacterSprites(page.rows))
+      .catch((err) => console.error('Failed to load character sprites for the painter:', err));
   }, []);
 
   useEffect(() => {
@@ -179,6 +199,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
       onStairOverlayChange: setStairOverlay,
       onSpawnOverlayChange: setSpawnOverlay,
       onPropOverlayChange: setPropOverlay,
+      onNpcOverlayChange: setNpcOverlay,
+      onTriggerOverlayChange: setTriggerOverlay,
     });
     viewportRef.current = viewport;
     return () => {
@@ -573,6 +595,188 @@ export function PainterPanel({ t }: PainterPanelProps) {
         </div>
       )}
 
+      {mapReady && painterState && (
+        <div className="painter-npcs">
+          {/* Routine editing stays JSON-side (c1a follow-up minimal). Event
+              scripts themselves stay JSON-authored — dialog/event editor is a
+              separate future work item. */}
+          <span className="painter-npcs-heading">{t('painter.npcs')}</span>
+          <p className="painter-npcs-events-hint">{t('painter.npcs.eventsHint')}</p>
+          {painterState.eventKeys.length === 0 && (
+            <p className="painter-npcs-hint">{t('painter.npcs.noEventsHint')}</p>
+          )}
+          <label>
+            {t('painter.npcs.sprite')}
+            <select
+              value={painterState.activeNpcSpriteObject ?? ''}
+              onChange={(event) => {
+                const value = event.target.value;
+                viewportRef.current?.setActiveNpcSpriteObject(value === '' ? undefined : value);
+              }}
+            >
+              <option value="">{t('painter.npcs.noSprite')}</option>
+              {characterSprites.map((asset) => (
+                <option key={asset.sha256} value={asset.sha256}>
+                  {shortSha(asset.sha256)}
+                  {asset.relPath ? ` — ${asset.relPath}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {t('painter.npcs.characterIndex')}
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={painterState.activeNpcCharacterIndex}
+              onChange={(event) => {
+                const parsed = Number.parseInt(event.target.value, 10);
+                if (Number.isFinite(parsed)) {
+                  viewportRef.current?.setActiveNpcCharacterIndex(parsed);
+                }
+              }}
+            />
+          </label>
+          <label>
+            {t('painter.npcs.facing')}
+            <select
+              value={painterState.activeNpcFacing}
+              onChange={(event) =>
+                viewportRef.current?.setActiveNpcFacing(event.target.value as NpcFacing)
+              }
+            >
+              {NPC_FACINGS.map((facing) => (
+                <option key={facing} value={facing}>
+                  {t(`painter.npcs.facing.${facing}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {t('painter.npcs.event')}
+            <select
+              value={painterState.activeNpcEventKey ?? ''}
+              disabled={painterState.eventKeys.length === 0}
+              onChange={(event) => {
+                const value = event.target.value;
+                viewportRef.current?.setActiveNpcEventKey(value === '' ? undefined : value);
+              }}
+            >
+              {painterState.eventKeys.length === 0 ? (
+                <option value="">{t('painter.npcs.noEvents')}</option>
+              ) : (
+                painterState.eventKeys.map((key) => (
+                  <option key={key} value={key}>
+                    {key}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+          {!painterState.activeNpcSpriteObject && painterState.tool === 'npc' && (
+            <p className="painter-npcs-hint">{t('painter.npcs.selectSpriteHint')}</p>
+          )}
+          <ul className="painter-npc-list">
+            {painterState.npcs
+              .filter((npc) => npc.floor === painterState.floors[painterState.activeFloor]?.id)
+              .map((npc) => (
+                <li key={npc.id}>
+                  <span>
+                    {formatTemplate(t('painter.npcs.summary'), {
+                      id: npc.id,
+                      x: npc.x,
+                      y: npc.y,
+                      event: npc.onInteract,
+                    })}
+                  </span>
+                  <button type="button" onClick={() => viewportRef.current?.removeNpc(npc.id)}>
+                    {t('painter.npcs.remove')}
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+
+      {mapReady && painterState && (
+        <div className="painter-triggers">
+          {/* Event scripts stay JSON-authored — dialog/event editor is future work. */}
+          <span className="painter-triggers-heading">{t('painter.triggers')}</span>
+          <p className="painter-triggers-events-hint">{t('painter.triggers.eventsHint')}</p>
+          {painterState.eventKeys.length === 0 && (
+            <p className="painter-triggers-hint">{t('painter.triggers.noEventsHint')}</p>
+          )}
+          <fieldset className="painter-triggers-on">
+            <legend>{t('painter.triggers.on')}</legend>
+            <label>
+              <input
+                type="radio"
+                name="trigger-on"
+                checked={painterState.activeTriggerOn === 'enter'}
+                onChange={() => viewportRef.current?.setActiveTriggerOn('enter')}
+              />
+              {t('painter.triggers.on.enter')}
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="trigger-on"
+                checked={painterState.activeTriggerOn === 'interact'}
+                onChange={() => viewportRef.current?.setActiveTriggerOn('interact')}
+              />
+              {t('painter.triggers.on.interact')}
+            </label>
+          </fieldset>
+          <label>
+            {t('painter.triggers.event')}
+            <select
+              value={painterState.activeTriggerEventKey ?? ''}
+              disabled={painterState.eventKeys.length === 0}
+              onChange={(event) => {
+                const value = event.target.value;
+                viewportRef.current?.setActiveTriggerEventKey(value === '' ? undefined : value);
+              }}
+            >
+              {painterState.eventKeys.length === 0 ? (
+                <option value="">{t('painter.triggers.noEvents')}</option>
+              ) : (
+                painterState.eventKeys.map((key) => (
+                  <option key={key} value={key}>
+                    {key}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+          <ul className="painter-trigger-list">
+            {painterState.triggers
+              .filter(
+                (trigger) => trigger.floor === painterState.floors[painterState.activeFloor]?.id,
+              )
+              .map((trigger) => (
+                <li key={trigger.id}>
+                  <span>
+                    {formatTemplate(t('painter.triggers.summary'), {
+                      id: trigger.id,
+                      x: trigger.x,
+                      y: trigger.y,
+                      on: trigger.on,
+                      event: trigger.event,
+                    })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => viewportRef.current?.removeTrigger(trigger.id)}
+                  >
+                    {t('painter.triggers.remove')}
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+
       {mapReady && painterState && paletteSlots.length > 0 && (
         <div className="painter-palettes">
           {paletteSlots.map((paletteSlot) => (
@@ -727,6 +931,54 @@ export function PainterPanel({ t }: PainterPanelProps) {
                 aria-label={formatTemplate(t('painter.props.overlayLabel'), { id: point.id })}
               >
                 ◆
+              </span>
+            ))}
+          </div>
+        )}
+        {npcOverlay.length > 0 && (
+          <div
+            className="painter-npc-overlay"
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+          >
+            {npcOverlay.map((point) => (
+              <span
+                key={point.id}
+                className="painter-npc-marker"
+                role="img"
+                style={{
+                  position: 'absolute',
+                  left: `${point.xFrac * 100}%`,
+                  top: `${point.yFrac * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                  color: '#81c784',
+                }}
+                aria-label={formatTemplate(t('painter.npcs.overlayLabel'), { id: point.id })}
+              >
+                ☺
+              </span>
+            ))}
+          </div>
+        )}
+        {triggerOverlay.length > 0 && (
+          <div
+            className="painter-trigger-overlay"
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+          >
+            {triggerOverlay.map((point) => (
+              <span
+                key={point.id}
+                className="painter-trigger-marker"
+                role="img"
+                style={{
+                  position: 'absolute',
+                  left: `${point.xFrac * 100}%`,
+                  top: `${point.yFrac * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                  color: '#ffb74d',
+                }}
+                aria-label={formatTemplate(t('painter.triggers.overlayLabel'), { id: point.id })}
+              >
+                ◎
               </span>
             ))}
           </div>

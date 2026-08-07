@@ -154,3 +154,22 @@ describe('ToolSM: prop tool (C5 WU-04 -- depth-props-hd)', () => {
     expect(endStroke(propStroking)).toEqual({ status: 'idle' });
   });
 });
+
+describe('ToolSM: npc + trigger tools (c1a follow-up)', () => {
+  it('resolves "N"/"T" (case-insensitive) to npc/trigger', () => {
+    expect(resolveToolShortcut('n')).toBe('npc');
+    expect(resolveToolShortcut('N')).toBe('npc');
+    expect(resolveToolShortcut('t')).toBe('trigger');
+    expect(resolveToolShortcut('T')).toBe('trigger');
+  });
+
+  it('the generic stroking transitions still work structurally for npc/trigger (never actually driven this way -- painter-store.ts short-circuits them in pointerDown, same as prop)', () => {
+    const npcStroking = beginStroke(TOOL_SM_IDLE, 'npc', 0, { x: 1, y: 2 });
+    expect(npcStroking).toMatchObject({ status: 'stroking', tool: 'npc' });
+    expect(endStroke(npcStroking)).toEqual({ status: 'idle' });
+
+    const triggerStroking = beginStroke(TOOL_SM_IDLE, 'trigger', 0, { x: 2, y: 3 });
+    expect(triggerStroking).toMatchObject({ status: 'stroking', tool: 'trigger' });
+    expect(endStroke(triggerStroking)).toEqual({ status: 'idle' });
+  });
+});

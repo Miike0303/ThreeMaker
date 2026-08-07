@@ -18,12 +18,14 @@ import type {
   MapDocument,
   MapLayers,
   MapSpawn,
+  NpcDocument,
   PropDocument,
   RoomDocument,
   SlotComposition,
   StairLinkDocument,
   TileLayerSet,
   TileSheetSlot,
+  TriggerDocument,
 } from '@threemaker/map-format';
 import { CURRENT_MAP_FORMAT_VERSION, MAP_FORMAT_MAGIC } from '@threemaker/map-format';
 
@@ -260,6 +262,10 @@ export function composeDocumentFromPainterFloors(
   stairLinks: readonly StairLinkDocument[] = doc.stairLinks,
   spawn: MapSpawn | undefined = doc.spawn,
   props: readonly PropDocument[] = doc.props,
+  // Live painter-store collections (c1a follow-up place tools). Default to the
+  // source document so pre-follow-up call sites stay byte-identical.
+  npcs: readonly NpcDocument[] = doc.npcs,
+  triggers: readonly TriggerDocument[] = doc.triggers,
 ): MapDocument {
   const originalById = new Map(doc.floors.map((floor) => [floor.id, floor] as const));
   const blankLayer = new Array(doc.width * doc.height).fill(0);
@@ -285,10 +291,12 @@ export function composeDocumentFromPainterFloors(
   // Schema v4 (c1a-authored-events-npcs): `npcs`/`triggers` reference their
   // floor by stable id exactly like `rooms`/`stairLinks`/`spawn`, so a removed
   // floor must drop them here too -- `validateNpc`/`validateTrigger` reject a
-  // dangling reference on the next parse. `events`/`worldSeeds` carry no floor
-  // reference and ride the spread untouched.
-  const composedNpcs = doc.npcs.filter((npc) => floorIds.has(npc.floor));
-  const composedTriggers = doc.triggers.filter((trigger) => floorIds.has(trigger.floor));
+  // dangling reference on the next parse. Live painter-store arrays are passed
+  // in (same shape as `props`) so place/delete survives compose; floor-filter
+  // still applies. `events`/`worldSeeds` carry no floor reference and ride the
+  // spread untouched.
+  const composedNpcs = npcs.filter((npc) => floorIds.has(npc.floor));
+  const composedTriggers = triggers.filter((trigger) => floorIds.has(trigger.floor));
   // Schema v5 (depth-props-hd C5 WU-04): props join the same floor-scoped
   // filter so a deleted floor cannot leave a dangling prop.floor behind.
   const composedProps = props.filter((prop) => floorIds.has(prop.floor));

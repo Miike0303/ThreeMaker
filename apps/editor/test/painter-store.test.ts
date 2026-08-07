@@ -8,24 +8,38 @@ import {
   addStairLink,
   clearSpawn,
   createPainterState,
+  nextNpcId,
   nextPropId,
+  nextTriggerId,
+  placeNpc,
   placeProp,
+  placeTrigger,
   pointerDown,
   pointerMove,
   pointerUp,
   redo,
+  redoNpc,
   redoProp,
   redoRoom,
+  redoTrigger,
   removeFloor,
+  removeNpc,
   removeProp,
   removeRoom,
   removeRoomRect,
   removeStairLink,
+  removeTrigger,
   renameRoom,
   selectFloor,
   setActiveLayer,
+  setActiveNpcCharacterIndex,
+  setActiveNpcEventKey,
+  setActiveNpcFacing,
+  setActiveNpcSpriteObject,
   setActivePropObject,
   setActiveRoomId,
+  setActiveTriggerEventKey,
+  setActiveTriggerOn,
   setFillTileId,
   setPendingStairEntry,
   setSemanticClass,
@@ -34,8 +48,10 @@ import {
   setTool,
   toggleStairLinkBidirectional,
   undo,
+  undoNpc,
   undoProp,
   undoRoom,
+  undoTrigger,
 } from '../src/painter-store.js';
 
 function makeLayers(width: number, height: number): TileLayerSet {
@@ -1254,5 +1270,260 @@ describe('painter-store: prop tool (C5 WU-04 -- depth-props-hd)', () => {
     expect(state.props).toEqual([
       { id: 'prop-1', x: 3, y: 3, floor: 'floor-1', object: PROP_OBJECT_A },
     ]);
+  });
+});
+
+const NPC_SPRITE_A = 'c'.repeat(64);
+const NPC_SPRITE_B = 'd'.repeat(64);
+const EVENT_TALK = 'talk-elder';
+const EVENT_GATE = 'open-gate';
+
+function npcReadyState(overrides: Parameters<typeof createPainterState>[0] = {}) {
+  let state = createPainterState({
+    ...oneFloor(4, 4),
+    width: 4,
+    height: 4,
+    eventKeys: [EVENT_TALK, EVENT_GATE],
+    ...overrides,
+  });
+  state = setActiveNpcSpriteObject(state, NPC_SPRITE_A);
+  return state;
+}
+
+function triggerReadyState(overrides: Parameters<typeof createPainterState>[0] = {}) {
+  return createPainterState({
+    ...oneFloor(4, 4),
+    width: 4,
+    height: 4,
+    eventKeys: [EVENT_TALK, EVENT_GATE],
+    ...overrides,
+  });
+}
+
+describe('painter-store: npc tool (c1a follow-up)', () => {
+  it('nextNpcId returns the first free npc-N id', () => {
+    expect(nextNpcId([])).toBe('npc-1');
+    expect(
+      nextNpcId([
+        {
+          id: 'npc-1',
+          x: 0,
+          y: 0,
+          floor: 'floor-0',
+          facing: 'down',
+          sprite: { object: NPC_SPRITE_A, characterIndex: 0 },
+          onInteract: EVENT_TALK,
+        },
+      ]),
+    ).toBe('npc-2');
+    expect(
+      nextNpcId([
+        {
+          id: 'npc-1',
+          x: 0,
+          y: 0,
+          floor: 'floor-0',
+          facing: 'down',
+          sprite: { object: NPC_SPRITE_A, characterIndex: 0 },
+          onInteract: EVENT_TALK,
+        },
+        {
+          id: 'npc-3',
+          x: 1,
+          y: 1,
+          floor: 'floor-0',
+          facing: 'down',
+          sprite: { object: NPC_SPRITE_A, characterIndex: 0 },
+          onInteract: EVENT_TALK,
+        },
+      ]),
+    ).toBe('npc-2');
+  });
+
+  it('placeNpc assigns next free id, active sprite/facing/event, and no routine', () => {
+    let state = npcReadyState();
+    state = setActiveNpcFacing(state, 'left');
+    state = setActiveNpcCharacterIndex(state, 2);
+    state = setActiveNpcEventKey(state, EVENT_GATE);
+    state = placeNpc(state, { x: 2, y: 3 });
+
+    expect(state.npcs).toEqual([
+      {
+        id: 'npc-1',
+        x: 2,
+        y: 3,
+        floor: 'floor-0',
+        facing: 'left',
+        sprite: { object: NPC_SPRITE_A, characterIndex: 2 },
+        onInteract: EVENT_GATE,
+      },
+    ]);
+    expect(state.npcs[0]).not.toHaveProperty('routine');
+  });
+
+  it('duplicate-tile NPC placement on the same floor is a no-op', () => {
+    let state = npcReadyState();
+    state = placeNpc(state, { x: 1, y: 1 });
+    state = setActiveNpcSpriteObject(state, NPC_SPRITE_B);
+    const beforeDup = state;
+    state = placeNpc(state, { x: 1, y: 1 });
+    expect(state).toBe(beforeDup);
+    expect(state.npcs).toHaveLength(1);
+    expect(state.npcs[0]?.sprite.object).toBe(NPC_SPRITE_A);
+  });
+
+  it('same tile on a different floor is allowed', () => {
+    let state = npcReadyState();
+    state = placeNpc(state, { x: 1, y: 1 });
+    state = addFloor(state, { id: 'floor-1' });
+    state = placeNpc(state, { x: 1, y: 1 });
+    expect(state.npcs.map((n) => n.id)).toEqual(['npc-1', 'npc-2']);
+    expect(state.npcs[1]).toMatchObject({ x: 1, y: 1, floor: 'floor-1' });
+  });
+
+  it('placement with zero events is unavailable (no-op)', () => {
+    let state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      eventKeys: [],
+    });
+    state = setActiveNpcSpriteObject(state, NPC_SPRITE_A);
+    const after = placeNpc(state, { x: 0, y: 0 });
+    expect(after).toBe(state);
+    expect(after.npcs).toEqual([]);
+
+    state = setTool(state, 'npc');
+    const { state: afterClick } = pointerDown(state, { x: 0, y: 0 });
+    expect(afterClick.npcs).toEqual([]);
+    expect(afterClick.stroke).toEqual({ status: 'idle' });
+  });
+
+  it('placement with no selected sprite is a no-op', () => {
+    const state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      eventKeys: [EVENT_TALK],
+    });
+    expect(placeNpc(state, { x: 0, y: 0 })).toBe(state);
+  });
+
+  it('pointerDown with the npc tool places without starting a stroke', () => {
+    let state = npcReadyState();
+    state = setTool(state, 'npc');
+    const { state: next } = pointerDown(state, { x: 1, y: 2 });
+
+    expect(next.npcs).toEqual([
+      {
+        id: 'npc-1',
+        x: 1,
+        y: 2,
+        floor: 'floor-0',
+        facing: 'down',
+        sprite: { object: NPC_SPRITE_A, characterIndex: 0 },
+        onInteract: EVENT_TALK,
+      },
+    ]);
+    expect(next.stroke).toEqual({ status: 'idle' });
+  });
+
+  it('removeNpc deletes; undo/redo restore', () => {
+    let state = npcReadyState();
+    state = placeNpc(state, { x: 0, y: 0 });
+    state = placeNpc(state, { x: 1, y: 1 });
+    state = removeNpc(state, 'npc-1');
+    expect(state.npcs.map((n) => n.id)).toEqual(['npc-2']);
+
+    ({ state } = undoNpc(state));
+    expect(state.npcs.map((n) => n.id).sort()).toEqual(['npc-1', 'npc-2']);
+
+    ({ state } = redoNpc(state));
+    expect(state.npcs.map((n) => n.id)).toEqual(['npc-2']);
+  });
+
+  it('undoNpc undoes a place as well', () => {
+    let state = npcReadyState();
+    state = placeNpc(state, { x: 2, y: 2 });
+    ({ state } = undoNpc(state));
+    expect(state.npcs).toEqual([]);
+    ({ state } = redoNpc(state));
+    expect(state.npcs[0]?.id).toBe('npc-1');
+  });
+});
+
+describe('painter-store: trigger tool (c1a follow-up)', () => {
+  it('nextTriggerId returns the first free trigger-N id', () => {
+    expect(nextTriggerId([])).toBe('trigger-1');
+    expect(
+      nextTriggerId([
+        { id: 'trigger-1', x: 0, y: 0, floor: 'floor-0', on: 'enter', event: EVENT_GATE },
+      ]),
+    ).toBe('trigger-2');
+  });
+
+  it('placeTrigger carries on-mode and event key with next free id', () => {
+    let state = triggerReadyState();
+    state = setActiveTriggerOn(state, 'interact');
+    state = setActiveTriggerEventKey(state, EVENT_GATE);
+    state = placeTrigger(state, { x: 2, y: 3 });
+
+    expect(state.triggers).toEqual([
+      {
+        id: 'trigger-1',
+        x: 2,
+        y: 3,
+        floor: 'floor-0',
+        on: 'interact',
+        event: EVENT_GATE,
+      },
+    ]);
+  });
+
+  it('placement with zero events is unavailable (no-op)', () => {
+    const state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      eventKeys: [],
+    });
+    expect(placeTrigger(state, { x: 0, y: 0 })).toBe(state);
+
+    const tooled = setTool(state, 'trigger');
+    const { state: afterClick } = pointerDown(tooled, { x: 0, y: 0 });
+    expect(afterClick.triggers).toEqual([]);
+    expect(afterClick.stroke).toEqual({ status: 'idle' });
+  });
+
+  it('pointerDown with the trigger tool places without starting a stroke', () => {
+    let state = triggerReadyState();
+    state = setTool(state, 'trigger');
+    const { state: next } = pointerDown(state, { x: 1, y: 2 });
+
+    expect(next.triggers).toEqual([
+      {
+        id: 'trigger-1',
+        x: 1,
+        y: 2,
+        floor: 'floor-0',
+        on: 'enter',
+        event: EVENT_TALK,
+      },
+    ]);
+    expect(next.stroke).toEqual({ status: 'idle' });
+  });
+
+  it('removeTrigger deletes; undo/redo restore', () => {
+    let state = triggerReadyState();
+    state = placeTrigger(state, { x: 0, y: 0 });
+    state = placeTrigger(state, { x: 1, y: 1 });
+    state = removeTrigger(state, 'trigger-1');
+    expect(state.triggers.map((t) => t.id)).toEqual(['trigger-2']);
+
+    ({ state } = undoTrigger(state));
+    expect(state.triggers.map((t) => t.id).sort()).toEqual(['trigger-1', 'trigger-2']);
+
+    ({ state } = redoTrigger(state));
+    expect(state.triggers.map((t) => t.id)).toEqual(['trigger-2']);
   });
 });
