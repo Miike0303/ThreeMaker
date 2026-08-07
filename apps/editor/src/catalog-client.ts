@@ -2,8 +2,8 @@
  * Catalog data-access boundary for the editor's React UI. Wraps two
  * backends behind one interface:
  *  - the real Tauri IPC commands (`catalog_list_games`/`catalog_list_assets`/
- *    `catalog_get_tileset`/`catalog_asset_store_dir`), used inside the real
- *    Tauri webview host;
+ *    `catalog_get_tileset`/`catalog_list_tilesets_for_game`/
+ *    `catalog_asset_store_dir`), used inside the real Tauri webview host;
  *  - a dev-only HTTP fallback (`/api/dev-catalog/...`, see vite.config.ts's
  *    `devCatalogApiPlugin`), used when `window.__TAURI_INTERNALS__` is
  *    absent -- i.e. under plain `vite dev` with no Tauri host attached
@@ -190,14 +190,7 @@ export interface TilesetSummaryRow {
 /** Tilesets belonging to one game, without their sheet rows -- for a picker/dropdown UI. Pair with `getTileset(id)` for the full composition. */
 export async function listTilesetsForGame(gameId: number): Promise<readonly TilesetSummaryRow[]> {
   if (isTauriAvailable()) {
-    // No dedicated Rust IPC command exists yet for a game-scoped tileset
-    // list (only `catalog_get_tileset(id)` for one already-known id) --
-    // out of scope this slice, since the dev fallback is what this slice's
-    // headed-Edge verification actually exercises.
-    throw new CatalogClientError(
-      'QueryFailed',
-      'listTilesetsForGame is not implemented for the real Tauri host yet.',
-    );
+    return invokeTauri<TilesetSummaryRow[]>('catalog_list_tilesets_for_game', { gameId });
   }
   const response = await fetch(`${DEV_API_BASE}/tilesets?gameId=${gameId}`);
   await assertOk(response);

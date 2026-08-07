@@ -1,5 +1,5 @@
 // The editor's frontend never touches SQL or the filesystem directly for
-// catalog access — it crosses the IPC boundary through these three typed
+// catalog access — it crosses the IPC boundary through these typed
 // commands, backed by a read-only rusqlite connection opened once at
 // startup (see catalog_ipc.rs's module doc for the design rationale).
 
@@ -9,6 +9,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use catalog_ipc::{
     resolve_catalog_db_path, AssetFilter, AssetPage, CatalogError, GameRow, TilesetRow,
+    TilesetSummaryRow,
 };
 use rusqlite::Connection;
 
@@ -65,6 +66,16 @@ fn catalog_get_tileset(
     catalog_ipc::get_tileset(conn, id)
 }
 
+#[tauri::command]
+fn catalog_list_tilesets_for_game(
+    state: tauri::State<CatalogState>,
+    game_id: i64,
+) -> Result<Vec<TilesetSummaryRow>, CatalogError> {
+    let guard = lock_catalog(&state)?;
+    let conn = guard.as_ref().ok_or(CatalogError::NotFound)?;
+    catalog_ipc::list_tilesets_for_game(conn, game_id)
+}
+
 /// Returns the asset-store directory (the catalog db's parent folder) as a
 /// string, so the frontend can compute `convertFileSrc` paths for object
 /// preview images -- the asset-protocol scope in `tauri.conf.json` is
@@ -113,6 +124,7 @@ pub fn run() {
             catalog_list_games,
             catalog_list_assets,
             catalog_get_tileset,
+            catalog_list_tilesets_for_game,
             catalog_asset_store_dir
         ])
         .run(tauri::generate_context!())

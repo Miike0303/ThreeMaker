@@ -4,7 +4,7 @@
 //! The webview never touches SQL directly (design's "Editor catalog read
 //! path" decision: rusqlite + typed IPC commands, `tauri-plugin-sql`
 //! rejected). This module owns the read-only `Connection` plus the query
-//! functions; `lib.rs` only wires the three `#[tauri::command]` entry points
+//! functions; `lib.rs` only wires the `#[tauri::command]` entry points
 //! and the app-level `CatalogState`.
 //!
 //! The schema below is a deliberate DUPLICATE of
@@ -151,6 +151,18 @@ pub struct TilesetRow {
     pub name: Option<String>,
     pub flags: Option<String>,
     pub sheets: Vec<TilesetSheetRow>,
+}
+
+/// Summary row for a game-scoped tileset picker — matches the dev middleware's
+/// `DevTilesetSummaryRow` / TS `TilesetSummaryRow` (no sheets, no flags).
+/// Field names are snake_case on the wire, same as the other catalog IPC
+/// structs (`TilesetRow`, `GameRow`, …).
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct TilesetSummaryRow {
+    pub id: i64,
+    pub game_id: i64,
+    pub rpgm_id: Option<i64>,
+    pub name: Option<String>,
 }
 
 /// Localizable error payload — the frontend maps `code` to a translated
@@ -348,6 +360,30 @@ pub fn get_tileset(conn: &Connection, id: i64) -> Result<Option<TilesetRow>, Cat
     }))
 }
 
+/// Tilesets belonging to one game, without sheet rows — for a picker UI.
+/// Replicates the dev middleware query exactly
+/// (`apps/editor/dev-server/catalog-api.ts` `listTilesetsForGame`):
+/// `SELECT id, game_id, rpgm_id, name FROM tilesets WHERE game_id = ? ORDER BY rpgm_id`.
+pub fn list_tilesets_for_game(
+    conn: &Connection,
+    game_id: i64,
+) -> Result<Vec<TilesetSummaryRow>, CatalogError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, game_id, rpgm_id, name FROM tilesets WHERE game_id = ? ORDER BY rpgm_id",
+    )?;
+    let rows = stmt
+        .query_map([game_id], |row| {
+            Ok(TilesetSummaryRow {
+                id: row.get(0)?,
+                game_id: row.get(1)?,
+                rpgm_id: row.get(2)?,
+                name: row.get(3)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,6 +455,20 @@ mod tests {
         conn.execute(
             "INSERT INTO tilesets (id, game_id, rpgm_id, name, flags) \
              VALUES (1, 1, 1, 'Outside', '[0]')",
+            [],
+        )
+        .unwrap();
+        // Second tileset for game 1 with a higher rpgm_id so ORDER BY rpgm_id
+        // is observable; a third for game 2 to prove the game_id filter.
+        conn.execute(
+            "INSERT INTO tilesets (id, game_id, rpgm_id, name, flags) \
+             VALUES (2, 1, 3, 'Dungeon', NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tilesets (id, game_id, rpgm_id, name, flags) \
+             VALUES (3, 2, 1, 'Outside-es', NULL)",
             [],
         )
         .unwrap();
@@ -499,6 +549,41 @@ mod tests {
         let conn = fixture_connection();
         let tileset = get_tileset(&conn, 999).expect("get_tileset");
         assert!(tileset.is_none());
+    }
+
+    #[test]
+    fn list_tilesets_for_game_filters_by_game_and_orders_by_rpgm_id() {
+        let conn = fixture_connection();
+        let rows = list_tilesets_for_game(&conn, 1).expect("list_tilesets_for_game");
+        assert_eq!(
+            rows,
+            vec![
+                TilesetSummaryRow {
+                    id: 1,
+                    game_id: 1,
+                    rpgm_id: Some(1),
+                    name: Some("Outside".into()),
+                },
+                TilesetSummaryRow {
+                    id: 2,
+                    game_id: 1,
+                    rpgm_id: Some(3),
+                    name: Some("Dungeon".into()),
+                },
+            ]
+        );
+
+        let game2 = list_tilesets_for_game(&conn, 2).expect("list game 2");
+        assert_eq!(game2.len(), 1);
+        assert_eq!(game2[0].name.as_deref(), Some("Outside-es"));
+        assert_eq!(game2[0].game_id, 2);
+    }
+
+    #[test]
+    fn list_tilesets_for_game_returns_empty_for_unknown_game() {
+        let conn = fixture_connection();
+        let rows = list_tilesets_for_game(&conn, 999).expect("list_tilesets_for_game");
+        assert!(rows.is_empty());
     }
 
     #[test]
