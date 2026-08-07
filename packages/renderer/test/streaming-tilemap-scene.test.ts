@@ -546,6 +546,35 @@ describe('StreamingTilemapScene ceiling carve + fade (Slice 3b)', () => {
     expect(() => scene.updateFade(1)).not.toThrow();
     scene.dispose();
   });
+
+  it('lighting bag: room material clone keeps lightMap + intensity + texture channel 1', () => {
+    const lightMap = new THREE.Texture();
+    const chunk: ChunkBuildData = {
+      chunkX: 0,
+      chunkY: 0,
+      tiles: [makeCarveTile(0, 0)],
+    };
+    const scene = new StreamingTilemapScene(
+      [chunk],
+      { B: new THREE.Texture() },
+      {
+        ceilingCarve: makeTwoRoomGrid(),
+        lighting: { lightMap, lightMapIntensity: 0.6 },
+        mapWidthTiles: 2,
+        mapHeightTiles: 2,
+      },
+    );
+    scene.buildChunk('0,0');
+
+    const roomMesh = scene.group.children[0]?.children.find(
+      (child) => child.name === 'chunk-0-0-B-room-1',
+    ) as THREE.Mesh;
+    const material = roomMesh.material as THREE.MeshBasicMaterial;
+    expect(material.lightMap).toBe(lightMap);
+    expect(material.lightMapIntensity).toBeCloseTo(0.6);
+    expect(lightMap.channel).toBe(1);
+    scene.dispose();
+  });
 });
 
 describe('stepRoomFadeOpacity (pure fade tween step)', () => {

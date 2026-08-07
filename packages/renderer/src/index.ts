@@ -37,6 +37,8 @@ export type { BuildChunkGroupOptions } from './scene/build-chunk-group.js';
 export { buildChunkGroup } from './scene/build-chunk-group.js';
 export type { PixelArtTextureOptions } from './scene/pixel-art-texture.js';
 export { configurePixelArtTexture, loadSheetTexture } from './scene/pixel-art-texture.js';
+export type { SheetLightingOptions } from './scene/sheet-materials.js';
+export { createShadowMaterial, createSheetMaterials } from './scene/sheet-materials.js';
 export type {
   ChunkSetDiff,
   StreamingTilemapSceneOptions,

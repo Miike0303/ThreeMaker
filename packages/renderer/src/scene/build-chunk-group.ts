@@ -23,6 +23,18 @@ export interface BuildChunkGroupOptions {
    */
   readonly wallPrismHeight?: number;
   /**
+   * Full map width in tiles -- normalizes lightmap `uv1` into absolute
+   * top-down [0,1]² space so one per-floor lightmap PNG covers the whole
+   * map. When omitted, falls back to a span that covers this chunk's own
+   * tiles/shadows (unit tests / callers without lightmaps).
+   */
+  readonly mapWidthTiles?: number;
+  /**
+   * Full map height in tiles -- pair of `mapWidthTiles` for lightmap `uv1`
+   * normalization. Same fallback when omitted.
+   */
+  readonly mapHeightTiles?: number;
+  /**
    * Shared material for the shadow-pencil overlay (typically black,
    * `transparent`, opacity 0.5, `depthWrite: false`). When omitted, shadow
    * data on the chunk is skipped -- same contract as a sheet with no
@@ -68,6 +80,13 @@ export interface BuildChunkGroupOptions {
     /** Full map width in tiles -- needed to index `roomIdGrid` from a tile's `(tileX, tileY)`. */
     readonly mapWidth: number;
   };
+}
+
+/** Resolved map dims used to write lightmap `uv1` for every geometry in a chunk. */
+interface LightmapUvContext {
+  readonly mapWidthTiles: number;
+  readonly mapHeightTiles: number;
+  readonly tileWorldSize: number;
 }
 
 /** One (sheet, roomId) ceiling-carve bucket's accumulated (not-yet-merged) geometry, keyed by `${sheet}|${roomId}`. */
@@ -127,6 +146,7 @@ function buildShadowGeometry(
   shadow: ShadowBuildData,
   tileWorldSize: number,
   heightUnit: number,
+  lightmap: LightmapUvContext,
 ): THREE.BufferGeometry[] {
   const half = tileWorldSize / 2;
   const worldX = shadow.tileX * tileWorldSize;
@@ -138,8 +158,16 @@ function buildShadowGeometry(
     if ((shadow.mask & (1 << i)) === 0) continue;
     const col = i % 2;
     const row = Math.floor(i / 2);
-    const quad = buildGroundQuad(FULL_UV, worldX + col * half, worldZ + row * half, half, half);
+    const quad = buildGroundQuad(
+      FULL_UV,
+      worldX + col * half,
+      worldZ + row * half,
+      half,
+      half,
+      lightmap,
+    );
     quad.translate(0, lift, 0);
+    // Lift is Y-only; ground uv1 (from XZ) is unchanged.
     geometries.push(quad);
   }
   return geometries;
@@ -156,6 +184,45 @@ function applyQuadUv(geometry: THREE.PlaneGeometry, uv: UvRect): void {
   uvAttribute.needsUpdate = true;
 }
 
+/**
+ * Ground / floor-plane lightmap UVs: per-vertex absolute map space so one
+ * per-floor lightmap PNG covers the whole map top-down.
+ * `uv1 = (worldX / mapWorldW, 1 - worldZ / mapWorldH)`.
+ */
+function applyGroundUv1(geometry: THREE.BufferGeometry, lightmap: LightmapUvContext): void {
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+  const mapWorldW = lightmap.mapWidthTiles * lightmap.tileWorldSize;
+  const mapWorldH = lightmap.mapHeightTiles * lightmap.tileWorldSize;
+  const values = new Float32Array(position.count * 2);
+  for (let i = 0; i < position.count; i++) {
+    values[i * 2] = position.getX(i) / mapWorldW;
+    values[i * 2 + 1] = 1 - position.getZ(i) / mapWorldH;
+  }
+  geometry.setAttribute('uv1', new THREE.BufferAttribute(values, 2));
+}
+
+/**
+ * Vertical geometry lightmap UVs: every vertex samples the FOOTPRINT tile
+ * center (flat sample — ground-level light color at that tile; a torch tints
+ * the wall base uniformly).
+ */
+function applyFlatFootprintUv1(
+  geometry: THREE.BufferGeometry,
+  tileX: number,
+  tileY: number,
+  lightmap: LightmapUvContext,
+): void {
+  const u = (tileX + 0.5) / lightmap.mapWidthTiles;
+  const v = 1 - (tileY + 0.5) / lightmap.mapHeightTiles;
+  const count = (geometry.getAttribute('position') as THREE.BufferAttribute).count;
+  const values = new Float32Array(count * 2);
+  for (let i = 0; i < count; i++) {
+    values[i * 2] = u;
+    values[i * 2 + 1] = v;
+  }
+  geometry.setAttribute('uv1', new THREE.BufferAttribute(values, 2));
+}
+
 /** One ground-plane sub-quad of world-space size `width` x `depth`, corner-positioned at (worldX, worldZ), lying at y=0 (callers translate for elevation). */
 function buildGroundQuad(
   uv: UvRect,
@@ -163,11 +230,13 @@ function buildGroundQuad(
   worldZ: number,
   width: number,
   depth: number,
+  lightmap: LightmapUvContext,
 ): THREE.BufferGeometry {
   const geometry = new THREE.PlaneGeometry(width, depth);
   applyQuadUv(geometry, uv);
   geometry.rotateX(-Math.PI / 2); // lie flat, facing +Y
   geometry.translate(worldX + width / 2, 0, worldZ + depth / 2);
+  applyGroundUv1(geometry, lightmap);
   return geometry;
 }
 
@@ -186,11 +255,15 @@ function buildWallQuad(
   centerZ: number,
   width: number,
   height: number,
+  tileX: number,
+  tileY: number,
+  lightmap: LightmapUvContext,
 ): THREE.BufferGeometry {
   const geometry = new THREE.PlaneGeometry(width, height);
   applyQuadUv(geometry, uv);
   // Faces +Z (toward a camera looking down at the map from the south).
   geometry.translate(worldX + width / 2, baseY + height / 2, centerZ);
+  applyFlatFootprintUv1(geometry, tileX, tileY, lightmap);
   return geometry;
 }
 
@@ -227,6 +300,9 @@ function buildSideFaceQuad(
   tileWorldSize: number,
   baseY: number,
   faceHeight: number,
+  tileX: number,
+  tileY: number,
+  lightmap: LightmapUvContext,
 ): THREE.BufferGeometry {
   const geometry = new THREE.PlaneGeometry(tileWorldSize, faceHeight);
   applyQuadUv(geometry, uv);
@@ -237,6 +313,7 @@ function buildSideFaceQuad(
     baseY + faceHeight / 2,
     worldZ + offset.z * tileWorldSize,
   );
+  applyFlatFootprintUv1(geometry, tileX, tileY, lightmap);
   return geometry;
 }
 
@@ -251,6 +328,7 @@ function buildCliffGeometry(
   tile: TileBuildData,
   tileWorldSize: number,
   heightUnit: number,
+  lightmap: LightmapUvContext,
 ): THREE.BufferGeometry[] {
   const cliffEdges = tile.cliffEdges;
   if (!cliffEdges || cliffEdges.length === 0) return [];
@@ -275,7 +353,20 @@ function buildCliffGeometry(
     const faceHeight = (ownHeight - neighborHeight) * heightUnit;
     if (faceHeight <= 0) continue;
     const baseY = neighborHeight * heightUnit;
-    geometries.push(buildSideFaceQuad(uv, edge, worldX, worldZ, tileWorldSize, baseY, faceHeight));
+    geometries.push(
+      buildSideFaceQuad(
+        uv,
+        edge,
+        worldX,
+        worldZ,
+        tileWorldSize,
+        baseY,
+        faceHeight,
+        tile.tileX,
+        tile.tileY,
+        lightmap,
+      ),
+    );
   }
   return geometries;
 }
@@ -314,6 +405,9 @@ function buildRampSkirtTriangle(
   cornerDown: readonly [number, number],
   highY: number,
   lowY: number,
+  tileX: number,
+  tileY: number,
+  lightmap: LightmapUvContext,
 ): THREE.BufferGeometry {
   const a = new THREE.Vector3(cornerUp[0], highY, cornerUp[1]);
   const b = new THREE.Vector3(cornerDown[0], highY, cornerDown[1]);
@@ -344,6 +438,7 @@ function buildRampSkirtTriangle(
   // trivial 1:1 identity one.
   geometry.setIndex([0, 1, 2]);
   geometry.computeVertexNormals();
+  applyFlatFootprintUv1(geometry, tileX, tileY, lightmap);
   return geometry;
 }
 
@@ -367,6 +462,7 @@ function buildRampSkirts(
   tile: TileBuildData,
   tileWorldSize: number,
   heightUnit: number,
+  lightmap: LightmapUvContext,
 ): THREE.BufferGeometry[] {
   const ramp = tile.ramp;
   if (!ramp) return [];
@@ -379,6 +475,7 @@ function buildRampSkirts(
   const south = worldZ + tileWorldSize;
   const highY = ramp.highHeight * heightUnit;
   const lowY = ramp.lowHeight * heightUnit;
+  const { tileX, tileY } = tile;
 
   const nw: readonly [number, number] = [worldX, worldZ];
   const ne: readonly [number, number] = [east, worldZ];
@@ -388,23 +485,23 @@ function buildRampSkirts(
   switch (ramp.direction) {
     case 'south':
       return [
-        buildRampSkirtTriangle(uv, 'west', nw, sw, highY, lowY),
-        buildRampSkirtTriangle(uv, 'east', ne, se, highY, lowY),
+        buildRampSkirtTriangle(uv, 'west', nw, sw, highY, lowY, tileX, tileY, lightmap),
+        buildRampSkirtTriangle(uv, 'east', ne, se, highY, lowY, tileX, tileY, lightmap),
       ];
     case 'north':
       return [
-        buildRampSkirtTriangle(uv, 'west', sw, nw, highY, lowY),
-        buildRampSkirtTriangle(uv, 'east', se, ne, highY, lowY),
+        buildRampSkirtTriangle(uv, 'west', sw, nw, highY, lowY, tileX, tileY, lightmap),
+        buildRampSkirtTriangle(uv, 'east', se, ne, highY, lowY, tileX, tileY, lightmap),
       ];
     case 'east':
       return [
-        buildRampSkirtTriangle(uv, 'north', nw, ne, highY, lowY),
-        buildRampSkirtTriangle(uv, 'south', sw, se, highY, lowY),
+        buildRampSkirtTriangle(uv, 'north', nw, ne, highY, lowY, tileX, tileY, lightmap),
+        buildRampSkirtTriangle(uv, 'south', sw, se, highY, lowY, tileX, tileY, lightmap),
       ];
     case 'west':
       return [
-        buildRampSkirtTriangle(uv, 'north', ne, nw, highY, lowY),
-        buildRampSkirtTriangle(uv, 'south', se, sw, highY, lowY),
+        buildRampSkirtTriangle(uv, 'north', ne, nw, highY, lowY, tileX, tileY, lightmap),
+        buildRampSkirtTriangle(uv, 'south', se, sw, highY, lowY, tileX, tileY, lightmap),
       ];
   }
 }
@@ -483,6 +580,7 @@ function buildWallPrismGeometry(
   wallPrismHeight: number,
   heightUnit: number,
   openEdges: readonly EdgeDirection[],
+  lightmap: LightmapUvContext,
 ): THREE.BufferGeometry[] {
   const worldX = tile.tileX * tileWorldSize;
   const worldZ = tile.tileY * tileWorldSize;
@@ -495,7 +593,18 @@ function buildWallPrismGeometry(
   if (sideUv) {
     for (const edge of openEdges) {
       geometries.push(
-        buildSideFaceQuad(sideUv, edge, worldX, worldZ, tileWorldSize, baseY, wallPrismHeight),
+        buildSideFaceQuad(
+          sideUv,
+          edge,
+          worldX,
+          worldZ,
+          tileWorldSize,
+          baseY,
+          wallPrismHeight,
+          tile.tileX,
+          tile.tileY,
+          lightmap,
+        ),
       );
     }
   }
@@ -507,14 +616,21 @@ function buildWallPrismGeometry(
       if (!uv) continue;
       const col = i % 2;
       const row = Math.floor(i / 2);
-      const cap = buildGroundQuad(uv, worldX + col * half, worldZ + row * half, half, half);
+      const cap = buildGroundQuad(
+        uv,
+        worldX + col * half,
+        worldZ + row * half,
+        half,
+        half,
+        lightmap,
+      );
       cap.translate(0, capY, 0);
       geometries.push(cap);
     }
   } else {
     const uv = tile.quads[0];
     if (uv) {
-      const cap = buildGroundQuad(uv, worldX, worldZ, tileWorldSize, tileWorldSize);
+      const cap = buildGroundQuad(uv, worldX, worldZ, tileWorldSize, tileWorldSize, lightmap);
       cap.translate(0, capY, 0);
       geometries.push(cap);
     }
@@ -555,6 +671,7 @@ function buildTileGeometry(
   heightUnit: number,
   wallPrismHeight: number,
   wallOpenEdges: readonly EdgeDirection[],
+  lightmap: LightmapUvContext,
 ): THREE.BufferGeometry[] {
   const worldX = tile.tileX * tileWorldSize;
   const worldZ = tile.tileY * tileWorldSize;
@@ -593,7 +710,17 @@ function buildTileGeometry(
         const row = Math.floor(i / 2); // 0 = north/image-top, 1 = south/image-bottom
         const baseY = (row === 0 ? halfWallHeight : 0) + standBaseLift;
         geometries.push(
-          buildWallQuad(uv, worldX + col * half, baseY, standCenterZ, half, halfWallHeight),
+          buildWallQuad(
+            uv,
+            worldX + col * half,
+            baseY,
+            standCenterZ,
+            half,
+            halfWallHeight,
+            tile.tileX,
+            tile.tileY,
+            lightmap,
+          ),
         );
       }
       return geometries;
@@ -601,7 +728,19 @@ function buildTileGeometry(
 
     const uv = tile.quads[0];
     if (!uv) return [];
-    return [buildWallQuad(uv, worldX, standBaseLift, standCenterZ, tileWorldSize, wallHeight)];
+    return [
+      buildWallQuad(
+        uv,
+        worldX,
+        standBaseLift,
+        standCenterZ,
+        tileWorldSize,
+        wallHeight,
+        tile.tileX,
+        tile.tileY,
+        lightmap,
+      ),
+    ];
   }
 
   if (tile.elevation === 'object') {
@@ -641,11 +780,30 @@ function buildTileGeometry(
     if (!uv) return [];
     const objectCenterZ =
       worldZ + tileWorldSize / 2 + tile.layerIndex * LAYER_LIFT_FACTOR * tileWorldSize;
-    return [buildWallQuad(uv, worldX, elevationLift, objectCenterZ, tileWorldSize, wallHeight)];
+    return [
+      buildWallQuad(
+        uv,
+        worldX,
+        elevationLift,
+        objectCenterZ,
+        tileWorldSize,
+        wallHeight,
+        tile.tileX,
+        tile.tileY,
+        lightmap,
+      ),
+    ];
   }
 
   if (isWallSheet(tile.sheet)) {
-    return buildWallPrismGeometry(tile, tileWorldSize, wallPrismHeight, heightUnit, wallOpenEdges);
+    return buildWallPrismGeometry(
+      tile,
+      tileWorldSize,
+      wallPrismHeight,
+      heightUnit,
+      wallOpenEdges,
+      lightmap,
+    );
   }
 
   const ramp = tile.ramp;
@@ -657,7 +815,14 @@ function buildTileGeometry(
       if (!uv) continue;
       const col = i % 2;
       const row = Math.floor(i / 2);
-      const quad = buildGroundQuad(uv, worldX + col * half, worldZ + row * half, half, half);
+      const quad = buildGroundQuad(
+        uv,
+        worldX + col * half,
+        worldZ + row * half,
+        half,
+        half,
+        lightmap,
+      );
       if (ramp) {
         applyRampSlope(quad, ramp, worldX, worldZ, tileWorldSize, heightUnit);
         if (layerLift !== 0) quad.translate(0, layerLift, 0);
@@ -669,7 +834,7 @@ function buildTileGeometry(
   } else {
     const uv = tile.quads[0];
     if (uv) {
-      const quad = buildGroundQuad(uv, worldX, worldZ, tileWorldSize, tileWorldSize);
+      const quad = buildGroundQuad(uv, worldX, worldZ, tileWorldSize, tileWorldSize, lightmap);
       if (ramp) {
         applyRampSlope(quad, ramp, worldX, worldZ, tileWorldSize, heightUnit);
         if (layerLift !== 0) quad.translate(0, layerLift, 0);
@@ -679,8 +844,8 @@ function buildTileGeometry(
       geometries.push(quad);
     }
   }
-  geometries.push(...buildCliffGeometry(tile, tileWorldSize, heightUnit));
-  geometries.push(...buildRampSkirts(tile, tileWorldSize, heightUnit));
+  geometries.push(...buildCliffGeometry(tile, tileWorldSize, heightUnit, lightmap));
+  geometries.push(...buildRampSkirts(tile, tileWorldSize, heightUnit, lightmap));
   return geometries;
 }
 
@@ -694,6 +859,33 @@ function buildTileGeometry(
  * skipped rather than throwing -- callers only need to provide materials for
  * the sheets they actually loaded.
  */
+/**
+ * Resolves absolute map dims for lightmap `uv1`. Prefer explicit options;
+ * otherwise span the chunk's own tiles/shadows so every geometry still gets
+ * a consistent attribute without forcing unit-test callers to pass map size.
+ */
+function resolveLightmapUvContext(
+  chunk: ChunkBuildData,
+  tileWorldSize: number,
+  options: BuildChunkGroupOptions,
+): LightmapUvContext {
+  let maxTileX = 0;
+  let maxTileY = 0;
+  for (const tile of chunk.tiles) {
+    if (tile.tileX > maxTileX) maxTileX = tile.tileX;
+    if (tile.tileY > maxTileY) maxTileY = tile.tileY;
+  }
+  for (const shadow of chunk.shadows ?? []) {
+    if (shadow.tileX > maxTileX) maxTileX = shadow.tileX;
+    if (shadow.tileY > maxTileY) maxTileY = shadow.tileY;
+  }
+  return {
+    mapWidthTiles: options.mapWidthTiles ?? Math.max(1, maxTileX + 1),
+    mapHeightTiles: options.mapHeightTiles ?? Math.max(1, maxTileY + 1),
+    tileWorldSize,
+  };
+}
+
 export function buildChunkGroup(
   chunk: ChunkBuildData,
   materials: Partial<Record<TileSheetId, THREE.Material>>,
@@ -703,6 +895,7 @@ export function buildChunkGroup(
   const wallHeight = options.wallHeight ?? tileWorldSize;
   const heightUnit = options.heightUnit ?? tileWorldSize;
   const wallPrismHeight = options.wallPrismHeight ?? 2 * tileWorldSize;
+  const lightmap = resolveLightmapUvContext(chunk, tileWorldSize, options);
 
   // Wall-tile adjacency for interior-face culling: whole-map when the caller
   // provides it (see `BuildChunkGroupOptions.wallTileKeys`), else falls back
@@ -723,6 +916,7 @@ export function buildChunkGroup(
       heightUnit,
       wallPrismHeight,
       openEdges,
+      lightmap,
     );
 
     // Carve-eligible: flat ground-quad tiles only (plus their cliff/skirt
@@ -790,7 +984,7 @@ export function buildChunkGroup(
   const shadows = chunk.shadows ?? [];
   if (options.shadowMaterial && shadows.length > 0) {
     const shadowGeometries = shadows.flatMap((shadow) =>
-      buildShadowGeometry(shadow, tileWorldSize, heightUnit),
+      buildShadowGeometry(shadow, tileWorldSize, heightUnit, lightmap),
     );
     const merged = mergeGeometries(shadowGeometries, false) as THREE.BufferGeometry | null;
     for (const geometry of shadowGeometries) geometry.dispose();

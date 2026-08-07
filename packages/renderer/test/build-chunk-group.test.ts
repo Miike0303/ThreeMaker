@@ -1407,3 +1407,179 @@ describe('buildChunkGroup ceiling carve buckets (Slice 3a)', () => {
     expect(names).toEqual(['chunk-0-0-A4', 'chunk-0-0-B', 'chunk-0-0-C']);
   });
 });
+
+describe('buildChunkGroup lightmap uv1 (C6 WU-02)', () => {
+  function groundTile(tileX: number, tileY: number, sheet: 'B' | 'C' = 'B'): TileBuildData {
+    return {
+      tileX,
+      tileY,
+      layerIndex: 0,
+      sheet,
+      quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+      elevation: 'ground',
+    };
+  }
+
+  function wallTile(tileX: number, tileY: number): TileBuildData {
+    return {
+      tileX,
+      tileY,
+      layerIndex: 0,
+      sheet: 'A4',
+      quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+      elevation: 'ground',
+    };
+  }
+
+  function rampTile(): TileBuildData {
+    return {
+      tileX: 0,
+      tileY: 0,
+      layerIndex: 0,
+      sheet: 'B',
+      quads: [{ u0: 0, v0: 0, u1: 0.1, v1: 0.1 }],
+      elevation: 'ground',
+      height: 3,
+      ramp: { direction: 'south', highHeight: 3, lowHeight: 2 },
+    };
+  }
+
+  /** Collect every mesh under a chunk group (per-sheet, per-room, shadow). */
+  function meshesOf(group: THREE.Group): THREE.Mesh[] {
+    return group.children.filter((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+  }
+
+  it('every mesh (per-sheet, per-room, shadow) carries a uv1 attribute matching position vertex count', () => {
+    const roomIdGrid = new Uint16Array([1, 0, 0, 0]);
+    const chunk = makeChunk({
+      tiles: [groundTile(0, 0), groundTile(1, 0), wallTile(0, 1)],
+      shadows: [{ tileX: 1, tileY: 1, mask: 1 }],
+    });
+    const materials = {
+      B: new THREE.MeshBasicMaterial(),
+      A4: new THREE.MeshBasicMaterial(),
+    };
+
+    const group = buildChunkGroup(chunk, materials, {
+      tileWorldSize: 1,
+      mapWidthTiles: 4,
+      mapHeightTiles: 4,
+      shadowMaterial: new THREE.MeshBasicMaterial(),
+      ceilingCarve: { roomIdGrid, mapWidth: 2 },
+    });
+
+    const meshes = meshesOf(group);
+    // ground carved into room-1, leftover ground sheet mesh optional, wall sheet, shadow
+    expect(meshes.length).toBeGreaterThanOrEqual(2);
+    for (const mesh of meshes) {
+      const geometry = mesh.geometry as THREE.BufferGeometry;
+      const position = geometry.getAttribute('position');
+      const uv1 = geometry.getAttribute('uv1');
+      expect(uv1, `mesh ${mesh.name} missing uv1`).toBeDefined();
+      expect(uv1.itemSize).toBe(2);
+      expect(uv1.count).toBe(position.count);
+    }
+  });
+
+  it('ground quad uv1 maps tile (x,y) on a W×H map to the expected absolute top-down rect', () => {
+    // Tile (2,1) on a 4×3 map, tileWorldSize=1 → corners:
+    // NW (2,1) → uv1 (2/4, 1-1/3), NE (3,1) → (3/4, 1-1/3),
+    // SW (2,2) → (2/4, 1-2/3), SE (3,2) → (3/4, 1-2/3).
+    const chunk = makeChunk({ tiles: [groundTile(2, 1)] });
+    const group = buildChunkGroup(
+      chunk,
+      { B: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, mapWidthTiles: 4, mapHeightTiles: 3 },
+    );
+
+    const geometry = (group.children[0] as THREE.Mesh).geometry as THREE.BufferGeometry;
+    const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+    const uv1 = geometry.getAttribute('uv1') as THREE.BufferAttribute;
+    expect(uv1.count).toBe(4);
+
+    const expectedByCorner = new Map([
+      ['2,1', { u: 2 / 4, v: 1 - 1 / 3 }],
+      ['3,1', { u: 3 / 4, v: 1 - 1 / 3 }],
+      ['2,2', { u: 2 / 4, v: 1 - 2 / 3 }],
+      ['3,2', { u: 3 / 4, v: 1 - 2 / 3 }],
+    ]);
+
+    for (let i = 0; i < position.count; i++) {
+      const key = `${position.getX(i)},${position.getZ(i)}`;
+      const expected = expectedByCorner.get(key);
+      expect(expected, `unexpected corner key ${key}`).toBeDefined();
+      if (!expected) continue;
+      expect(uv1.getX(i)).toBeCloseTo(expected.u);
+      expect(uv1.getY(i)).toBeCloseTo(expected.v);
+    }
+  });
+
+  it("vertical wall's 4 uv1 values are identical and equal the footprint tile center", () => {
+    // Isolated A4 wall at (1,2) on a 5×5 map → center (1.5/5, 1-2.5/5).
+    const chunk = makeChunk({ tiles: [wallTile(1, 2)] });
+    const group = buildChunkGroup(
+      chunk,
+      { A4: new THREE.MeshBasicMaterial() },
+      { tileWorldSize: 1, mapWidthTiles: 5, mapHeightTiles: 5, wallPrismHeight: 2 },
+    );
+
+    const geometry = (group.children[0] as THREE.Mesh).geometry as THREE.BufferGeometry;
+    const uv1 = geometry.getAttribute('uv1') as THREE.BufferAttribute;
+    // Wall prism: 4 side faces × 4 verts + 1 top cap × 4 verts.
+    expect(uv1.count).toBeGreaterThanOrEqual(4);
+
+    const expectedU = (1 + 0.5) / 5;
+    const expectedV = 1 - (2 + 0.5) / 5;
+
+    // Side faces are vertical → flat footprint sample. Cap is a ground-plane
+    // quad (ground-rule uv1). Base side verts (y < 1.5) must all equal the
+    // footprint tile center.
+    const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+    let sideVerts = 0;
+    let firstBase: number | undefined;
+    for (let i = 0; i < position.count; i++) {
+      if (position.getY(i) < 1.5) {
+        expect(uv1.getX(i)).toBeCloseTo(expectedU);
+        expect(uv1.getY(i)).toBeCloseTo(expectedV);
+        if (firstBase === undefined) firstBase = i;
+        sideVerts += 1;
+      }
+    }
+    expect(sideVerts).toBeGreaterThanOrEqual(4);
+    expect(firstBase).toBeDefined();
+    if (firstBase === undefined) return;
+    for (let i = 0; i < position.count; i++) {
+      if (position.getY(i) < 1.5) {
+        expect(uv1.getX(i)).toBeCloseTo(uv1.getX(firstBase));
+        expect(uv1.getY(i)).toBeCloseTo(uv1.getY(firstBase));
+      }
+    }
+  });
+
+  it('merge survives a chunk with ground + wall + ramp (no silent null from mergeGeometries)', () => {
+    const chunk = makeChunk({
+      tiles: [groundTile(1, 0), wallTile(2, 0), rampTile()],
+    });
+    const materials = {
+      B: new THREE.MeshBasicMaterial(),
+      A4: new THREE.MeshBasicMaterial(),
+    };
+
+    const group = buildChunkGroup(chunk, materials, {
+      tileWorldSize: 1,
+      heightUnit: 1,
+      mapWidthTiles: 4,
+      mapHeightTiles: 4,
+    });
+
+    // Two sheet meshes (B carries ground+ramp, A4 carries wall) — both non-null merges.
+    expect(group.children.length).toBe(2);
+    for (const child of group.children) {
+      expect(child).toBeInstanceOf(THREE.Mesh);
+      const geometry = (child as THREE.Mesh).geometry as THREE.BufferGeometry;
+      expect(geometry.getAttribute('position').count).toBeGreaterThan(0);
+      expect(geometry.getAttribute('uv1')).toBeDefined();
+      expect(geometry.getAttribute('uv1').count).toBe(geometry.getAttribute('position').count);
+    }
+  });
+});

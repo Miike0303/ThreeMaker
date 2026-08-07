@@ -5,7 +5,11 @@ import type { ChunkBuildData } from '../geometry/types.js';
 import { chunkKey } from '../streaming/chunk-streamer.js';
 import { type BuildChunkGroupOptions, buildChunkGroup } from './build-chunk-group.js';
 import type { PixelArtTextureOptions } from './pixel-art-texture.js';
-import { createShadowMaterial, createSheetMaterials } from './sheet-materials.js';
+import {
+  createShadowMaterial,
+  createSheetMaterials,
+  type SheetLightingOptions,
+} from './sheet-materials.js';
 
 export interface StreamingTilemapSceneOptions
   extends Omit<BuildChunkGroupOptions, 'shadowMaterial' | 'wallTileKeys'> {
@@ -18,6 +22,8 @@ export interface StreamingTilemapSceneOptions
   readonly ownsTextures?: boolean;
   /** Forwarded to `createSheetMaterials` for every sheet texture; see `PixelArtTextureOptions`. */
   readonly textureOptions?: PixelArtTextureOptions;
+  /** Forwarded to `createSheetMaterials` for baked lightmap binding (channel 1 / `uv1`). */
+  readonly lighting?: SheetLightingOptions;
 }
 
 /** The subset of a `ChunkStreamer` diff this scene consumes (kept structural to avoid a hard coupling). */
@@ -148,9 +154,9 @@ export class StreamingTilemapScene {
     this.group = new THREE.Group();
     this.group.name = 'tilemap';
 
-    const { ownsTextures = true, textureOptions, ...buildOptions } = options;
+    const { ownsTextures = true, textureOptions, lighting, ...buildOptions } = options;
     this.buildOptions = buildOptions;
-    this.materialsBySheet = createSheetMaterials(textures, textureOptions);
+    this.materialsBySheet = createSheetMaterials(textures, textureOptions, lighting);
     this.shadowMaterial = createShadowMaterial();
     this.ownedTextures = ownsTextures ? Object.values(textures) : [];
 

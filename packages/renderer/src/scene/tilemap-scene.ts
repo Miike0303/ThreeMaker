@@ -4,12 +4,18 @@ import { computeWallTileKeys } from '../geometry/elevation.js';
 import type { ChunkBuildData } from '../geometry/types.js';
 import { type BuildChunkGroupOptions, buildChunkGroup } from './build-chunk-group.js';
 import type { PixelArtTextureOptions } from './pixel-art-texture.js';
-import { createShadowMaterial, createSheetMaterials } from './sheet-materials.js';
+import {
+  createShadowMaterial,
+  createSheetMaterials,
+  type SheetLightingOptions,
+} from './sheet-materials.js';
 
 export interface TilemapSceneOptions
   extends Omit<BuildChunkGroupOptions, 'shadowMaterial' | 'wallTileKeys'> {
   /** Forwarded to `createSheetMaterials` for every sheet texture; see `PixelArtTextureOptions`. */
   readonly textureOptions?: PixelArtTextureOptions;
+  /** Forwarded to `createSheetMaterials` for baked lightmap binding (channel 1 / `uv1`). */
+  readonly lighting?: SheetLightingOptions;
 }
 
 /**
@@ -40,8 +46,8 @@ export class TilemapScene {
     this.group = new THREE.Group();
     this.group.name = 'tilemap';
 
-    const { textureOptions, ...buildOptions } = options;
-    const materialsBySheet = createSheetMaterials(textures, textureOptions);
+    const { textureOptions, lighting, ...buildOptions } = options;
+    const materialsBySheet = createSheetMaterials(textures, textureOptions, lighting);
     const shadowMaterial = createShadowMaterial();
     this.ownedMaterials = [...Object.values(materialsBySheet), shadowMaterial];
     this.ownedTextures = Object.values(textures);

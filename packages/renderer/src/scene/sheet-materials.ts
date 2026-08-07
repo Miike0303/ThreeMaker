@@ -3,6 +3,18 @@ import * as THREE from 'three';
 import { configurePixelArtTexture, type PixelArtTextureOptions } from './pixel-art-texture.js';
 
 /**
+ * Optional baked-lightmap inputs for sheet materials (C6 lighting). When
+ * present, every sheet material of the call gets `lightMap` + intensity and
+ * the lightmap texture is bound to UV channel 1 (`uv1` attribute).
+ * Shadow material never receives a lightMap -- callers must not pass this
+ * bag into `createShadowMaterial`.
+ */
+export interface SheetLightingOptions {
+  readonly lightMap?: THREE.Texture;
+  readonly lightMapIntensity?: number;
+}
+
+/**
  * Builds the shared per-sheet tile materials, configuring each texture for
  * pixel art on the way. One material per sheet, reused by every chunk that
  * references the sheet -- chunk disposal must never touch these.
@@ -33,19 +45,34 @@ import { configurePixelArtTexture, type PixelArtTextureOptions } from './pixel-a
  * non-mipmapped tileset shows while walking. Defaults to the crisp
  * no-mipmap sprite configuration, unchanged from before this option
  * existed -- the art call on tileset filtering is the caller's to make.
+ *
+ * `lighting` is optional: when provided with a `lightMap`, every sheet
+ * material of this call (one per-floor call site) gets that texture on
+ * channel 1 (`uv1`) and `lightMapIntensity` (default 1). Omitted bag leaves
+ * materials with `lightMap === null`, identical to pre-lighting behavior.
  */
 export function createSheetMaterials(
   textures: Partial<Record<TileSheetId, THREE.Texture>>,
   textureOptions: PixelArtTextureOptions = {},
+  lighting?: SheetLightingOptions,
 ): Partial<Record<TileSheetId, THREE.Material>> {
   const materialsBySheet: Partial<Record<TileSheetId, THREE.Material>> = {};
+  if (lighting?.lightMap) {
+    // three r184: lightmap samples UV channel `texture.channel` → attribute `uv1` when channel=1.
+    lighting.lightMap.channel = 1;
+  }
   for (const [sheet, texture] of Object.entries(textures) as [TileSheetId, THREE.Texture][]) {
     configurePixelArtTexture(texture, textureOptions);
-    materialsBySheet[sheet] = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshBasicMaterial({
       map: texture,
       side: THREE.DoubleSide,
       alphaTest: 0.5,
     });
+    if (lighting?.lightMap) {
+      material.lightMap = lighting.lightMap;
+      material.lightMapIntensity = lighting.lightMapIntensity ?? 1;
+    }
+    materialsBySheet[sheet] = material;
   }
   return materialsBySheet;
 }
