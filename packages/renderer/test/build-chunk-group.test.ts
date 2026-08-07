@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { computeWallTileKeys } from '../src/geometry/elevation.js';
 import type { ChunkBuildData, TileBuildData } from '../src/geometry/types.js';
 import { buildChunkGroup } from '../src/scene/build-chunk-group.js';
+import { createSheetMaterials } from '../src/scene/sheet-materials.js';
 
 function makeChunk(overrides: Partial<ChunkBuildData> = {}): ChunkBuildData {
   return {
@@ -1049,6 +1050,27 @@ describe('buildChunkGroup ramp geometry (Slice 2b)', () => {
     // 1 inclined quad (4) + 2 skirts (3 each) + 1 surviving cliff face (4).
     // The 'south' cliffEdges entry contributes NOTHING (suppressed).
     expect(geometry.getAttribute('position').count).toBe(4 + 3 + 3 + 4);
+  });
+
+  it('lit mode: ramp-containing chunk still merges to meshes with normal itemSize 3 everywhere (C6 WU-04)', () => {
+    // Inclined ground (PlaneGeometry + recompute) and hand-built skirt triangles
+    // must agree on the attribute set so mergeGeometries succeeds under Lambert.
+    const chunk = makeChunk({ tiles: [rampTile()] });
+    const materials = createSheetMaterials({ B: new THREE.Texture() }, {}, { lit: true });
+
+    const group = buildChunkGroup(chunk, materials, { tileWorldSize: 1, heightUnit: 1 });
+
+    expect(group.children.length).toBeGreaterThan(0);
+    for (const child of group.children) {
+      expect(child).toBeInstanceOf(THREE.Mesh);
+      const geometry = (child as THREE.Mesh).geometry as THREE.BufferGeometry;
+      const normal = geometry.getAttribute('normal');
+      expect(normal, `mesh ${child.name} missing normal`).toBeDefined();
+      expect(normal.itemSize).toBe(3);
+      expect(normal.count).toBe(geometry.getAttribute('position').count);
+      // 1 inclined quad (4 verts) + 2 skirts (3 each) = 10; merge must not drop skirts.
+      expect(geometry.getAttribute('position').count).toBeGreaterThanOrEqual(10);
+    }
   });
 
   it("keeps a ramp tile's low edge coplanar with an adjacent flat tile built in a DIFFERENT chunk (seam at ramp-cliff junction)", () => {

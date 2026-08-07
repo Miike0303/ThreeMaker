@@ -48,6 +48,7 @@ const SNAPSHOT = {
   narrativeSprites: 3,
   propInstances: 2,
   lightInstances: 3,
+  litTiles: true,
   backend: 'webgpu',
   frameTimeMs: 16.66,
   hopsCompleted: 2,
@@ -78,7 +79,7 @@ describe('formatDebugRows', () => {
       { label: 'Elevation', value: '2' },
       { label: 'NPC sprites', value: '3' },
       { label: 'Props', value: '2' },
-      { label: 'Lights', value: '3' },
+      { label: 'Lights', value: '3 (lit)' },
       { label: 'Map hops', value: '2' },
       { label: 'Last hop NPC sprites', value: '1' },
       { label: 'Last hop floor textures', value: '4' },
@@ -88,6 +89,15 @@ describe('formatDebugRows', () => {
       { label: 'Inventory', value: '{key:1,potion:2}' },
       { label: 'Stats', value: '{hp:10,mp:3}' },
     ]);
+  });
+
+  it('formats Lights as N when tiles are unlit, N (lit) when litTiles is true (C6 WU-04)', () => {
+    const i18n = createI18n(LOCALES, 'en');
+    const unlit = formatDebugRows({ ...SNAPSHOT, lightInstances: 0, litTiles: false }, i18n.t);
+    const lit = formatDebugRows({ ...SNAPSHOT, lightInstances: 2, litTiles: true }, i18n.t);
+
+    expect(unlit.find((r) => r.label === 'Lights')?.value).toBe('0');
+    expect(lit.find((r) => r.label === 'Lights')?.value).toBe('2 (lit)');
   });
 
   it('exposes last-hop dispose counts for C1 GPU-leak debug-panel contract', () => {

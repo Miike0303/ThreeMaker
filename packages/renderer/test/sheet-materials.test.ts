@@ -109,3 +109,74 @@ describe('createSheetMaterials lighting bag (C6 WU-02)', () => {
     expect(clone.lightMap?.channel).toBe(1);
   });
 });
+
+describe('createSheetMaterials lit flag (C6 WU-04)', () => {
+  it('lit: true builds MeshLambertMaterial with map / DoubleSide / alphaTest preserved', () => {
+    const map = new THREE.Texture();
+    const materials = createSheetMaterials({ B: map }, {}, { lit: true });
+    const material = materials.B;
+
+    expect(material).toBeInstanceOf(THREE.MeshLambertMaterial);
+    const lambert = material as THREE.MeshLambertMaterial;
+    expect(lambert.map).toBe(map);
+    expect(lambert.side).toBe(THREE.DoubleSide);
+    expect(lambert.alphaTest).toBe(0.5);
+  });
+
+  it('absent / false lit keeps MeshBasicMaterial (byte-identical unlit default)', () => {
+    const map = new THREE.Texture();
+    const absent = createSheetMaterials({ B: map }).B;
+    const falseLit = createSheetMaterials({ C: map }, {}, { lit: false }).C;
+
+    expect(absent).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect(falseLit).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect(absent).not.toBeInstanceOf(THREE.MeshLambertMaterial);
+    expect(falseLit).not.toBeInstanceOf(THREE.MeshLambertMaterial);
+    for (const material of [absent, falseLit] as THREE.MeshBasicMaterial[]) {
+      expect(material.map).toBe(map);
+      expect(material.side).toBe(THREE.DoubleSide);
+      expect(material.alphaTest).toBe(0.5);
+      expect(material.lightMap).toBeNull();
+    }
+  });
+
+  it('lightMap + intensity land on Lambert when lit', () => {
+    const lightMap = new THREE.Texture();
+    const materials = createSheetMaterials(
+      { B: new THREE.Texture() },
+      {},
+      { lit: true, lightMap, lightMapIntensity: 0.55 },
+    );
+    const material = materials.B as THREE.MeshLambertMaterial;
+
+    expect(material).toBeInstanceOf(THREE.MeshLambertMaterial);
+    expect(material.lightMap).toBe(lightMap);
+    expect(material.lightMapIntensity).toBeCloseTo(0.55);
+    expect(lightMap.channel).toBe(1);
+  });
+
+  it('lit Material.clone() keeps Lambert class + lightMap + intensity (room-clone path)', () => {
+    const lightMap = new THREE.Texture();
+    lightMap.channel = 1;
+    const materials = createSheetMaterials(
+      { B: new THREE.Texture() },
+      {},
+      { lit: true, lightMap, lightMapIntensity: 0.4 },
+    );
+    const base = materials.B as THREE.MeshLambertMaterial;
+    const clone = base.clone();
+
+    expect(clone).toBeInstanceOf(THREE.MeshLambertMaterial);
+    expect(clone.lightMap).toBe(lightMap);
+    expect(clone.lightMapIntensity).toBeCloseTo(0.4);
+    expect(clone.lightMap?.channel).toBe(1);
+  });
+});
+
+describe('createShadowMaterial stays basic under lit maps (C6 WU-04)', () => {
+  it('is always MeshBasicMaterial (black overlay, never lit)', () => {
+    const material = createShadowMaterial();
+    expect(material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect(material).not.toBeInstanceOf(THREE.MeshLambertMaterial);
+  });
+});

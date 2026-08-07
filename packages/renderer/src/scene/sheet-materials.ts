@@ -3,13 +3,20 @@ import * as THREE from 'three';
 import { configurePixelArtTexture, type PixelArtTextureOptions } from './pixel-art-texture.js';
 
 /**
- * Optional baked-lightmap inputs for sheet materials (C6 lighting). When
+ * Optional lighting inputs for sheet materials (C6). When `lightMap` is
  * present, every sheet material of the call gets `lightMap` + intensity and
  * the lightmap texture is bound to UV channel 1 (`uv1` attribute).
- * Shadow material never receives a lightMap -- callers must not pass this
- * bag into `createShadowMaterial`.
+ * When `lit` is true, materials are `MeshLambertMaterial` so scene lights
+ * (point/spot/ambient) affect tiles; absent/false keeps `MeshBasicMaterial`
+ * (unlit, byte-identical to pre-WU-04). Shadow material never receives this
+ * bag -- callers must not pass it into `createShadowMaterial`.
  */
 export interface SheetLightingOptions {
+  /**
+   * When true, build `MeshLambertMaterial` so dynamic scene lights shade
+   * tiles. Default / false: `MeshBasicMaterial` (unlit).
+   */
+  readonly lit?: boolean;
   readonly lightMap?: THREE.Texture;
   readonly lightMapIntensity?: number;
 }
@@ -48,8 +55,10 @@ export interface SheetLightingOptions {
  *
  * `lighting` is optional: when provided with a `lightMap`, every sheet
  * material of this call (one per-floor call site) gets that texture on
- * channel 1 (`uv1`) and `lightMapIntensity` (default 1). Omitted bag leaves
- * materials with `lightMap === null`, identical to pre-lighting behavior.
+ * channel 1 (`uv1`) and `lightMapIntensity` (default 1). When `lit` is true,
+ * materials are Lambert instead of Basic so scene lights shade tiles.
+ * Omitted bag leaves Basic materials with `lightMap === null`, identical to
+ * pre-lighting behavior.
  */
 export function createSheetMaterials(
   textures: Partial<Record<TileSheetId, THREE.Texture>>,
@@ -61,13 +70,19 @@ export function createSheetMaterials(
     // three r184: lightmap samples UV channel `texture.channel` → attribute `uv1` when channel=1.
     lighting.lightMap.channel = 1;
   }
+  const lit = lighting?.lit === true;
   for (const [sheet, texture] of Object.entries(textures) as [TileSheetId, THREE.Texture][]) {
     configurePixelArtTexture(texture, textureOptions);
-    const material = new THREE.MeshBasicMaterial({
+    const common = {
       map: texture,
       side: THREE.DoubleSide,
       alphaTest: 0.5,
-    });
+    } as const;
+    // Lit: Lambert responds to scene lights (C6 authored point/spot + ambient).
+    // Unlit default: Basic — byte-identical to pre-WU-04 (maps with zero lights).
+    const material = lit
+      ? new THREE.MeshLambertMaterial(common)
+      : new THREE.MeshBasicMaterial(common);
     if (lighting?.lightMap) {
       material.lightMap = lighting.lightMap;
       material.lightMapIntensity = lighting.lightMapIntensity ?? 1;
@@ -81,6 +96,10 @@ export function createSheetMaterials(
  * The shared shadow-pencil overlay material: RPG Maker corescript paints
  * shadow quarters as rgba(0,0,0,0.5). `depthWrite: false` keeps the
  * translucent overlay from occluding anything drawn after it.
+ *
+ * Always `MeshBasicMaterial` even on lit maps: this is a black alpha overlay
+ * painted on top of ground quads, not a surface that should receive scene
+ * lights. Callers must never pass a `SheetLightingOptions` bag here.
  *
  * `polygonOffset` (negative factor/units, i.e. "pull toward the camera" in
  * clip space) is the actual fix for z-fighting flicker between this overlay

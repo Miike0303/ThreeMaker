@@ -17,6 +17,11 @@ export interface DebugSnapshot {
   readonly propInstances: number;
   /** Live authored light instances from the current map's lights bundle (0 if none). */
   readonly lightInstances: number;
+  /**
+   * Whether tile sheet materials are lit (Lambert) for this map — true when
+   * the map authors at least one light (C6 WU-04 opt-in).
+   */
+  readonly litTiles: boolean;
   /** Active renderer backend label (`webgpu` / `webgl2`). */
   readonly backend: string;
   /** EMA frame time in milliseconds (display-rounded in {@link formatDebugRows}). */
@@ -70,7 +75,13 @@ export function formatDebugRows(snapshot: DebugSnapshot, t: I18n['t']): readonly
     { label: t('debug.elevation'), value: String(snapshot.elevation) },
     { label: t('debug.narrativeSprites'), value: String(snapshot.narrativeSprites) },
     { label: t('debug.props'), value: String(snapshot.propInstances) },
-    { label: t('debug.lights'), value: String(snapshot.lightInstances) },
+    {
+      label: t('debug.lights'),
+      // C6 WU-04: smallest headless-observable lit-mode signal on the existing row.
+      value: snapshot.litTiles
+        ? `${snapshot.lightInstances} (lit)`
+        : String(snapshot.lightInstances),
+    },
     { label: t('debug.hops'), value: String(snapshot.hopsCompleted) },
     {
       label: t('debug.lastHopSprites'),
@@ -242,6 +253,7 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
       narrativeSprites: 0,
       propInstances: 0,
       lightInstances: 0,
+      litTiles: false,
       backend: '',
       frameTimeMs: 0,
       hopsCompleted: 0,

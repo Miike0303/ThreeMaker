@@ -120,6 +120,11 @@ import {
   driveRoomFade,
   resolveFadedRoomId,
 } from './room-state.js';
+import {
+  baseSceneLightSetup,
+  buildSheetLightingOptions,
+  mapHasAuthoredLights,
+} from './sheet-tile-lighting.js';
 import type { FloorSpawn } from './spawn.js';
 import { resolveInitialSpawn } from './spawn.js';
 import { isTauriAvailable } from './tauri-env.js';
@@ -774,9 +779,29 @@ async function renderFixtureMap(
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a2e);
 
-  const light = new THREE.DirectionalLight(0xffffff, 3);
-  light.position.set(fixtureMap.width * 0.3, 20, fixtureMap.height * 0.2);
-  scene.add(light, new THREE.AmbientLight(0x404060, 2));
+  // Base scene lights: unlit maps keep today's directional+ambient (props only
+  // until tiles also opt into lit). Lit maps (authored lights) swap ambient to
+  // white at Math.PI and zero the directional — see baseSceneLightSetup.
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
+  directionalLight.position.set(fixtureMap.width * 0.3, 20, fixtureMap.height * 0.2);
+  const ambientLight = new THREE.AmbientLight(0x404060, 2);
+  scene.add(directionalLight, ambientLight);
+  /** Opt-in lit tile materials for the active map (`doc.lights.length > 0`). */
+  let sessionLitTiles = mapHasAuthoredLights(sessionOverride?.lights ?? []);
+  function applyBaseSceneLights(hasLights: boolean): void {
+    sessionLitTiles = hasLights;
+    const setup = baseSceneLightSetup(hasLights);
+    ambientLight.color.setHex(setup.ambient.color);
+    ambientLight.intensity = setup.ambient.intensity;
+    if (setup.directional) {
+      directionalLight.color.setHex(setup.directional.color);
+      directionalLight.intensity = setup.directional.intensity;
+    } else {
+      // Zero rather than remove: hop reverse (lit → unlit) just restores intensity.
+      directionalLight.intensity = 0;
+    }
+  }
+  applyBaseSceneLights(sessionLitTiles);
 
   // Created (and initialized) before any map session so `getMaxAnisotropy()`
   // is available up front -- every session's tileset materials use it for
@@ -832,8 +857,9 @@ async function renderFixtureMap(
       source.rampCells ?? [],
       source.tilePixelSize ?? TILE_SIZE_PX,
     );
-    // C6 intermediate state: lightMap affects tile sheet materials here;
-    // authored THREE lights only visibly affect glTF props until WU-05.
+    // C6 WU-04: lit tiles when the map authors lights; lightMap still optional.
+    // Seam: buildSheetLightingOptions(sessionLitTiles, lightMapTexture).
+    const lighting = buildSheetLightingOptions(sessionLitTiles, source.lightMapTexture);
     const tilemap = new StreamingTilemapScene(chunks, source.textures, {
       tileWorldSize: TILE_WORLD_SIZE,
       ownsTextures: false,
@@ -853,7 +879,7 @@ async function renderFixtureMap(
       ...(belowRoomIdGrid
         ? { ceilingCarve: { roomIdGrid: belowRoomIdGrid, mapWidth: source.map.width } }
         : {}),
-      ...(source.lightMapTexture ? { lighting: { lightMap: source.lightMapTexture } } : {}),
+      ...(lighting ? { lighting } : {}),
     });
     tilemap.group.position.y = source.baseElevation * HEIGHT_UNIT;
     const streamer = new ChunkStreamer({
@@ -1306,6 +1332,7 @@ async function renderFixtureMap(
       narrativeSprites: bundle?.sprites.length ?? 0,
       propInstances: propsBundle?.count ?? 0,
       lightInstances: lightsBundle?.count ?? 0,
+      litTiles: sessionLitTiles,
       backend: rendererBackend,
       frameTimeMs: frameTimeMsEma,
       hopsCompleted: hopStats.hopsCompleted,
@@ -1344,6 +1371,9 @@ async function renderFixtureMap(
       },
       get lightInstances() {
         return lightsBundle?.count ?? 0;
+      },
+      get litTiles() {
+        return sessionLitTiles;
       },
       get backend() {
         return rendererBackend;
@@ -1923,6 +1953,9 @@ async function renderFixtureMap(
       disposePropsBundle();
       disposeLightsBundle();
       session.dispose();
+      // DEV cycle targets never author lights — restore unlit base before rebuild.
+      applyBaseSceneLights(false);
+      activeLights = [];
     }
 
     window.addEventListener('keydown', (event) => {
@@ -2169,6 +2202,8 @@ async function renderFixtureMap(
           ? { spawn: hopArrival.spawn }
           : undefined;
 
+        // Apply lit/ambient before createMapSession so buildFloorRender sees it.
+        applyBaseSceneLights(mapHasAuthoredLights(nextResult.lights));
         session = createMapSession(nextResult.floorSources, nextResult.stairLinks, sessionOpts);
         // transferMap may set facing; FloorSpawn has no facing field, so apply
         // it on the mover after the session exists (same-map teleport pattern).

@@ -67,6 +67,11 @@ declare global {
       readonly propInstances: number;
       /** Live authored light instances from the current lights bundle (C6). */
       readonly lightInstances: number;
+      /**
+       * Whether tile sheet materials are lit (Lambert) for the active map
+       * (true when the map authors at least one light — C6 WU-04).
+       */
+      readonly litTiles: boolean;
       /** Active three.js renderer backend after `renderer.init()` (`webgpu` | `webgl2`). */
       readonly backend: 'webgpu' | 'webgl2';
       /** Exponential-moving-average frame time in milliseconds. */

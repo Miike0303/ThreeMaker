@@ -437,6 +437,8 @@ function buildRampSkirtTriangle(
   // hand-built triangle needs an explicit index too, even though it's a
   // trivial 1:1 identity one.
   geometry.setIndex([0, 1, 2]);
+  // Flat face normal from winding — required for MeshLambertMaterial (C6 lit
+  // tiles) and for mergeGeometries attribute-set parity with PlaneGeometry quads.
   geometry.computeVertexNormals();
   applyFlatFootprintUv1(geometry, tileX, tileY, lightmap);
   return geometry;

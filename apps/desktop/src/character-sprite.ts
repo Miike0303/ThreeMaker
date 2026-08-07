@@ -98,6 +98,8 @@ export class CharacterSprite {
     this.geometry.translate(0, worldHeight / 2, 0);
     this.uvAttribute = this.geometry.getAttribute('uv') as THREE.BufferAttribute;
 
+    // Always Basic (unlit): billboards keep the crisp sprite look. A lit-sprites
+    // pass is deliberately out of scope for C6 WU-04 (tiles only).
     this.material = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
