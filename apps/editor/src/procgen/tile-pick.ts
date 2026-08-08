@@ -3,7 +3,7 @@
  * Pure — no DOM / catalog IO.
  */
 
-import type { SemanticOverrides } from '@threemaker/map-format';
+import type { SemanticClass, SemanticOverrides } from '@threemaker/map-format';
 import { getSemanticClass } from '../semantic-store.js';
 
 /** Most common non-zero tile id in a layer, or `undefined` if empty. */
@@ -47,6 +47,26 @@ export function majorityWallClassedTileId(
 }
 
 /**
+ * First tile id (ascending) marked with `cls` in semantics, excluding
+ * `excludeId` when set.
+ */
+export function firstClassedTileId(
+  semantics: SemanticOverrides,
+  cls: SemanticClass,
+  excludeId?: number,
+): number | undefined {
+  let best: number | undefined;
+  for (const key of Object.keys(semantics)) {
+    const id = Number(key);
+    if (!Number.isFinite(id) || id <= 0) continue;
+    if (excludeId !== undefined && id === excludeId) continue;
+    if (getSemanticClass(semantics, id) !== cls) continue;
+    if (best === undefined || id < best) best = id;
+  }
+  return best;
+}
+
+/**
  * First tile id (ascending) marked `class: 'wall'` in semantics, excluding
  * `excludeId` when set. Used when the wall layer is empty but the author
  * already tagged wall tiles elsewhere.
@@ -55,15 +75,7 @@ export function firstWallClassedTileId(
   semantics: SemanticOverrides,
   excludeId?: number,
 ): number | undefined {
-  let best: number | undefined;
-  for (const key of Object.keys(semantics)) {
-    const id = Number(key);
-    if (!Number.isFinite(id) || id <= 0) continue;
-    if (excludeId !== undefined && id === excludeId) continue;
-    if (getSemanticClass(semantics, id) !== 'wall') continue;
-    if (best === undefined || id < best) best = id;
-  }
-  return best;
+  return firstClassedTileId(semantics, 'wall', excludeId);
 }
 
 /**
@@ -71,6 +83,7 @@ export function firstWallClassedTileId(
  * Preference: brush fill for ground → majority on layer 0 → fallback.
  * Wall: override → wall-class majority on layer 2 → any wall-classed semantic
  * → layer-2 majority if distinct from ground → fallback wall id.
+ * Door: first door-classed semantic id (optional; only when present).
  */
 export function resolveDungeonTileIds(input: {
   readonly fillTileId: number;
@@ -83,9 +96,13 @@ export function resolveDungeonTileIds(input: {
    * (still falls back if zero).
    */
   readonly wallTileOverride?: number;
-  /** Optional live map semantics for wall-class preference. */
+  /** Optional live map semantics for wall/door-class preference. */
   readonly semantics?: SemanticOverrides;
-}): { readonly groundTileId: number; readonly wallTileId: number } {
+}): {
+  readonly groundTileId: number;
+  readonly wallTileId: number;
+  readonly doorTileId?: number;
+} {
   const semantics = input.semantics ?? {};
   const fromFill = input.fillTileId > 0 ? input.fillTileId : undefined;
   const fromGround = majorityNonZeroTileId(input.groundLayer);
@@ -118,5 +135,15 @@ export function resolveDungeonTileIds(input: {
   // Last resort: still need a non-zero wall; allow same as ground (looks flat but valid).
   if (wallTileId === 0) wallTileId = groundTileId;
 
-  return { groundTileId, wallTileId };
+  const doorFromSemantics = firstClassedTileId(semantics, 'door', groundTileId);
+  const doorTileId =
+    doorFromSemantics !== undefined &&
+    doorFromSemantics !== wallTileId &&
+    doorFromSemantics > 0
+      ? doorFromSemantics
+      : undefined;
+
+  return doorTileId === undefined
+    ? { groundTileId, wallTileId }
+    : { groundTileId, wallTileId, doorTileId };
 }

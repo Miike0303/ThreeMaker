@@ -13,6 +13,11 @@ export type DungeonStampOptions = {
   readonly groundTileId: number;
   /** Tile id painted on layer 2 for solid walls. */
   readonly wallTileId: number;
+  /**
+   * Optional tile id painted on layer 1 (Mid) at room/corridor door openings.
+   * When omitted, openings still exist as walkable gaps (no wall) but mid stays empty.
+   */
+  readonly doorTileId?: number;
   /** Minimum room size (default 4). */
   readonly minRoomSize?: number;
   /** Maximum room size (default 8). */
@@ -32,10 +37,20 @@ export type DungeonRoom = {
   readonly h: number;
 };
 
+export type DungeonDoor = {
+  readonly x: number;
+  readonly y: number;
+};
+
 export type DungeonStampResult = {
   /** Four row-major layers [0..3], length width*height each. */
   readonly layers: readonly [number[], number[], number[], number[]];
   readonly rooms: readonly DungeonRoom[];
+  /**
+   * Walkable room-perimeter cells that open into a corridor (or exterior carve).
+   * DESIGN: "doors as openings".
+   */
+  readonly doors: readonly DungeonDoor[];
   readonly seed: number;
 };
 
@@ -87,6 +102,66 @@ function idx(width: number, x: number, y: number): number {
   return y * width + x;
 }
 
+function pointInRoom(room: DungeonRoom, x: number, y: number): boolean {
+  return x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h;
+}
+
+/**
+ * Room-edge walkable cells that have a walkable 4-neighbor outside the room
+ * (corridor exit). Pure helper exported for tests.
+ */
+export function findDoorOpenings(
+  rooms: readonly DungeonRoom[],
+  walkable: Uint8Array | readonly number[],
+  width: number,
+  height: number,
+): DungeonDoor[] {
+  const doors: DungeonDoor[] = [];
+  const seen = new Set<string>();
+  const dirs: readonly [number, number][] = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
+  const consider = (room: DungeonRoom, x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    if (!walkable[idx(width, x, y)]) return;
+    let opensOut = false;
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      if (!walkable[idx(width, nx, ny)]) continue;
+      if (!pointInRoom(room, nx, ny)) {
+        opensOut = true;
+        break;
+      }
+    }
+    if (!opensOut) return;
+    const key = `${x},${y}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    doors.push({ x, y });
+  };
+
+  for (const room of rooms) {
+    if (room.w <= 0 || room.h <= 0) continue;
+    // Top and bottom edges.
+    for (let x = room.x; x < room.x + room.w; x++) {
+      consider(room, x, room.y);
+      if (room.h > 1) consider(room, x, room.y + room.h - 1);
+    }
+    // Left and right edges (skip corners already visited).
+    for (let y = room.y + 1; y < room.y + room.h - 1; y++) {
+      consider(room, room.x, y);
+      if (room.w > 1) consider(room, room.x + room.w - 1, y);
+    }
+  }
+  return doors;
+}
+
 /**
  * Place non-overlapping rooms, carve 1-tile corridors between centers,
  * flood floor + walls into paint layers. Deterministic for a given seed.
@@ -98,6 +173,7 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
     seed,
     groundTileId,
     wallTileId,
+    doorTileId = 0,
     minRoomSize = 4,
     maxRoomSize = 8,
     roomCount = 6,
@@ -203,21 +279,29 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
         continue;
       }
       // Wall if any 4-neighbor is walkable (edge of rooms/corridors).
-      let border = false;
-      if (x > 0 && walkable[idx(width, x - 1, y)]) border = true;
-      if (x < width - 1 && walkable[idx(width, x + 1, y)]) border = true;
-      if (y > 0 && walkable[idx(width, x, y - 1)]) border = true;
-      if (y < height - 1 && walkable[idx(width, x, y + 1)]) border = true;
-      if (border) {
+      let edge = false;
+      if (x > 0 && walkable[idx(width, x - 1, y)]) edge = true;
+      if (x < width - 1 && walkable[idx(width, x + 1, y)]) edge = true;
+      if (y > 0 && walkable[idx(width, x, y - 1)]) edge = true;
+      if (y < height - 1 && walkable[idx(width, x, y + 1)]) edge = true;
+      if (edge) {
         ground[i] = groundTileId;
         wall[i] = wallTileId;
       }
     }
   }
 
+  const doors = findDoorOpenings(rooms, walkable, width, height);
+  if (doorTileId > 0) {
+    for (const d of doors) {
+      mid[idx(width, d.x, d.y)] = doorTileId;
+    }
+  }
+
   return {
     layers: [ground, mid, wall, over],
     rooms,
+    doors,
     seed,
   };
 }

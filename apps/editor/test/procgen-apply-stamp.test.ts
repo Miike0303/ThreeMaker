@@ -137,4 +137,28 @@ describe('applyDungeonStampToMapDocument', () => {
     // Ground id is not forced to wall.
     expect(next.tileset.semantics['2816']).toBeUndefined();
   });
+
+  it('tags stamped mid-layer door tiles with semantic class door', () => {
+    const doc = createBlankMapDocument({
+      id: 'stamp-door',
+      name: 'Door',
+      width: 32,
+      height: 24,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const stamp = stampSimpleDungeon({
+      width: 32,
+      height: 24,
+      seed: 42,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      doorTileId: 5001,
+      roomCount: 5,
+    });
+    expect(stamp.doors.length).toBeGreaterThan(0);
+    const next = applyDungeonStampToMapDocument(doc, stamp);
+    expect(next.tileset.semantics['5001']).toEqual({ class: 'door' });
+    expect(next.tileset.semantics['4352']).toEqual({ class: 'wall' });
+  });
 });

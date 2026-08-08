@@ -407,7 +407,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       const floor0 = doc.floors[0];
       const groundLayer = floor0?.layers.tiles[0] ?? [];
       const wallLayer = floor0?.layers.tiles[2] ?? [];
-      const { groundTileId, wallTileId } = resolveDungeonTileIds({
+      const { groundTileId, wallTileId, doorTileId } = resolveDungeonTileIds({
         fillTileId: state.fillTileId,
         groundLayer,
         wallLayer,
@@ -425,6 +425,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
         seed,
         groundTileId,
         wallTileId,
+        ...(doorTileId !== undefined ? { doorTileId } : {}),
         roomCount: preset.roomCount,
         minRoomSize: preset.minRoomSize,
         maxRoomSize: preset.maxRoomSize,

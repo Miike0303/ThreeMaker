@@ -135,3 +135,83 @@ describe('pickMainRoomSpawn', () => {
     expect(stamp.layers[2][i]).toBe(0);
   });
 });
+
+describe('stampSimpleDungeon door openings', () => {
+  const DOOR = 5001;
+
+  it('reports door openings on room edges where corridors leave', () => {
+    const stamp = stampSimpleDungeon({
+      width: 32,
+      height: 24,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 5,
+    });
+    expect(stamp.rooms.length).toBeGreaterThan(1);
+    expect(stamp.doors.length).toBeGreaterThan(0);
+    for (const d of stamp.doors) {
+      const i = d.y * 32 + d.x;
+      // Door sits on walkable ground, never under a wall tile.
+      expect(stamp.layers[0][i]).toBe(GROUND);
+      expect(stamp.layers[2][i]).toBe(0);
+      // Must sit on some room perimeter.
+      const onRoomEdge = stamp.rooms.some(
+        (r) =>
+          d.x >= r.x &&
+          d.x < r.x + r.w &&
+          d.y >= r.y &&
+          d.y < r.y + r.h &&
+          (d.x === r.x || d.x === r.x + r.w - 1 || d.y === r.y || d.y === r.y + r.h - 1),
+      );
+      expect(onRoomEdge).toBe(true);
+    }
+  });
+
+  it('paints optional door tiles on mid layer at openings', () => {
+    const stamp = stampSimpleDungeon({
+      width: 32,
+      height: 24,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      doorTileId: DOOR,
+      roomCount: 5,
+    });
+    expect(stamp.doors.length).toBeGreaterThan(0);
+    for (const d of stamp.doors) {
+      const i = d.y * 32 + d.x;
+      expect(stamp.layers[1][i]).toBe(DOOR);
+    }
+    // Mid is empty except doors.
+    const midNonZero = stamp.layers[1].filter((id) => id !== 0).length;
+    expect(midNonZero).toBe(stamp.doors.length);
+  });
+
+  it('leaves mid empty when doorTileId is omitted', () => {
+    const stamp = stampSimpleDungeon({
+      width: 24,
+      height: 18,
+      seed: 7,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+    });
+    expect(stamp.layers[1].every((id) => id === 0)).toBe(true);
+  });
+
+  it('is still deterministic including doors for the same seed', () => {
+    const opts = {
+      width: 28,
+      height: 20,
+      seed: 99,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      doorTileId: DOOR,
+      roomCount: 4,
+    };
+    const a = stampSimpleDungeon(opts);
+    const b = stampSimpleDungeon(opts);
+    expect(a.doors).toEqual(b.doors);
+    expect(a.layers[1]).toEqual(b.layers[1]);
+  });
+});

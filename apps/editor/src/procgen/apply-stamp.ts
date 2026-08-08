@@ -53,9 +53,11 @@ export function applyDungeonStampToMapDocument(
       ],
     },
   };
-  // DESIGN: walls on layer 2 + semantic `wall` so collision/occlusion see them.
+  // DESIGN: walls on layer 2 + semantic `wall`; mid doors + semantic `door`.
   const wallIds = uniqueNonZeroIds(tiles2);
-  const nextSemantics = assignSemanticClass(doc.tileset.semantics, wallIds, 'wall');
+  const doorIds = uniqueNonZeroIds(tiles1);
+  let nextSemantics = assignSemanticClass(doc.tileset.semantics, wallIds, 'wall');
+  nextSemantics = assignSemanticClass(nextSemantics, doorIds, 'door');
   let next: MapDocument = {
     ...doc,
     floors: doc.floors.map((f, i) => (i === 0 ? nextFloor : f)),

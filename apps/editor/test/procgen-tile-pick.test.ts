@@ -106,4 +106,31 @@ describe('resolveDungeonTileIds', () => {
     });
     expect(r.wallTileId).toBe(42);
   });
+
+  it('resolves optional doorTileId from door-classed semantics', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: {
+        '5': { class: 'wall' },
+        '77': { class: 'door' },
+        '80': { class: 'door' },
+      },
+    });
+    expect(r.doorTileId).toBe(77);
+  });
+
+  it('omits doorTileId when no door-classed semantics exist', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+    });
+    expect(r.doorTileId).toBeUndefined();
+  });
 });

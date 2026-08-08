@@ -86,6 +86,7 @@ Maker Studio shell
 - WU-PROC-03 presets dungeon/house/cave + wall tile picker (brush/auto/override)
 - WU-PROC-04 place spawn in largest room on Generate (`pickMainRoomSpawn`)
 - WU-PROC-05 stamp tags wall tile ids `semantics.class=wall`; tile-pick prefers wall-classed tiles
+- WU-PROC-06 door openings at room edges; optional mid door tile from door-class semantics + `semantics.class=door`
 
 ## PR Plan
 
