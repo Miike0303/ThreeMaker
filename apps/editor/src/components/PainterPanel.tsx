@@ -41,6 +41,7 @@ import type {
 import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
 import { applyDungeonStampToMapDocument } from '../procgen/apply-stamp.js';
 import { stampSimpleDungeon } from '../procgen/dungeon-stamp.js';
+import { resolveDungeonTileIds } from '../procgen/tile-pick.js';
 import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
 import type { ToolId } from '../tool-sm.js';
 import { CommandList } from './CommandForm.js';
@@ -229,6 +230,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
     'paint',
   );
   const [community, setCommunity] = useState<CommunitySettings>(() => loadCommunitySettings());
+  /** Procgen seed (uint32). Editable; randomize button rolls a new one. */
+  const [procgenSeed, setProcgenSeed] = useState(() => (Date.now() >>> 0) % 1_000_000_000);
 
   useEffect(() => {
     listGames()
@@ -392,17 +395,27 @@ export function PainterPanel({ t }: PainterPanelProps) {
       return;
     }
     try {
-      const groundTileId = state.fillTileId > 0 ? state.fillTileId : GROUND_TILE_ID;
-      // Prefer a distinct wall id; fall back to decor seed when fill is ground.
-      const wallTileId = groundTileId === GROUND_TILE_ID ? 4352 : groundTileId;
+      const floor0 = doc.floors[0];
+      const groundLayer = floor0?.layers.tiles[0] ?? [];
+      const wallLayer = floor0?.layers.tiles[2] ?? [];
+      const { groundTileId, wallTileId } = resolveDungeonTileIds({
+        fillTileId: state.fillTileId,
+        groundLayer,
+        wallLayer,
+        fallbackGround: GROUND_TILE_ID,
+        // A4 wall range start — only used when the map has no wall majority yet.
+        fallbackWall: 4352,
+      });
+      const seed = procgenSeed >>> 0;
       const stamp = stampSimpleDungeon({
         width: doc.width,
         height: doc.height,
-        seed: (Date.now() ^ (doc.width * 73856093)) >>> 0,
+        seed,
         groundTileId,
-        wallTileId: wallTileId === 0 ? GROUND_TILE_ID : wallTileId,
+        wallTileId,
         roomCount: 6,
       });
+      // Stamp only rewrites floor-0 tile layers — events/NPCs/spawn stay on the document.
       const stamped = applyDungeonStampToMapDocument(doc, stamp);
       const { textures, sheetPixelSizes } = await loadSlotTextures(stamped);
       viewport.loadMap(stamped, textures, sheetPixelSizes, groundTileId);
@@ -418,7 +431,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       console.error('Dungeon procgen failed:', err);
       setStatusMessage(t('painter.procgen.failed'));
     }
-  }, [t]);
+  }, [t, procgenSeed]);
 
   // Keep selected event key in sync with the live eventKeys list.
   useEffect(() => {
@@ -499,7 +512,31 @@ export function PainterPanel({ t }: PainterPanelProps) {
               <button type="button" onClick={() => viewportRef.current?.redo()}>
                 {t('painter.redo')}
               </button>
-              <button type="button" onClick={() => void handleGenerateDungeon()}>
+              <label className="ide-menubar-seed">
+                {t('painter.procgen.seed')}
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={procgenSeed}
+                  onChange={(event) => {
+                    const n = Number.parseInt(event.target.value, 10);
+                    if (Number.isFinite(n)) setProcgenSeed(n >>> 0);
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                title={t('painter.procgen.randomizeSeed')}
+                onClick={() => setProcgenSeed((Math.random() * 1_000_000_000) >>> 0)}
+              >
+                {t('painter.procgen.randomizeSeedShort')}
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void handleGenerateDungeon()}
+              >
                 {t('painter.procgen.generate')}
               </button>
             </>
@@ -1133,6 +1170,38 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       >
                         {t('painter.createMap')}
                       </button>
+                    </section>
+                    <section className="ide-section">
+                      <h3 className="ide-section-title">{t('painter.procgen')}</h3>
+                      <p className="ide-hint">{t('painter.procgen.hint')}</p>
+                      <div className="ide-row">
+                        <label>
+                          {t('painter.procgen.seed')}
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={procgenSeed}
+                            onChange={(event) => {
+                              const n = Number.parseInt(event.target.value, 10);
+                              if (Number.isFinite(n)) setProcgenSeed(n >>> 0);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setProcgenSeed((Math.random() * 1_000_000_000) >>> 0)}
+                        >
+                          {t('painter.procgen.randomizeSeed')}
+                        </button>
+                        <button
+                          type="button"
+                          className="primary"
+                          onClick={() => void handleGenerateDungeon()}
+                        >
+                          {t('painter.procgen.generate')}
+                        </button>
+                      </div>
                     </section>
                     <section className="ide-section">
                       <h3 className="ide-section-title">{t('painter.community')}</h3>

@@ -383,6 +383,20 @@ label {
   margin: 0 4px;
 }
 
+.ide-menubar-seed {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--tm-text-dim);
+}
+
+.ide-menubar-seed input {
+  width: 96px;
+  font-family: var(--tm-mono);
+  font-size: 12px;
+}
+
 .ide-body {
   flex: 1;
   min-height: 0;
