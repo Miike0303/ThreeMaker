@@ -74,8 +74,15 @@ Maker Studio shell
 ## Open questions
 
 - [ ] Community legal default for mixed catalogs (user-owned vs imported RPGM).
-- [ ] Procgen lives in `packages/procgen` vs editor-only until multi-client.
+- [x] Procgen lives in editor `src/procgen` for v1 (promote to package when desktop/MCP need it).
 - [ ] Whether Imagine ingest is in-studio or CLI-only for v1.
+
+## Implemented (loop log)
+
+- WU-UX-01 keep Map mounted; named layers; tool→inspector
+- WU-PROC-01 stampSimpleDungeon + Generate dungeon
+- WU-COMM-01 settings + opt-out toggles + offline enqueue
+- WU-PROC-02 seed field + tile-pick heuristics + preserve narrative on stamp
 
 ## PR Plan
 
