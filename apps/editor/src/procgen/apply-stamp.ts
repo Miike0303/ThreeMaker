@@ -2,6 +2,7 @@
  * Apply a dungeon stamp onto floor 0 of a MapDocument (pure).
  */
 import type { MapDocument } from '@threemaker/map-format';
+import { assignSemanticClass } from '../semantic-store.js';
 import { pickMainRoomSpawn, type DungeonStampResult } from './dungeon-stamp.js';
 
 export type ApplyDungeonStampOptions = {
@@ -12,6 +13,15 @@ export type ApplyDungeonStampOptions = {
    */
   readonly placeSpawnInMainRoom?: boolean;
 };
+
+/** Collect distinct non-zero tile ids from a stamp layer. */
+function uniqueNonZeroIds(layer: readonly number[]): Set<number> {
+  const ids = new Set<number>();
+  for (const id of layer) {
+    if (id !== 0) ids.add(id);
+  }
+  return ids;
+}
 
 export function applyDungeonStampToMapDocument(
   doc: MapDocument,
@@ -43,16 +53,20 @@ export function applyDungeonStampToMapDocument(
       ],
     },
   };
-  const next: MapDocument = {
+  // DESIGN: walls on layer 2 + semantic `wall` so collision/occlusion see them.
+  const wallIds = uniqueNonZeroIds(tiles2);
+  const nextSemantics = assignSemanticClass(doc.tileset.semantics, wallIds, 'wall');
+  let next: MapDocument = {
     ...doc,
     floors: doc.floors.map((f, i) => (i === 0 ? nextFloor : f)),
+    tileset: { ...doc.tileset, semantics: nextSemantics },
   };
-  if (!options.placeSpawnInMainRoom) {
-    return next;
+  if (options.placeSpawnInMainRoom) {
+    const pos = pickMainRoomSpawn(stamp.rooms, doc.width, doc.height);
+    next = {
+      ...next,
+      spawn: { x: pos.x, y: pos.y, floor: floor0.id },
+    };
   }
-  const pos = pickMainRoomSpawn(stamp.rooms, doc.width, doc.height);
-  return {
-    ...next,
-    spawn: { x: pos.x, y: pos.y, floor: floor0.id },
-  };
+  return next;
 }

@@ -61,4 +61,49 @@ describe('resolveDungeonTileIds', () => {
     expect(r.groundTileId).toBe(1);
     expect(r.wallTileId).toBe(42);
   });
+
+  it('prefers a wall-classed tile from semantics when wall layer is empty', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: {
+        '50': { class: 'furniture' },
+        '88': { class: 'wall' },
+        '90': { class: 'door' },
+      },
+    });
+    expect(r.wallTileId).toBe(88);
+  });
+
+  it('prefers majority wall-layer id only when it is already wall-classed', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [7, 7, 7, 88],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: {
+        '7': { class: 'furniture' },
+        '88': { class: 'wall' },
+      },
+    });
+    // Majority 7 is furniture — skip to wall-classed 88 present on the layer.
+    expect(r.wallTileId).toBe(88);
+  });
+
+  it('does not let semantics override an explicit wallTileOverride', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      wallTileOverride: 42,
+      semantics: { '88': { class: 'wall' } },
+    });
+    expect(r.wallTileId).toBe(42);
+  });
 });

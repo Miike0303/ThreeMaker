@@ -414,6 +414,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
         fallbackGround: GROUND_TILE_ID,
         // A4 wall range start — only used when the map has no wall majority yet.
         fallbackWall: 4352,
+        semantics: state.semantics,
         ...(procgenWallTileId > 0 ? { wallTileOverride: procgenWallTileId } : {}),
       });
       const seed = procgenSeed >>> 0;

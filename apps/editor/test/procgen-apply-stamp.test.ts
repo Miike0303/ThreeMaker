@@ -104,4 +104,37 @@ describe('applyDungeonStampToMapDocument', () => {
     expect(next.floors[0]?.layers.tiles[0]?.[i]).toBe(2816);
     expect(next.floors[0]?.layers.tiles[2]?.[i]).toBe(0);
   });
+
+  it('tags stamped wall tile ids with semantic class wall and preserves other semantics', () => {
+    const base = createBlankMapDocument({
+      id: 'stamp-sem',
+      name: 'Sem',
+      width: 16,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const doc = {
+      ...base,
+      tileset: {
+        ...base.tileset,
+        semantics: {
+          '99': { class: 'furniture' as const },
+          '4352': { class: 'door' as const },
+        },
+      },
+    };
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 3,
+      groundTileId: 2816,
+      wallTileId: 4352,
+    });
+    const next = applyDungeonStampToMapDocument(doc, stamp);
+    expect(next.tileset.semantics['4352']).toEqual({ class: 'wall' });
+    expect(next.tileset.semantics['99']).toEqual({ class: 'furniture' });
+    // Ground id is not forced to wall.
+    expect(next.tileset.semantics['2816']).toBeUndefined();
+  });
 });

@@ -85,6 +85,7 @@ Maker Studio shell
 - WU-PROC-02 seed field + tile-pick heuristics + preserve narrative on stamp
 - WU-PROC-03 presets dungeon/house/cave + wall tile picker (brush/auto/override)
 - WU-PROC-04 place spawn in largest room on Generate (`pickMainRoomSpawn`)
+- WU-PROC-05 stamp tags wall tile ids `semantics.class=wall`; tile-pick prefers wall-classed tiles
 
 ## PR Plan
 
