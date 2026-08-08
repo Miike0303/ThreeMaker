@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
+import './editor.css';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
 

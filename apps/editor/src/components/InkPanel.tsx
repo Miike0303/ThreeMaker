@@ -106,9 +106,9 @@ export function InkPanel({ t, painterState, onStatus }: InkPanelProps) {
   };
 
   return (
-    <section className="panel-section" aria-label={t('painter.ink')}>
-      <h3>{t('painter.ink')}</h3>
-      <p className="hint">{t('painter.ink.help')}</p>
+    <section className="ink-workbench" aria-label={t('painter.ink')}>
+      <h3 className="ide-section-title">{t('painter.ink')}</h3>
+      <p className="ide-hint">{t('painter.ink.help')}</p>
       <div className="painter-events-add-event">
         <input
           type="text"
@@ -116,14 +116,14 @@ export function InkPanel({ t, painterState, onStatus }: InkPanelProps) {
           placeholder={t('painter.ink.storyPlaceholder')}
           onChange={(e) => setManualStoryId(e.target.value)}
         />
-        <button type="button" onClick={openStory}>
+        <button type="button" className="primary" onClick={openStory}>
           {t('painter.ink.open')}
         </button>
       </div>
       {storyIds.length === 0 ? (
-        <p className="hint">{t('painter.ink.none')}</p>
+        <p className="ide-hint">{t('painter.ink.none')}</p>
       ) : (
-        <>
+        <div className="ink-split">
           <label>
             {t('painter.ink.story')}
             <select
@@ -138,10 +138,11 @@ export function InkPanel({ t, painterState, onStatus }: InkPanelProps) {
             </select>
           </label>
           {loading ? (
-            <p className="hint">{t('painter.ink.loading')}</p>
+            <p className="ide-hint">{t('painter.ink.loading')}</p>
           ) : (
             <>
               <textarea
+                className="ink-source"
                 value={source}
                 onChange={(e) => {
                   setSource(e.target.value);
@@ -150,20 +151,24 @@ export function InkPanel({ t, painterState, onStatus }: InkPanelProps) {
                 rows={10}
                 spellCheck={false}
                 aria-label={t('painter.ink.source')}
-                style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
               />
-              <p className="hint">{t('painter.ink.graphHint')}</p>
-              <InkGraph
-                source={source}
-                ariaLabel={t('painter.ink.graph')}
-                onSourceChange={(next) => {
-                  setSource(next);
-                  setDirty(true);
-                }}
-              />
+              <p className="ide-hint">{t('painter.ink.graphHint')}</p>
+              <div className="ink-graph-wrap">
+                <InkGraph
+                  source={source}
+                  ariaLabel={t('painter.ink.graph')}
+                  onSourceChange={(next) => {
+                    setSource(next);
+                    setDirty(true);
+                  }}
+                />
+              </div>
             </>
           )}
-          <p className="hint" role="status">
+          <p
+            className={compile.ok ? 'ide-hint ink-compile-ok' : 'ide-hint ink-compile-fail'}
+            role="status"
+          >
             {compile.ok
               ? t('painter.ink.compileOk').replace('{count}', String(compile.knotCount))
               : t('painter.ink.compileFail').replace(
@@ -172,10 +177,15 @@ export function InkPanel({ t, painterState, onStatus }: InkPanelProps) {
                 )}
             {dirty ? ` · ${t('painter.ink.dirty')}` : ''}
           </p>
-          <button type="button" onClick={() => void handleSave()} disabled={!compile.ok || loading}>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => void handleSave()}
+            disabled={!compile.ok || loading}
+          >
             {t('painter.ink.save')}
           </button>
-        </>
+        </div>
       )}
     </section>
   );
