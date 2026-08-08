@@ -48,4 +48,17 @@ describe('resolveDungeonTileIds', () => {
     expect(r.groundTileId).toBe(7);
     expect(r.wallTileId).toBe(20);
   });
+
+  it('wallTileOverride wins over layer majority', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [9, 9, 9],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      wallTileOverride: 42,
+    });
+    expect(r.groundTileId).toBe(1);
+    expect(r.wallTileId).toBe(42);
+  });
 });

@@ -19,6 +19,10 @@ export type DungeonStampOptions = {
   readonly maxRoomSize?: number;
   /** How many rooms to place (default 6). */
   readonly roomCount?: number;
+  /** Corridor thickness in tiles (default 1). */
+  readonly corridorWidth?: number;
+  /** Keep an uncarved ring at the map edge (default false). */
+  readonly tightBorder?: boolean;
 };
 
 export type DungeonStampResult = {
@@ -63,6 +67,8 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
     minRoomSize = 4,
     maxRoomSize = 8,
     roomCount = 6,
+    corridorWidth = 1,
+    tightBorder = false,
   } = options;
 
   if (width < 8 || height < 8) {
@@ -71,6 +77,8 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
   if (groundTileId === 0 || wallTileId === 0) {
     throw new Error('groundTileId and wallTileId must be non-zero tile ids');
   }
+  const corridorHalf = Math.max(0, Math.floor((Math.max(1, corridorWidth) - 1) / 2));
+  const border = tightBorder ? 2 : 1;
 
   const rand = mulberry32(seed);
   const size = width * height;
@@ -79,12 +87,20 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
   type Room = { x: number; y: number; w: number; h: number };
   const rooms: Room[] = [];
   const attempts = roomCount * 24;
+  const maxW = Math.max(1, width - border * 2);
+  const maxH = Math.max(1, height - border * 2);
 
   for (let i = 0; i < attempts && rooms.length < roomCount; i++) {
-    const w = minRoomSize + Math.floor(rand() * Math.max(1, maxRoomSize - minRoomSize + 1));
-    const h = minRoomSize + Math.floor(rand() * Math.max(1, maxRoomSize - minRoomSize + 1));
-    const x = 1 + Math.floor(rand() * Math.max(1, width - w - 2));
-    const y = 1 + Math.floor(rand() * Math.max(1, height - h - 2));
+    const w = Math.min(
+      maxW,
+      minRoomSize + Math.floor(rand() * Math.max(1, maxRoomSize - minRoomSize + 1)),
+    );
+    const h = Math.min(
+      maxH,
+      minRoomSize + Math.floor(rand() * Math.max(1, maxRoomSize - minRoomSize + 1)),
+    );
+    const x = border + Math.floor(rand() * Math.max(1, width - w - border * 2));
+    const y = border + Math.floor(rand() * Math.max(1, height - h - border * 2));
     const candidate = { x, y, w, h };
     const overlaps = rooms.some(
       (r) =>
@@ -102,7 +118,18 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
     }
   }
 
-  // L-corridors between consecutive room centers.
+  const carveDisk = (cx: number, cy: number) => {
+    for (let dy = -corridorHalf; dy <= corridorHalf; dy++) {
+      for (let dx = -corridorHalf; dx <= corridorHalf; dx++) {
+        const xx = cx + dx;
+        const yy = cy + dy;
+        if (xx < border || yy < border || xx >= width - border || yy >= height - border) continue;
+        walkable[idx(width, xx, yy)] = 1;
+      }
+    }
+  };
+
+  // L-corridors between consecutive room centers (width from preset).
   for (let i = 1; i < rooms.length; i++) {
     const a = rooms[i - 1];
     const b = rooms[i];
@@ -111,18 +138,17 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
     const ay = a.y + Math.floor(a.h / 2);
     const bx = b.x + Math.floor(b.w / 2);
     const by = b.y + Math.floor(b.h / 2);
-    // Horizontal then vertical.
     const x0 = Math.min(ax, bx);
     const x1 = Math.max(ax, bx);
-    for (let xx = x0; xx <= x1; xx++) walkable[idx(width, xx, ay)] = 1;
+    for (let xx = x0; xx <= x1; xx++) carveDisk(xx, ay);
     const y0 = Math.min(ay, by);
     const y1 = Math.max(ay, by);
-    for (let yy = y0; yy <= y1; yy++) walkable[idx(width, bx, yy)] = 1;
+    for (let yy = y0; yy <= y1; yy++) carveDisk(bx, yy);
   }
 
   // If no rooms landed, carve a centered hall so the stamp is never empty.
   if (rooms.length === 0) {
-    const margin = 2;
+    const margin = Math.max(2, border);
     for (let y = margin; y < height - margin; y++) {
       for (let x = margin; x < width - margin; x++) {
         walkable[idx(width, x, y)] = 1;

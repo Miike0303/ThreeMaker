@@ -83,6 +83,7 @@ Maker Studio shell
 - WU-PROC-01 stampSimpleDungeon + Generate dungeon
 - WU-COMM-01 settings + opt-out toggles + offline enqueue
 - WU-PROC-02 seed field + tile-pick heuristics + preserve narrative on stamp
+- WU-PROC-03 presets dungeon/house/cave + wall tile picker (brush/auto/override)
 
 ## PR Plan
 

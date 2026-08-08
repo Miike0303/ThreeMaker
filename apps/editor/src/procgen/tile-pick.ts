@@ -31,15 +31,25 @@ export function resolveDungeonTileIds(input: {
   readonly wallLayer: readonly number[];
   readonly fallbackGround: number;
   readonly fallbackWall: number;
+  /**
+   * Explicit wall tile from the UI picker. When > 0, wins over layer majority
+   * (still falls back if zero).
+   */
+  readonly wallTileOverride?: number;
 }): { readonly groundTileId: number; readonly wallTileId: number } {
   const fromFill = input.fillTileId > 0 ? input.fillTileId : undefined;
   const fromGround = majorityNonZeroTileId(input.groundLayer);
   const groundTileId = fromFill ?? fromGround ?? input.fallbackGround;
 
+  const override =
+    input.wallTileOverride !== undefined && input.wallTileOverride > 0
+      ? input.wallTileOverride
+      : undefined;
   const fromWall = majorityNonZeroTileId(input.wallLayer);
   let wallTileId =
-    fromWall !== undefined && fromWall !== groundTileId ? fromWall : input.fallbackWall;
-  if (wallTileId === 0 || wallTileId === groundTileId) {
+    override ??
+    (fromWall !== undefined && fromWall !== groundTileId ? fromWall : input.fallbackWall);
+  if (wallTileId === 0 || (wallTileId === groundTileId && input.fallbackWall !== groundTileId)) {
     wallTileId = input.fallbackWall !== groundTileId ? input.fallbackWall : groundTileId;
   }
   // Last resort: still need a non-zero wall; allow same as ground (looks flat but valid).
