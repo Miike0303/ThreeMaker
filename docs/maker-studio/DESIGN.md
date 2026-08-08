@@ -84,6 +84,7 @@ Maker Studio shell
 - WU-COMM-01 settings + opt-out toggles + offline enqueue
 - WU-PROC-02 seed field + tile-pick heuristics + preserve narrative on stamp
 - WU-PROC-03 presets dungeon/house/cave + wall tile picker (brush/auto/override)
+- WU-PROC-04 place spawn in largest room on Generate (`pickMainRoomSpawn`)
 
 ## PR Plan
 

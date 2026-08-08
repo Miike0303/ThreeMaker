@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createBlankMapDocument } from '../src/map-compose.js';
 import { applyDungeonStampToMapDocument } from '../src/procgen/apply-stamp.js';
-import { stampSimpleDungeon } from '../src/procgen/dungeon-stamp.js';
+import { pickMainRoomSpawn, stampSimpleDungeon } from '../src/procgen/dungeon-stamp.js';
 
 describe('applyDungeonStampToMapDocument', () => {
   it('writes stamp layers onto floor 0 without changing map size', () => {
@@ -67,5 +67,41 @@ describe('applyDungeonStampToMapDocument', () => {
     expect(next.npcs).toEqual(doc.npcs);
     expect(next.spawn).toEqual(doc.spawn);
     expect(next.worldSeeds).toEqual(doc.worldSeeds);
+  });
+
+  it('places spawn in the main room when requested', () => {
+    const doc = createBlankMapDocument({
+      id: 'stamp-spawn',
+      name: 'Spawn',
+      width: 24,
+      height: 18,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const stampedDoc = {
+      ...doc,
+      spawn: { x: 0, y: 0, floor: 'floor-0' },
+    };
+    const stamp = stampSimpleDungeon({
+      width: 24,
+      height: 18,
+      seed: 42,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      roomCount: 6,
+    });
+    const next = applyDungeonStampToMapDocument(stampedDoc, stamp, {
+      placeSpawnInMainRoom: true,
+    });
+    const expected = pickMainRoomSpawn(stamp.rooms, 24, 18);
+    expect(next.spawn).toEqual({
+      x: expected.x,
+      y: expected.y,
+      floor: 'floor-0',
+    });
+    // Still walkable under the new spawn.
+    const i = expected.y * 24 + expected.x;
+    expect(next.floors[0]?.layers.tiles[0]?.[i]).toBe(2816);
+    expect(next.floors[0]?.layers.tiles[2]?.[i]).toBe(0);
   });
 });

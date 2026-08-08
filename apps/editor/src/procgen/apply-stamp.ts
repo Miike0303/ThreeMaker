@@ -2,11 +2,21 @@
  * Apply a dungeon stamp onto floor 0 of a MapDocument (pure).
  */
 import type { MapDocument } from '@threemaker/map-format';
-import type { DungeonStampResult } from './dungeon-stamp.js';
+import { pickMainRoomSpawn, type DungeonStampResult } from './dungeon-stamp.js';
+
+export type ApplyDungeonStampOptions = {
+  /**
+   * When true, overwrite document spawn with the center of the largest
+   * stamped room on floor 0 (so Generate is immediately playable).
+   * Default false preserves existing spawn/events/npcs narrative data.
+   */
+  readonly placeSpawnInMainRoom?: boolean;
+};
 
 export function applyDungeonStampToMapDocument(
   doc: MapDocument,
   stamp: DungeonStampResult,
+  options: ApplyDungeonStampOptions = {},
 ): MapDocument {
   const floor0 = doc.floors[0];
   if (!floor0) {
@@ -33,8 +43,16 @@ export function applyDungeonStampToMapDocument(
       ],
     },
   };
-  return {
+  const next: MapDocument = {
     ...doc,
     floors: doc.floors.map((f, i) => (i === 0 ? nextFloor : f)),
+  };
+  if (!options.placeSpawnInMainRoom) {
+    return next;
+  }
+  const pos = pickMainRoomSpawn(stamp.rooms, doc.width, doc.height);
+  return {
+    ...next,
+    spawn: { x: pos.x, y: pos.y, floor: floor0.id },
   };
 }

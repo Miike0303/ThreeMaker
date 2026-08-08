@@ -25,17 +25,51 @@ export type DungeonStampOptions = {
   readonly tightBorder?: boolean;
 };
 
+export type DungeonRoom = {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+};
+
 export type DungeonStampResult = {
   /** Four row-major layers [0..3], length width*height each. */
   readonly layers: readonly [number[], number[], number[], number[]];
-  readonly rooms: readonly {
-    readonly x: number;
-    readonly y: number;
-    readonly w: number;
-    readonly h: number;
-  }[];
+  readonly rooms: readonly DungeonRoom[];
   readonly seed: number;
 };
+
+/**
+ * Prefer the center of the largest room (by area) so playtesting starts in a
+ * real chamber, not a corridor or wall. Ties keep the first room in order.
+ * When no rooms landed, fall back to the map center (hall carve path).
+ */
+export function pickMainRoomSpawn(
+  rooms: readonly DungeonRoom[],
+  width: number,
+  height: number,
+): { readonly x: number; readonly y: number } {
+  if (rooms.length === 0) {
+    return {
+      x: Math.min(width - 1, Math.max(0, Math.floor(width / 2))),
+      y: Math.min(height - 1, Math.max(0, Math.floor(height / 2))),
+    };
+  }
+  let best = rooms[0]!;
+  let bestArea = best.w * best.h;
+  for (let i = 1; i < rooms.length; i++) {
+    const r = rooms[i]!;
+    const area = r.w * r.h;
+    if (area > bestArea) {
+      best = r;
+      bestArea = area;
+    }
+  }
+  return {
+    x: best.x + Math.floor(best.w / 2),
+    y: best.y + Math.floor(best.h / 2),
+  };
+}
 
 /** Mulberry32 — deterministic 0..1 from a 32-bit seed. */
 function mulberry32(seed: number): () => number {
