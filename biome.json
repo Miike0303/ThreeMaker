@@ -31,7 +31,9 @@
         "apps/desktop/test/authored-map-narrative.test.ts",
         "apps/editor/src/painter-store.ts",
         "apps/editor/test/painter-store.test.ts",
-        "apps/editor/test/map-compose-v4.test.ts"
+        "apps/editor/test/map-compose-v4.test.ts",
+        "apps/editor/test/events-editor-exit-criterion.test.ts",
+        "apps/editor/test/human-loop-authoring-exit-criterion.test.ts"
       ],
       "linter": {
         "rules": {
