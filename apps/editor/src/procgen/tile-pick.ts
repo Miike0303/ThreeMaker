@@ -83,7 +83,7 @@ export function firstWallClassedTileId(
  * Preference: brush fill for ground → majority on layer 0 → fallback.
  * Wall: override → wall-class majority on layer 2 → any wall-classed semantic
  * → layer-2 majority if distinct from ground → fallback wall id.
- * Door: first door-classed semantic id (optional; only when present).
+ * Door: override → first door-classed semantic id (optional; omitted when none).
  */
 export function resolveDungeonTileIds(input: {
   readonly fillTileId: number;
@@ -96,6 +96,11 @@ export function resolveDungeonTileIds(input: {
    * (still falls back if zero).
    */
   readonly wallTileOverride?: number;
+  /**
+   * Explicit door tile from the UI picker. When > 0 and distinct from
+   * ground/wall, wins over door-class semantics.
+   */
+  readonly doorTileOverride?: number;
   /** Optional live map semantics for wall/door-class preference. */
   readonly semantics?: SemanticOverrides;
 }): {
@@ -135,13 +140,21 @@ export function resolveDungeonTileIds(input: {
   // Last resort: still need a non-zero wall; allow same as ground (looks flat but valid).
   if (wallTileId === 0) wallTileId = groundTileId;
 
+  const doorOverride =
+    input.doorTileOverride !== undefined &&
+    input.doorTileOverride > 0 &&
+    input.doorTileOverride !== groundTileId &&
+    input.doorTileOverride !== wallTileId
+      ? input.doorTileOverride
+      : undefined;
   const doorFromSemantics = firstClassedTileId(semantics, 'door', groundTileId);
-  const doorTileId =
+  const doorFromSemanticsOk =
     doorFromSemantics !== undefined &&
     doorFromSemantics !== wallTileId &&
     doorFromSemantics > 0
       ? doorFromSemantics
       : undefined;
+  const doorTileId = doorOverride ?? doorFromSemanticsOk;
 
   return doorTileId === undefined
     ? { groundTileId, wallTileId }

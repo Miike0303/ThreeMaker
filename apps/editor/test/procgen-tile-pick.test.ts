@@ -133,4 +133,58 @@ describe('resolveDungeonTileIds', () => {
     });
     expect(r.doorTileId).toBeUndefined();
   });
+
+  it('doorTileOverride wins over door-classed semantics', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      doorTileOverride: 501,
+      semantics: {
+        '5': { class: 'wall' },
+        '77': { class: 'door' },
+      },
+    });
+    expect(r.doorTileId).toBe(501);
+  });
+
+  it('doorTileOverride zero falls through to door semantics', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      doorTileOverride: 0,
+      semantics: { '77': { class: 'door' } },
+    });
+    expect(r.doorTileId).toBe(77);
+  });
+
+  it('rejects doorTileOverride equal to ground or wall', () => {
+    const sameAsGround = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      doorTileOverride: 1,
+      semantics: { '5': { class: 'wall' }, '77': { class: 'door' } },
+    });
+    // Invalid override ignored → semantic door.
+    expect(sameAsGround.doorTileId).toBe(77);
+
+    const sameAsWall = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      wallTileOverride: 9,
+      doorTileOverride: 9,
+    });
+    expect(sameAsWall.doorTileId).toBeUndefined();
+  });
 });

@@ -241,6 +241,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [procgenPreset, setProcgenPreset] = useState<ProcgenPresetId>(DEFAULT_PROCGEN_PRESET);
   /** 0 = auto (layer majority / fallback); else explicit wall tile id. */
   const [procgenWallTileId, setProcgenWallTileId] = useState(0);
+  /** 0 = auto (door-class semantics); else explicit mid-layer door tile id. */
+  const [procgenDoorTileId, setProcgenDoorTileId] = useState(0);
 
   useEffect(() => {
     listGames()
@@ -416,6 +418,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
         fallbackWall: 4352,
         semantics: state.semantics,
         ...(procgenWallTileId > 0 ? { wallTileOverride: procgenWallTileId } : {}),
+        ...(procgenDoorTileId > 0 ? { doorTileOverride: procgenDoorTileId } : {}),
       });
       const seed = procgenSeed >>> 0;
       const preset = getProcgenPreset(procgenPreset);
@@ -444,6 +447,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       setStatusMessage(
         formatTemplate(t('painter.procgen.success'), {
           rooms: stamp.rooms.length,
+          doors: stamp.doors.length,
           seed: stamp.seed,
           preset: t(`painter.procgen.preset.${preset.id}`),
         }),
@@ -452,7 +456,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       console.error('Dungeon procgen failed:', err);
       setStatusMessage(t('painter.procgen.failed'));
     }
-  }, [t, procgenSeed, procgenPreset, procgenWallTileId]);
+  }, [t, procgenSeed, procgenPreset, procgenWallTileId, procgenDoorTileId]);
 
   // Keep selected event key in sync with the live eventKeys list.
   useEffect(() => {
@@ -1282,6 +1286,45 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               id: procgenWallTileId,
                             })
                           : t('painter.procgen.wallTileAuto')}
+                      </p>
+                      <div className="ide-row">
+                        <label>
+                          {t('painter.procgen.doorTile')}
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={procgenDoorTileId}
+                            onChange={(event) => {
+                              const n = Number.parseInt(event.target.value, 10);
+                              if (Number.isFinite(n)) setProcgenDoorTileId(Math.max(0, n));
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          title={t('painter.procgen.doorFromBrushHint')}
+                          onClick={() => {
+                            const fill = painterState.fillTileId;
+                            if (fill > 0) setProcgenDoorTileId(fill);
+                          }}
+                        >
+                          {t('painter.procgen.doorFromBrush')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProcgenDoorTileId(0)}
+                          title={t('painter.procgen.doorAutoHint')}
+                        >
+                          {t('painter.procgen.doorAuto')}
+                        </button>
+                      </div>
+                      <p className="ide-hint">
+                        {procgenDoorTileId > 0
+                          ? formatTemplate(t('painter.procgen.doorTileActive'), {
+                              id: procgenDoorTileId,
+                            })
+                          : t('painter.procgen.doorTileAuto')}
                       </p>
                       <button
                         type="button"
