@@ -1,6 +1,6 @@
 /**
- * L4 WU-02: text-only Ink sidecar editor for story ids referenced by map events.
- * Graph view is WU-03. Text is the source of truth; live compile via tryCompileInkSource.
+ * L4 WU-02/03: Ink sidecar text editor + knot graph for story ids on the map.
+ * Text is the source of truth; graph drag rewrites `@tm-node` layout comments.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -12,6 +12,7 @@ import {
   tryCompileInkSource,
 } from '../ink-sidecar.js';
 import type { PainterState } from '../painter-store.js';
+import { InkGraph } from './InkGraph.js';
 
 export interface InkPanelProps {
   readonly t: (key: string) => string;
@@ -139,17 +140,28 @@ export function InkPanel({ t, painterState, onStatus }: InkPanelProps) {
           {loading ? (
             <p className="hint">{t('painter.ink.loading')}</p>
           ) : (
-            <textarea
-              value={source}
-              onChange={(e) => {
-                setSource(e.target.value);
-                setDirty(true);
-              }}
-              rows={12}
-              spellCheck={false}
-              aria-label={t('painter.ink.source')}
-              style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
-            />
+            <>
+              <textarea
+                value={source}
+                onChange={(e) => {
+                  setSource(e.target.value);
+                  setDirty(true);
+                }}
+                rows={10}
+                spellCheck={false}
+                aria-label={t('painter.ink.source')}
+                style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
+              />
+              <p className="hint">{t('painter.ink.graphHint')}</p>
+              <InkGraph
+                source={source}
+                ariaLabel={t('painter.ink.graph')}
+                onSourceChange={(next) => {
+                  setSource(next);
+                  setDirty(true);
+                }}
+              />
+            </>
           )}
           <p className="hint" role="status">
             {compile.ok

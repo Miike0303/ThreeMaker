@@ -112,6 +112,9 @@
     "painter.ink.compileOk": "Compilación OK ({count} nudos/stitches).",
     "painter.ink.compileFail": "Compilación fallida: {message}",
     "painter.ink.dirty": "sin guardar",
+    "painter.ink.graph": "Grafo de nudos Ink",
+    "painter.ink.graphHint": "Arrastrá nudos para guardar el layout en comentarios @tm-node. Las aristas son solo guía visual.",
+
     "painter.events.field.ifKey": "Clave if",
     "painter.events.field.ifOp": "Operador",
     "painter.events.field.ifSource": "Fuente",

@@ -5,9 +5,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyInkNodeLayouts,
+  buildInkGraphModel,
   type InkNodeLayout,
+  listInkEdges,
   listInkKnots,
   parseInkNodeLayouts,
+  setInkNodePosition,
 } from '../src/ink-source-structure.js';
 
 describe('listInkKnots', () => {
@@ -94,5 +97,94 @@ B
     const body = '=== start ===\nHi\n';
     const next = applyInkNodeLayouts(body, [{ knot: 'start', x: 0, y: 0 }]);
     expect(next).toBe('// @tm-node start x=0 y=0\n\n=== start ===\nHi\n');
+  });
+});
+
+describe('listInkEdges (lossy visual hops)', () => {
+  it('collects -> target and [[label|target]] diverts under the current knot', () => {
+    const source = `
+=== start ===
+Hello
+-> mid
+* [Go] -> other
+[[Talk|chat]]
+
+=== mid ===
+-> END
+
+=== other ===
+Bye
+
+=== chat ===
+Hi
+`;
+    expect(listInkEdges(source)).toEqual([
+      { from: 'start', to: 'mid' },
+      { from: 'start', to: 'other' },
+      { from: 'start', to: 'chat' },
+      { from: 'mid', to: 'END' },
+    ]);
+  });
+
+  it('dedupes identical from→to pairs and ignores diverts before any knot header', () => {
+    const source = `-> nowhere
+=== a ===
+-> b
+-> b
+=== b ===
+`;
+    expect(listInkEdges(source)).toEqual([{ from: 'a', to: 'b' }]);
+  });
+});
+
+describe('buildInkGraphModel / setInkNodePosition', () => {
+  it('merges stored layouts with grid defaults for missing knots', () => {
+    const source = `// @tm-node start x=10 y=20
+=== start ===
+-> mid
+=== mid ===
+`;
+    const model = buildInkGraphModel(source, { colWidth: 180, rowHeight: 100 });
+    expect(model.nodes.map((n) => n.knot)).toEqual(['start', 'mid']);
+    expect(model.nodes[0]).toEqual({ knot: 'start', x: 10, y: 20 });
+    // mid is index 1 → col 1, row 0
+    expect(model.nodes[1]).toEqual({ knot: 'mid', x: 180, y: 0 });
+    expect(model.edges).toEqual([{ from: 'start', to: 'mid' }]);
+  });
+
+  it('includes undeclared divert targets (e.g. END) as graph nodes', () => {
+    const source = `=== start ===
+-> END
+`;
+    const model = buildInkGraphModel(source);
+    expect(model.nodes.map((n) => n.knot)).toEqual(['start', 'END']);
+    expect(model.edges).toEqual([{ from: 'start', to: 'END' }]);
+  });
+
+  it('setInkNodePosition rewrites one knot and keeps other layouts', () => {
+    const source = `// @tm-node start x=0 y=0
+// @tm-node mid x=1 y=1
+
+=== start ===
+-> mid
+=== mid ===
+`;
+    const next = setInkNodePosition(source, 'mid', 99, 44);
+    expect(parseInkNodeLayouts(next)).toEqual([
+      { knot: 'mid', x: 99, y: 44 },
+      { knot: 'start', x: 0, y: 0 },
+    ]);
+    expect(listInkKnots(next)).toEqual(['start', 'mid']);
+  });
+
+  it('setInkNodePosition invents defaults for other knots when none stored', () => {
+    const source = `=== start ===
+-> mid
+=== mid ===
+`;
+    const next = setInkNodePosition(source, 'start', 5, 6);
+    const layouts = parseInkNodeLayouts(next);
+    expect(layouts.find((l) => l.knot === 'start')).toEqual({ knot: 'start', x: 5, y: 6 });
+    expect(layouts.find((l) => l.knot === 'mid')).toBeDefined();
   });
 });

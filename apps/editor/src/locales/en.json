@@ -112,6 +112,9 @@
     "painter.ink.compileOk": "Compile OK ({count} knots/stitches).",
     "painter.ink.compileFail": "Compile failed: {message}",
     "painter.ink.dirty": "unsaved",
+    "painter.ink.graph": "Ink knot graph",
+    "painter.ink.graphHint": "Drag knots to save layout in @tm-node comments. Edges are a visual guide only.",
+
     "painter.events.field.ifKey": "If key",
     "painter.events.field.ifOp": "Operator",
     "painter.events.field.ifSource": "Source",

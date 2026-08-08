@@ -1,9 +1,9 @@
 /**
- * Pure structure helpers for the Ink text↔graph editor (L4 WU-01).
+ * Pure structure helpers for the Ink text↔graph editor (L4 WU-01 / WU-03).
  *
  * Text remains the source of truth. Layout is stored as special comments so
  * a single `.ink` sidecar carries both dialogue and node positions — no
- * second metadata file. Graph edges are not inferred here (editor UI WU-03).
+ * second metadata file. Edges are best-effort (visual aid only).
  */
 
 /** One knot/stitch name with canvas position (editor graph). */
@@ -13,6 +13,27 @@ export type InkNodeLayout = {
   readonly y: number;
 };
 
+/** Best-effort divert hop for the graph view (lossy). */
+export type InkEdge = {
+  readonly from: string;
+  readonly to: string;
+};
+
+/** Graph snapshot for the editor: nodes (with positions) + edges. */
+export type InkGraphModel = {
+  readonly nodes: readonly InkNodeLayout[];
+  readonly edges: readonly InkEdge[];
+};
+
+export type BuildInkGraphModelOptions = {
+  /** Horizontal spacing for missing layout defaults (default 180). */
+  readonly colWidth?: number;
+  /** Vertical spacing for missing layout defaults (default 100). */
+  readonly rowHeight?: number;
+  /** How many columns in the default grid (default 4). */
+  readonly columns?: number;
+};
+
 /** `=== name ===` (knot) or `= name =` (stitch) header line. */
 const KNOT_HEADER = /^\s*(?:=+)\s*([A-Za-z_][\w.]*)\s*(?:=+)\s*(?:\/\/.*)?$/;
 
@@ -20,6 +41,11 @@ const KNOT_HEADER = /^\s*(?:=+)\s*([A-Za-z_][\w.]*)\s*(?:=+)\s*(?:\/\/.*)?$/;
 const LAYOUT_LINE =
   /^\s*\/\/\s*@tm-node\s+([A-Za-z_][\w.]*)\s+x=(-?\d+(?:\.\d+)?)\s+y=(-?\d+(?:\.\d+)?)\s*$/;
 
+/** `-> target` divert (arrow form). */
+const ARROW_DIVERT = /->\s*([A-Za-z_][\w.]*)/g;
+
+/** `[[label|target]]` choice divert. */
+const BRACKET_DIVERT = /\[\[[^\]]*\|([A-Za-z_][\w.]*)\]\]/g;
 /**
  * Lists knot and stitch names from ink source in first-seen order.
  * Does not compile — works on incomplete drafts so the graph can still open.
@@ -106,4 +132,103 @@ function stripLeadingLayoutBlock(source: string): string {
     break;
   }
   return lines.slice(i).join('\n');
+}
+
+/**
+ * Best-effort divert edges for the graph (visual aid). Text remains truth —
+ * missing/extra edges are OK. Diverts before the first knot header are ignored.
+ * Includes hops to `END` and to knots not declared in this file.
+ */
+export function listInkEdges(source: string): readonly InkEdge[] {
+  const edges: InkEdge[] = [];
+  const seen = new Set<string>();
+  let current: string | null = null;
+
+  for (const line of source.split(/\r?\n/)) {
+    const header = KNOT_HEADER.exec(line);
+    if (header?.[1]) {
+      current = header[1];
+      continue;
+    }
+    if (current === null) continue;
+
+    for (const re of [ARROW_DIVERT, BRACKET_DIVERT]) {
+      re.lastIndex = 0;
+      let match = re.exec(line);
+      while (match) {
+        const to = match[1];
+        if (to) {
+          const key = `${current}\0${to}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            edges.push({ from: current, to });
+          }
+        }
+        match = re.exec(line);
+      }
+    }
+  }
+  return edges;
+}
+
+function defaultGridPosition(
+  index: number,
+  colWidth: number,
+  rowHeight: number,
+  columns: number,
+): { readonly x: number; readonly y: number } {
+  const col = index % columns;
+  const row = Math.floor(index / columns);
+  return { x: col * colWidth, y: row * rowHeight };
+}
+
+/**
+ * Builds the editor graph model: one node per listed knot/stitch (stored
+ * `@tm-node` position when present, else a stable grid default) plus edges.
+ */
+export function buildInkGraphModel(
+  source: string,
+  options: BuildInkGraphModelOptions = {},
+): InkGraphModel {
+  const colWidth = options.colWidth ?? 180;
+  const rowHeight = options.rowHeight ?? 100;
+  const columns = options.columns ?? 4;
+  const knots = listInkKnots(source);
+  const edges = listInkEdges(source);
+  // Divert targets that are not declared knots (e.g. END, external) still get a node.
+  const declared = new Set(knots);
+  const extras: string[] = [];
+  for (const edge of edges) {
+    if (!declared.has(edge.to) && !extras.includes(edge.to)) extras.push(edge.to);
+  }
+  const allKnots = [...knots, ...extras];
+  const stored = new Map(parseInkNodeLayouts(source).map((n) => [n.knot, n] as const));
+  const nodes: InkNodeLayout[] = allKnots.map((knot, index) => {
+    const existing = stored.get(knot);
+    if (existing) return existing;
+    const pos = defaultGridPosition(index, colWidth, rowHeight, columns);
+    return { knot, x: pos.x, y: pos.y };
+  });
+  return { nodes, edges };
+}
+
+/**
+ * Moves one knot on the graph and rewrites the layout preamble. Other knots
+ * keep stored positions when present; otherwise they receive grid defaults so
+ * a single drag still produces a complete layout block.
+ */
+export function setInkNodePosition(
+  source: string,
+  knot: string,
+  x: number,
+  y: number,
+  options: BuildInkGraphModelOptions = {},
+): string {
+  const model = buildInkGraphModel(source, options);
+  const layouts = model.nodes.map((node) => (node.knot === knot ? { knot, x, y } : node));
+  // If the knot is not in the source yet, still record the position.
+  if (!layouts.some((n) => n.knot === knot)) {
+    layouts.push({ knot, x, y });
+  }
+  return applyInkNodeLayouts(source, layouts);
 }

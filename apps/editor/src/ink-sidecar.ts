@@ -10,11 +10,13 @@
 import { BaseDirectory, exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { EventCommand } from '@threemaker/core';
 import {
+  buildInkGraphModel,
   compileInk,
   InkCompileError,
   type InkIssue,
   listInkKnots,
   parseInkNodeLayouts,
+  setInkNodePosition,
 } from '@threemaker/narrative';
 import { isTauriAvailable } from './catalog-client.js';
 import { MAP_DIR_RELATIVE, MAP_FILE_RELATIVE, MapClientError } from './map-client.js';
@@ -122,5 +124,5 @@ export async function saveInkSidecar(storyId: string, source: string): Promise<v
   }
 }
 
-/** Re-export layout helpers for the future graph panel (WU-03). */
-export { listInkKnots, parseInkNodeLayouts };
+/** Re-export structure helpers used by the ink panel / graph. */
+export { buildInkGraphModel, listInkKnots, parseInkNodeLayouts, setInkNodePosition };

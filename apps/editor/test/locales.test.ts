@@ -88,6 +88,8 @@ const NEW_KEYS = [
   'painter.ink.compileOk',
   'painter.ink.compileFail',
   'painter.ink.dirty',
+  'painter.ink.graph',
+  'painter.ink.graphHint',
   'painter.events.field.ifKey',
   'painter.events.field.ifOp',
   'painter.events.field.ifSource',

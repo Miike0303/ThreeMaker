@@ -17,6 +17,7 @@
     "@threemaker/map-format": "workspace:*",
     "@threemaker/narrative": "workspace:*",
     "@threemaker/renderer": "workspace:*",
+    "@xyflow/react": "^12.11.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "0.184.0"
