@@ -76,18 +76,35 @@ export function App({ i18n, localeStorageKey }: AppProps) {
       </header>
 
       <div className="app-body">
-        {workspace === 'map' ? (
+        {/* Keep Map mounted when browsing Assets — unmounting disposed the viewport and
+            wiped the unsaved session (Maker Studio UX critical). Hide with CSS only. */}
+        <div
+          className={
+            workspace === 'map'
+              ? 'app-workspace-panel app-workspace-panel-active'
+              : 'app-workspace-panel'
+          }
+          aria-hidden={workspace !== 'map'}
+          inert={workspace !== 'map' ? true : undefined}
+        >
           <PainterPanel t={t} />
-        ) : (
-          <div className="app-workspace app-workspace-assets">
-            <section className="app-panel app-panel-catalog">
-              <CatalogBrowser t={t} onSelectAsset={setSelectedAsset} />
-            </section>
-            <section className="app-panel app-panel-viewer">
-              <MapViewer t={t} />
-            </section>
-          </div>
-        )}
+        </div>
+        <div
+          className={
+            workspace === 'assets'
+              ? 'app-workspace-panel app-workspace-panel-active app-workspace-assets'
+              : 'app-workspace-panel app-workspace-assets'
+          }
+          aria-hidden={workspace !== 'assets'}
+          inert={workspace !== 'assets' ? true : undefined}
+        >
+          <section className="app-panel app-panel-catalog">
+            <CatalogBrowser t={t} onSelectAsset={setSelectedAsset} />
+          </section>
+          <section className="app-panel app-panel-viewer">
+            <MapViewer t={t} />
+          </section>
+        </div>
       </div>
 
       <footer className="app-footer">

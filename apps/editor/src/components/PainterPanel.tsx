@@ -11,6 +11,7 @@ import {
   listGames,
   objectPreviewUrl,
 } from '../catalog-client.js';
+import { loadCommunitySettings, maybeEnqueueCommunityShare } from '../community-settings.js';
 import {
   canSavePainterDocument,
   defaultWorldSeedValue,
@@ -33,6 +34,8 @@ import type {
   TriggerOverlayItem,
 } from '../painter-viewport.js';
 import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
+import { applyDungeonStampToMapDocument } from '../procgen/apply-stamp.js';
+import { stampSimpleDungeon } from '../procgen/dungeon-stamp.js';
 import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
 import type { ToolId } from '../tool-sm.js';
 import { CommandList } from './CommandForm.js';
@@ -56,6 +59,30 @@ const TOOLS: readonly { readonly id: ToolId; readonly shortcut: string }[] = [
   { id: 'npc', shortcut: 'N' },
   { id: 'trigger', shortcut: 'T' },
 ];
+
+/** Paint layer roles for 2.5D authoring (schema indices 0–3, RPG Maker–style). */
+const PAINT_LAYERS = [
+  { index: 0 as const, nameKey: 'painter.layer.ground' },
+  { index: 1 as const, nameKey: 'painter.layer.mid' },
+  { index: 2 as const, nameKey: 'painter.layer.wall' },
+  { index: 3 as const, nameKey: 'painter.layer.over' },
+] as const;
+
+/** Which inspector tab to open when a tool is selected (studio routing). */
+function inspectorTabForTool(tool: ToolId): 'map' | 'paint' | 'events' | 'ink' | 'entities' {
+  switch (tool) {
+    case 'room-box':
+    case 'stair-link':
+    case 'spawn-point':
+      return 'map';
+    case 'prop':
+    case 'npc':
+    case 'trigger':
+      return 'entities';
+    default:
+      return 'paint';
+  }
+}
 
 const NPC_FACINGS: readonly NpcFacing[] = ['down', 'left', 'right', 'up'];
 
@@ -327,10 +354,64 @@ export function PainterPanel({ t }: PainterPanelProps) {
     if (!doc) return;
     try {
       await saveMapDocument(doc);
-      setStatusMessage(t('painter.saveSuccess'));
+      // Community share is opt-out (default on); no network in v0 — enqueue only.
+      const community = loadCommunitySettings();
+      const tileShas = Object.values(doc.tileset.slots)
+        .map((slot) => slot?.object)
+        .filter((sha): sha is string => typeof sha === 'string' && sha.length > 0);
+      const enqueue = maybeEnqueueCommunityShare(community, {
+        mapId: doc.id,
+        mapName: doc.name,
+        tileObjectShas: tileShas,
+        // Until provenance is on slots, treat non-empty catalog slots as possibly imported.
+        usesOnlyImportedAssets: false,
+      });
+      if (enqueue) {
+        console.info('[Maker Studio] community share queued (offline stub)', enqueue);
+        setStatusMessage(t('painter.saveSuccessShareQueued'));
+      } else {
+        setStatusMessage(t('painter.saveSuccess'));
+      }
     } catch (err) {
       console.error('Failed to save the map:', err);
       setStatusMessage(t('painter.saveFailed'));
+    }
+  }, [t]);
+
+  const handleGenerateDungeon = useCallback(async () => {
+    const viewport = viewportRef.current;
+    const doc = viewport?.currentDocument();
+    const state = viewport?.painterState;
+    if (!viewport || !doc || !state) {
+      setStatusMessage(t('painter.procgen.needMap'));
+      return;
+    }
+    try {
+      const groundTileId = state.fillTileId > 0 ? state.fillTileId : GROUND_TILE_ID;
+      // Prefer a distinct wall id; fall back to decor seed when fill is ground.
+      const wallTileId = groundTileId === GROUND_TILE_ID ? 4352 : groundTileId;
+      const stamp = stampSimpleDungeon({
+        width: doc.width,
+        height: doc.height,
+        seed: (Date.now() ^ (doc.width * 73856093)) >>> 0,
+        groundTileId,
+        wallTileId: wallTileId === 0 ? GROUND_TILE_ID : wallTileId,
+        roomCount: 6,
+      });
+      const stamped = applyDungeonStampToMapDocument(doc, stamp);
+      const { textures, sheetPixelSizes } = await loadSlotTextures(stamped);
+      viewport.loadMap(stamped, textures, sheetPixelSizes, groundTileId);
+      setPaletteSlots(await buildPaletteSlots(stamped, sheetPixelSizes));
+      setMapReady(true);
+      setStatusMessage(
+        formatTemplate(t('painter.procgen.success'), {
+          rooms: stamp.rooms.length,
+          seed: stamp.seed,
+        }),
+      );
+    } catch (err) {
+      console.error('Dungeon procgen failed:', err);
+      setStatusMessage(t('painter.procgen.failed'));
     }
   }, [t]);
 
@@ -350,6 +431,13 @@ export function PainterPanel({ t }: PainterPanelProps) {
     () => (painterState ? validateEventsDraft(painterState.events) : null),
     [painterState],
   );
+
+  // Route inspector to the pane that matches the active tool (Unity-style).
+  const activeTool = painterState?.tool;
+  useEffect(() => {
+    if (activeTool === undefined) return;
+    setInspectorTab(inspectorTabForTool(activeTool));
+  }, [activeTool]);
 
   const handleLoad = useCallback(async () => {
     try {
@@ -406,6 +494,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
               <button type="button" onClick={() => viewportRef.current?.redo()}>
                 {t('painter.redo')}
               </button>
+              <button type="button" onClick={() => void handleGenerateDungeon()}>
+                {t('painter.procgen.generate')}
+              </button>
             </>
           )}
         </div>
@@ -450,9 +541,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     viewportRef.current?.setActiveLayer(Number(event.target.value) as 0 | 1 | 2 | 3)
                   }
                 >
-                  {[0, 1, 2, 3].map((layer) => (
-                    <option key={layer} value={layer}>
-                      {layer}
+                  {PAINT_LAYERS.map((layer) => (
+                    <option key={layer.index} value={layer.index}>
+                      {layer.index}: {t(layer.nameKey)}
                     </option>
                   ))}
                 </select>
@@ -968,6 +1059,26 @@ export function PainterPanel({ t }: PainterPanelProps) {
 
                 {inspectorTab === 'paint' && (
                   <>
+                    <section className="ide-section">
+                      <h3 className="ide-section-title">{t('painter.layers')}</h3>
+                      <p className="ide-hint">{t('painter.layers.hint')}</p>
+                      <ul className="layers-list">
+                        {[...PAINT_LAYERS].reverse().map((layer) => (
+                          <li key={layer.index}>
+                            <button
+                              type="button"
+                              className={`layers-btn${
+                                painterState.activeLayer === layer.index ? ' layers-btn-active' : ''
+                              }`}
+                              onClick={() => viewportRef.current?.setActiveLayer(layer.index)}
+                            >
+                              <span className="layers-btn-index">{layer.index}</span>
+                              <span className="layers-btn-name">{t(layer.nameKey)}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
                     <section className="ide-section">
                       <h3 className="ide-section-title">
                         {t(`painter.tool.${painterState.tool}`)}

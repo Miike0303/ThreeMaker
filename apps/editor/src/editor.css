@@ -233,6 +233,20 @@ label {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* Stacked workspaces: only the active panel is visible; inactive stays mounted. */
+.app-workspace-panel {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.app-workspace-panel-active {
+  display: flex;
+  flex-direction: column;
 }
 
 .app-workspace {
@@ -245,6 +259,65 @@ label {
   flex: 1;
   min-height: 0;
   display: flex;
+  flex-direction: row;
+}
+
+/* Named paint layers (RPG Maker–style list) */
+.layers-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.layers-list li {
+  margin: 0;
+  padding: 0;
+}
+
+.layers-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  background: var(--tm-bg-2);
+  border: 1px solid var(--tm-border);
+  border-radius: var(--tm-radius);
+  padding: 7px 10px;
+  color: var(--tm-text-dim);
+}
+
+.layers-btn:hover:not(:disabled) {
+  background: var(--tm-bg-3);
+  border-color: var(--tm-border-strong);
+  color: var(--tm-text);
+}
+
+.layers-btn-active {
+  background: var(--tm-accent-soft) !important;
+  border-color: var(--tm-accent) !important;
+  color: var(--tm-text) !important;
+  box-shadow: inset 3px 0 0 var(--tm-accent);
+}
+
+.layers-btn-index {
+  font-family: var(--tm-mono);
+  font-size: 10px;
+  color: var(--tm-text-faint);
+  min-width: 1.2em;
+}
+
+.layers-btn-active .layers-btn-index {
+  color: var(--tm-accent);
+}
+
+.layers-btn-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .app-panel-catalog {
