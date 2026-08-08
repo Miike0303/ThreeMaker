@@ -8,7 +8,7 @@ import {
   isValidSha256,
   SchemaVersionMismatchError,
 } from './dev-server/catalog-api.js';
-import { loadMapFile, saveMapFile } from './dev-server/map-api.js';
+import { loadInkFile, loadMapFile, saveInkFile, saveMapFile } from './dev-server/map-api.js';
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(APP_DIR, '..', '..');
@@ -36,6 +36,8 @@ const DEV_ASSET_STORE_DIR = resolve(dirname(DEV_CATALOG_DB_PATH));
 // on first save (see `dev-server/map-api.ts`).
 const DEV_HOME_DIR = process.env.USERPROFILE ?? process.env.HOME ?? '.';
 const DEV_MAP_FILE_PATH = resolve(DEV_HOME_DIR, '.threemaker', 'maps', 'current.tmmap.json');
+const DEV_MAPS_DIR = resolve(DEV_HOME_DIR, '.threemaker', 'maps');
+const SAFE_STORY_ID = /^[A-Za-z0-9_-]+$/;
 
 // Mirrors apps/editor/src-tauri/src/catalog_ipc.rs's PAGE_SIZE (100) -- no
 // cross-language sharing needed for a single fixed constant; keep both in
@@ -210,6 +212,54 @@ function devMapApiPlugin(): Plugin {
             saveMapFile(DEV_MAP_FILE_PATH, body);
             res.statusCode = 204;
             res.end();
+          });
+          return;
+        }
+
+        // Ink sidecars next to the working map (L4 WU-02): GET/POST /ink?storyId=
+        if (segments.length === 1 && segments[0] === 'ink' && req.method === 'GET') {
+          const storyId = url.searchParams.get('storyId') ?? '';
+          if (!SAFE_STORY_ID.test(storyId)) {
+            res.statusCode = 400;
+            res.end('invalid storyId');
+            return;
+          }
+          const inkPath = resolve(DEV_MAPS_DIR, `current.${storyId}.ink`);
+          const text = loadInkFile(inkPath);
+          if (text === null) {
+            res.statusCode = 404;
+            res.end();
+            return;
+          }
+          res.setHeader('content-type', 'text/plain; charset=utf-8');
+          res.end(text);
+          return;
+        }
+
+        if (segments.length === 1 && segments[0] === 'ink' && req.method === 'POST') {
+          let body = '';
+          req.setEncoding('utf8');
+          req.on('data', (chunk: string) => {
+            body += chunk;
+          });
+          req.on('end', () => {
+            try {
+              const parsed = JSON.parse(body) as { storyId?: unknown; source?: unknown };
+              const storyId = typeof parsed.storyId === 'string' ? parsed.storyId : '';
+              const source = typeof parsed.source === 'string' ? parsed.source : null;
+              if (!SAFE_STORY_ID.test(storyId) || source === null) {
+                res.statusCode = 400;
+                res.end('invalid body');
+                return;
+              }
+              const inkPath = resolve(DEV_MAPS_DIR, `current.${storyId}.ink`);
+              saveInkFile(inkPath, source);
+              res.statusCode = 204;
+              res.end();
+            } catch {
+              res.statusCode = 400;
+              res.end('invalid json');
+            }
           });
           return;
         }

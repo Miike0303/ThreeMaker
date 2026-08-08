@@ -87,6 +87,9 @@ importers:
       '@threemaker/map-format':
         specifier: workspace:*
         version: link:../../packages/map-format
+      '@threemaker/narrative':
+        specifier: workspace:*
+        version: link:../../packages/narrative
       '@threemaker/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer

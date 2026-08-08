@@ -15,6 +15,7 @@
     "@threemaker/core": "workspace:*",
     "@threemaker/importer-rpgm": "workspace:*",
     "@threemaker/map-format": "workspace:*",
+    "@threemaker/narrative": "workspace:*",
     "@threemaker/renderer": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

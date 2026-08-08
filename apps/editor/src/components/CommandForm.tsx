@@ -206,9 +206,32 @@ function CommandFields({ t, path, command, onUpdate }: CommandFieldsProps) {
     case 'showDialogue': {
       const lines =
         command.source.kind === 'text' ? command.source.lines : ([] as readonly string[]);
+      const inkStoryId = command.source.kind === 'ink' ? command.source.storyId : '';
+      const inkKnot = command.source.kind === 'ink' ? (command.source.knot ?? '') : '';
       return (
         <div className="painter-events-fields">
           <p className="painter-events-hint">{t('painter.events.dialogueInkHint')}</p>
+          <label>
+            {t('painter.events.field.dialogueKind')}
+            <select
+              value={command.source.kind}
+              onChange={(e) => {
+                const kind = e.target.value;
+                if (kind === 'ink') {
+                  onUpdate(path, {
+                    source: { kind: 'ink', storyId: inkStoryId || 'story', knot: 'start' },
+                  });
+                } else {
+                  onUpdate(path, {
+                    source: { kind: 'text', lines: lines.length > 0 ? [...lines] : [''] },
+                  });
+                }
+              }}
+            >
+              <option value="text">{t('painter.events.dialogueKind.text')}</option>
+              <option value="ink">{t('painter.events.dialogueKind.ink')}</option>
+            </select>
+          </label>
           <label>
             {t('painter.events.field.speaker')}
             <input
@@ -220,18 +243,55 @@ function CommandFields({ t, path, command, onUpdate }: CommandFieldsProps) {
               }}
             />
           </label>
-          <label>
-            {t('painter.events.field.lines')}
-            <textarea
-              rows={Math.max(2, lines.length || 1)}
-              value={dialogueLinesToTextarea(lines)}
-              onChange={(e) =>
-                onUpdate(path, {
-                  source: { kind: 'text', lines: dialogueLinesFromTextarea(e.target.value) },
-                })
-              }
-            />
-          </label>
+          {command.source.kind === 'ink' ? (
+            <>
+              <label>
+                {t('painter.events.field.storyId')}
+                <input
+                  type="text"
+                  value={inkStoryId}
+                  onChange={(e) =>
+                    onUpdate(path, {
+                      source: {
+                        kind: 'ink',
+                        storyId: e.target.value,
+                        ...(inkKnot === '' ? {} : { knot: inkKnot }),
+                      },
+                    })
+                  }
+                />
+              </label>
+              <label>
+                {t('painter.events.field.knot')}
+                <input
+                  type="text"
+                  value={inkKnot}
+                  onChange={(e) => {
+                    const knot = e.target.value;
+                    onUpdate(path, {
+                      source:
+                        knot === ''
+                          ? { kind: 'ink', storyId: inkStoryId }
+                          : { kind: 'ink', storyId: inkStoryId, knot },
+                    });
+                  }}
+                />
+              </label>
+            </>
+          ) : (
+            <label>
+              {t('painter.events.field.lines')}
+              <textarea
+                rows={Math.max(2, lines.length || 1)}
+                value={dialogueLinesToTextarea(lines)}
+                onChange={(e) =>
+                  onUpdate(path, {
+                    source: { kind: 'text', lines: dialogueLinesFromTextarea(e.target.value) },
+                  })
+                }
+              />
+            </label>
+          )}
         </div>
       );
     }

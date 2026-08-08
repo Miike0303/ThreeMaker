@@ -37,6 +37,7 @@ import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
 import type { ToolId } from '../tool-sm.js';
 import { CommandList } from './CommandForm.js';
 import { GameTilesetPicker } from './GameTilesetPicker.js';
+import { InkPanel } from './InkPanel.js';
 import { TilePalette } from './TilePalette.js';
 
 export interface PainterPanelProps {
@@ -887,6 +888,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {mapReady && (
+        <InkPanel t={t} painterState={painterState ?? null} onStatus={setStatusMessage} />
       )}
 
       {mapReady && painterState && (
