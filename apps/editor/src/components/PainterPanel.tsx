@@ -11,7 +11,12 @@ import {
   listGames,
   objectPreviewUrl,
 } from '../catalog-client.js';
-import { loadCommunitySettings, maybeEnqueueCommunityShare } from '../community-settings.js';
+import {
+  type CommunitySettings,
+  loadCommunitySettings,
+  maybeEnqueueCommunityShare,
+  saveCommunitySettings,
+} from '../community-settings.js';
 import {
   canSavePainterDocument,
   defaultWorldSeedValue,
@@ -223,6 +228,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [inspectorTab, setInspectorTab] = useState<'map' | 'paint' | 'events' | 'ink' | 'entities'>(
     'paint',
   );
+  const [community, setCommunity] = useState<CommunitySettings>(() => loadCommunitySettings());
 
   useEffect(() => {
     listGames()
@@ -355,7 +361,6 @@ export function PainterPanel({ t }: PainterPanelProps) {
     try {
       await saveMapDocument(doc);
       // Community share is opt-out (default on); no network in v0 — enqueue only.
-      const community = loadCommunitySettings();
       const tileShas = Object.values(doc.tileset.slots)
         .map((slot) => slot?.object)
         .filter((sha): sha is string => typeof sha === 'string' && sha.length > 0);
@@ -376,7 +381,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       console.error('Failed to save the map:', err);
       setStatusMessage(t('painter.saveFailed'));
     }
-  }, [t]);
+  }, [t, community]);
 
   const handleGenerateDungeon = useCallback(async () => {
     const viewport = viewportRef.current;
@@ -1128,6 +1133,40 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       >
                         {t('painter.createMap')}
                       </button>
+                    </section>
+                    <section className="ide-section">
+                      <h3 className="ide-section-title">{t('painter.community')}</h3>
+                      <p className="ide-hint">{t('painter.community.hint')}</p>
+                      <label className="ide-check">
+                        <input
+                          type="checkbox"
+                          checked={community.shareOnSave}
+                          onChange={(event) => {
+                            const next = {
+                              ...community,
+                              shareOnSave: event.target.checked,
+                            };
+                            setCommunity(next);
+                            saveCommunitySettings(next);
+                          }}
+                        />
+                        {t('painter.community.shareOnSave')}
+                      </label>
+                      <label className="ide-check">
+                        <input
+                          type="checkbox"
+                          checked={community.allowImportedAssets}
+                          onChange={(event) => {
+                            const next = {
+                              ...community,
+                              allowImportedAssets: event.target.checked,
+                            };
+                            setCommunity(next);
+                            saveCommunitySettings(next);
+                          }}
+                        />
+                        {t('painter.community.allowImported')}
+                      </label>
                     </section>
                   </>
                 )}
