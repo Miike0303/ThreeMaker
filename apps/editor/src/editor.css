@@ -142,22 +142,42 @@ label {
 .app-header-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.app-header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.15;
   min-width: 0;
 }
 
 .app-header-brand h1 {
   margin: 0;
   font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.app-header-subtitle {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tm-text-faint);
 }
 
 .app-header-mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
-  background: linear-gradient(135deg, var(--tm-accent), #a78bfa);
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: linear-gradient(145deg, #8aa4ff 0%, var(--tm-accent) 45%, #a78bfa 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 2px 8px rgba(108, 140, 255, 0.25);
   flex: none;
 }
 

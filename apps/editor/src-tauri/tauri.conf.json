@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ThreeMaker Editor",
+  "productName": "Maker Studio",
   "version": "0.1.0",
   "identifier": "com.threemaker.editor",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "ThreeMaker Editor",
+        "title": "Maker Studio",
         "width": 1400,
         "height": 900
       }

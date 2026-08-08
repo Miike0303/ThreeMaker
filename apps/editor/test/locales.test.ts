@@ -10,6 +10,8 @@ import en from '../src/locales/en.json' with { type: 'json' };
 import es from '../src/locales/es.json' with { type: 'json' };
 
 const NEW_KEYS = [
+  'app.title',
+  'app.brand.subtitle',
   'app.workspace',
   'app.workspace.map',
   'app.workspace.assets',

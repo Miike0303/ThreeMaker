@@ -41,7 +41,10 @@ export function App({ i18n, localeStorageKey }: AppProps) {
       <header className="app-header">
         <div className="app-header-brand">
           <span className="app-header-mark" aria-hidden />
-          <h1>{t('app.title')}</h1>
+          <div className="app-header-titles">
+            <h1>{t('app.title')}</h1>
+            <span className="app-header-subtitle">{t('app.brand.subtitle')}</span>
+          </div>
         </div>
         <nav className="app-workspace-tabs" aria-label={t('app.workspace')}>
           <button
