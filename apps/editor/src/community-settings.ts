@@ -205,8 +205,47 @@ export function describeCommunityShareStatus(
 }
 
 /**
- * Build a share payload if settings allow. Returns null when the user opted out.
- * Network upload is intentionally not implemented here.
+ * Minimal slot shape for the imported-asset gate (matches map-format `SlotSource`
+ * without depending on that package from this settings module).
+ */
+export type SlotSourceLike = {
+  readonly object?: string;
+  readonly sourceTilesetId?: number;
+  readonly sourceGameId?: number;
+};
+
+export type SlotCompositionLike = Readonly<
+  Partial<Record<string, SlotSourceLike | null | undefined>>
+>;
+
+/**
+ * True when every non-empty tile slot looks catalog-sourced (has
+ * `sourceGameId` and/or `sourceTilesetId`) and at least one such slot exists.
+ *
+ * Maker Studio v0 treats catalog-sourced slots as `import-rpgm` provenance for
+ * the community gate (DESIGN hard rule). User-authored sheets that only carry
+ * an `object` hash (no source ids) are not "imported". Empty maps → false.
+ */
+export function usesOnlyImportedSlotSources(slots: SlotCompositionLike): boolean {
+  const filled: SlotSourceLike[] = [];
+  for (const source of Object.values(slots)) {
+    if (source == null || typeof source !== 'object') continue;
+    if (typeof source.object === 'string' && source.object.length > 0) {
+      filled.push(source);
+    }
+  }
+  if (filled.length === 0) return false;
+  return filled.every(
+    (source) =>
+      (typeof source.sourceGameId === 'number' && Number.isFinite(source.sourceGameId)) ||
+      (typeof source.sourceTilesetId === 'number' && Number.isFinite(source.sourceTilesetId)),
+  );
+}
+
+/**
+ * Build a share payload if settings allow. Returns null when the user opted out
+ * or the imported-asset gate blocks the map. Network upload is intentionally
+ * not implemented here.
  */
 export function maybeEnqueueCommunityShare(
   settings: CommunitySettings,

@@ -120,6 +120,7 @@ Maker Studio shell
 - WU-COMM-05 offline share queue empty state + push replaces same `mapId` (one newest job per map)
 - WU-LIGHT-08 soft-clamp light brush intensity/range/height (`clampLight*` via `clampRange`; UI max attrs)
 - WU-UTIL-04 `addStairLink` / `setPendingStairEntry` clamp OOB tiles + no-op on unknown floor ids
+- WU-COMM-06 `usesOnlyImportedSlotSources` (catalog provenance on slots) wires save gate + blocked status toast
 
 ## PR Plan
 

@@ -25,6 +25,7 @@ import {
   replaceCommunityShareQueue,
   saveCommunitySettings,
   serializeCommunityShareQueue,
+  usesOnlyImportedSlotSources,
 } from '../community-settings.js';
 import {
   canSavePainterDocument,
@@ -470,17 +471,19 @@ export function PainterPanel({ t }: PainterPanelProps) {
       const tileShas = Object.values(doc.tileset.slots)
         .map((slot) => slot?.object)
         .filter((sha): sha is string => typeof sha === 'string' && sha.length > 0);
+      const onlyImported = usesOnlyImportedSlotSources(doc.tileset.slots);
       const enqueue = maybeEnqueueCommunityShare(community, {
         mapId: doc.id,
         mapName: doc.name,
         tileObjectShas: tileShas,
-        // Until provenance is on slots, treat non-empty catalog slots as possibly imported.
-        usesOnlyImportedAssets: false,
+        usesOnlyImportedAssets: onlyImported,
       });
       if (enqueue) {
         console.info('[Maker Studio] community share queued (offline stub)', enqueue);
         setCommunityQueue(pushCommunityShareQueue(enqueue));
         setStatusMessage(t('painter.saveSuccessShareQueued'));
+      } else if (community.shareOnSave && onlyImported && !community.allowImportedAssets) {
+        setStatusMessage(t('painter.saveSuccessShareBlockedImported'));
       } else {
         setStatusMessage(t('painter.saveSuccess'));
       }

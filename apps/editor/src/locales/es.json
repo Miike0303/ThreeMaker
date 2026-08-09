@@ -69,6 +69,7 @@
     "painter.save": "Guardar",
     "painter.saveSuccess": "Mapa guardado.",
     "painter.saveSuccessShareQueued": "Mapa guardado · share a comunidad en cola (offline hasta el servidor).",
+    "painter.saveSuccessShareBlockedImported": "Mapa guardado · share omitido (el mapa solo usa tiles de catálogo/importados; activá “Permitir share de mapas con assets importados de RPGM”).",
     "painter.saveFailed": "No se pudo guardar el mapa — ver la consola para más detalles.",
     "painter.procgen": "Procgen",
     "painter.procgen.hint": "Pincel = suelo. Pared/puerta: id, desde pincel o Auto. Misma seed + preset = mismo layout. Spawn en la sala mayor; conserva eventos/NPCs.",

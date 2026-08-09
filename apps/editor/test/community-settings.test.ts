@@ -13,6 +13,7 @@ import {
   replaceCommunityShareQueue,
   saveCommunitySettings,
   serializeCommunityShareQueue,
+  usesOnlyImportedSlotSources,
   type CommunityShareEnqueue,
 } from '../src/community-settings.js';
 
@@ -82,6 +83,35 @@ describe('community-settings', () => {
         { ...base, usesOnlyImportedAssets: true },
       ),
     ).not.toBeNull();
+  });
+});
+
+describe('usesOnlyImportedSlotSources (WU-COMM-06)', () => {
+  const SHA = 'a'.repeat(64);
+
+  it('is false for empty maps and object-only (user) slots', () => {
+    expect(usesOnlyImportedSlotSources({})).toBe(false);
+    expect(usesOnlyImportedSlotSources({ A: {} })).toBe(false);
+    expect(usesOnlyImportedSlotSources({ A: { object: SHA } })).toBe(false);
+  });
+
+  it('is true when every filled slot has catalog provenance ids', () => {
+    expect(
+      usesOnlyImportedSlotSources({
+        A: { object: SHA, sourceGameId: 1, sourceTilesetId: 10 },
+        B: { object: 'b'.repeat(64), sourceTilesetId: 11 },
+        C: {},
+      }),
+    ).toBe(true);
+  });
+
+  it('is false when any filled slot lacks provenance (mixed catalog + user)', () => {
+    expect(
+      usesOnlyImportedSlotSources({
+        A: { object: SHA, sourceGameId: 1 },
+        B: { object: 'b'.repeat(64) },
+      }),
+    ).toBe(false);
   });
 });
 

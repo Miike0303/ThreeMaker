@@ -35,6 +35,7 @@ const NEW_KEYS = [
   'painter.layer.wall',
   'painter.layer.over',
   'painter.saveSuccessShareQueued',
+  'painter.saveSuccessShareBlockedImported',
   'painter.procgen',
   'painter.procgen.hint',
   'painter.procgen.generate',
