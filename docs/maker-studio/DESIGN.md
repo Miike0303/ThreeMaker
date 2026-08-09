@@ -103,6 +103,7 @@ Maker Studio shell
 - WU-PROC-10 sparse room furniture on mid (`scatterFurnitureInRooms`); resolve furniture-class tiles; apply tags furniture vs door
 - WU-PROC-11 auto-bump seed after Generate (`nextProcgenSeed`); furniture density slider
 - WU-PROC-12 furniture tile override (id/brush/auto) + palette role Furniture
+- WU-PROC-13 recent seed history (`pushProcgenSeedHistory`) for one-click replay
 
 ## PR Plan
 

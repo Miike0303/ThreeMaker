@@ -5,6 +5,8 @@ import {
   furnitureDensityFromPercent,
   furnitureDensityToPercent,
   nextProcgenSeed,
+  PROCGEN_SEED_HISTORY_MAX,
+  pushProcgenSeedHistory,
   randomProcgenSeed,
 } from '../src/procgen/seed.js';
 
@@ -41,5 +43,29 @@ describe('furniture density percent round-trip', () => {
     expect(furnitureDensityFromPercent(100)).toBe(1);
     expect(furnitureDensityToPercent(0.06)).toBe(6);
     expect(furnitureDensityToPercent(0.5)).toBe(50);
+  });
+});
+
+describe('pushProcgenSeedHistory', () => {
+  it('prepends newest and caps length', () => {
+    let h: readonly number[] = [];
+    h = pushProcgenSeedHistory(h, 1);
+    h = pushProcgenSeedHistory(h, 2);
+    h = pushProcgenSeedHistory(h, 3);
+    expect(h).toEqual([3, 2, 1]);
+    for (let i = 4; i < 4 + PROCGEN_SEED_HISTORY_MAX; i++) {
+      h = pushProcgenSeedHistory(h, i);
+    }
+    expect(h).toHaveLength(PROCGEN_SEED_HISTORY_MAX);
+    expect(h[0]).toBe(3 + PROCGEN_SEED_HISTORY_MAX);
+  });
+
+  it('moves duplicate seed to front without doubling', () => {
+    const h = pushProcgenSeedHistory([10, 20, 30], 20);
+    expect(h).toEqual([20, 10, 30]);
+  });
+
+  it('coerces seeds to uint32', () => {
+    expect(pushProcgenSeedHistory([], -1)).toEqual([0xffffffff]);
   });
 });

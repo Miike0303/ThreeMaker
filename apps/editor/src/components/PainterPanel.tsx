@@ -85,6 +85,7 @@ import {
   furnitureDensityFromPercent,
   furnitureDensityToPercent,
   nextProcgenSeed,
+  pushProcgenSeedHistory,
   randomProcgenSeed,
 } from '../procgen/seed.js';
 import { resolveDungeonTileIds } from '../procgen/tile-pick.js';
@@ -265,6 +266,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   );
   /** Procgen seed (uint32). Editable; randomize button rolls a new one. */
   const [procgenSeed, setProcgenSeed] = useState(() => (Date.now() >>> 0) % 1_000_000_000);
+  /** Newest-first seeds that produced a stamp (replay via click). */
+  const [procgenSeedHistory, setProcgenSeedHistory] = useState<readonly number[]>([]);
   const [procgenPreset, setProcgenPreset] = useState<ProcgenPresetId>(DEFAULT_PROCGEN_PRESET);
   /** 0 = auto (layer majority / fallback); else explicit wall tile id. */
   const [procgenWallTileId, setProcgenWallTileId] = useState(0);
@@ -523,7 +526,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
       const floor0Id = stamped.floors[0]?.id;
       const mainRoomId = pickMainRoomId(roomsOnFloor(stamped.rooms, floor0Id));
       viewport.setActiveRoomId(mainRoomId);
-      // Bump seed so the next Generate is a new layout without hitting Rnd.
+      // Remember used seed for replay; bump so the next Generate is new without Rnd.
+      setProcgenSeedHistory((prev) => pushProcgenSeedHistory(prev, seed));
       setProcgenSeed(nextProcgenSeed(seed));
       setStatusMessage(
         formatTemplate(t('painter.procgen.success'), {
@@ -1398,6 +1402,28 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           {t('painter.procgen.randomizeSeed')}
                         </button>
                       </div>
+                      {procgenSeedHistory.length > 0 && (
+                        <div className="ide-row ide-seed-history" role="group" aria-label={t('painter.procgen.seedHistory')}>
+                          <span className="ide-hint">{t('painter.procgen.seedHistory')}:</span>
+                          {procgenSeedHistory.map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              className={
+                                procgenSeed === s
+                                  ? 'ide-seed-history-btn ide-seed-history-btn-active'
+                                  : 'ide-seed-history-btn'
+                              }
+                              title={formatTemplate(t('painter.procgen.seedHistoryUse'), {
+                                seed: s,
+                              })}
+                              onClick={() => setProcgenSeed(s >>> 0)}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <label>
                         {t('painter.procgen.furnitureDensity')}
                         <input

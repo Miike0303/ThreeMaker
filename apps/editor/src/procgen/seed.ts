@@ -5,6 +5,9 @@
 /** Default sparse furniture density (matches stampSimpleDungeon default). */
 export const DEFAULT_FURNITURE_DENSITY = 0.06;
 
+/** Max recent Generate seeds kept for one-click replay (newest first). */
+export const PROCGEN_SEED_HISTORY_MAX = 8;
+
 /**
  * Advance seed after a successful Generate so the next click yields a new layout.
  * Wraps uint32.
@@ -42,4 +45,19 @@ export function furnitureDensityFromPercent(percent: number): number {
 /** Density 0–1 → rounded UI percent 0–100. */
 export function furnitureDensityToPercent(density: number): number {
   return Math.round(clampFurnitureDensity(density) * 100);
+}
+
+/**
+ * Prepend a used Generate seed to history (newest first).
+ * Dedupes exact seed (moves to front), coerces uint32, caps at max.
+ */
+export function pushProcgenSeedHistory(
+  history: readonly number[],
+  seed: number,
+  max: number = PROCGEN_SEED_HISTORY_MAX,
+): readonly number[] {
+  const s = seed >>> 0;
+  const cap = Math.max(1, Math.floor(max));
+  const rest = history.filter((h) => (h >>> 0) !== s).map((h) => h >>> 0);
+  return [s, ...rest].slice(0, cap);
 }

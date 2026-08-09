@@ -80,6 +80,8 @@
     "painter.procgen.seed": "Seed",
     "painter.procgen.randomizeSeed": "Randomize seed",
     "painter.procgen.randomizeSeedShort": "Rnd",
+    "painter.procgen.seedHistory": "Recent seeds",
+    "painter.procgen.seedHistoryUse": "Set seed to {seed} (re-Generate to replay)",
     "painter.procgen.furnitureDensity": "Furniture density",
     "painter.procgen.furnitureDensityValue": "{percent}%",
     "painter.procgen.furnitureDensityHint": "Needs a furniture-class tile in semantics (mid layer).",

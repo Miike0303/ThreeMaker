@@ -45,6 +45,8 @@ const NEW_KEYS = [
   'painter.procgen.seed',
   'painter.procgen.randomizeSeed',
   'painter.procgen.randomizeSeedShort',
+  'painter.procgen.seedHistory',
+  'painter.procgen.seedHistoryUse',
   'painter.procgen.furnitureDensity',
   'painter.procgen.furnitureDensityValue',
   'painter.procgen.furnitureDensityHint',

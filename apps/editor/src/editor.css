@@ -667,6 +667,23 @@ label {
   min-width: 0;
 }
 
+.ide-seed-history {
+  align-items: center;
+  gap: 4px;
+}
+
+.ide-seed-history-btn {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+}
+
+.ide-seed-history-btn-active {
+  border-color: var(--tm-accent);
+  background: var(--tm-accent-soft);
+  color: var(--tm-text);
+}
+
 .ide-list {
   list-style: none;
   margin: 0;
