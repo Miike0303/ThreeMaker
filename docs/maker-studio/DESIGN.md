@@ -113,6 +113,7 @@ Maker Studio shell
 - WU-PROC-15 preset roomLight mood (dungeon amber / house warm white / cave cool) wired into Generate
 - WU-PROC-16 Generate ensures player torch (`placePlayerTorch` / `ensurePlayerTorch`); full editor vitest 721 pass
 - WU-LIGHT-06 prune lights attached to missing NPCs on removeNpc/undo/redo (`pruneLightsForNpcs`)
+- WU-LIGHT-07 compose also prunes dangling NPC-attached lights before save/export
 
 ## PR Plan
 

@@ -294,4 +294,45 @@ describe('composeDocumentFromPainterFloors: placed lights (WU-LIGHT-01)', () => 
     ({ state } = undoLight(state));
     expect(state.lights).toEqual([]);
   });
+
+  it('compose prunes lights attached to missing NPCs (WU-LIGHT-07)', () => {
+    const blank = createBlankMapDocument(BLANK_OPTIONS);
+    const doc: MapDocument = {
+      ...blank,
+      lights: [
+        {
+          id: 'orphan',
+          kind: 'point',
+          color: '#00ff00',
+          intensity: 1,
+          range: 2,
+          attach: 'npc-gone',
+        },
+        {
+          id: 'ok',
+          kind: 'point',
+          color: '#ff8800',
+          intensity: 1,
+          range: 3,
+          attach: 'player',
+        },
+        {
+          id: 'placed',
+          kind: 'point',
+          color: '#ffaa00',
+          intensity: 1,
+          range: 4,
+          x: 1,
+          y: 1,
+          floor: 'floor-0',
+        },
+      ],
+    };
+    const composed = composeDocumentFromPainterFloors(
+      doc,
+      painterFloorsFromDocument(doc),
+    );
+    const reparsed = parseMapDocument(JSON.parse(serializeMapDocument(composed)));
+    expect(reparsed.lights.map((l) => l.id).sort()).toEqual(['ok', 'placed']);
+  });
 });

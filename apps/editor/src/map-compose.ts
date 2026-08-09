@@ -29,6 +29,7 @@ import type {
   TriggerDocument,
 } from '@threemaker/map-format';
 import { CURRENT_MAP_FORMAT_VERSION, MAP_FORMAT_MAGIC } from '@threemaker/map-format';
+import { pruneLightsForNpcs } from './entity-lists.js';
 
 /**
  * RPGM tile-id range `[start, end)` per sheet slot -- duplicates
@@ -316,9 +317,12 @@ export function composeDocumentFromPainterFloors(
   // filter so a deleted floor cannot leave a dangling prop.floor behind.
   const composedProps = props.filter((prop) => floorIds.has(prop.floor));
   // Schema v6: placed lights are floor-scoped; attached lights have no floor.
-  const composedLights = lights.filter(
+  // Also drop attach targets that are not player and not in composedNpcs
+  // (safety net if store prune was skipped — save must not emit invalid docs).
+  const floorScopedLights = lights.filter(
     (light) => light.floor === undefined || floorIds.has(light.floor),
   );
+  const composedLights = pruneLightsForNpcs(floorScopedLights, composedNpcs);
 
   const { spawn: _originalSpawn, ...docWithoutSpawn } = doc;
   const base = {
