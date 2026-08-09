@@ -230,6 +230,27 @@ export type CommunityShareStatus = {
 };
 
 /**
+ * Format an offline queue `at` ISO timestamp for list rows (WU-COMM-09).
+ * Invalid / non-date input returns the original string unchanged.
+ * `locale` is optional BCP 47 (e.g. `en`, `es`); omit for runtime default.
+ */
+export function formatCommunityShareAt(at: string, locale?: string): string {
+  const ms = Date.parse(at);
+  if (!Number.isFinite(ms)) return at;
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(ms));
+  } catch {
+    return at;
+  }
+}
+
+/**
  * Pure inspector status for the community section (no I/O).
  * `queue` is newest-first; lastMapName is the newest job when present.
  */

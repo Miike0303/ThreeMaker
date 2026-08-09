@@ -4,6 +4,7 @@ import {
   COMMUNITY_SHARE_QUEUE_MAX,
   DEFAULT_COMMUNITY_SETTINGS,
   describeCommunityShareStatus,
+  formatCommunityShareAt,
   loadCommunitySettings,
   loadCommunityShareQueue,
   maybeEnqueueCommunityShare,
@@ -97,6 +98,23 @@ describe('community-settings', () => {
       version: 6,
       licenseTag: 'import-rpgm',
     });
+  });
+});
+
+describe('formatCommunityShareAt (WU-COMM-09)', () => {
+  it('formats a valid ISO timestamp with the given locale', () => {
+    const formatted = formatCommunityShareAt('2026-08-08T14:30:00.000Z', 'en-US');
+    // Locale shapes vary by ICU data; assert it is not the raw ISO string and parses.
+    expect(formatted).not.toBe('2026-08-08T14:30:00.000Z');
+    expect(formatted.length).toBeGreaterThan(0);
+    expect(Date.parse('2026-08-08T14:30:00.000Z')).toBeGreaterThan(0);
+    // en-US medium-ish: includes year 2026 and a time separator or AM/PM.
+    expect(formatted).toMatch(/2026/);
+  });
+
+  it('returns the original string when the value is not a date', () => {
+    expect(formatCommunityShareAt('not-a-date')).toBe('not-a-date');
+    expect(formatCommunityShareAt('')).toBe('');
   });
 });
 

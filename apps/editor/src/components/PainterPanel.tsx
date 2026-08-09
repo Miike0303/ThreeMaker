@@ -16,6 +16,7 @@ import {
   type CommunitySettings,
   type CommunityShareEnqueue,
   describeCommunityShareStatus,
+  formatCommunityShareAt,
   loadCommunitySettings,
   loadCommunityShareQueue,
   maybeEnqueueCommunityShare,
@@ -1688,7 +1689,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   name: job.mapName,
                                   version: String(job.version),
                                   license: t(`painter.community.license.${job.licenseTag}`),
-                                  at: job.at,
+                                  at: formatCommunityShareAt(job.at),
                                 })}
                               </span>
                               <button
