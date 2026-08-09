@@ -99,6 +99,7 @@ Maker Studio shell
 - WU-UX-07 NPC/trigger floor lists + empty states; click row reuses placement brush (list-place)
 - WU-OBJ-02 placed prop row reuses object brush (`propPlacementFromDocument`); prop empty state parity
 - WU-COMM-03 offline queue list + remove job + copy JSON (`removeCommunityShareQueueJob`)
+- WU-COMM-04 paste/import queue JSON (`parseCommunityShareQueueJson` + `replaceCommunityShareQueue`)
 
 ## PR Plan
 

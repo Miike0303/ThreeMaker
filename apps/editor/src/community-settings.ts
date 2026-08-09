@@ -133,6 +133,47 @@ export function serializeCommunityShareQueue(queue: readonly CommunityShareEnque
   return JSON.stringify(queue, null, 2);
 }
 
+export type ParseCommunityShareQueueResult =
+  | { readonly ok: true; readonly jobs: readonly CommunityShareEnqueue[] }
+  | {
+      readonly ok: false;
+      readonly reason: 'invalid-json' | 'not-array' | 'no-valid-jobs';
+    };
+
+/**
+ * Pure: parse a previously exported (or hand-edited) queue JSON.
+ * Keeps only well-shaped jobs, newest-first order preserved, capped at max.
+ */
+export function parseCommunityShareQueueJson(raw: string): ParseCommunityShareQueueResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false, reason: 'invalid-json' };
+  }
+  if (!Array.isArray(parsed)) {
+    return { ok: false, reason: 'not-array' };
+  }
+  const jobs = parsed.filter(isShareEnqueue).slice(0, COMMUNITY_SHARE_QUEUE_MAX);
+  if (jobs.length === 0) {
+    return { ok: false, reason: 'no-valid-jobs' };
+  }
+  return { ok: true, jobs };
+}
+
+/**
+ * Replace the entire offline queue with `jobs` (already validated/capped preferred).
+ * Persists and returns the stored queue (re-filtered + capped for safety).
+ */
+export function replaceCommunityShareQueue(
+  jobs: readonly CommunityShareEnqueue[],
+  storage: Pick<Storage, 'setItem'> = globalThis.localStorage,
+): readonly CommunityShareEnqueue[] {
+  const next = jobs.filter(isShareEnqueue).slice(0, COMMUNITY_SHARE_QUEUE_MAX);
+  storage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
 export type CommunityShareStatus = {
   readonly kind: 'off' | 'ready' | 'queued';
   readonly queueLength: number;

@@ -7,8 +7,10 @@ import {
   loadCommunitySettings,
   loadCommunityShareQueue,
   maybeEnqueueCommunityShare,
+  parseCommunityShareQueueJson,
   pushCommunityShareQueue,
   removeCommunityShareQueueJob,
+  replaceCommunityShareQueue,
   saveCommunitySettings,
   serializeCommunityShareQueue,
   type CommunityShareEnqueue,
@@ -146,6 +148,43 @@ describe('community share offline queue', () => {
     const raw = serializeCommunityShareQueue(jobs);
     expect(JSON.parse(raw)).toEqual(jobs);
     expect(raw).toContain('\n');
+  });
+
+  it('parseCommunityShareQueueJson accepts export and rejects bad input', () => {
+    const jobs = [sampleJob('z'), sampleJob('y')];
+    expect(parseCommunityShareQueueJson(serializeCommunityShareQueue(jobs))).toEqual({
+      ok: true,
+      jobs,
+    });
+    expect(parseCommunityShareQueueJson('not-json')).toEqual({
+      ok: false,
+      reason: 'invalid-json',
+    });
+    expect(parseCommunityShareQueueJson('{"mapId":"x"}')).toEqual({
+      ok: false,
+      reason: 'not-array',
+    });
+    expect(parseCommunityShareQueueJson('[{"mapId":1}]')).toEqual({
+      ok: false,
+      reason: 'no-valid-jobs',
+    });
+    // Strips invalid entries, keeps valid ones
+    expect(
+      parseCommunityShareQueueJson(
+        JSON.stringify([sampleJob('ok'), { mapId: 1 }, sampleJob('two')]),
+      ),
+    ).toEqual({ ok: true, jobs: [sampleJob('ok'), sampleJob('two')] });
+  });
+
+  it('replaceCommunityShareQueue overwrites storage with filtered jobs', () => {
+    const storage = memoryStorage();
+    pushCommunityShareQueue(sampleJob('old'), storage);
+    const next = replaceCommunityShareQueue(
+      [sampleJob('a'), sampleJob('b'), { mapId: 1 } as unknown as CommunityShareEnqueue],
+      storage,
+    );
+    expect(next.map((j) => j.mapId)).toEqual(['a', 'b']);
+    expect(loadCommunityShareQueue(storage).map((j) => j.mapId)).toEqual(['a', 'b']);
   });
 });
 
