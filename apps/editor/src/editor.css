@@ -522,6 +522,39 @@ label {
   width: 100%;
 }
 
+.ide-palette-roles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.ide-palette-roles-label {
+  font-size: 11px;
+  color: var(--tm-text-faint);
+  margin-right: 4px;
+}
+
+.ide-palette-role {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--tm-border-strong);
+  background: var(--tm-bg-2);
+  color: var(--tm-text-dim);
+}
+
+.ide-palette-role-active {
+  border-color: var(--tm-accent);
+  background: var(--tm-accent-soft);
+  color: var(--tm-text);
+}
+
+.ide-palette-role-hint {
+  margin: 0 0 8px;
+}
+
 .ide-palette-dock {
   flex: none;
   max-height: 160px;

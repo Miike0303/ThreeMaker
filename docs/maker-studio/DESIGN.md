@@ -90,6 +90,7 @@ Maker Studio shell
 - WU-PROC-07 door tile picker (id / brush / auto) + success status shows door count
 - WU-UX-03 empty states (no map / no events) + focus rings; community offline queue + status badge
 - WU-COMM-02 clear offline share queue; procgen pipeline regression test (stamp→apply spawn/doors/semantics)
+- WU-PROC-08 palette dock roles brush/wall/door — click catalog swatch sets fill or procgen overrides
 
 ## PR Plan
 

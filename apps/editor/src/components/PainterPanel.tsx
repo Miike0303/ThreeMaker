@@ -47,6 +47,12 @@ import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
 import { applyDungeonStampToMapDocument } from '../procgen/apply-stamp.js';
 import { stampSimpleDungeon } from '../procgen/dungeon-stamp.js';
 import {
+  assignmentFromPaletteClick,
+  PROCGEN_PALETTE_ROLES,
+  type ProcgenPaletteRole,
+  selectedTileIdForRole,
+} from '../procgen/palette-role.js';
+import {
   DEFAULT_PROCGEN_PRESET,
   getProcgenPreset,
   PROCGEN_PRESETS,
@@ -251,6 +257,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [procgenWallTileId, setProcgenWallTileId] = useState(0);
   /** 0 = auto (door-class semantics); else explicit mid-layer door tile id. */
   const [procgenDoorTileId, setProcgenDoorTileId] = useState(0);
+  /** Palette dock: click assigns brush fill, wall override, or door override. */
+  const [paletteRole, setPaletteRole] = useState<ProcgenPaletteRole>('brush');
 
   const communityStatus = useMemo(
     () => describeCommunityShareStatus(community, communityQueue),
@@ -941,6 +949,28 @@ export function PainterPanel({ t }: PainterPanelProps) {
 
           {mapReady && painterState && paletteSlots.length > 0 && (
             <section className="ide-palette-dock" aria-label={t('painter.paletteDock')}>
+              <div className="ide-palette-roles" role="radiogroup" aria-label={t('painter.palette.role')}>
+                <span className="ide-palette-roles-label">{t('painter.palette.role')}</span>
+                {PROCGEN_PALETTE_ROLES.map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    role="radio"
+                    aria-checked={paletteRole === role}
+                    className={
+                      paletteRole === role
+                        ? 'ide-palette-role ide-palette-role-active'
+                        : 'ide-palette-role'
+                    }
+                    onClick={() => setPaletteRole(role)}
+                  >
+                    {t(`painter.palette.role.${role}`)}
+                  </button>
+                ))}
+              </div>
+              <p className="ide-hint ide-palette-role-hint">
+                {t(`painter.palette.role.${paletteRole}.hint`)}
+              </p>
               {paletteSlots.map((paletteSlot) => (
                 <TilePalette
                   key={paletteSlot.slot}
@@ -949,8 +979,23 @@ export function PainterPanel({ t }: PainterPanelProps) {
                   imageUrl={paletteSlot.imageUrl}
                   pixelSize={paletteSlot.pixelSize}
                   tilePixelSize={paletteSlot.tilePixelSize}
-                  selectedTileId={painterState.fillTileId}
-                  onSelect={(tileId) => viewportRef.current?.setFillTileId(tileId)}
+                  selectedTileId={selectedTileIdForRole(paletteRole, {
+                    fillTileId: painterState.fillTileId,
+                    wallOverride: procgenWallTileId,
+                    doorOverride: procgenDoorTileId,
+                  })}
+                  onSelect={(tileId) => {
+                    const assignment = assignmentFromPaletteClick(paletteRole, tileId);
+                    if (assignment.setFill !== undefined) {
+                      viewportRef.current?.setFillTileId(assignment.setFill);
+                    }
+                    if (assignment.setWallOverride !== undefined) {
+                      setProcgenWallTileId(assignment.setWallOverride);
+                    }
+                    if (assignment.setDoorOverride !== undefined) {
+                      setProcgenDoorTileId(assignment.setDoorOverride);
+                    }
+                  }}
                   tileAriaLabel={(tileId) =>
                     formatTemplate(t('painter.paletteTile'), { id: tileId })
                   }
