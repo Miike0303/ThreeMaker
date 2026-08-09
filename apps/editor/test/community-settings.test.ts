@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clearCommunityShareQueue,
   COMMUNITY_SHARE_QUEUE_MAX,
   DEFAULT_COMMUNITY_SETTINGS,
   describeCommunityShareStatus,
@@ -103,6 +104,15 @@ describe('community share offline queue', () => {
 
   it('ignores corrupt queue storage', () => {
     const storage = memoryStorage({ 'threemaker-maker-studio:community-queue': 'not-json' });
+    expect(loadCommunityShareQueue(storage)).toEqual([]);
+  });
+
+  it('clearCommunityShareQueue empties storage and returns []', () => {
+    const storage = memoryStorage();
+    pushCommunityShareQueue(sampleJob('a'), storage);
+    pushCommunityShareQueue(sampleJob('b'), storage);
+    expect(loadCommunityShareQueue(storage)).toHaveLength(2);
+    expect(clearCommunityShareQueue(storage)).toEqual([]);
     expect(loadCommunityShareQueue(storage)).toEqual([]);
   });
 });

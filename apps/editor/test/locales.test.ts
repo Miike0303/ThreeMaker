@@ -69,6 +69,8 @@ const NEW_KEYS = [
   'painter.community.statusOff',
   'painter.community.statusReady',
   'painter.community.statusQueued',
+  'painter.community.clearQueue',
+  'painter.community.queueCleared',
   'painter.empty.noMapTitle',
   'painter.empty.noMapBody',
   'painter.events.emptyTitle',

@@ -91,6 +91,8 @@
     "painter.community.statusOff": "Sharing off — saves stay local only.",
     "painter.community.statusReady": "Sharing on — next save will queue offline.",
     "painter.community.statusQueued": "Offline queue: {count} · last “{name}”",
+    "painter.community.clearQueue": "Clear offline queue",
+    "painter.community.queueCleared": "Community offline queue cleared.",
     "painter.empty.noMapTitle": "No map open",
     "painter.empty.noMapBody": "Create or load a map to paint, generate dungeons, and author events.",
     "painter.events.emptyTitle": "No events yet",

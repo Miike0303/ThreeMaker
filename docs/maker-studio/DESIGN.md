@@ -89,6 +89,7 @@ Maker Studio shell
 - WU-PROC-06 door openings at room edges; optional mid door tile from door-class semantics + `semantics.class=door`
 - WU-PROC-07 door tile picker (id / brush / auto) + success status shows door count
 - WU-UX-03 empty states (no map / no events) + focus rings; community offline queue + status badge
+- WU-COMM-02 clear offline share queue; procgen pipeline regression test (stamp→apply spawn/doors/semantics)
 
 ## PR Plan
 

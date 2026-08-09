@@ -12,6 +12,7 @@ import {
   objectPreviewUrl,
 } from '../catalog-client.js';
 import {
+  clearCommunityShareQueue,
   type CommunitySettings,
   type CommunityShareEnqueue,
   describeCommunityShareStatus,
@@ -1373,6 +1374,19 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                 name: communityStatus.lastMapName ?? '',
                               })}
                       </p>
+                      {communityQueue.length > 0 && (
+                        <div className="ide-row">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCommunityQueue(clearCommunityShareQueue());
+                              setStatusMessage(t('painter.community.queueCleared'));
+                            }}
+                          >
+                            {t('painter.community.clearQueue')}
+                          </button>
+                        </div>
+                      )}
                       <label className="ide-check">
                         <input
                           type="checkbox"

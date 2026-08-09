@@ -99,6 +99,18 @@ export function pushCommunityShareQueue(
   return next;
 }
 
+/** Drop every offline share job (user "Clear queue" action). */
+export function clearCommunityShareQueue(
+  storage: Pick<Storage, 'setItem'> & Partial<Pick<Storage, 'removeItem'>> = globalThis.localStorage,
+): readonly CommunityShareEnqueue[] {
+  if (typeof storage.removeItem === 'function') {
+    storage.removeItem(QUEUE_STORAGE_KEY);
+  } else {
+    storage.setItem(QUEUE_STORAGE_KEY, '[]');
+  }
+  return [];
+}
+
 export type CommunityShareStatus = {
   readonly kind: 'off' | 'ready' | 'queued';
   readonly queueLength: number;

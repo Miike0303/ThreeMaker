@@ -91,6 +91,8 @@
     "painter.community.statusOff": "Share apagado — los guardados quedan solo locales.",
     "painter.community.statusReady": "Share activo — el próximo guardado se encola offline.",
     "painter.community.statusQueued": "Cola offline: {count} · último “{name}”",
+    "painter.community.clearQueue": "Vaciar cola offline",
+    "painter.community.queueCleared": "Cola offline de comunidad vaciada.",
     "painter.empty.noMapTitle": "Sin mapa abierto",
     "painter.empty.noMapBody": "Creá o cargá un mapa para pintar, generar mazmorras y autorar eventos.",
     "painter.events.emptyTitle": "Sin eventos todavía",
