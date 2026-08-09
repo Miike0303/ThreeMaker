@@ -65,11 +65,11 @@
  * remove/re-add is the undo). Path addressing for nested commands uses a
  * flat tagged `CommandPath` (see type doc below).
  *
- * Light authoring (schema v6 WU-LIGHT-01): `PainterState.lights` mirrors
- * `MapDocument.lights` exactly (flat, top-level). Place/remove only for the
- * placed form (x/y/floor); attached lights stay JSON-side this WU.
+ * Light authoring (schema v6 WU-LIGHT-01/04): `PainterState.lights` mirrors
+ * `MapDocument.lights` exactly (flat, top-level). Place/remove for the placed
+ * form (x/y/floor); `placeAttachedLight` for attach=player|npcId.
  * Deliberately NO per-floor command-stack undo v1 (remove is the undo),
- * same stair-link/spawn precedent — undo stack can land with overlay WU.
+ * same stair-link/spawn precedent.
  */
 
 import type { EventCommand } from '@threemaker/core';
@@ -1608,7 +1608,7 @@ function upsertLight(
 /**
  * Places a point/spot light on the ACTIVE floor at `point` using the active
  * light brush and the next free `light-N` id. Lights MAY share a tile (schema).
- * No-ops mid-stroke. Attached form is not authored here.
+ * No-ops mid-stroke. Attached form uses `placeAttachedLight`.
  */
 export function placeLight(
   state: PainterState,
@@ -1645,14 +1645,51 @@ export function placeLightAtTile(
 }
 
 /**
- * Removes light `id` when it is a placed light on the ACTIVE floor.
- * Attached lights and other floors are a safe no-op. Ignored mid-stroke.
+ * Authors an attached light (`attach` only — no x/y/floor/height) using the
+ * active brush. `attach` must be `'player'` or an existing NPC id on this map.
+ * No-ops mid-stroke or on an invalid target.
+ */
+export function placeAttachedLight(state: PainterState, attach: string): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const target = attach.trim();
+  if (target.length === 0) return state;
+  if (target !== 'player' && !state.npcs.some((npc) => npc.id === target)) return state;
+
+  const id = nextLightId(state.lights);
+  const light: LightDocument = {
+    id,
+    kind: state.activeLightKind,
+    color: state.activeLightColor,
+    intensity: state.activeLightIntensity,
+    range: state.activeLightRange,
+    attach: target,
+  };
+  return { ...state, lights: upsertLight(state.lights, id, light) };
+}
+
+/**
+ * Panel path: cancel a stuck stroke, then `placeAttachedLight`.
+ */
+export function placeAttachedLightAction(state: PainterState, attach: string): PainterState {
+  const idle = cancelStroke(state);
+  return placeAttachedLight(idle, attach);
+}
+
+/**
+ * Removes light `id` when:
+ * - it is a placed light on the ACTIVE floor, or
+ * - it is an attached light (document-wide, any "floor").
+ * Other floors' placed lights are a safe no-op. Ignored mid-stroke.
  */
 export function removeLight(state: PainterState, id: string): PainterState {
   if (state.stroke.status === 'stroking') return state;
-  const floor = activeFloorState(state);
-  const existing = state.lights.find((light) => light.id === id && light.floor === floor.id);
+  const existing = state.lights.find((light) => light.id === id);
   if (!existing) return state;
+  if (existing.attach !== undefined) {
+    return { ...state, lights: upsertLight(state.lights, id, undefined) };
+  }
+  const floor = activeFloorState(state);
+  if (existing.floor !== floor.id) return state;
   return { ...state, lights: upsertLight(state.lights, id, undefined) };
 }
 

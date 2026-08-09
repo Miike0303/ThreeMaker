@@ -14,6 +14,7 @@ import {
 import {
   createPainterState,
   nextLightId,
+  placeAttachedLight,
   placeLight,
   removeLight,
   setActiveLightColor,
@@ -85,7 +86,7 @@ describe('composeDocumentFromPainterFloors: placed lights (WU-LIGHT-01)', () => 
     ]);
   });
 
-  it('removeLight drops only active-floor placed light', () => {
+  it('removeLight drops active-floor placed lights and attached lights', () => {
     const doc = createBlankMapDocument(BLANK_OPTIONS);
     let state = createPainterState({
       floors: painterFloorsFromDocument(doc),
@@ -114,9 +115,77 @@ describe('composeDocumentFromPainterFloors: placed lights (WU-LIGHT-01)', () => 
     });
     state = removeLight(state, 'on-floor');
     expect(state.lights.map((l) => l.id)).toEqual(['keep-attached']);
-    // Attached not on floor — remove is no-op by id if floor mismatch; attached has no floor
     state = removeLight(state, 'keep-attached');
-    expect(state.lights.map((l) => l.id)).toEqual(['keep-attached']);
+    expect(state.lights).toEqual([]);
+  });
+
+  it('placeAttachedLight → compose → parse; rejects unknown attach targets', () => {
+    const doc = createBlankMapDocument(BLANK_OPTIONS);
+    const withNpc: MapDocument = {
+      ...doc,
+      npcs: [
+        {
+          id: 'npc-1',
+          x: 0,
+          y: 0,
+          floor: 'floor-0',
+          facing: 'down',
+          sprite: { object: 'a'.repeat(64), characterIndex: 0 },
+          onInteract: 'talk',
+        },
+      ],
+      events: {
+        talk: [{ type: 'showDialogue', source: { kind: 'text', lines: ['hi'] } }],
+      },
+    };
+    let state = createPainterState({
+      floors: painterFloorsFromDocument(withNpc),
+      width: withNpc.width,
+      height: withNpc.height,
+      lights: withNpc.lights,
+      npcs: withNpc.npcs,
+      events: withNpc.events,
+    });
+    state = setActiveLightColor(state, '#ff8800');
+    state = setActiveLightIntensity(state, 1.25);
+    state = setActiveLightRange(state, 3);
+    expect(placeAttachedLight(state, 'missing-npc')).toBe(state);
+
+    state = placeAttachedLight(state, 'player');
+    state = placeAttachedLight(state, 'npc-1');
+
+    const composed = composeDocumentFromPainterFloors(
+      withNpc,
+      state.floors,
+      state.rooms,
+      state.stairLinks,
+      state.spawn,
+      state.props,
+      state.npcs,
+      state.triggers,
+      state.events,
+      state.worldSeeds,
+      state.lights,
+    );
+    const reparsed = parseMapDocument(JSON.parse(serializeMapDocument(composed)));
+    expect(reparsed.lights).toEqual([
+      {
+        id: 'light-1',
+        kind: 'point',
+        color: '#ff8800',
+        intensity: 1.25,
+        range: 3,
+        attach: 'player',
+      },
+      {
+        id: 'light-2',
+        kind: 'point',
+        color: '#ff8800',
+        intensity: 1.25,
+        range: 3,
+        attach: 'npc-1',
+      },
+    ]);
   });
 
   it('floor-filters placed lights; keeps attached lights when a floor is removed', () => {

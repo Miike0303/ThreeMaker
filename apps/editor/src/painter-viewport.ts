@@ -550,6 +550,13 @@ export class PainterViewport {
     this.recomputeLightOverlay();
   }
 
+  /** Attach a light to player or an NPC id (no canvas marker; document-wide). */
+  placeAttachedLight(attach: string): void {
+    if (!this.state) return;
+    this.state = painter.placeAttachedLightAction(this.state, attach);
+    this.emitState();
+  }
+
   // --- Event scripts + worldSeeds (events editor WU-02; no overlay recompute) ---
 
   addEvent(key: string): void {

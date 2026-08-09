@@ -107,6 +107,7 @@ Maker Studio shell
 - WU-LIGHT-01 lights in painter store (place/remove, tool L, Entities list); compose threads live lights; attached keep / floor filter
 - WU-LIGHT-02 light viewport overlay (`computeLightOverlayPoints`); markers use authored color; spot vs point glyph
 - WU-LIGHT-03 compose re-attaches per-floor `lightMap` sha (no longer stripped on save)
+- WU-LIGHT-04 attached lights (`placeAttachedLight` player|npc); list/remove; removeLight handles attach
 
 ## PR Plan
 

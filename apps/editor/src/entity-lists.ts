@@ -145,7 +145,7 @@ export function propObjectLibrary(
 
 /**
  * Placed lights on a floor (schema v6). Attached lights (`attach` only) have no
- * floor and are excluded — list them separately when attached authoring lands.
+ * floor and are excluded — use `attachedLights` for those.
  */
 export function lightsOnFloor(
   lights: readonly LightDocument[],
@@ -153,6 +153,19 @@ export function lightsOnFloor(
 ): readonly LightDocument[] {
   if (floorId === undefined) return [];
   return lights.filter((light) => light.floor === floorId);
+}
+
+/** Lights with the attached form (`attach` set; no floor/x/y). Document-wide. */
+export function attachedLights(lights: readonly LightDocument[]): readonly LightDocument[] {
+  return lights.filter((light) => light.attach !== undefined);
+}
+
+/**
+ * Valid attach targets for a new attached light: always `'player'`, then every
+ * authored NPC id in document order (schema: attach is player or npc id).
+ */
+export function lightAttachTargets(npcs: readonly NpcDocument[]): readonly string[] {
+  return ['player', ...npcs.map((npc) => npc.id)];
 }
 
 /** Placement brush fields copied from an authored light (list-place reuse). */

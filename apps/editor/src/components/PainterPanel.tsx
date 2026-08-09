@@ -34,6 +34,8 @@ import {
   worldValueKind,
 } from '../event-form-helpers.js';
 import {
+  attachedLights,
+  lightAttachTargets,
   lightPlacementFromDocument,
   lightsOnFloor,
   npcPlacementFromDocument,
@@ -261,6 +263,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [triggerPlaceY, setTriggerPlaceY] = useState(0);
   const [lightPlaceX, setLightPlaceX] = useState(0);
   const [lightPlaceY, setLightPlaceY] = useState(0);
+  /** Attach target for attached lights (`player` or npc id). */
+  const [lightAttachTarget, setLightAttachTarget] = useState('player');
   // Events section UI (events editor WU-02).
   const [selectedEventKey, setSelectedEventKey] = useState<string | undefined>(undefined);
   const [newEventKey, setNewEventKey] = useState('');
@@ -316,6 +320,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const floorLights = useMemo(
     () => lightsOnFloor(painterState?.lights ?? [], activeFloorId),
     [painterState?.lights, activeFloorId],
+  );
+  const docAttachedLights = useMemo(
+    () => attachedLights(painterState?.lights ?? []),
+    [painterState?.lights],
+  );
+  const attachTargets = useMemo(
+    () => lightAttachTargets(painterState?.npcs ?? []),
+    [painterState?.npcs],
   );
   const objectLibrary = useMemo(
     () => propObjectLibrary(painterState?.props ?? [], painterState?.activePropObject),
@@ -2573,6 +2585,95 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   y: light.y ?? 0,
                                   kind: light.kind,
                                   color: light.color,
+                                })}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => viewportRef.current?.removeLight(light.id)}
+                              >
+                                {t('painter.lights.remove')}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <h4 className="ide-section-title">{t('painter.lights.attached')}</h4>
+                      <p className="ide-hint">{t('painter.lights.attached.hint')}</p>
+                      <div className="painter-place-at-tile">
+                        <label>
+                          {t('painter.lights.attachTarget')}
+                          <select
+                            value={
+                              attachTargets.includes(lightAttachTarget)
+                                ? lightAttachTarget
+                                : 'player'
+                            }
+                            onChange={(event) => setLightAttachTarget(event.target.value)}
+                          >
+                            {attachTargets.map((target) => (
+                              <option key={target} value={target}>
+                                {target === 'player'
+                                  ? t('painter.lights.attach.player')
+                                  : formatTemplate(t('painter.lights.attach.npc'), {
+                                      id: target,
+                                    })}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = attachTargets.includes(lightAttachTarget)
+                              ? lightAttachTarget
+                              : 'player';
+                            viewportRef.current?.placeAttachedLight(target);
+                            setStatusMessage(
+                              formatTemplate(t('painter.lights.attached.toast'), {
+                                attach: target,
+                              }),
+                            );
+                          }}
+                        >
+                          {t('painter.lights.attach')}
+                        </button>
+                      </div>
+                      {docAttachedLights.length === 0 ? (
+                        <div className="ide-empty" role="status">
+                          <p className="ide-empty-title">
+                            {t('painter.lights.attached.emptyTitle')}
+                          </p>
+                          <p className="ide-hint">{t('painter.lights.attached.emptyBody')}</p>
+                        </div>
+                      ) : (
+                        <ul
+                          className="ide-list"
+                          aria-label={t('painter.lights.attached')}
+                        >
+                          {docAttachedLights.map((light) => (
+                            <li key={light.id}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const brush = lightPlacementFromDocument(light);
+                                  viewportRef.current?.setActiveLightKind(brush.kind);
+                                  viewportRef.current?.setActiveLightColor(brush.color);
+                                  viewportRef.current?.setActiveLightIntensity(brush.intensity);
+                                  viewportRef.current?.setActiveLightRange(brush.range);
+                                  if (light.attach) setLightAttachTarget(light.attach);
+                                  setStatusMessage(
+                                    formatTemplate(t('painter.lights.reuseToast'), {
+                                      id: light.id,
+                                    }),
+                                  );
+                                }}
+                              >
+                                {formatTemplate(t('painter.lights.attached.summary'), {
+                                  id: light.id,
+                                  kind: light.kind,
+                                  color: light.color,
+                                  attach: light.attach ?? '',
                                 })}
                               </button>
                               <button

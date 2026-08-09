@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  attachedLights,
   entitiesOnFloor,
+  lightAttachTargets,
   lightPlacementFromDocument,
   lightsOnFloor,
   normalizeLightColor,
@@ -276,5 +278,21 @@ describe('normalizeLightColor', () => {
     expect(normalizeLightColor('#fff')).toBeUndefined();
     expect(normalizeLightColor('red')).toBeUndefined();
     expect(normalizeLightColor('#GG0000')).toBeUndefined();
+  });
+});
+
+describe('attachedLights', () => {
+  it('returns only lights with attach; excludes placed', () => {
+    expect(attachedLights([LIGHT_PLACED, LIGHT_ATTACHED, LIGHT_OTHER_FLOOR])).toEqual([
+      LIGHT_ATTACHED,
+    ]);
+    expect(attachedLights([LIGHT_PLACED])).toEqual([]);
+  });
+});
+
+describe('lightAttachTargets', () => {
+  it('always includes player then npc ids in document order', () => {
+    expect(lightAttachTargets([])).toEqual(['player']);
+    expect(lightAttachTargets([NPC_1, NPC_2])).toEqual(['player', 'n1', 'n2']);
   });
 });
