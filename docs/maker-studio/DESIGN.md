@@ -105,6 +105,7 @@ Maker Studio shell
 - WU-PROC-12 furniture tile override (id/brush/auto) + palette role Furniture
 - WU-PROC-13 recent seed history (`pushProcgenSeedHistory`) for one-click replay
 - WU-LIGHT-01 lights in painter store (place/remove, tool L, Entities list); compose threads live lights; attached keep / floor filter
+- WU-LIGHT-02 light viewport overlay (`computeLightOverlayPoints`); markers use authored color; spot vs point glyph
 
 ## PR Plan
 

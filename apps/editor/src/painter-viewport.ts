@@ -24,6 +24,7 @@ import {
   toRenderableMap,
   toRenderableTileset,
 } from './map-compose.js';
+import { computeLightOverlayPoints } from './light-overlay.js';
 import { computeNpcOverlayPoints } from './npc-overlay.js';
 import type { PainterState } from './painter-store.js';
 import * as painter from './painter-store.js';
@@ -124,6 +125,15 @@ export interface TriggerOverlayItem {
   readonly yFrac: number;
 }
 
+/** One placed light marker on the active floor (see `light-overlay.ts`). */
+export interface LightOverlayItem {
+  readonly id: string;
+  readonly xFrac: number;
+  readonly yFrac: number;
+  readonly kind: LightDocument['kind'];
+  readonly color: string;
+}
+
 export interface PainterViewportCallbacks {
   /** Fired after every painter-store transition (tool switch, stroke commit, undo/redo, semantic assignment...) so the surrounding UI can re-render its toolbar/inspector. */
   readonly onStateChange?: (state: PainterState) => void;
@@ -143,6 +153,8 @@ export interface PainterViewportCallbacks {
   readonly onNpcOverlayChange?: (points: readonly NpcOverlayItem[]) => void;
   /** Fired whenever the active floor's trigger markers change (c1a follow-up). */
   readonly onTriggerOverlayChange?: (points: readonly TriggerOverlayItem[]) => void;
+  /** Fired whenever the active floor's light markers change (schema v6 WU-LIGHT-02). */
+  readonly onLightOverlayChange?: (points: readonly LightOverlayItem[]) => void;
 }
 
 /**
@@ -249,6 +261,7 @@ export class PainterViewport {
     this.recomputePropOverlay();
     this.recomputeNpcOverlay();
     this.recomputeTriggerOverlay();
+    this.recomputeLightOverlay();
   }
 
   /** Adds a new blank floor on top of the stack and makes it active (spec: "adding a floor"). No-op if no map is loaded. */
@@ -296,6 +309,7 @@ export class PainterViewport {
     this.recomputePropOverlay();
     this.recomputeNpcOverlay();
     this.recomputeTriggerOverlay();
+    this.recomputeLightOverlay();
   }
 
   setTool(tool: ToolId): void {
@@ -526,12 +540,14 @@ export class PainterViewport {
     if (!this.state) return;
     this.state = painter.removeLight(this.state, id);
     this.emitState();
+    this.recomputeLightOverlay();
   }
 
   placeLightAtTile(x: number, y: number): void {
     if (!this.state) return;
     this.state = painter.placeLightAtTile(this.state, { x, y });
     this.emitState();
+    this.recomputeLightOverlay();
   }
 
   // --- Event scripts + worldSeeds (events editor WU-02; no overlay recompute) ---
@@ -665,6 +681,7 @@ export class PainterViewport {
     if (this.state.tool === 'prop') this.recomputePropOverlay();
     if (this.state.tool === 'npc') this.recomputeNpcOverlay();
     if (this.state.tool === 'trigger') this.recomputeTriggerOverlay();
+    if (this.state.tool === 'light') this.recomputeLightOverlay();
     this.emitState();
   }
 
@@ -989,6 +1006,32 @@ export class PainterViewport {
     this.callbacks.onTriggerOverlayChange?.(items);
   }
 
+  /** Recomputes the active floor's placed light markers (schema v6 WU-LIGHT-02). */
+  private recomputeLightOverlay(): void {
+    if (!this.state || !this.cameraPose) return;
+    const activeFloorId = painter.activeFloorState(this.state).id;
+    const points = computeLightOverlayPoints(this.state.lights, activeFloorId);
+
+    const items: LightOverlayItem[] = [];
+    for (const point of points) {
+      const projected = projectToScreenFraction(
+        { x: point.x + 0.5, y: 0, z: point.y + 0.5 },
+        this.cameraPose,
+        OVERVIEW_FOV_DEG,
+        this.camera.aspect,
+      );
+      if (!projected) continue;
+      items.push({
+        id: point.id,
+        xFrac: projected.xFrac,
+        yFrac: projected.yFrac,
+        kind: point.kind,
+        color: point.color,
+      });
+    }
+    this.callbacks.onLightOverlayChange?.(items);
+  }
+
   private startRenderLoop(): void {
     if (this.animationHandle !== undefined) return;
     const renderFrame = () => {
@@ -1011,6 +1054,7 @@ export class PainterViewport {
     this.recomputePropOverlay();
     this.recomputeNpcOverlay();
     this.recomputeTriggerOverlay();
+    this.recomputeLightOverlay();
   }
 
   dispose(): void {

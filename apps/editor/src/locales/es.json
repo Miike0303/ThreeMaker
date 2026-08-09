@@ -312,6 +312,7 @@
     "painter.lights.height": "Altura",
     "painter.lights.summary": "{id} {kind} en ({x}, {y}) · {color}",
     "painter.lights.remove": "Quitar",
+    "painter.lights.overlayLabel": "Luz {id} ({kind})",
     "painter.lights.emptyTitle": "Sin luces en este piso",
     "painter.lights.emptyBody": "Configura color y alcance, luego Colocar en casilla o usa la herramienta L en el mapa.",
     "painter.lights.reuseToast": "Ajustes de la luz {id} cargados — colocá otra copia (L).",

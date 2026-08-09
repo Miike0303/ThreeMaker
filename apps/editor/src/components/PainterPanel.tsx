@@ -52,6 +52,7 @@ import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, seedDemoTiles } from '../map-compose.js';
 import { isEventReferenced, type PainterState, validateEventsDraft } from '../painter-store.js';
 import type {
+  LightOverlayItem,
   NpcOverlayItem,
   PropOverlayItem,
   RampGlyphOverlayItem,
@@ -248,6 +249,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [propOverlay, setPropOverlay] = useState<readonly PropOverlayItem[]>([]);
   const [npcOverlay, setNpcOverlay] = useState<readonly NpcOverlayItem[]>([]);
   const [triggerOverlay, setTriggerOverlay] = useState<readonly TriggerOverlayItem[]>([]);
+  const [lightOverlay, setLightOverlay] = useState<readonly LightOverlayItem[]>([]);
   const [characterSprites, setCharacterSprites] = useState<readonly AssetRow[]>([]);
   const glbInputRef = useRef<HTMLInputElement | null>(null);
   // Coordinate placement (complements canvas clicks on large maps).
@@ -360,6 +362,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       onPropOverlayChange: setPropOverlay,
       onNpcOverlayChange: setNpcOverlay,
       onTriggerOverlayChange: setTriggerOverlay,
+      onLightOverlayChange: setLightOverlay,
     });
     viewportRef.current = viewport;
     return () => {
@@ -975,6 +978,34 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     })}
                   >
                     ◎
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {painterState && lightOverlay.length > 0 && (
+              <div
+                className="painter-light-overlay"
+                style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+              >
+                {lightOverlay.map((point) => (
+                  <span
+                    key={point.id}
+                    className="painter-light-marker"
+                    role="img"
+                    style={{
+                      position: 'absolute',
+                      left: `${point.xFrac * 100}%`,
+                      top: `${point.yFrac * 100}%`,
+                      transform: 'translate(-50%, -50%)',
+                      color: point.color,
+                    }}
+                    aria-label={formatTemplate(t('painter.lights.overlayLabel'), {
+                      id: point.id,
+                      kind: point.kind,
+                    })}
+                  >
+                    {point.kind === 'spot' ? '◉' : '☀'}
                   </span>
                 ))}
               </div>

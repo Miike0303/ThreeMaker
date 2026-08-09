@@ -312,6 +312,7 @@
     "painter.lights.height": "Height",
     "painter.lights.summary": "{id} {kind} at ({x}, {y}) · {color}",
     "painter.lights.remove": "Remove",
+    "painter.lights.overlayLabel": "Light {id} ({kind})",
     "painter.lights.emptyTitle": "No lights on this floor",
     "painter.lights.emptyBody": "Set color and range, then Place at tile or use tool L on the map.",
     "painter.lights.reuseToast": "Light {id} settings loaded — place another copy (L).",
