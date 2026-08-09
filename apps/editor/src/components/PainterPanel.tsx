@@ -34,6 +34,7 @@ import {
   npcsOnFloor,
   pickMainRoomId,
   propObjectLibrary,
+  propPlacementFromDocument,
   propsOnFloor,
   roomsOnFloor,
   triggerPlacementFromDocument,
@@ -1822,18 +1823,42 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         </button>
                       </div>
                       {floorProps.length === 0 ? (
-                        <p className="ide-hint">{t('painter.props.placedEmpty')}</p>
+                        <div className="ide-empty" role="status">
+                          <p className="ide-empty-title">{t('painter.props.emptyTitle')}</p>
+                          <p className="ide-hint">{t('painter.props.emptyBody')}</p>
+                        </div>
                       ) : (
-                        <ul className="ide-list">
+                        <ul className="ide-list" aria-label={t('painter.props')}>
                           {floorProps.map((prop) => (
-                            <li key={prop.id}>
-                              <span>
+                            <li
+                              key={prop.id}
+                              className={
+                                painterState.activePropObject === prop.object
+                                  ? 'ide-list-active'
+                                  : undefined
+                              }
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const brush = propPlacementFromDocument(prop);
+                                  viewportRef.current?.setActivePropObject(brush.object);
+                                  viewportRef.current?.setTool('prop');
+                                  setStatusMessage(
+                                    formatTemplate(t('painter.props.reuseToast'), {
+                                      id: prop.id,
+                                      sha: shortSha(brush.object),
+                                    }),
+                                  );
+                                }}
+                              >
                                 {formatTemplate(t('painter.props.summary'), {
                                   id: prop.id,
                                   x: prop.x,
                                   y: prop.y,
+                                  sha: shortSha(prop.object),
                                 })}
-                              </span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => viewportRef.current?.removeProp(prop.id)}

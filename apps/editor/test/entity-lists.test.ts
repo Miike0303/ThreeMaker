@@ -5,6 +5,7 @@ import {
   npcsOnFloor,
   pickMainRoomId,
   propObjectLibrary,
+  propPlacementFromDocument,
   propsOnFloor,
   roomArea,
   roomsOnFloor,
@@ -195,5 +196,12 @@ describe('triggerPlacementFromDocument', () => {
       on: 'interact',
       eventKey: 'chest',
     });
+  });
+});
+
+describe('propPlacementFromDocument', () => {
+  it('copies object sha for reuse', () => {
+    expect(propPlacementFromDocument(PROP_1)).toEqual({ object: OBJ_A });
+    expect(propPlacementFromDocument(PROP_2)).toEqual({ object: OBJ_B });
   });
 });

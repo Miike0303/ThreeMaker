@@ -109,6 +109,15 @@ export function triggerPlacementFromDocument(trigger: TriggerDocument): TriggerP
   };
 }
 
+/** Placement brush fields copied from an authored prop (list-place reuse). */
+export type PropPlacementBrush = {
+  readonly object: string;
+};
+
+export function propPlacementFromDocument(prop: PropDocument): PropPlacementBrush {
+  return { object: prop.object };
+}
+
 /**
  * Unique prop object shas for U2U-style list-place library.
  * Order: active first (if non-empty), then first-seen order from placed props.
