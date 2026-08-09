@@ -92,7 +92,7 @@
     "painter.procgen.doorTileActive": "Door override: {id}",
     "painter.procgen.doorTileAuto": "Door: auto (door-class semantics / openings only)",
     "painter.procgen.needMap": "Load or create a map before generating.",
-    "painter.procgen.success": "{preset} · {rooms} rooms · {doors} doors · seed {seed}",
+    "painter.procgen.success": "{preset} · {rooms} rooms · {doors} doors · {furniture} furniture · seed {seed}",
     "painter.procgen.failed": "Dungeon generation failed — see console.",
     "painter.community": "Community",
     "painter.community.hint": "By default maps queue for community share on save (offline until the server exists). Uncheck to keep saves local only.",

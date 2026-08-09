@@ -100,6 +100,7 @@ Maker Studio shell
 - WU-OBJ-02 placed prop row reuses object brush (`propPlacementFromDocument`); prop empty state parity
 - WU-COMM-03 offline queue list + remove job + copy JSON (`removeCommunityShareQueueJob`)
 - WU-COMM-04 paste/import queue JSON (`parseCommunityShareQueueJson` + `replaceCommunityShareQueue`)
+- WU-PROC-10 sparse room furniture on mid (`scatterFurnitureInRooms`); resolve furniture-class tiles; apply tags furniture vs door
 
 ## PR Plan
 

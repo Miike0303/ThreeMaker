@@ -161,4 +161,30 @@ describe('applyDungeonStampToMapDocument', () => {
     expect(next.tileset.semantics['5001']).toEqual({ class: 'door' });
     expect(next.tileset.semantics['4352']).toEqual({ class: 'wall' });
   });
+
+  it('tags mid furniture tiles as furniture without reclassing doors', () => {
+    const doc = createBlankMapDocument({
+      id: 'stamp-furn',
+      name: 'Furn',
+      width: 32,
+      height: 24,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const stamp = stampSimpleDungeon({
+      width: 32,
+      height: 24,
+      seed: 42,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      doorTileId: 5001,
+      furnitureTileId: 9001,
+      furnitureDensity: 0.4,
+      roomCount: 5,
+    });
+    expect(stamp.furnitureCount).toBeGreaterThan(0);
+    const next = applyDungeonStampToMapDocument(doc, stamp);
+    expect(next.tileset.semantics['5001']).toEqual({ class: 'door' });
+    expect(next.tileset.semantics['9001']).toEqual({ class: 'furniture' });
+  });
 });

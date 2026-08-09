@@ -213,5 +213,57 @@ describe('stampSimpleDungeon door openings', () => {
     const b = stampSimpleDungeon(opts);
     expect(a.doors).toEqual(b.doors);
     expect(a.layers[1]).toEqual(b.layers[1]);
+    expect(a.furnitureCount).toBe(0);
+  });
+
+  it('scatters furniture on mid without overwriting doors', () => {
+    const FURN = 9001;
+    const stamp = stampSimpleDungeon({
+      width: 32,
+      height: 24,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      doorTileId: DOOR,
+      furnitureTileId: FURN,
+      furnitureDensity: 0.5,
+      roomCount: 5,
+    });
+    expect(stamp.furnitureCount).toBeGreaterThan(0);
+    for (const d of stamp.doors) {
+      const i = d.y * 32 + d.x;
+      expect(stamp.layers[1][i]).toBe(DOOR);
+    }
+    const midFurn = stamp.layers[1].filter((id) => id === FURN).length;
+    expect(midFurn).toBe(stamp.furnitureCount);
+    // Layout without furniture still matches room/door structure
+    const bare = stampSimpleDungeon({
+      width: 32,
+      height: 24,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      doorTileId: DOOR,
+      roomCount: 5,
+    });
+    expect(stamp.rooms).toEqual(bare.rooms);
+    expect(stamp.doors).toEqual(bare.doors);
+    expect(stamp.layers[0]).toEqual(bare.layers[0]);
+    expect(stamp.layers[2]).toEqual(bare.layers[2]);
+  });
+
+  it('furniture scatter is deterministic for the same seed', () => {
+    const opts = {
+      width: 28,
+      height: 20,
+      seed: 123,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      doorTileId: DOOR,
+      furnitureTileId: 777,
+      furnitureDensity: 0.2,
+      roomCount: 4,
+    };
+    expect(stampSimpleDungeon(opts)).toEqual(stampSimpleDungeon(opts));
   });
 });

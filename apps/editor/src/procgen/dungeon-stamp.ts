@@ -18,6 +18,16 @@ export type DungeonStampOptions = {
    * When omitted, openings still exist as walkable gaps (no wall) but mid stays empty.
    */
   readonly doorTileId?: number;
+  /**
+   * Optional tile id painted sparsely on layer 1 (Mid) inside rooms (not on doors).
+   * Uses a separate RNG stream so layout/doors stay stable for a given seed.
+   */
+  readonly furnitureTileId?: number;
+  /**
+   * Probability 0..1 of placing furniture on each interior room cell (default 0.06).
+   * Clamped; ignored when furnitureTileId is unset/zero.
+   */
+  readonly furnitureDensity?: number;
   /** Minimum room size (default 4). */
   readonly minRoomSize?: number;
   /** Maximum room size (default 8). */
@@ -51,6 +61,8 @@ export type DungeonStampResult = {
    * DESIGN: "doors as openings".
    */
   readonly doors: readonly DungeonDoor[];
+  /** Count of mid-layer furniture tiles placed (0 when no furniture tile). */
+  readonly furnitureCount: number;
   readonly seed: number;
 };
 
@@ -96,6 +108,45 @@ function mulberry32(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/** Derived seed so furniture scatter never perturbs room/corridor RNG. */
+export function furnitureScatterSeed(layoutSeed: number): number {
+  return (layoutSeed ^ 0xf47e1) >>> 0;
+}
+
+/**
+ * Sparse mid-layer furniture inside room interiors (1-tile inset).
+ * Never overwrites non-zero mid cells (doors). Mutates `mid` in place.
+ * Returns how many furniture tiles were written.
+ */
+export function scatterFurnitureInRooms(
+  rooms: readonly DungeonRoom[],
+  mid: number[],
+  width: number,
+  height: number,
+  furnitureTileId: number,
+  density: number,
+  rand: () => number,
+): number {
+  if (furnitureTileId <= 0 || density <= 0) return 0;
+  const p = Math.min(1, density);
+  let count = 0;
+  for (const room of rooms) {
+    // Interior only (skip perimeter so walls/doors stay clear).
+    if (room.w < 3 || room.h < 3) continue;
+    for (let yy = room.y + 1; yy < room.y + room.h - 1; yy++) {
+      for (let xx = room.x + 1; xx < room.x + room.w - 1; xx++) {
+        if (xx < 0 || yy < 0 || xx >= width || yy >= height) continue;
+        const i = yy * width + xx;
+        if (mid[i] !== 0) continue;
+        if (rand() >= p) continue;
+        mid[i] = furnitureTileId;
+        count += 1;
+      }
+    }
+  }
+  return count;
 }
 
 function idx(width: number, x: number, y: number): number {
@@ -174,6 +225,8 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
     groundTileId,
     wallTileId,
     doorTileId = 0,
+    furnitureTileId = 0,
+    furnitureDensity,
     minRoomSize = 4,
     maxRoomSize = 8,
     roomCount = 6,
@@ -298,10 +351,29 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
     }
   }
 
+  let furnitureCount = 0;
+  if (furnitureTileId > 0 && furnitureTileId !== doorTileId && furnitureTileId !== groundTileId) {
+    const density =
+      furnitureDensity === undefined
+        ? 0.06
+        : Math.min(1, Math.max(0, furnitureDensity));
+    const furnRand = mulberry32(furnitureScatterSeed(seed));
+    furnitureCount = scatterFurnitureInRooms(
+      rooms,
+      mid,
+      width,
+      height,
+      furnitureTileId,
+      density,
+      furnRand,
+    );
+  }
+
   return {
     layers: [ground, mid, wall, over],
     rooms,
     doors,
+    furnitureCount,
     seed,
   };
 }

@@ -132,6 +132,54 @@ describe('resolveDungeonTileIds', () => {
       fallbackWall: 20,
     });
     expect(r.doorTileId).toBeUndefined();
+    expect(r.furnitureTileId).toBeUndefined();
+  });
+
+  it('resolves optional furnitureTileId from furniture-classed semantics', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: {
+        '5': { class: 'wall' },
+        '77': { class: 'door' },
+        '200': { class: 'furniture' },
+        '201': { class: 'furniture' },
+      },
+    });
+    expect(r.furnitureTileId).toBe(200);
+    expect(r.doorTileId).toBe(77);
+  });
+
+  it('furnitureTileOverride wins and skips collisions with ground/wall/door', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      furnitureTileOverride: 333,
+      semantics: {
+        '5': { class: 'wall' },
+        '77': { class: 'door' },
+        '200': { class: 'furniture' },
+      },
+    });
+    expect(r.furnitureTileId).toBe(333);
+    const collided = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      doorTileOverride: 77,
+      furnitureTileOverride: 77,
+      semantics: { '5': { class: 'wall' }, '200': { class: 'furniture' } },
+    });
+    // Override collides with door → fall back to furniture semantics.
+    expect(collided.furnitureTileId).toBe(200);
   });
 
   it('doorTileOverride wins over door-classed semantics', () => {

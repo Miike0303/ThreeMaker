@@ -59,11 +59,24 @@ export function applyDungeonStampToMapDocument(
       ],
     },
   };
-  // DESIGN: walls on layer 2 + semantic `wall`; mid doors + semantic `door`.
+  // DESIGN: walls on layer 2 + semantic `wall`; mid doors + furniture.
+  // Only stamp.doors positions are tagged `door`; other mid non-zero ids → `furniture`.
   const wallIds = uniqueNonZeroIds(tiles2);
-  const doorIds = uniqueNonZeroIds(tiles1);
+  const doorIds = new Set<number>();
+  const furnitureIds = new Set<number>();
+  const width = doc.width;
+  for (const d of stamp.doors) {
+    const id = tiles1[d.y * width + d.x] ?? 0;
+    if (id !== 0) doorIds.add(id);
+  }
+  for (let i = 0; i < tiles1.length; i++) {
+    const id = tiles1[i] ?? 0;
+    if (id === 0 || doorIds.has(id)) continue;
+    furnitureIds.add(id);
+  }
   let nextSemantics = assignSemanticClass(doc.tileset.semantics, wallIds, 'wall');
   nextSemantics = assignSemanticClass(nextSemantics, doorIds, 'door');
+  nextSemantics = assignSemanticClass(nextSemantics, furnitureIds, 'furniture');
   let next: MapDocument = {
     ...doc,
     floors: doc.floors.map((f, i) => (i === 0 ? nextFloor : f)),

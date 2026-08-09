@@ -101,12 +101,18 @@ export function resolveDungeonTileIds(input: {
    * ground/wall, wins over door-class semantics.
    */
   readonly doorTileOverride?: number;
-  /** Optional live map semantics for wall/door-class preference. */
+  /**
+   * Explicit furniture tile. When > 0 and distinct from ground/wall/door,
+   * wins over furniture-class semantics.
+   */
+  readonly furnitureTileOverride?: number;
+  /** Optional live map semantics for wall/door/furniture-class preference. */
   readonly semantics?: SemanticOverrides;
 }): {
   readonly groundTileId: number;
   readonly wallTileId: number;
   readonly doorTileId?: number;
+  readonly furnitureTileId?: number;
 } {
   const semantics = input.semantics ?? {};
   const fromFill = input.fillTileId > 0 ? input.fillTileId : undefined;
@@ -156,7 +162,31 @@ export function resolveDungeonTileIds(input: {
       : undefined;
   const doorTileId = doorOverride ?? doorFromSemanticsOk;
 
-  return doorTileId === undefined
-    ? { groundTileId, wallTileId }
-    : { groundTileId, wallTileId, doorTileId };
+  const furnitureOverride =
+    input.furnitureTileOverride !== undefined &&
+    input.furnitureTileOverride > 0 &&
+    input.furnitureTileOverride !== groundTileId &&
+    input.furnitureTileOverride !== wallTileId &&
+    input.furnitureTileOverride !== doorTileId
+      ? input.furnitureTileOverride
+      : undefined;
+  const furnitureFromSemantics = firstClassedTileId(semantics, 'furniture', groundTileId);
+  const furnitureFromSemanticsOk =
+    furnitureFromSemantics !== undefined &&
+    furnitureFromSemantics > 0 &&
+    furnitureFromSemantics !== wallTileId &&
+    furnitureFromSemantics !== doorTileId
+      ? furnitureFromSemantics
+      : undefined;
+  const furnitureTileId = furnitureOverride ?? furnitureFromSemanticsOk;
+
+  const result: {
+    groundTileId: number;
+    wallTileId: number;
+    doorTileId?: number;
+    furnitureTileId?: number;
+  } = { groundTileId, wallTileId };
+  if (doorTileId !== undefined) result.doorTileId = doorTileId;
+  if (furnitureTileId !== undefined) result.furnitureTileId = furnitureTileId;
+  return result;
 }
