@@ -95,6 +95,7 @@ Maker Studio shell
 - WU-PROC-09 Generate writes floor-0 `rooms` from stamp (room overlay / occlusion ready)
 - WU-UX-05 extract `inspectorTabForTool` tests; palette assign status toast (brush/wall/door)
 - WU-OBJ-01 prop object library list-place (`propObjectLibrary`) + rooms/props empty states
+- WU-UX-06 Generate opens Map tab + selects main room (`pickMainRoomId`); stair links empty state
 
 ## PR Plan
 

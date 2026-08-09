@@ -29,7 +29,12 @@ import {
   type WorldValueKind,
   worldValueKind,
 } from '../event-form-helpers.js';
-import { propObjectLibrary, propsOnFloor, roomsOnFloor } from '../entity-lists.js';
+import {
+  pickMainRoomId,
+  propObjectLibrary,
+  propsOnFloor,
+  roomsOnFloor,
+} from '../entity-lists.js';
 import { formatTemplate } from '../format-template.js';
 import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
@@ -472,6 +477,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
       viewport.loadMap(stamped, textures, sheetPixelSizes, groundTileId);
       setPaletteSlots(await buildPaletteSlots(stamped, sheetPixelSizes));
       setMapReady(true);
+      // Surface rooms list + highlight main chamber (matches spawn placement).
+      setInspectorTab('map');
+      viewport.selectFloor(0);
+      const floor0Id = stamped.floors[0]?.id;
+      const mainRoomId = pickMainRoomId(roomsOnFloor(stamped.rooms, floor0Id));
+      viewport.setActiveRoomId(mainRoomId);
       setStatusMessage(
         formatTemplate(t('painter.procgen.success'), {
           rooms: stamp.rooms.length,
@@ -1158,34 +1169,41 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       {painterState.pendingStairEntry && (
                         <p className="ide-hint">{t('painter.stairLink.pendingHint')}</p>
                       )}
-                      <ul className="ide-list">
-                        {painterState.stairLinks.map((link) => (
-                          <li key={link.id}>
-                            <span>
-                              {formatTemplate(t('painter.stairLink.summary'), {
-                                from: resolveFloorLabel(painterState.floors, link.fromFloor, t),
-                                to: resolveFloorLabel(painterState.floors, link.toFloor, t),
-                              })}
-                            </span>
-                            <label className="ide-check">
-                              <input
-                                type="checkbox"
-                                checked={link.bidirectional}
-                                onChange={() =>
-                                  viewportRef.current?.toggleStairLinkBidirectional(link.id)
-                                }
-                              />
-                              {t('painter.stairLink.bidirectional')}
-                            </label>
-                            <button
-                              type="button"
-                              onClick={() => viewportRef.current?.removeStairLink(link.id)}
-                            >
-                              {t('painter.stairLink.remove')}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
+                      {painterState.stairLinks.length === 0 && !painterState.pendingStairEntry ? (
+                        <div className="ide-empty" role="status">
+                          <p className="ide-empty-title">{t('painter.stairLinks.emptyTitle')}</p>
+                          <p className="ide-hint">{t('painter.stairLinks.emptyBody')}</p>
+                        </div>
+                      ) : (
+                        <ul className="ide-list">
+                          {painterState.stairLinks.map((link) => (
+                            <li key={link.id}>
+                              <span>
+                                {formatTemplate(t('painter.stairLink.summary'), {
+                                  from: resolveFloorLabel(painterState.floors, link.fromFloor, t),
+                                  to: resolveFloorLabel(painterState.floors, link.toFloor, t),
+                                })}
+                              </span>
+                              <label className="ide-check">
+                                <input
+                                  type="checkbox"
+                                  checked={link.bidirectional}
+                                  onChange={() =>
+                                    viewportRef.current?.toggleStairLinkBidirectional(link.id)
+                                  }
+                                />
+                                {t('painter.stairLink.bidirectional')}
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => viewportRef.current?.removeStairLink(link.id)}
+                              >
+                                {t('painter.stairLink.remove')}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </section>
 
                     <section className="ide-section">

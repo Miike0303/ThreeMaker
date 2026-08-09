@@ -97,6 +97,8 @@ const NEW_KEYS = [
   'painter.tool.npc',
   'painter.tool.trigger',
   'painter.stairLinks',
+  'painter.stairLinks.emptyTitle',
+  'painter.stairLinks.emptyBody',
   'painter.stairLink.summary',
   'painter.stairLink.bidirectional',
   'painter.stairLink.remove',

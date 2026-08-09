@@ -4,6 +4,34 @@
  */
 import type { PropDocument, RoomDocument } from '@threemaker/map-format';
 
+/** Sum of rect areas for a room (ties and empty rects allowed). */
+export function roomArea(room: RoomDocument): number {
+  let area = 0;
+  for (const rect of room.rects) {
+    area += Math.max(0, rect.width) * Math.max(0, rect.height);
+  }
+  return area;
+}
+
+/**
+ * Largest room by total rect area; first in list wins ties.
+ * Empty input → undefined (caller leaves selection cleared).
+ */
+export function pickMainRoomId(rooms: readonly RoomDocument[]): string | undefined {
+  if (rooms.length === 0) return undefined;
+  let best = rooms[0]!;
+  let bestArea = roomArea(best);
+  for (let i = 1; i < rooms.length; i++) {
+    const room = rooms[i]!;
+    const area = roomArea(room);
+    if (area > bestArea) {
+      best = room;
+      bestArea = area;
+    }
+  }
+  return best.id;
+}
+
 /** Rooms on a floor, stable document order. */
 export function roomsOnFloor(
   rooms: readonly RoomDocument[],

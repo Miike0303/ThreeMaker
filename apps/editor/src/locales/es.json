@@ -272,6 +272,8 @@
     "painter.room.remove": "Quitar",
     "painter.room.overlayLabel": "Habitación: {name}",
     "painter.stairLinks": "Enlaces de escalera",
+    "painter.stairLinks.emptyTitle": "Sin enlaces de escalera",
+    "painter.stairLinks.emptyBody": "Usá la herramienta Enlace de escalera (S): clic en entrada en una planta, luego salida en otra.",
     "painter.stairLink.summary": "{from} → {to}",
     "painter.stairLink.bidirectional": "Bidireccional",
     "painter.stairLink.remove": "Quitar",

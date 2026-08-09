@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  pickMainRoomId,
   propObjectLibrary,
   propsOnFloor,
+  roomArea,
   roomsOnFloor,
 } from '../src/entity-lists.js';
 
@@ -22,6 +24,14 @@ const ROOM_C = {
   floor: 'floor-0',
   rects: [{ x: 8, y: 8, width: 3, height: 3 }],
 };
+const ROOM_MULTI = {
+  id: 'multi',
+  floor: 'floor-0',
+  rects: [
+    { x: 0, y: 0, width: 2, height: 2 },
+    { x: 4, y: 4, width: 5, height: 5 },
+  ],
+};
 
 const OBJ_A = 'a'.repeat(64);
 const OBJ_B = 'b'.repeat(64);
@@ -31,6 +41,41 @@ const PROP_1 = { id: 'p1', x: 0, y: 0, floor: 'floor-0', object: OBJ_A };
 const PROP_2 = { id: 'p2', x: 1, y: 0, floor: 'floor-0', object: OBJ_B };
 const PROP_3 = { id: 'p3', x: 0, y: 1, floor: 'floor-1', object: OBJ_A };
 const PROP_DUP = { id: 'p4', x: 2, y: 2, floor: 'floor-0', object: OBJ_A };
+
+describe('roomArea', () => {
+  it('sums rect areas and ignores negative dimensions as zero', () => {
+    expect(roomArea(ROOM_A)).toBe(16);
+    expect(roomArea(ROOM_MULTI)).toBe(4 + 25);
+    expect(
+      roomArea({
+        id: 'neg',
+        floor: 'f',
+        rects: [{ x: 0, y: 0, width: -2, height: 9 }],
+      }),
+    ).toBe(0);
+  });
+});
+
+describe('pickMainRoomId', () => {
+  it('returns undefined for an empty list', () => {
+    expect(pickMainRoomId([])).toBeUndefined();
+  });
+
+  it('picks the largest room by area and first on ties', () => {
+    // A=16, C=9 → A
+    expect(pickMainRoomId([ROOM_A, ROOM_C])).toBe('a');
+    // MULTI=29 wins over A=16
+    expect(pickMainRoomId([ROOM_A, ROOM_MULTI, ROOM_C])).toBe('multi');
+    // equal area: first wins
+    const twin = {
+      id: 'twin',
+      floor: 'floor-0',
+      rects: [{ x: 0, y: 0, width: 4, height: 4 }],
+    };
+    expect(pickMainRoomId([ROOM_A, twin])).toBe('a');
+    expect(pickMainRoomId([twin, ROOM_A])).toBe('twin');
+  });
+});
 
 describe('roomsOnFloor', () => {
   it('filters by floor id and preserves order', () => {

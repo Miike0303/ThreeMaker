@@ -272,6 +272,8 @@
     "painter.room.remove": "Remove",
     "painter.room.overlayLabel": "Room: {name}",
     "painter.stairLinks": "Stair links",
+    "painter.stairLinks.emptyTitle": "No stair links",
+    "painter.stairLinks.emptyBody": "Use the Stair link tool (S): click entry on one floor, then exit on another.",
     "painter.stairLink.summary": "{from} → {to}",
     "painter.stairLink.bidirectional": "Bidirectional",
     "painter.stairLink.remove": "Remove",
