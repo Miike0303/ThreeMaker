@@ -16,12 +16,14 @@ import {
   nextLightId,
   placeAttachedLight,
   placeLight,
+  redoLight,
   removeLight,
   setActiveLightColor,
   setActiveLightHeight,
   setActiveLightIntensity,
   setActiveLightKind,
   setActiveLightRange,
+  undoLight,
 } from '../src/painter-store.js';
 
 const BLANK_OPTIONS: CreateBlankMapDocumentOptions = {
@@ -258,5 +260,38 @@ describe('composeDocumentFromPainterFloors: placed lights (WU-LIGHT-01)', () => 
     });
     expect(setActiveLightColor(state, 'not-a-color')).toBe(state);
     expect(setActiveLightColor(state, '#ABCDEF').activeLightColor).toBe('#abcdef');
+  });
+
+  it('undoLight / redoLight reverse place and remove (WU-LIGHT-05)', () => {
+    const doc = createBlankMapDocument(BLANK_OPTIONS);
+    let state = createPainterState({
+      floors: painterFloorsFromDocument(doc),
+      width: doc.width,
+      height: doc.height,
+    });
+    state = placeLight(state, { x: 1, y: 1 });
+    expect(state.lights).toHaveLength(1);
+    ({ state } = undoLight(state));
+    expect(state.lights).toEqual([]);
+    ({ state } = redoLight(state));
+    expect(state.lights).toHaveLength(1);
+    const id = state.lights[0]!.id;
+    state = removeLight(state, id);
+    expect(state.lights).toEqual([]);
+    ({ state } = undoLight(state));
+    expect(state.lights.map((l) => l.id)).toEqual([id]);
+  });
+
+  it('undoLight undoes placeAttachedLight', () => {
+    const doc = createBlankMapDocument(BLANK_OPTIONS);
+    let state = createPainterState({
+      floors: painterFloorsFromDocument(doc),
+      width: doc.width,
+      height: doc.height,
+    });
+    state = placeAttachedLight(state, 'player');
+    expect(state.lights[0]?.attach).toBe('player');
+    ({ state } = undoLight(state));
+    expect(state.lights).toEqual([]);
   });
 });

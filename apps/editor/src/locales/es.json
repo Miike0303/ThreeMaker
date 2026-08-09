@@ -303,6 +303,8 @@
     "painter.triggers.reuseToast": "Ajustes del disparador {id} cargados — colocá otra copia (T).",
     "painter.lights": "Luces",
     "painter.lights.hint": "Coloca luces point o spot en el piso activo (herramienta L), o adjuntá una luz al jugador / un NPC.",
+    "painter.lights.undo": "Deshacer luz",
+    "painter.lights.redo": "Rehacer luz",
     "painter.lights.kind": "Tipo",
     "painter.lights.kind.point": "Point",
     "painter.lights.kind.spot": "Spot",

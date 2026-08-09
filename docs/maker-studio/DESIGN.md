@@ -108,6 +108,7 @@ Maker Studio shell
 - WU-LIGHT-02 light viewport overlay (`computeLightOverlayPoints`); markers use authored color; spot vs point glyph
 - WU-LIGHT-03 compose re-attaches per-floor `lightMap` sha (no longer stripped on save)
 - WU-LIGHT-04 attached lights (`placeAttachedLight` player|npc); list/remove; removeLight handles attach
+- WU-LIGHT-05 light place/remove undo stack (`lightCommandStack` per floor; attached uses active floor)
 
 ## PR Plan
 

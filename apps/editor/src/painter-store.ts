@@ -65,11 +65,11 @@
  * remove/re-add is the undo). Path addressing for nested commands uses a
  * flat tagged `CommandPath` (see type doc below).
  *
- * Light authoring (schema v6 WU-LIGHT-01/04): `PainterState.lights` mirrors
+ * Light authoring (schema v6 WU-LIGHT-01/04/05): `PainterState.lights` mirrors
  * `MapDocument.lights` exactly (flat, top-level). Place/remove for the placed
- * form (x/y/floor); `placeAttachedLight` for attach=player|npcId.
- * Deliberately NO per-floor command-stack undo v1 (remove is the undo),
- * same stair-link/spawn precedent.
+ * form (x/y/floor); `placeAttachedLight` for attach=player|npcId. Place/remove
+ * push onto the active floor's OWN `lightCommandStack` (attached ops also use
+ * the active floor's stack for session undo isolation).
  */
 
 import type { EventCommand } from '@threemaker/core';
@@ -199,7 +199,30 @@ export const EMPTY_TRIGGER_COMMAND_STACK: TriggerCommandStackState = {
   redoStack: [],
 };
 
-/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"), and (Slice 5a) its own independent room-command stack (`roomCommandStack`) -- a floor's room edits undo/redo separately from its tile edits, never crossing into another floor's history -- plus (C5 WU-04) its own prop-command stack and (c1a follow-up) npc/trigger command stacks. Structurally parallel to `map-compose.ts`'s `PainterFloorSource` (`{id, label?, baseElevation, layers}`, no command stack) and `PainterFloorInit` below (same fields as this type, minus the session-local stacks) -- separate types by design, not accidental divergence: each belongs to its own layer (composed-doc source, store-init input, live store state). */
+/**
+ * One light mutation's before/after `LightDocument` (schema v6 WU-LIGHT-05).
+ * Same shape as `PropCommand`. Attached lights still push onto the ACTIVE
+ * floor's stack (session isolation); `floor` is that active floor id, even
+ * when the light itself has no floor (attach form).
+ */
+export interface LightCommand {
+  readonly floor: string;
+  readonly id: string;
+  readonly before?: LightDocument;
+  readonly after?: LightDocument;
+}
+
+export interface LightCommandStackState {
+  readonly undoStack: readonly LightCommand[];
+  readonly redoStack: readonly LightCommand[];
+}
+
+export const EMPTY_LIGHT_COMMAND_STACK: LightCommandStackState = {
+  undoStack: [],
+  redoStack: [],
+};
+
+/** One stacked floor's paintable state: its own tile layers plus its own independent undo/redo command stack (spec: "per-floor undo isolation"), and (Slice 5a) its own independent room-command stack (`roomCommandStack`) -- a floor's room edits undo/redo separately from its tile edits, never crossing into another floor's history -- plus (C5 WU-04) its own prop-command stack, (c1a follow-up) npc/trigger command stacks, and (WU-LIGHT-05) light command stack. Structurally parallel to `map-compose.ts`'s `PainterFloorSource` (`{id, label?, baseElevation, layers}`, no command stack) and `PainterFloorInit` below (same fields as this type, minus the session-local stacks) -- separate types by design, not accidental divergence: each belongs to its own layer (composed-doc source, store-init input, live store state). */
 export interface PainterFloorState {
   readonly id: string;
   readonly label?: string;
@@ -210,6 +233,7 @@ export interface PainterFloorState {
   readonly propCommandStack: PropCommandStackState;
   readonly npcCommandStack: NpcCommandStackState;
   readonly triggerCommandStack: TriggerCommandStackState;
+  readonly lightCommandStack: LightCommandStackState;
 }
 
 /** A floor's initial layers, as sourced from a loaded/composed `MapDocument` (see `map-compose.ts`'s `painterFloorsFromDocument`, which returns this exact shape as `PainterFloorSource`) or freshly created for a blank floor -- command stacks are always session-local, never persisted. */
@@ -430,6 +454,7 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
       propCommandStack: EMPTY_PROP_COMMAND_STACK,
       npcCommandStack: EMPTY_NPC_COMMAND_STACK,
       triggerCommandStack: EMPTY_TRIGGER_COMMAND_STACK,
+      lightCommandStack: EMPTY_LIGHT_COMMAND_STACK,
     })),
     activeFloor,
     width,
@@ -500,6 +525,7 @@ function replaceActiveFloor(
       | 'propCommandStack'
       | 'npcCommandStack'
       | 'triggerCommandStack'
+      | 'lightCommandStack'
     >
   >,
 ): PainterState {
@@ -540,6 +566,7 @@ export function addFloor(state: PainterState, options: AddFloorOptions): Painter
     propCommandStack: EMPTY_PROP_COMMAND_STACK,
     npcCommandStack: EMPTY_NPC_COMMAND_STACK,
     triggerCommandStack: EMPTY_TRIGGER_COMMAND_STACK,
+    lightCommandStack: EMPTY_LIGHT_COMMAND_STACK,
   };
   const floors = [...state.floors, floor];
   return { ...state, floors, activeFloor: floors.length - 1 };
@@ -1605,6 +1632,19 @@ function upsertLight(
   return lights.map((light, i) => (i === index ? next : light));
 }
 
+function applyLightMutation(
+  state: PainterState,
+  lights: readonly LightDocument[],
+  command: LightCommand,
+): PainterState {
+  const floor = activeFloorState(state);
+  const undoStack = [...floor.lightCommandStack.undoStack, command].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, {
+    lightCommandStack: { undoStack, redoStack: [] },
+  });
+  return { ...withStack, lights };
+}
+
 /**
  * Places a point/spot light on the ACTIVE floor at `point` using the active
  * light brush and the next free `light-N` id. Lights MAY share a tile (schema).
@@ -1629,7 +1669,8 @@ export function placeLight(
     floor: floor.id,
     height: state.activeLightHeight,
   };
-  return { ...state, lights: upsertLight(state.lights, id, light) };
+  const lights = upsertLight(state.lights, id, light);
+  return applyLightMutation(state, lights, { floor: floor.id, id, after: light });
 }
 
 /**
@@ -1647,7 +1688,8 @@ export function placeLightAtTile(
 /**
  * Authors an attached light (`attach` only — no x/y/floor/height) using the
  * active brush. `attach` must be `'player'` or an existing NPC id on this map.
- * No-ops mid-stroke or on an invalid target.
+ * No-ops mid-stroke or on an invalid target. Pushes onto the active floor's
+ * light command stack for undo isolation.
  */
 export function placeAttachedLight(state: PainterState, attach: string): PainterState {
   if (state.stroke.status === 'stroking') return state;
@@ -1655,6 +1697,7 @@ export function placeAttachedLight(state: PainterState, attach: string): Painter
   if (target.length === 0) return state;
   if (target !== 'player' && !state.npcs.some((npc) => npc.id === target)) return state;
 
+  const floor = activeFloorState(state);
   const id = nextLightId(state.lights);
   const light: LightDocument = {
     id,
@@ -1664,7 +1707,8 @@ export function placeAttachedLight(state: PainterState, attach: string): Painter
     range: state.activeLightRange,
     attach: target,
   };
-  return { ...state, lights: upsertLight(state.lights, id, light) };
+  const lights = upsertLight(state.lights, id, light);
+  return applyLightMutation(state, lights, { floor: floor.id, id, after: light });
 }
 
 /**
@@ -1685,12 +1729,46 @@ export function removeLight(state: PainterState, id: string): PainterState {
   if (state.stroke.status === 'stroking') return state;
   const existing = state.lights.find((light) => light.id === id);
   if (!existing) return state;
-  if (existing.attach !== undefined) {
-    return { ...state, lights: upsertLight(state.lights, id, undefined) };
-  }
   const floor = activeFloorState(state);
-  if (existing.floor !== floor.id) return state;
-  return { ...state, lights: upsertLight(state.lights, id, undefined) };
+  if (existing.attach === undefined && existing.floor !== floor.id) return state;
+
+  const lights = upsertLight(state.lights, id, undefined);
+  return applyLightMutation(state, lights, { floor: floor.id, id, before: existing });
+}
+
+export interface LightCommandStepOutcome {
+  readonly state: PainterState;
+  readonly command?: LightCommand;
+}
+
+/** Undoes the most recent light command on the ACTIVE floor's OWN `lightCommandStack`, if any. */
+export function undoLight(state: PainterState): LightCommandStepOutcome {
+  const floor = activeFloorState(state);
+  const last = floor.lightCommandStack.undoStack[floor.lightCommandStack.undoStack.length - 1];
+  if (!last) return { state };
+
+  const lights = upsertLight(state.lights, last.id, last.before);
+  const undoStack = floor.lightCommandStack.undoStack.slice(0, -1);
+  const redoStack = [...floor.lightCommandStack.redoStack, last].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, {
+    lightCommandStack: { undoStack, redoStack },
+  });
+  return { state: { ...withStack, lights }, command: last };
+}
+
+/** Re-applies the most recently undone light command on the ACTIVE floor's OWN `lightCommandStack`, if any. */
+export function redoLight(state: PainterState): LightCommandStepOutcome {
+  const floor = activeFloorState(state);
+  const last = floor.lightCommandStack.redoStack[floor.lightCommandStack.redoStack.length - 1];
+  if (!last) return { state };
+
+  const lights = upsertLight(state.lights, last.id, last.after);
+  const redoStack = floor.lightCommandStack.redoStack.slice(0, -1);
+  const undoStack = [...floor.lightCommandStack.undoStack, last].slice(-COMMAND_STACK_CAP);
+  const withStack = replaceActiveFloor(state, {
+    lightCommandStack: { undoStack, redoStack },
+  });
+  return { state: { ...withStack, lights }, command: last };
 }
 
 // --- Event scripts + worldSeeds (events editor WU-01; no undo stack) ----

@@ -303,6 +303,8 @@
     "painter.triggers.reuseToast": "Trigger {id} settings loaded — place another copy (T).",
     "painter.lights": "Lights",
     "painter.lights.hint": "Place point or spot lights on the active floor (tool L), or attach a light to the player / an NPC.",
+    "painter.lights.undo": "Undo light",
+    "painter.lights.redo": "Redo light",
     "painter.lights.kind": "Kind",
     "painter.lights.kind.point": "Point",
     "painter.lights.kind.spot": "Spot",

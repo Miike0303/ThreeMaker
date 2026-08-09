@@ -2445,6 +2445,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     <section className="ide-section">
                       <h3 className="ide-section-title">{t('painter.lights')}</h3>
                       <p className="ide-hint">{t('painter.lights.hint')}</p>
+                      <div className="ide-row">
+                        <button type="button" onClick={() => viewportRef.current?.undoLight()}>
+                          {t('painter.lights.undo')}
+                        </button>
+                        <button type="button" onClick={() => viewportRef.current?.redoLight()}>
+                          {t('painter.lights.redo')}
+                        </button>
+                      </div>
                       <fieldset className="ide-fieldset">
                         <legend>{t('painter.lights.kind')}</legend>
                         {LIGHT_KINDS.map((kind) => (

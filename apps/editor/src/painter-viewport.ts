@@ -557,6 +557,20 @@ export class PainterViewport {
     this.emitState();
   }
 
+  undoLight(): void {
+    if (!this.state) return;
+    this.state = painter.undoLight(this.state).state;
+    this.emitState();
+    this.recomputeLightOverlay();
+  }
+
+  redoLight(): void {
+    if (!this.state) return;
+    this.state = painter.redoLight(this.state).state;
+    this.emitState();
+    this.recomputeLightOverlay();
+  }
+
   // --- Event scripts + worldSeeds (events editor WU-02; no overlay recompute) ---
 
   addEvent(key: string): void {
