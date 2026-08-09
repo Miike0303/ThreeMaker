@@ -114,6 +114,7 @@ Maker Studio shell
 - WU-PROC-16 Generate ensures player torch (`placePlayerTorch` / `ensurePlayerTorch`); full editor vitest 721 pass
 - WU-LIGHT-06 prune lights attached to missing NPCs on removeNpc/undo/redo (`pruneLightsForNpcs`)
 - WU-LIGHT-07 compose also prunes dangling NPC-attached lights before save/export
+- WU-UTIL-01 `clampTileIndex` + editor `clampRange` tests; furniture density uses `clampRange`; `placeLight` clamps OOB tile coords so Place-at-tile cannot invent invalid lights
 
 ## PR Plan
 

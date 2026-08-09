@@ -88,6 +88,33 @@ describe('composeDocumentFromPainterFloors: placed lights (WU-LIGHT-01)', () => 
     ]);
   });
 
+  it('placeLight clamps OOB tile coords into map bounds (WU-UTIL-01)', () => {
+    const doc = createBlankMapDocument(BLANK_OPTIONS);
+    let state = createPainterState({
+      floors: painterFloorsFromDocument(doc),
+      width: doc.width,
+      height: doc.height,
+      lights: doc.lights,
+    });
+    state = placeLight(state, { x: -3, y: 99 });
+    expect(state.lights[0]).toMatchObject({ x: 0, y: 3 });
+
+    const composed = composeDocumentFromPainterFloors(
+      doc,
+      state.floors,
+      state.rooms,
+      state.stairLinks,
+      state.spawn,
+      state.props,
+      state.npcs,
+      state.triggers,
+      state.events,
+      state.worldSeeds,
+      state.lights,
+    );
+    expect(() => parseMapDocument(JSON.parse(serializeMapDocument(composed)))).not.toThrow();
+  });
+
   it('removeLight drops active-floor placed lights and attached lights', () => {
     const doc = createBlankMapDocument(BLANK_OPTIONS);
     let state = createPainterState({

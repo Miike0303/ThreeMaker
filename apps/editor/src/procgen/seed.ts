@@ -1,6 +1,7 @@
 /**
  * Pure seed / density helpers for Maker Studio procgen UI.
  */
+import { clampRange } from '../clamp.js';
 
 /** Default sparse furniture density (matches stampSimpleDungeon default). */
 export const DEFAULT_FURNITURE_DENSITY = 0.06;
@@ -29,11 +30,10 @@ export function clampFurnitureDensity(
   fallback: number = DEFAULT_FURNITURE_DENSITY,
 ): number {
   if (!Number.isFinite(value)) {
-    return Number.isFinite(fallback)
-      ? Math.min(1, Math.max(0, fallback))
-      : DEFAULT_FURNITURE_DENSITY;
+    if (!Number.isFinite(fallback)) return DEFAULT_FURNITURE_DENSITY;
+    return clampRange(fallback, 0, 1);
   }
-  return Math.min(1, Math.max(0, value));
+  return clampRange(value, 0, 1);
 }
 
 /** UI percent (0–100) → density 0–1. */

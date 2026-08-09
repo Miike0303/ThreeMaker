@@ -103,6 +103,7 @@ import {
   redoCommand,
   undoCommand,
 } from '@threemaker/map-format';
+import { clampTileIndex } from './clamp.js';
 import { normalizeLightColor, pruneLightsForNpcs } from './entity-lists.js';
 import { assignSemanticClass, resolveTouchedTileIds } from './semantic-store.js';
 import type { TilePoint, ToolId, ToolSMState, ToolSMStrokingState } from './tool-sm.js';
@@ -1668,6 +1669,8 @@ export function placeLight(
   if (state.stroke.status === 'stroking') return state;
 
   const floor = activeFloorState(state);
+  const x = clampTileIndex(point.x, state.width);
+  const y = clampTileIndex(point.y, state.height);
   const id = nextLightId(state.lights);
   const light: LightDocument = {
     id,
@@ -1675,8 +1678,8 @@ export function placeLight(
     color: state.activeLightColor,
     intensity: state.activeLightIntensity,
     range: state.activeLightRange,
-    x: point.x,
-    y: point.y,
+    x,
+    y,
     floor: floor.id,
     height: state.activeLightHeight,
   };
