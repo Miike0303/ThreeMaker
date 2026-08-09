@@ -5,6 +5,7 @@ import {
   clampLightIntensity,
   clampLightRange,
   entitiesOnFloor,
+  entitiesOnKnownFloors,
   LIGHT_HEIGHT_MAX,
   LIGHT_INTENSITY_MAX,
   LIGHT_INTENSITY_MIN,
@@ -20,7 +21,9 @@ import {
   propObjectLibrary,
   propPlacementFromDocument,
   propsOnFloor,
+  pruneLightsForFloors,
   pruneLightsForNpcs,
+  pruneStairLinksForFloors,
   roomArea,
   roomsOnFloor,
   triggerPlacementFromDocument,
@@ -360,5 +363,65 @@ describe('pruneLightsForNpcs', () => {
     const lights = [LIGHT_PLACED, LIGHT_ATTACHED];
     const next = pruneLightsForNpcs(lights, [NPC_1]);
     expect(next).toEqual(lights);
+  });
+});
+
+describe('entitiesOnKnownFloors (WU-UTIL-06)', () => {
+  it('drops entities on missing floors and keeps same ref when all known', () => {
+    const known = new Set(['floor-0']);
+    expect(entitiesOnKnownFloors([ROOM_A, ROOM_B, ROOM_C], known)).toEqual([ROOM_A, ROOM_C]);
+    const onlyGround = [ROOM_A, ROOM_C];
+    expect(entitiesOnKnownFloors(onlyGround, known)).toBe(onlyGround);
+  });
+});
+
+describe('pruneStairLinksForFloors (WU-UTIL-06)', () => {
+  const LINK_OK = {
+    id: 's0',
+    fromFloor: 'floor-0',
+    toFloor: 'floor-1',
+    bidirectional: true,
+    waypoints: [
+      { x: 1, y: 1, floor: 'floor-0' },
+      { x: 2, y: 2, floor: 'floor-1' },
+    ],
+  };
+  const LINK_ORPHAN = {
+    id: 's1',
+    fromFloor: 'floor-0',
+    toFloor: 'floor-gone',
+    bidirectional: false,
+    waypoints: [
+      { x: 0, y: 0, floor: 'floor-0' },
+      { x: 0, y: 1, floor: 'floor-gone' },
+    ],
+  };
+
+  it('drops links whose from/to floor is missing', () => {
+    const known = new Set(['floor-0', 'floor-1']);
+    expect(pruneStairLinksForFloors([LINK_OK, LINK_ORPHAN], known)).toEqual([LINK_OK]);
+  });
+
+  it('returns same reference when all links valid', () => {
+    const known = new Set(['floor-0', 'floor-1']);
+    const links = [LINK_OK];
+    expect(pruneStairLinksForFloors(links, known)).toBe(links);
+  });
+});
+
+describe('pruneLightsForFloors (WU-UTIL-06)', () => {
+  it('drops placed lights on missing floors; keeps attached', () => {
+    const known = new Set(['floor-0']);
+    expect(
+      pruneLightsForFloors([LIGHT_PLACED, LIGHT_OTHER_FLOOR, LIGHT_ATTACHED], known).map(
+        (l) => l.id,
+      ),
+    ).toEqual(['lamp-1', 'torch']);
+  });
+
+  it('returns same reference when all placed floors known', () => {
+    const known = new Set(['floor-0', 'floor-1']);
+    const lights = [LIGHT_PLACED, LIGHT_OTHER_FLOOR, LIGHT_ATTACHED];
+    expect(pruneLightsForFloors(lights, known)).toBe(lights);
   });
 });

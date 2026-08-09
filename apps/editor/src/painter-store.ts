@@ -108,8 +108,11 @@ import {
   clampLightHeight,
   clampLightIntensity,
   clampLightRange,
+  entitiesOnKnownFloors,
   normalizeLightColor,
+  pruneLightsForFloors,
   pruneLightsForNpcs,
+  pruneStairLinksForFloors,
 } from './entity-lists.js';
 import { assignSemanticClass, resolveTouchedTileIds } from './semantic-store.js';
 import type { TilePoint, ToolId, ToolSMState, ToolSMStrokingState } from './tool-sm.js';
@@ -584,6 +587,10 @@ export function selectFloor(state: PainterState, index: number): PainterState {
  * floor BEFORE it was removed, stays at the same index (now pointing at
  * whatever took its place, or clamped to the new last floor) if the active
  * floor itself was removed.
+ *
+ * WU-UTIL-06: also drops floor-scoped authoring that referenced the removed
+ * floor id (rooms/props/npcs/triggers/placed lights/stair-links/spawn) so the
+ * live store stays schema-safe before compose filters on save.
  */
 export function removeFloor(state: PainterState, index: number): PainterState {
   if (state.stroke.status === 'stroking') return state;
@@ -595,7 +602,40 @@ export function removeFloor(state: PainterState, index: number): PainterState {
     index < state.activeFloor
       ? state.activeFloor - 1
       : Math.min(state.activeFloor, floors.length - 1);
-  return { ...state, floors, activeFloor };
+  const floorIds = new Set(floors.map((floor) => floor.id));
+  const rooms = entitiesOnKnownFloors(state.rooms, floorIds);
+  const props = entitiesOnKnownFloors(state.props, floorIds);
+  const npcs = entitiesOnKnownFloors(state.npcs, floorIds);
+  const triggers = entitiesOnKnownFloors(state.triggers, floorIds);
+  const stairLinks = pruneStairLinksForFloors(state.stairLinks, floorIds);
+  const lights = pruneLightsForNpcs(pruneLightsForFloors(state.lights, floorIds), npcs);
+
+  let next: PainterState = {
+    ...state,
+    floors,
+    activeFloor,
+    rooms,
+    props,
+    npcs,
+    triggers,
+    stairLinks,
+    lights,
+  };
+
+  if (next.spawn !== undefined && !floorIds.has(next.spawn.floor)) {
+    const { spawn: _spawn, ...rest } = next;
+    next = rest;
+  }
+  if (
+    next.activeRoomId !== undefined &&
+    !next.rooms.some((room) => room.id === next.activeRoomId)
+  ) {
+    next = setActiveRoomId(next, undefined);
+  }
+  if (next.pendingStairEntry !== undefined && !floorIds.has(next.pendingStairEntry.floor)) {
+    next = setPendingStairEntry(next, undefined);
+  }
+  return next;
 }
 
 /** Toggles semantic-class painting mode. Ignored mid-stroke, same as `setTool`. */

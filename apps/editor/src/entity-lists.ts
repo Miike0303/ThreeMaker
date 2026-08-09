@@ -8,6 +8,7 @@ import type {
   NpcFacing,
   PropDocument,
   RoomDocument,
+  StairLinkDocument,
   TriggerDocument,
 } from '@threemaker/map-format';
 import { clampRange } from './clamp.js';
@@ -19,6 +20,46 @@ export function entitiesOnFloor<T extends { readonly floor: string }>(
 ): readonly T[] {
   if (floorId === undefined) return [];
   return entities.filter((entity) => entity.floor === floorId);
+}
+
+/**
+ * Keep only entities whose `floor` is still in the floor stack (WU-UTIL-06).
+ * Returns the same array reference when nothing was dropped.
+ */
+export function entitiesOnKnownFloors<T extends { readonly floor: string }>(
+  entities: readonly T[],
+  floorIds: ReadonlySet<string>,
+): readonly T[] {
+  const next = entities.filter((entity) => floorIds.has(entity.floor));
+  return next.length === entities.length ? entities : next;
+}
+
+/**
+ * Drop stair-links that reference a missing floor id (from or to).
+ * Returns the same array reference when nothing was dropped.
+ */
+export function pruneStairLinksForFloors(
+  links: readonly StairLinkDocument[],
+  floorIds: ReadonlySet<string>,
+): readonly StairLinkDocument[] {
+  const next = links.filter(
+    (link) => floorIds.has(link.fromFloor) && floorIds.has(link.toFloor),
+  );
+  return next.length === links.length ? links : next;
+}
+
+/**
+ * Drop placed lights whose `floor` is gone. Attached lights (no floor) pass.
+ * Pair with `pruneLightsForNpcs` after NPCs on removed floors are filtered.
+ */
+export function pruneLightsForFloors(
+  lights: readonly LightDocument[],
+  floorIds: ReadonlySet<string>,
+): readonly LightDocument[] {
+  const next = lights.filter(
+    (light) => light.attach !== undefined || (light.floor !== undefined && floorIds.has(light.floor)),
+  );
+  return next.length === lights.length ? lights : next;
 }
 
 /** Sum of rect areas for a room (ties and empty rects allowed). */

@@ -535,6 +535,72 @@ describe('painter-store: floor switcher (Slice 4 -- painter-floors spec)', () =>
     expect(switched).toBe(state);
   });
 
+  it('removeFloor prunes floor-scoped entities, stairs, spawn, and NPC lights (WU-UTIL-06)', () => {
+    let state = createPainterState({
+      ...oneFloor(4, 4),
+      width: 4,
+      height: 4,
+      events: {
+        talk: [{ type: 'showDialogue', source: { kind: 'text', lines: ['hi'] } }],
+      },
+    });
+    state = addFloor(state, { id: 'floor-1' });
+    // Ground room (stays).
+    state = selectFloor(state, 0);
+    state = addRoom(state, {
+      id: 'keep-room',
+      rects: [{ x: 0, y: 0, width: 2, height: 2 }],
+    });
+    // Upper-floor content (dropped with the floor).
+    state = selectFloor(state, 1);
+    state = addRoom(state, {
+      id: 'drop-room',
+      rects: [{ x: 1, y: 1, width: 2, height: 2 }],
+    });
+    state = setActiveRoomId(state, 'drop-room');
+    state = setSpawn(state, { x: 1, y: 1, floor: 'floor-1' });
+    state = addStairLink(state, {
+      id: 'stair-01',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: 0, y: 0 },
+      exit: { x: 1, y: 1 },
+    });
+    state = setPendingStairEntry(state, { floor: 'floor-1', x: 2, y: 2 });
+    state = placeLight(state, { x: 0, y: 0 }); // floor-1 lamp
+    const upperLampId = state.lights[state.lights.length - 1]!.id;
+    state = selectFloor(state, 0);
+    state = placeLight(state, { x: 0, y: 0 }); // ground lamp
+    const groundLampId = state.lights[state.lights.length - 1]!.id;
+    state = setActiveNpcSpriteObject(state, 'a'.repeat(64));
+    state = setActiveNpcEventKey(state, 'talk');
+    state = selectFloor(state, 1);
+    state = placeNpc(state, { x: 2, y: 2 });
+    const npcId = state.npcs[0]!.id;
+    state = placeAttachedLight(state, npcId);
+    state = placeAttachedLight(state, 'player');
+    state = setActivePropObject(state, 'b'.repeat(64));
+    state = placeProp(state, { x: 3, y: 3 });
+    state = setActiveTriggerEventKey(state, 'talk');
+    state = placeTrigger(state, { x: 1, y: 2 });
+
+    state = removeFloor(state, 1);
+
+    expect(state.floors.map((f) => f.id)).toEqual(['floor-0']);
+    expect(state.rooms.map((r) => r.id)).toEqual(['keep-room']);
+    expect(state.activeRoomId).toBeUndefined();
+    expect(state.spawn).toBeUndefined();
+    expect(state.stairLinks).toEqual([]);
+    expect(state.pendingStairEntry).toBeUndefined();
+    expect(state.npcs).toEqual([]);
+    expect(state.props).toEqual([]);
+    expect(state.triggers).toEqual([]);
+    expect(state.lights.some((l) => l.id === upperLampId)).toBe(false);
+    expect(state.lights.some((l) => l.id === groundLampId)).toBe(true);
+    expect(state.lights.some((l) => l.attach === 'player')).toBe(true);
+    expect(state.lights.some((l) => l.attach === npcId)).toBe(false);
+  });
+
   it('createPainterState accepts a multi-floor init with an explicit activeFloor (map load path)', () => {
     const state = createPainterState({
       floors: [
