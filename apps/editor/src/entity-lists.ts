@@ -10,6 +10,7 @@ import type {
   RoomDocument,
   TriggerDocument,
 } from '@threemaker/map-format';
+import { clampRange } from './clamp.js';
 
 /** Filter any floor-scoped entity list (rooms, props, npcs, triggers). */
 export function entitiesOnFloor<T extends { readonly floor: string }>(
@@ -193,6 +194,35 @@ export function normalizeLightColor(raw: string): string | undefined {
   const color = raw.trim().toLowerCase();
   if (!/^#[0-9a-f]{6}$/.test(color)) return undefined;
   return color;
+}
+
+/** Authoring soft bounds for light brush (schema only requires finite > 0 / >= 0). */
+export const LIGHT_INTENSITY_MIN = 0.01;
+export const LIGHT_INTENSITY_MAX = 50;
+export const LIGHT_RANGE_MIN = 0.01;
+export const LIGHT_RANGE_MAX = 64;
+export const LIGHT_HEIGHT_MIN = 0;
+export const LIGHT_HEIGHT_MAX = 32;
+
+/**
+ * Soft-clamp intensity into authoring bounds. Non-finite or `<= 0` → undefined
+ * (caller no-ops). Tiny positive values lift to MIN; huge values cap at MAX.
+ */
+export function clampLightIntensity(value: number): number | undefined {
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  return clampRange(value, LIGHT_INTENSITY_MIN, LIGHT_INTENSITY_MAX);
+}
+
+/** Soft-clamp range (world units); same invalid contract as intensity. */
+export function clampLightRange(value: number): number | undefined {
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  return clampRange(value, LIGHT_RANGE_MIN, LIGHT_RANGE_MAX);
+}
+
+/** Soft-clamp height (world-Y offset); non-finite or `< 0` → undefined. */
+export function clampLightHeight(value: number): number | undefined {
+  if (!Number.isFinite(value) || value < 0) return undefined;
+  return clampRange(value, LIGHT_HEIGHT_MIN, LIGHT_HEIGHT_MAX);
 }
 
 /**

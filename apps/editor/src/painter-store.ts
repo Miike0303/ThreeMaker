@@ -104,7 +104,13 @@ import {
   undoCommand,
 } from '@threemaker/map-format';
 import { clampTileIndex } from './clamp.js';
-import { normalizeLightColor, pruneLightsForNpcs } from './entity-lists.js';
+import {
+  clampLightHeight,
+  clampLightIntensity,
+  clampLightRange,
+  normalizeLightColor,
+  pruneLightsForNpcs,
+} from './entity-lists.js';
 import { assignSemanticClass, resolveTouchedTileIds } from './semantic-store.js';
 import type { TilePoint, ToolId, ToolSMState, ToolSMStrokingState } from './tool-sm.js';
 import { beginStroke, continueStroke, endStroke, TOOL_SM_IDLE } from './tool-sm.js';
@@ -481,18 +487,9 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     activeTriggerOn,
     activeLightKind,
     activeLightColor: normalizeLightColor(activeLightColor) ?? DEFAULT_LIGHT_COLOR,
-    activeLightIntensity:
-      Number.isFinite(activeLightIntensity) && activeLightIntensity > 0
-        ? activeLightIntensity
-        : DEFAULT_LIGHT_INTENSITY,
-    activeLightRange:
-      Number.isFinite(activeLightRange) && activeLightRange > 0
-        ? activeLightRange
-        : DEFAULT_LIGHT_RANGE,
-    activeLightHeight:
-      Number.isFinite(activeLightHeight) && activeLightHeight >= 0
-        ? activeLightHeight
-        : DEFAULT_LIGHT_HEIGHT,
+    activeLightIntensity: clampLightIntensity(activeLightIntensity) ?? DEFAULT_LIGHT_INTENSITY,
+    activeLightRange: clampLightRange(activeLightRange) ?? DEFAULT_LIGHT_RANGE,
+    activeLightHeight: clampLightHeight(activeLightHeight) ?? DEFAULT_LIGHT_HEIGHT,
   };
   let next: PainterState = spawn === undefined ? base : { ...base, spawn };
   if (activePropObject !== undefined) next = { ...next, activePropObject };
@@ -1635,20 +1632,23 @@ export function setActiveLightColor(state: PainterState, color: string): Painter
 
 export function setActiveLightIntensity(state: PainterState, intensity: number): PainterState {
   const idle = cancelStroke(state);
-  if (!Number.isFinite(intensity) || intensity <= 0) return idle;
-  return { ...idle, activeLightIntensity: intensity };
+  const clamped = clampLightIntensity(intensity);
+  if (clamped === undefined) return idle;
+  return { ...idle, activeLightIntensity: clamped };
 }
 
 export function setActiveLightRange(state: PainterState, range: number): PainterState {
   const idle = cancelStroke(state);
-  if (!Number.isFinite(range) || range <= 0) return idle;
-  return { ...idle, activeLightRange: range };
+  const clamped = clampLightRange(range);
+  if (clamped === undefined) return idle;
+  return { ...idle, activeLightRange: clamped };
 }
 
 export function setActiveLightHeight(state: PainterState, height: number): PainterState {
   const idle = cancelStroke(state);
-  if (!Number.isFinite(height) || height < 0) return idle;
-  return { ...idle, activeLightHeight: height };
+  const clamped = clampLightHeight(height);
+  if (clamped === undefined) return idle;
+  return { ...idle, activeLightHeight: clamped };
 }
 
 function upsertLight(

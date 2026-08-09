@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   attachedLights,
+  clampLightHeight,
+  clampLightIntensity,
+  clampLightRange,
   entitiesOnFloor,
+  LIGHT_HEIGHT_MAX,
+  LIGHT_INTENSITY_MAX,
+  LIGHT_INTENSITY_MIN,
+  LIGHT_RANGE_MAX,
+  LIGHT_RANGE_MIN,
   lightAttachTargets,
   lightPlacementFromDocument,
   lightsOnFloor,
@@ -249,6 +257,27 @@ describe('lightsOnFloor', () => {
     ]);
     expect(lightsOnFloor([LIGHT_PLACED], undefined)).toEqual([]);
     expect(lightsOnFloor([LIGHT_ATTACHED], 'floor-0')).toEqual([]);
+  });
+});
+
+describe('clampLightIntensity / range / height (WU-LIGHT-08)', () => {
+  it('soft-clamps valid values and rejects non-positive / non-finite', () => {
+    expect(clampLightIntensity(1.5)).toBe(1.5);
+    expect(clampLightIntensity(0.001)).toBe(LIGHT_INTENSITY_MIN);
+    expect(clampLightIntensity(999)).toBe(LIGHT_INTENSITY_MAX);
+    expect(clampLightIntensity(0)).toBeUndefined();
+    expect(clampLightIntensity(-1)).toBeUndefined();
+    expect(clampLightIntensity(Number.NaN)).toBeUndefined();
+
+    expect(clampLightRange(4)).toBe(4);
+    expect(clampLightRange(0.001)).toBe(LIGHT_RANGE_MIN);
+    expect(clampLightRange(1000)).toBe(LIGHT_RANGE_MAX);
+    expect(clampLightRange(0)).toBeUndefined();
+
+    expect(clampLightHeight(0)).toBe(0);
+    expect(clampLightHeight(2)).toBe(2);
+    expect(clampLightHeight(100)).toBe(LIGHT_HEIGHT_MAX);
+    expect(clampLightHeight(-0.1)).toBeUndefined();
   });
 });
 

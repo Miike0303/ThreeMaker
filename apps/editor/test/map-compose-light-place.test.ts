@@ -115,6 +115,24 @@ describe('composeDocumentFromPainterFloors: placed lights (WU-LIGHT-01)', () => 
     expect(() => parseMapDocument(JSON.parse(serializeMapDocument(composed)))).not.toThrow();
   });
 
+  it('setActiveLight* soft-clamps extreme brush values (WU-LIGHT-08)', () => {
+    const doc = createBlankMapDocument(BLANK_OPTIONS);
+    let state = createPainterState({
+      floors: painterFloorsFromDocument(doc),
+      width: doc.width,
+      height: doc.height,
+    });
+    state = setActiveLightIntensity(state, 999);
+    state = setActiveLightRange(state, 0.001);
+    state = setActiveLightHeight(state, 100);
+    expect(state.activeLightIntensity).toBe(50);
+    expect(state.activeLightRange).toBe(0.01);
+    expect(state.activeLightHeight).toBe(32);
+    expect(setActiveLightIntensity(state, 0).activeLightIntensity).toBe(50);
+    expect(setActiveLightRange(state, -1).activeLightRange).toBe(0.01);
+    expect(setActiveLightHeight(state, -0.5).activeLightHeight).toBe(32);
+  });
+
   it('removeLight drops active-floor placed lights and attached lights', () => {
     const doc = createBlankMapDocument(BLANK_OPTIONS);
     let state = createPainterState({

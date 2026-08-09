@@ -2493,6 +2493,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         <input
                           type="number"
                           min={0.01}
+                          max={50}
                           step={0.1}
                           value={painterState.activeLightIntensity}
                           onChange={(event) => {
@@ -2508,6 +2509,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         <input
                           type="number"
                           min={0.01}
+                          max={64}
                           step={0.5}
                           value={painterState.activeLightRange}
                           onChange={(event) => {
@@ -2523,6 +2525,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         <input
                           type="number"
                           min={0}
+                          max={32}
                           step={0.25}
                           value={painterState.activeLightHeight}
                           onChange={(event) => {
