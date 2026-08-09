@@ -143,6 +143,8 @@
     "painter.events.emptyBody": "Add an event key below to start a command script (NPC interact, triggers).",
     "painter.rooms.emptyTitle": "No rooms on this floor",
     "painter.rooms.emptyBody": "Use New room / Room tool (R), or Generate a dungeon to fill floor-0 rooms.",
+    "painter.mapName": "Map",
+    "painter.mapNameHint": "Display name saved with the map (blank becomes Untitled Map).",
     "painter.floors": "Floor",
     "painter.floorOption": "Floor {index}",
     "painter.floorLabel": "Name",

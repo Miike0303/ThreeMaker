@@ -54,7 +54,7 @@ import {
 import { formatTemplate } from '../format-template.js';
 import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
-import { composeMapFromTilesets, seedDemoTiles } from '../map-compose.js';
+import { composeMapFromTilesets, normalizeMapName, seedDemoTiles } from '../map-compose.js';
 import { isEventReferenced, type PainterState, validateEventsDraft } from '../painter-store.js';
 import type {
   LightOverlayItem,
@@ -246,6 +246,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [tilesetBId, setTilesetBId] = useState<number | undefined>(undefined);
 
   const [mapReady, setMapReady] = useState(false);
+  /** Document display name draft (WU-UX-09); committed on blur via setMapName. */
+  const [mapNameDraft, setMapNameDraft] = useState('');
   const [painterState, setPainterState] = useState<PainterState | undefined>(undefined);
   const [paletteSlots, setPaletteSlots] = useState<readonly PaletteSlotInfo[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -450,6 +452,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       const firstSprite = characterSprites[0]?.sha256;
       if (firstSprite) viewportRef.current?.setActiveNpcSpriteObject(firstSprite);
       setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
+      setMapNameDraft(doc.name);
       setMapReady(true);
     } catch (err) {
       console.error('Failed to create the painter demo map:', err);
@@ -568,6 +571,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       const { textures, sheetPixelSizes } = await loadSlotTextures(stamped);
       viewport.loadMap(stamped, textures, sheetPixelSizes, groundTileId);
       setPaletteSlots(await buildPaletteSlots(stamped, sheetPixelSizes));
+      setMapNameDraft(stamped.name);
       setMapReady(true);
       // Surface rooms list + highlight main chamber (matches spawn placement).
       setInspectorTab('map');
@@ -639,6 +643,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       const firstSprite = characterSprites[0]?.sha256;
       if (firstSprite) viewportRef.current?.setActiveNpcSpriteObject(firstSprite);
       setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
+      setMapNameDraft(doc.name);
       setMapReady(true);
       setStatusMessage(t('painter.loadSuccess'));
     } catch (err) {
@@ -728,6 +733,22 @@ export function PainterPanel({ t }: PainterPanelProps) {
         </div>
         {painterState && (
           <>
+            <div className="ide-menubar-sep" aria-hidden />
+            <div className="ide-menubar-group">
+              <label title={t('painter.mapNameHint')}>
+                {t('painter.mapName')}
+                <input
+                  type="text"
+                  value={mapNameDraft}
+                  onChange={(event) => setMapNameDraft(event.target.value)}
+                  onBlur={() => {
+                    const next = normalizeMapName(mapNameDraft);
+                    setMapNameDraft(next);
+                    viewportRef.current?.setMapName(next);
+                  }}
+                />
+              </label>
+            </div>
             <div className="ide-menubar-sep" aria-hidden />
             <div className="ide-menubar-group">
               <label>

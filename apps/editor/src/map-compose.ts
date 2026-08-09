@@ -81,6 +81,21 @@ export interface CreateBlankMapDocumentOptions {
   readonly flags: readonly number[];
 }
 
+/** Default display name when the author clears the map name field (WU-UX-09). */
+export const DEFAULT_MAP_NAME = 'Untitled Map';
+
+/**
+ * Trim map display name for save/export. Empty / whitespace-only → `fallback`
+ * (schema allows `""`, but Maker Studio refuses blank titles in the UI).
+ */
+export function normalizeMapName(
+  raw: string,
+  fallback: string = DEFAULT_MAP_NAME,
+): string {
+  const trimmed = raw.trim();
+  return trimmed.length === 0 ? fallback : trimmed;
+}
+
 /**
  * A blank (all-zero) map at the current format version, with the given slot
  * composition already set. Schema v2 (plantas-apiladas Slice 1): this

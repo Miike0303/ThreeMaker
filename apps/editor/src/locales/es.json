@@ -143,6 +143,8 @@
     "painter.events.emptyBody": "Agregá una clave de evento abajo para empezar un script (interact de NPC, triggers).",
     "painter.rooms.emptyTitle": "Sin habitaciones en esta planta",
     "painter.rooms.emptyBody": "Usá Nueva habitación / herramienta Habitación (R), o Generá una mazmorra para llenar la planta 0.",
+    "painter.mapName": "Mapa",
+    "painter.mapNameHint": "Nombre que se guarda con el mapa (vacío → Untitled Map).",
     "painter.floors": "Planta",
     "painter.floorOption": "Planta {index}",
     "painter.floorLabel": "Nombre",

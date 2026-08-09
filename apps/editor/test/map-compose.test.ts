@@ -5,7 +5,9 @@ import {
   composeDocumentFromPainterFloors,
   composeMapFromTilesets,
   createBlankMapDocument,
+  DEFAULT_MAP_NAME,
   mergeSlotFlags,
+  normalizeMapName,
   painterFloorsFromDocument,
   seedDemoTiles,
   toRenderableMap,
@@ -43,6 +45,15 @@ describe('mergeSlotFlags', () => {
     const merged = mergeSlotFlags([{ slot: 'A2', sourceFlags: sourceA2 }]);
     expect(merged[4351]).toBe(0x99);
     expect(merged[4352]).toBe(0); // first A3 id: a different slot's range
+  });
+});
+
+describe('normalizeMapName (WU-UX-09)', () => {
+  it('trims non-empty names and falls back when blank', () => {
+    expect(normalizeMapName('  Cave  ')).toBe('Cave');
+    expect(normalizeMapName('')).toBe(DEFAULT_MAP_NAME);
+    expect(normalizeMapName('   ')).toBe(DEFAULT_MAP_NAME);
+    expect(normalizeMapName('\t', 'Demo')).toBe('Demo');
   });
 });
 

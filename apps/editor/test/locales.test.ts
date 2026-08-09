@@ -77,6 +77,8 @@ const NEW_KEYS = [
   'painter.procgen.failed',
   'painter.floorLabel',
   'painter.floorLabelHint',
+  'painter.mapName',
+  'painter.mapNameHint',
   'painter.community',
   'painter.community.hint',
   'painter.community.shareOnSave',

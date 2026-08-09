@@ -20,6 +20,7 @@ import { objectPreviewUrl } from './catalog-client.js';
 import { computeDirtyChunkKeys } from './dirty-region.js';
 import {
   composeDocumentFromPainterFloors,
+  normalizeMapName,
   painterFloorsFromDocument,
   toRenderableMap,
   toRenderableTileset,
@@ -680,6 +681,22 @@ export class PainterViewport {
       ...composed,
       tileset: { ...composed.tileset, semantics: this.state.semantics },
     };
+  }
+
+  /** Live map display name (document-level, not painter-store). */
+  mapName(): string | undefined {
+    return this.doc?.name;
+  }
+
+  /**
+   * Sets document display name (WU-UX-09). Empty/whitespace normalizes to
+   * Untitled Map. No-op when no map is loaded or the name is unchanged.
+   */
+  setMapName(name: string): void {
+    if (!this.doc) return;
+    const next = normalizeMapName(name);
+    if (this.doc.name === next) return;
+    this.doc = { ...this.doc, name: next };
   }
 
   private pickTile(event: PointerEvent): TilePoint | undefined {
