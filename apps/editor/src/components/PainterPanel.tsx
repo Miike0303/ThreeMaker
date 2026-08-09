@@ -16,6 +16,7 @@ import {
   type CommunitySettings,
   type CommunityShareEnqueue,
   communityShareTileCount,
+  communityShareQueueTileTotal,
   formatCommunityShareMapId,
   describeCommunityShareStatus,
   formatCommunityShareAt,
@@ -1724,37 +1725,44 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           <p className="ide-hint">{t('painter.community.queueEmptyBody')}</p>
                         </div>
                       ) : (
-                        <ul className="ide-list" aria-label={t('painter.community.queueList')}>
-                          {communityQueue.map((job) => (
-                            <li key={`${job.mapId}:${job.at}`}>
-                              <span>
-                                {formatTemplate(t('painter.community.queueItem'), {
-                                  name: job.mapName,
-                                  id: formatCommunityShareMapId(job.mapId),
-                                  version: String(job.version),
-                                  license: t(`painter.community.license.${job.licenseTag}`),
-                                  tiles: String(communityShareTileCount(job.tileObjectShas)),
-                                  at: formatCommunityShareAt(job.at),
-                                })}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setCommunityQueue(
-                                    removeCommunityShareQueueJob(job.mapId, job.at),
-                                  );
-                                  setStatusMessage(
-                                    formatTemplate(t('painter.community.queueItemRemoved'), {
-                                      name: job.mapName,
-                                    }),
-                                  );
-                                }}
-                              >
-                                {t('painter.community.removeJob')}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
+                        <>
+                          <ul className="ide-list" aria-label={t('painter.community.queueList')}>
+                            {communityQueue.map((job) => (
+                              <li key={`${job.mapId}:${job.at}`}>
+                                <span>
+                                  {formatTemplate(t('painter.community.queueItem'), {
+                                    name: job.mapName,
+                                    id: formatCommunityShareMapId(job.mapId),
+                                    version: String(job.version),
+                                    license: t(`painter.community.license.${job.licenseTag}`),
+                                    tiles: String(communityShareTileCount(job.tileObjectShas)),
+                                    at: formatCommunityShareAt(job.at),
+                                  })}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCommunityQueue(
+                                      removeCommunityShareQueueJob(job.mapId, job.at),
+                                    );
+                                    setStatusMessage(
+                                      formatTemplate(t('painter.community.queueItemRemoved'), {
+                                        name: job.mapName,
+                                      }),
+                                    );
+                                  }}
+                                >
+                                  {t('painter.community.removeJob')}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="ide-hint" role="status">
+                            {formatTemplate(t('painter.community.queueTileTotal'), {
+                              tiles: String(communityShareQueueTileTotal(communityQueue)),
+                            })}
+                          </p>
+                        </>
                       )}
                       <div className="ide-row">
                         <button

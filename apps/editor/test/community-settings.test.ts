@@ -5,6 +5,7 @@ import {
   DEFAULT_COMMUNITY_SETTINGS,
   describeCommunityShareStatus,
   communityShareTileCount,
+  communityShareQueueTileTotal,
   formatCommunityShareAt,
   formatCommunityShareMapId,
   loadCommunitySettings,
@@ -146,6 +147,33 @@ describe('formatCommunityShareMapId (WU-COMM-11)', () => {
   it('returns empty string for blank input', () => {
     expect(formatCommunityShareMapId('')).toBe('');
     expect(formatCommunityShareMapId('   ')).toBe('');
+  });
+});
+
+describe('communityShareQueueTileTotal (WU-COMM-12)', () => {
+  it('returns 0 for empty queue and blank-only shas', () => {
+    expect(communityShareQueueTileTotal([])).toBe(0);
+    expect(
+      communityShareQueueTileTotal([
+        { ...sampleJob('a'), tileObjectShas: ['', ''] },
+      ]),
+    ).toBe(0);
+  });
+
+  it('unions unique non-empty shas across jobs (no per-job sum)', () => {
+    const a = 'a'.repeat(64);
+    const b = 'b'.repeat(64);
+    const c = 'c'.repeat(64);
+    expect(
+      communityShareQueueTileTotal([
+        { ...sampleJob('1'), tileObjectShas: [a, b, a, ''] },
+        { ...sampleJob('2'), tileObjectShas: [b, c] },
+        { ...sampleJob('3'), tileObjectShas: [c, a] },
+      ]),
+    ).toBe(3);
+    expect(
+      communityShareQueueTileTotal([{ ...sampleJob('solo'), tileObjectShas: [a] }]),
+    ).toBe(1);
   });
 });
 

@@ -135,6 +135,7 @@ Maker Studio shell
 - WU-UX-10 room names: `addRoom`/`renameRoom` trim via `normalizeOptionalName`; blank clears; same-value no-op (no undo noise)
 - WU-COMM-10 offline queue rows show unique tile object count (`communityShareTileCount` + `{tiles}` in en/es)
 - WU-COMM-11 offline queue rows show short map id (`formatCommunityShareMapId` + `{id}` in en/es) for same-name disambiguation
+- WU-COMM-12 offline queue summary: unique tiles across all jobs (`communityShareQueueTileTotal` + `queueTileTotal` en/es)
 
 ## PR Plan
 

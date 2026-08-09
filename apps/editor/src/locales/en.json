@@ -123,6 +123,7 @@
     "painter.community.queueEmptyTitle": "No offline share jobs",
     "painter.community.queueEmptyBody": "Save a map with community share on, or paste queue JSON to restore jobs.",
     "painter.community.queueItem": "{name} · {id} · v{version} · {license} · {tiles} tiles · {at}",
+    "painter.community.queueTileTotal": "{tiles} unique tiles across offline queue",
     "painter.community.license.user-owned": "user-owned",
     "painter.community.license.import-rpgm": "import-rpgm",
     "painter.community.license.mixed": "mixed",

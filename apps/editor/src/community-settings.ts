@@ -286,6 +286,22 @@ export function formatCommunityShareMapId(
 }
 
 /**
+ * Unique non-empty tile object shas across the whole offline queue (WU-COMM-12).
+ * Shared sheets between maps count once — not a sum of per-job badges.
+ */
+export function communityShareQueueTileTotal(
+  jobs: readonly Pick<CommunityShareEnqueue, 'tileObjectShas'>[],
+): number {
+  const seen = new Set<string>();
+  for (const job of jobs) {
+    for (const sha of job.tileObjectShas) {
+      if (typeof sha === 'string' && sha.length > 0) seen.add(sha);
+    }
+  }
+  return seen.size;
+}
+
+/**
  * Pure inspector status for the community section (no I/O).
  * `queue` is newest-first; lastMapName is the newest job when present.
  */

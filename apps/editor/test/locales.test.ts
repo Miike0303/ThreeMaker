@@ -92,6 +92,7 @@ const NEW_KEYS = [
   'painter.community.queueEmptyTitle',
   'painter.community.queueEmptyBody',
   'painter.community.queueItem',
+  'painter.community.queueTileTotal',
   'painter.community.license.user-owned',
   'painter.community.license.import-rpgm',
   'painter.community.license.mixed',
