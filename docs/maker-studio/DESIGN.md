@@ -119,6 +119,7 @@ Maker Studio shell
 - WU-UTIL-03 `setSpawn` clamps OOB tile coords; no-op on unknown floor id
 - WU-COMM-05 offline share queue empty state + push replaces same `mapId` (one newest job per map)
 - WU-LIGHT-08 soft-clamp light brush intensity/range/height (`clampLight*` via `clampRange`; UI max attrs)
+- WU-UTIL-04 `addStairLink` / `setPendingStairEntry` clamp OOB tiles + no-op on unknown floor ids
 
 ## PR Plan
 

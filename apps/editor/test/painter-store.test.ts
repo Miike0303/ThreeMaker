@@ -86,6 +86,21 @@ function oneFloor(width: number, height: number, layers?: TileLayerSet) {
   };
 }
 
+/** Two floors (floor-0 active): stair-link tests need real `toFloor` ids. */
+function twoFloorsReady(extra: Parameters<typeof createPainterState>[0] = {}) {
+  const width = extra.width ?? 4;
+  const height = extra.height ?? 4;
+  let state = createPainterState({
+    ...oneFloor(width, height),
+    width,
+    height,
+    ...extra,
+  });
+  state = addFloor(state, { id: 'floor-1' });
+  state = selectFloor(state, 0);
+  return state;
+}
+
 describe('painter-store: brush', () => {
   it('paints a single cell on pointerdown + pointerup with no movement', () => {
     let state = createPainterState({
@@ -854,7 +869,7 @@ describe('painter-store: stair-link authoring (Slice 5a -- loop-crear-jugar)', (
   });
 
   it('addStairLink appends a 2-waypoint StairLinkDocument from entry/exit tiles, defaulting bidirectional to true', () => {
-    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    let state = twoFloorsReady();
     state = addStairLink(state, {
       id: 'stair-1',
       fromFloor: 'floor-0',
@@ -878,7 +893,7 @@ describe('painter-store: stair-link authoring (Slice 5a -- loop-crear-jugar)', (
   });
 
   it('addStairLink honors an explicit bidirectional: false', () => {
-    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    let state = twoFloorsReady();
     state = addStairLink(state, {
       id: 'stair-1',
       fromFloor: 'floor-0',
@@ -891,7 +906,7 @@ describe('painter-store: stair-link authoring (Slice 5a -- loop-crear-jugar)', (
   });
 
   it('addStairLink is a no-op if a link with that id already exists', () => {
-    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    let state = twoFloorsReady();
     state = addStairLink(state, {
       id: 'stair-1',
       fromFloor: 'floor-0',
@@ -910,7 +925,7 @@ describe('painter-store: stair-link authoring (Slice 5a -- loop-crear-jugar)', (
   });
 
   it('addStairLink is ignored mid-stroke, same as setTool', () => {
-    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4, fillTileId: 1 });
+    let state = twoFloorsReady({ fillTileId: 1 });
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
     const result = addStairLink(state, {
       id: 'stair-1',
@@ -922,8 +937,45 @@ describe('painter-store: stair-link authoring (Slice 5a -- loop-crear-jugar)', (
     expect(result).toBe(state);
   });
 
+  it('addStairLink clamps OOB entry/exit tiles into map bounds (WU-UTIL-04)', () => {
+    let state = twoFloorsReady();
+    state = addStairLink(state, {
+      id: 'stair-1',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      entry: { x: -2, y: 99 },
+      exit: { x: 100, y: -1 },
+    });
+    expect(state.stairLinks[0]?.waypoints).toEqual([
+      { x: 0, y: 3, floor: 'floor-0' },
+      { x: 3, y: 0, floor: 'floor-1' },
+    ]);
+  });
+
+  it('addStairLink is a no-op when fromFloor or toFloor is missing', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    expect(
+      addStairLink(state, {
+        id: 'stair-1',
+        fromFloor: 'floor-0',
+        toFloor: 'ghost',
+        entry: { x: 0, y: 0 },
+        exit: { x: 1, y: 1 },
+      }),
+    ).toBe(state);
+    expect(
+      addStairLink(state, {
+        id: 'stair-1',
+        fromFloor: 'ghost',
+        toFloor: 'floor-0',
+        entry: { x: 0, y: 0 },
+        exit: { x: 1, y: 1 },
+      }),
+    ).toBe(state);
+  });
+
   it('removeStairLink removes the link from state.stairLinks', () => {
-    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    let state = twoFloorsReady();
     state = addStairLink(state, {
       id: 'stair-1',
       fromFloor: 'floor-0',
@@ -942,7 +994,7 @@ describe('painter-store: stair-link authoring (Slice 5a -- loop-crear-jugar)', (
   });
 
   it('removeStairLink is ignored mid-stroke, same as setTool', () => {
-    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4, fillTileId: 1 });
+    let state = twoFloorsReady({ fillTileId: 1 });
     state = addStairLink(state, {
       id: 'stair-1',
       fromFloor: 'floor-0',
@@ -956,7 +1008,7 @@ describe('painter-store: stair-link authoring (Slice 5a -- loop-crear-jugar)', (
   });
 
   it('toggleStairLinkBidirectional flips the flag on the matching link', () => {
-    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    let state = twoFloorsReady();
     state = addStairLink(state, {
       id: 'stair-1',
       fromFloor: 'floor-0',
@@ -980,7 +1032,7 @@ describe('painter-store: stair-link authoring (Slice 5a -- loop-crear-jugar)', (
   });
 
   it('toggleStairLinkBidirectional is ignored mid-stroke, same as setTool', () => {
-    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4, fillTileId: 1 });
+    let state = twoFloorsReady({ fillTileId: 1 });
     state = addStairLink(state, {
       id: 'stair-1',
       fromFloor: 'floor-0',
@@ -1002,6 +1054,14 @@ describe('painter-store: stair-link authoring (Slice 5a -- loop-crear-jugar)', (
 
     state = setPendingStairEntry(state, undefined);
     expect(state.pendingStairEntry).toBeUndefined();
+  });
+
+  it('setPendingStairEntry clamps OOB coords and rejects unknown floors (WU-UTIL-04)', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setPendingStairEntry(state, { floor: 'floor-0', x: -3, y: 40 });
+    expect(state.pendingStairEntry).toEqual({ floor: 'floor-0', x: 0, y: 3 });
+    const before = state;
+    expect(setPendingStairEntry(state, { floor: 'ghost', x: 1, y: 1 })).toBe(before);
   });
 
   it('setPendingStairEntry is ignored mid-stroke, same as setTool', () => {

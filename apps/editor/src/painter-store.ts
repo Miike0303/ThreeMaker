@@ -1047,6 +1047,10 @@ export interface AddStairLinkOptions {
 export function addStairLink(state: PainterState, options: AddStairLinkOptions): PainterState {
   if (state.stroke.status === 'stroking') return state;
   if (state.stairLinks.some((link) => link.id === options.id)) return state;
+  // Schema requires fromFloor/toFloor to exist; clamp waypoints into map bounds
+  // so Place-at-tile / tool paths cannot invent invalid links (WU-UTIL-04).
+  if (!state.floors.some((floor) => floor.id === options.fromFloor)) return state;
+  if (!state.floors.some((floor) => floor.id === options.toFloor)) return state;
 
   const link: StairLinkDocument = {
     id: options.id,
@@ -1054,8 +1058,16 @@ export function addStairLink(state: PainterState, options: AddStairLinkOptions):
     toFloor: options.toFloor,
     bidirectional: options.bidirectional ?? true,
     waypoints: [
-      { x: options.entry.x, y: options.entry.y, floor: options.fromFloor },
-      { x: options.exit.x, y: options.exit.y, floor: options.toFloor },
+      {
+        x: clampTileIndex(options.entry.x, state.width),
+        y: clampTileIndex(options.entry.y, state.height),
+        floor: options.fromFloor,
+      },
+      {
+        x: clampTileIndex(options.exit.x, state.width),
+        y: clampTileIndex(options.exit.y, state.height),
+        floor: options.toFloor,
+      },
     ],
   };
   return { ...state, stairLinks: [...state.stairLinks, link] };
@@ -1090,7 +1102,17 @@ export function setPendingStairEntry(
   entry: { readonly floor: string; readonly x: number; readonly y: number } | undefined,
 ): PainterState {
   if (state.stroke.status === 'stroking') return state;
-  if (entry !== undefined) return { ...state, pendingStairEntry: entry };
+  if (entry !== undefined) {
+    if (!state.floors.some((floor) => floor.id === entry.floor)) return state;
+    return {
+      ...state,
+      pendingStairEntry: {
+        floor: entry.floor,
+        x: clampTileIndex(entry.x, state.width),
+        y: clampTileIndex(entry.y, state.height),
+      },
+    };
+  }
   if (state.pendingStairEntry === undefined) return state;
   const { pendingStairEntry: _pendingStairEntry, ...rest } = state;
   return rest;
