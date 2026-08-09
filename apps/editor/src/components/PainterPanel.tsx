@@ -30,10 +30,14 @@ import {
   worldValueKind,
 } from '../event-form-helpers.js';
 import {
+  npcPlacementFromDocument,
+  npcsOnFloor,
   pickMainRoomId,
   propObjectLibrary,
   propsOnFloor,
   roomsOnFloor,
+  triggerPlacementFromDocument,
+  triggersOnFloor,
 } from '../entity-lists.js';
 import { formatTemplate } from '../format-template.js';
 import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
@@ -269,6 +273,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const floorProps = useMemo(
     () => propsOnFloor(painterState?.props ?? [], activeFloorId),
     [painterState?.props, activeFloorId],
+  );
+  const floorNpcs = useMemo(
+    () => npcsOnFloor(painterState?.npcs ?? [], activeFloorId),
+    [painterState?.npcs, activeFloorId],
+  );
+  const floorTriggers = useMemo(
+    () => triggersOnFloor(painterState?.triggers ?? [], activeFloorId),
+    [painterState?.triggers, activeFloorId],
   );
   const objectLibrary = useMemo(
     () => propObjectLibrary(painterState?.props ?? [], painterState?.activePropObject),
@@ -1959,22 +1971,42 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           {t('painter.placeAtTile')}
                         </button>
                       </div>
-                      <ul className="ide-list">
-                        {painterState.npcs
-                          .filter(
-                            (npc) =>
-                              npc.floor === painterState.floors[painterState.activeFloor]?.id,
-                          )
-                          .map((npc) => (
+                      {floorNpcs.length === 0 ? (
+                        <div className="ide-empty" role="status">
+                          <p className="ide-empty-title">{t('painter.npcs.emptyTitle')}</p>
+                          <p className="ide-hint">{t('painter.npcs.emptyBody')}</p>
+                        </div>
+                      ) : (
+                        <ul className="ide-list" aria-label={t('painter.npcs')}>
+                          {floorNpcs.map((npc) => (
                             <li key={npc.id}>
-                              <span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const brush = npcPlacementFromDocument(npc);
+                                  viewportRef.current?.setActiveNpcSpriteObject(
+                                    brush.spriteObject,
+                                  );
+                                  viewportRef.current?.setActiveNpcCharacterIndex(
+                                    brush.characterIndex,
+                                  );
+                                  viewportRef.current?.setActiveNpcFacing(brush.facing);
+                                  viewportRef.current?.setActiveNpcEventKey(brush.eventKey);
+                                  viewportRef.current?.setTool('npc');
+                                  setStatusMessage(
+                                    formatTemplate(t('painter.npcs.reuseToast'), {
+                                      id: npc.id,
+                                    }),
+                                  );
+                                }}
+                              >
                                 {formatTemplate(t('painter.npcs.summary'), {
                                   id: npc.id,
                                   x: npc.x,
                                   y: npc.y,
                                   event: npc.onInteract,
                                 })}
-                              </span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => viewportRef.current?.removeNpc(npc.id)}
@@ -1983,7 +2015,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               </button>
                             </li>
                           ))}
-                      </ul>
+                        </ul>
+                      )}
                     </section>
 
                     <section className="ide-section">
@@ -2079,15 +2112,29 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           {t('painter.placeAtTile')}
                         </button>
                       </div>
-                      <ul className="ide-list">
-                        {painterState.triggers
-                          .filter(
-                            (trigger) =>
-                              trigger.floor === painterState.floors[painterState.activeFloor]?.id,
-                          )
-                          .map((trigger) => (
+                      {floorTriggers.length === 0 ? (
+                        <div className="ide-empty" role="status">
+                          <p className="ide-empty-title">{t('painter.triggers.emptyTitle')}</p>
+                          <p className="ide-hint">{t('painter.triggers.emptyBody')}</p>
+                        </div>
+                      ) : (
+                        <ul className="ide-list" aria-label={t('painter.triggers')}>
+                          {floorTriggers.map((trigger) => (
                             <li key={trigger.id}>
-                              <span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const brush = triggerPlacementFromDocument(trigger);
+                                  viewportRef.current?.setActiveTriggerOn(brush.on);
+                                  viewportRef.current?.setActiveTriggerEventKey(brush.eventKey);
+                                  viewportRef.current?.setTool('trigger');
+                                  setStatusMessage(
+                                    formatTemplate(t('painter.triggers.reuseToast'), {
+                                      id: trigger.id,
+                                    }),
+                                  );
+                                }}
+                              >
                                 {formatTemplate(t('painter.triggers.summary'), {
                                   id: trigger.id,
                                   x: trigger.x,
@@ -2095,7 +2142,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   on: trigger.on,
                                   event: trigger.event,
                                 })}
-                              </span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => viewportRef.current?.removeTrigger(trigger.id)}
@@ -2104,7 +2151,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               </button>
                             </li>
                           ))}
-                      </ul>
+                        </ul>
+                      )}
                     </section>
                   </>
                 )}

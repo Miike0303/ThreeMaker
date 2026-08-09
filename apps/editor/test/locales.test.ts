@@ -230,6 +230,9 @@ const NEW_KEYS = [
   'painter.npcs.summary',
   'painter.npcs.remove',
   'painter.npcs.overlayLabel',
+  'painter.npcs.emptyTitle',
+  'painter.npcs.emptyBody',
+  'painter.npcs.reuseToast',
   'painter.triggers',
   'painter.triggers.eventsHint',
   'painter.triggers.noEventsHint',
@@ -241,6 +244,9 @@ const NEW_KEYS = [
   'painter.triggers.summary',
   'painter.triggers.remove',
   'painter.triggers.overlayLabel',
+  'painter.triggers.emptyTitle',
+  'painter.triggers.emptyBody',
+  'painter.triggers.reuseToast',
 ] as const;
 
 describe('locale strings: stair-link + spawn-point authoring (Slice 5b)', () => {

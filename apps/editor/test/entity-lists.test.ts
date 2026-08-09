@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  entitiesOnFloor,
+  npcPlacementFromDocument,
+  npcsOnFloor,
   pickMainRoomId,
   propObjectLibrary,
   propsOnFloor,
   roomArea,
   roomsOnFloor,
+  triggerPlacementFromDocument,
+  triggersOnFloor,
 } from '../src/entity-lists.js';
 
 const ROOM_A = {
@@ -121,5 +126,74 @@ describe('propObjectLibrary', () => {
     ).toEqual([OBJ_A]);
     expect(propObjectLibrary([], '   ')).toEqual([]);
     expect(propObjectLibrary([])).toEqual([]);
+  });
+});
+
+const NPC_1 = {
+  id: 'n1',
+  x: 1,
+  y: 2,
+  floor: 'floor-0',
+  facing: 'down' as const,
+  sprite: { object: OBJ_A, characterIndex: 3 },
+  onInteract: 'greet',
+};
+const NPC_2 = {
+  id: 'n2',
+  x: 0,
+  y: 0,
+  floor: 'floor-1',
+  facing: 'up' as const,
+  sprite: { object: OBJ_B, characterIndex: 0 },
+  onInteract: 'shop',
+};
+
+const TRIG_1 = {
+  id: 't1',
+  x: 4,
+  y: 5,
+  floor: 'floor-0',
+  on: 'enter' as const,
+  event: 'zone-a',
+};
+const TRIG_2 = {
+  id: 't2',
+  x: 0,
+  y: 0,
+  floor: 'floor-1',
+  on: 'interact' as const,
+  event: 'chest',
+};
+
+describe('entitiesOnFloor / npcsOnFloor / triggersOnFloor', () => {
+  it('filters floor-scoped entities', () => {
+    expect(entitiesOnFloor([NPC_1, NPC_2], 'floor-0')).toEqual([NPC_1]);
+    expect(npcsOnFloor([NPC_1, NPC_2], 'floor-0')).toEqual([NPC_1]);
+    expect(triggersOnFloor([TRIG_1, TRIG_2], 'floor-0')).toEqual([TRIG_1]);
+    expect(npcsOnFloor([NPC_1], undefined)).toEqual([]);
+  });
+});
+
+describe('npcPlacementFromDocument', () => {
+  it('copies sprite, facing, and onInteract for reuse', () => {
+    expect(npcPlacementFromDocument(NPC_1)).toEqual({
+      spriteObject: OBJ_A,
+      characterIndex: 3,
+      facing: 'down',
+      eventKey: 'greet',
+    });
+  });
+});
+
+describe('triggerPlacementFromDocument', () => {
+  it('copies on and event for reuse', () => {
+    expect(triggerPlacementFromDocument(TRIG_1)).toEqual({
+      on: 'enter',
+      eventKey: 'zone-a',
+    });
+    expect(triggerPlacementFromDocument(TRIG_2)).toEqual({
+      on: 'interact',
+      eventKey: 'chest',
+    });
   });
 });

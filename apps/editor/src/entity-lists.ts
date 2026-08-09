@@ -2,7 +2,22 @@
  * Pure list helpers for Map / Entities inspectors (rooms, props list-place).
  * Keeps floor filtering and object-library order out of React components.
  */
-import type { PropDocument, RoomDocument } from '@threemaker/map-format';
+import type {
+  NpcDocument,
+  NpcFacing,
+  PropDocument,
+  RoomDocument,
+  TriggerDocument,
+} from '@threemaker/map-format';
+
+/** Filter any floor-scoped entity list (rooms, props, npcs, triggers). */
+export function entitiesOnFloor<T extends { readonly floor: string }>(
+  entities: readonly T[],
+  floorId: string | undefined,
+): readonly T[] {
+  if (floorId === undefined) return [];
+  return entities.filter((entity) => entity.floor === floorId);
+}
 
 /** Sum of rect areas for a room (ties and empty rects allowed). */
 export function roomArea(room: RoomDocument): number {
@@ -37,8 +52,7 @@ export function roomsOnFloor(
   rooms: readonly RoomDocument[],
   floorId: string | undefined,
 ): readonly RoomDocument[] {
-  if (floorId === undefined) return [];
-  return rooms.filter((room) => room.floor === floorId);
+  return entitiesOnFloor(rooms, floorId);
 }
 
 /** Placed props on a floor, stable document order. */
@@ -46,8 +60,53 @@ export function propsOnFloor(
   props: readonly PropDocument[],
   floorId: string | undefined,
 ): readonly PropDocument[] {
-  if (floorId === undefined) return [];
-  return props.filter((prop) => prop.floor === floorId);
+  return entitiesOnFloor(props, floorId);
+}
+
+/** Placed NPCs on a floor, stable document order. */
+export function npcsOnFloor(
+  npcs: readonly NpcDocument[],
+  floorId: string | undefined,
+): readonly NpcDocument[] {
+  return entitiesOnFloor(npcs, floorId);
+}
+
+/** Placed triggers on a floor, stable document order. */
+export function triggersOnFloor(
+  triggers: readonly TriggerDocument[],
+  floorId: string | undefined,
+): readonly TriggerDocument[] {
+  return entitiesOnFloor(triggers, floorId);
+}
+
+/** Placement brush fields copied from an authored NPC (list-place reuse). */
+export type NpcPlacementBrush = {
+  readonly spriteObject: string;
+  readonly characterIndex: number;
+  readonly facing: NpcFacing;
+  readonly eventKey: string;
+};
+
+export function npcPlacementFromDocument(npc: NpcDocument): NpcPlacementBrush {
+  return {
+    spriteObject: npc.sprite.object,
+    characterIndex: npc.sprite.characterIndex,
+    facing: npc.facing,
+    eventKey: npc.onInteract,
+  };
+}
+
+/** Placement brush fields copied from an authored trigger (list-place reuse). */
+export type TriggerPlacementBrush = {
+  readonly on: 'enter' | 'interact';
+  readonly eventKey: string;
+};
+
+export function triggerPlacementFromDocument(trigger: TriggerDocument): TriggerPlacementBrush {
+  return {
+    on: trigger.on,
+    eventKey: trigger.event,
+  };
 }
 
 /**
