@@ -145,6 +145,8 @@
     "painter.rooms.emptyBody": "Usá Nueva habitación / herramienta Habitación (R), o Generá una mazmorra para llenar la planta 0.",
     "painter.floors": "Planta",
     "painter.floorOption": "Planta {index}",
+    "painter.floorLabel": "Nombre",
+    "painter.floorLabelHint": "Nombre opcional de la planta activa (vacío = Planta N).",
     "painter.addFloor": "Agregar planta",
     "painter.removeFloor": "Quitar planta",
     "painter.layer": "Capa",

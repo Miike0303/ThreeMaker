@@ -145,6 +145,8 @@
     "painter.rooms.emptyBody": "Use New room / Room tool (R), or Generate a dungeon to fill floor-0 rooms.",
     "painter.floors": "Floor",
     "painter.floorOption": "Floor {index}",
+    "painter.floorLabel": "Name",
+    "painter.floorLabelHint": "Optional display name for the active floor (empty = Floor N).",
     "painter.addFloor": "Add floor",
     "painter.removeFloor": "Remove floor",
     "painter.layer": "Layer",

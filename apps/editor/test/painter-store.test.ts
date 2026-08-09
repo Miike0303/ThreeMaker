@@ -43,6 +43,8 @@ import {
   renameEvent,
   renameRoom,
   selectFloor,
+  setFloorLabel,
+  normalizeFloorLabel,
   setActiveLayer,
   setActiveNpcCharacterIndex,
   setActiveNpcEventKey,
@@ -533,6 +535,31 @@ describe('painter-store: floor switcher (Slice 4 -- painter-floors spec)', () =>
     ({ state } = pointerDown(state, { x: 0, y: 0 }));
     const switched = removeFloor(state, 1);
     expect(switched).toBe(state);
+  });
+
+  it('setFloorLabel sets, trims, and clears labels (WU-UX-08)', () => {
+    let state = createPainterState({ ...oneFloor(2, 2), width: 2, height: 2 });
+    state = addFloor(state, { id: 'floor-1' });
+    expect(normalizeFloorLabel('  Roof  ')).toBe('Roof');
+    expect(normalizeFloorLabel('   ')).toBeUndefined();
+
+    state = setFloorLabel(state, 1, '  Roof  ');
+    expect(state.floors[1]?.label).toBe('Roof');
+    expect(state.floors[0]?.label).toBeUndefined();
+
+    // Same value → same reference.
+    const same = setFloorLabel(state, 1, 'Roof');
+    expect(same).toBe(state);
+
+    // Empty clears optional label key.
+    state = setFloorLabel(state, 1, '  ');
+    expect(state.floors[1]?.label).toBeUndefined();
+
+    // OOB / mid-stroke no-ops.
+    expect(setFloorLabel(state, 9, 'X')).toBe(state);
+    state = setFloorLabel(state, 0, 'Ground');
+    ({ state } = pointerDown(state, { x: 0, y: 0 }));
+    expect(setFloorLabel(state, 0, 'Basement')).toBe(state);
   });
 
   it('removeFloor prunes floor-scoped entities, stairs, spawn, and NPC lights (WU-UTIL-06)', () => {

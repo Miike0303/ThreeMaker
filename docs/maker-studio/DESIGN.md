@@ -129,6 +129,7 @@ Maker Studio shell
 - WU-PROC-18 multi-floor Generate places bidirectional stair to adjacent floor (`placeStairToAdjacentFloor` / `stairs-from-stamp`); pair links replaced on re-Generate
 - WU-COMM-09 offline queue rows format `at` via `formatCommunityShareAt` (readable local date/time; invalid → raw)
 - WU-PROC-19 Generate success toast includes `{stairs}` via `countStampStairLinks` (en/es)
+- WU-UX-08 `setFloorLabel` / `normalizeFloorLabel` + menubar name field for active floor (compose keeps label)
 
 ## PR Plan
 

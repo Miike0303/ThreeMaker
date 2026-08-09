@@ -754,6 +754,22 @@ export function PainterPanel({ t }: PainterPanelProps) {
               >
                 {t('painter.removeFloor')}
               </button>
+              <label title={t('painter.floorLabelHint')}>
+                {t('painter.floorLabel')}
+                <input
+                  type="text"
+                  value={painterState.floors[painterState.activeFloor]?.label ?? ''}
+                  placeholder={formatTemplate(t('painter.floorOption'), {
+                    index: painterState.activeFloor,
+                  })}
+                  onChange={(event) =>
+                    viewportRef.current?.setFloorLabel(
+                      painterState.activeFloor,
+                      event.target.value,
+                    )
+                  }
+                />
+              </label>
             </div>
             <div className="ide-menubar-sep" aria-hidden />
             <div className="ide-menubar-group">

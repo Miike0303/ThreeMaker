@@ -573,6 +573,52 @@ export function addFloor(state: PainterState, options: AddFloorOptions): Painter
   return { ...state, floors, activeFloor: floors.length - 1 };
 }
 
+/**
+ * Trimmed display label for a floor. Empty / whitespace-only → clear (undefined).
+ */
+export function normalizeFloorLabel(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+}
+
+/**
+ * Sets or clears the optional display `label` on floor `index` (WU-UX-08).
+ * Empty/whitespace clears the label (dropdown falls back to Floor N).
+ * Ignored mid-stroke or for an out-of-range index. Same-value is a no-op.
+ */
+export function setFloorLabel(
+  state: PainterState,
+  index: number,
+  label: string | undefined,
+): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  if (index < 0 || index >= state.floors.length) return state;
+  const floor = state.floors[index];
+  if (!floor) return state;
+
+  const nextLabel =
+    label === undefined ? undefined : normalizeFloorLabel(label);
+  if (floor.label === nextLabel) return state;
+
+  const floors = state.floors.map((entry, i) => {
+    if (i !== index) return entry;
+    const next: PainterFloorState = {
+      id: entry.id,
+      baseElevation: entry.baseElevation,
+      layers: entry.layers,
+      commandStack: entry.commandStack,
+      roomCommandStack: entry.roomCommandStack,
+      propCommandStack: entry.propCommandStack,
+      npcCommandStack: entry.npcCommandStack,
+      triggerCommandStack: entry.triggerCommandStack,
+      lightCommandStack: entry.lightCommandStack,
+      ...(nextLabel !== undefined ? { label: nextLabel } : {}),
+    };
+    return next;
+  });
+  return { ...state, floors };
+}
+
 /** Switches the active floor. Ignored mid-stroke or for an out-of-range index. */
 export function selectFloor(state: PainterState, index: number): PainterState {
   if (state.stroke.status === 'stroking') return state;

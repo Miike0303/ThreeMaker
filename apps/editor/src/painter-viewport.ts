@@ -289,6 +289,19 @@ export class PainterViewport {
   }
 
   /**
+   * Sets or clears the optional display label on floor `index` (WU-UX-08).
+   * Empty/whitespace clears. No-op when unchanged / mid-stroke / OOB.
+   * Label-only: no scene rebuild required (dropdown + compose use state).
+   */
+  setFloorLabel(index: number, label: string | undefined): void {
+    if (!this.state) return;
+    const next = painter.setFloorLabel(this.state, index, label);
+    if (next === this.state) return;
+    this.state = next;
+    this.emitState();
+  }
+
+  /**
    * Shared pipeline for every floor-structure change (add/select/remove):
    * adopt `next` as the current state, rebuild the active floor's scene
    * from scratch, and re-emit state/ramp-glyphs. Every floor-structure
