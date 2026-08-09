@@ -110,6 +110,7 @@ Maker Studio shell
 - WU-LIGHT-04 attached lights (`placeAttachedLight` player|npc); list/remove; removeLight handles attach
 - WU-LIGHT-05 light place/remove undo stack (`lightCommandStack` per floor; attached uses active floor)
 - WU-PROC-14 Generate places room-center lights (`placeRoomLights` / `lightsFromDungeonRooms`)
+- WU-PROC-15 preset roomLight mood (dungeon amber / house warm white / cave cool) wired into Generate
 
 ## PR Plan
 

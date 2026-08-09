@@ -4,6 +4,7 @@ import {
   DEFAULT_PROCGEN_PRESET,
   getProcgenPreset,
   PROCGEN_PRESETS,
+  stampRoomLightOptionsFromPreset,
   type ProcgenPresetId,
 } from '../src/procgen/presets.js';
 
@@ -14,6 +15,22 @@ describe('procgen presets', () => {
   it('lists dungeon, house, and cave', () => {
     expect(PROCGEN_PRESETS.map((p) => p.id)).toEqual(['dungeon', 'house', 'cave']);
     expect(DEFAULT_PROCGEN_PRESET).toBe('dungeon');
+  });
+
+  it('each preset has a distinct roomLight mood (WU-PROC-15)', () => {
+    const dungeon = getProcgenPreset('dungeon');
+    const house = getProcgenPreset('house');
+    const cave = getProcgenPreset('cave');
+    expect(dungeon.roomLight.color).toBe('#ffaa00');
+    expect(house.roomLight.color).toBe('#ffe8c8');
+    expect(cave.roomLight.color).toBe('#88ccff');
+    expect(new Set([dungeon, house, cave].map((p) => p.roomLight.color)).size).toBe(3);
+    expect(stampRoomLightOptionsFromPreset(cave)).toEqual({
+      color: '#88ccff',
+      intensity: 0.85,
+      range: 4,
+      height: 1.5,
+    });
   });
 
   it('getProcgenPreset returns each id', () => {

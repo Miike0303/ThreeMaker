@@ -82,6 +82,7 @@ import {
   DEFAULT_PROCGEN_PRESET,
   getProcgenPreset,
   PROCGEN_PRESETS,
+  stampRoomLightOptionsFromPreset,
   type ProcgenPresetId,
 } from '../procgen/presets.js';
 import {
@@ -537,11 +538,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
         tightBorder: preset.tightBorder,
       });
       // Stamp rewrites floor-0 tile layers + rooms; events/NPCs/worldSeeds stay.
-      // Spawn is moved into the largest room; room-center lamps make Generate lit.
+      // Spawn is moved into the largest room; room-center lamps use preset mood.
       const stamped = applyDungeonStampToMapDocument(doc, stamp, {
         placeSpawnInMainRoom: true,
         replaceFloor0Rooms: true,
         placeRoomLights: true,
+        roomLightOptions: stampRoomLightOptionsFromPreset(preset),
       });
       const { textures, sheetPixelSizes } = await loadSlotTextures(stamped);
       viewport.loadMap(stamped, textures, sheetPixelSizes, groundTileId);

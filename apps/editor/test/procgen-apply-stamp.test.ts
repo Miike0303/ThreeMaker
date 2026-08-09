@@ -188,6 +188,33 @@ describe('applyDungeonStampToMapDocument', () => {
     expect(next.tileset.semantics['9001']).toEqual({ class: 'furniture' });
   });
 
+  it('applies roomLightOptions color when placing lights', () => {
+    const doc = createBlankMapDocument({
+      id: 'stamp-mood',
+      name: 'Mood',
+      width: 20,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const stamp = stampSimpleDungeon({
+      width: 20,
+      height: 16,
+      seed: 3,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      roomCount: 3,
+    });
+    const next = applyDungeonStampToMapDocument(doc, stamp, {
+      placeRoomLights: true,
+      roomLightOptions: { color: '#88ccff', intensity: 0.85, range: 4, height: 1.5 },
+    });
+    const roomLights = next.lights.filter((l) => l.floor === 'floor-0');
+    expect(roomLights.length).toBe(stamp.rooms.length);
+    expect(roomLights.every((l) => l.color === '#88ccff')).toBe(true);
+    expect(roomLights.every((l) => l.intensity === 0.85)).toBe(true);
+  });
+
   it('places room-center lights when placeRoomLights is true', () => {
     const base = createBlankMapDocument({
       id: 'stamp-lights',
