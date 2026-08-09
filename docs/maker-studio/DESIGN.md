@@ -115,6 +115,7 @@ Maker Studio shell
 - WU-LIGHT-06 prune lights attached to missing NPCs on removeNpc/undo/redo (`pruneLightsForNpcs`)
 - WU-LIGHT-07 compose also prunes dangling NPC-attached lights before save/export
 - WU-UTIL-01 `clampTileIndex` + editor `clampRange` tests; furniture density uses `clampRange`; `placeLight` clamps OOB tile coords so Place-at-tile cannot invent invalid lights
+- WU-UTIL-02 `placeProp` / `placeNpc` / `placeTrigger` clamp OOB tile coords (NPC occupancy uses clamped tile)
 
 ## PR Plan
 

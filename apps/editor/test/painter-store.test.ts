@@ -1317,6 +1317,13 @@ describe('painter-store: prop tool (C5 WU-04 -- depth-props-hd)', () => {
       activeFloorState(viaPointer).propCommandStack,
     );
   });
+
+  it('placeProp clamps OOB tile coords into map bounds (WU-UTIL-02)', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setActivePropObject(state, PROP_OBJECT_A);
+    state = placeProp(state, { x: -2, y: 99 });
+    expect(state.props[0]).toMatchObject({ x: 0, y: 3, object: PROP_OBJECT_A });
+  });
 });
 
 const NPC_SPRITE_A = 'c'.repeat(64);
@@ -1416,6 +1423,21 @@ describe('painter-store: npc tool (c1a follow-up)', () => {
     expect(state).toBe(beforeDup);
     expect(state.npcs).toHaveLength(1);
     expect(state.npcs[0]?.sprite.object).toBe(NPC_SPRITE_A);
+  });
+
+  it('placeNpc clamps OOB tile coords into map bounds (WU-UTIL-02)', () => {
+    let state = npcReadyState();
+    state = placeNpc(state, { x: -5, y: 40 });
+    expect(state.npcs[0]).toMatchObject({ x: 0, y: 3 });
+  });
+
+  it('OOB placeNpc that clamps onto an occupied tile is a no-op', () => {
+    let state = npcReadyState();
+    state = placeNpc(state, { x: 0, y: 3 });
+    const before = state;
+    state = placeNpc(state, { x: -1, y: 99 });
+    expect(state).toBe(before);
+    expect(state.npcs).toHaveLength(1);
   });
 
   it('same tile on a different floor is allowed', () => {
@@ -1615,6 +1637,13 @@ describe('painter-store: trigger tool (c1a follow-up)', () => {
         event: EVENT_GATE,
       },
     ]);
+  });
+
+  it('placeTrigger clamps OOB tile coords into map bounds (WU-UTIL-02)', () => {
+    let state = triggerReadyState();
+    state = setActiveTriggerEventKey(state, EVENT_TALK);
+    state = placeTrigger(state, { x: 100, y: -3 });
+    expect(state.triggers[0]).toMatchObject({ x: 3, y: 0, event: EVENT_TALK });
   });
 
   it('placement with zero events is unavailable (no-op)', () => {

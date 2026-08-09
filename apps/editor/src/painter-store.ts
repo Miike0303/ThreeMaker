@@ -1179,13 +1179,15 @@ export function placeProp(
   if (!state.activePropObject) return state;
 
   const floor = activeFloorState(state);
+  const x = clampTileIndex(point.x, state.width);
+  const y = clampTileIndex(point.y, state.height);
   const id = nextPropId(state.props);
   // scale/rotationY/animation omitted deliberately -- authoring those stays
   // JSON-side for now (C5 WU-04 minimal place tool).
   const prop: PropDocument = {
     id,
-    x: point.x,
-    y: point.y,
+    x,
+    y,
     floor: floor.id,
     object: state.activePropObject,
   };
@@ -1349,8 +1351,10 @@ export function placeNpc(
   }
 
   const floor = activeFloorState(state);
+  const x = clampTileIndex(point.x, state.width);
+  const y = clampTileIndex(point.y, state.height);
   const occupied = state.npcs.some(
-    (npc) => npc.floor === floor.id && npc.x === point.x && npc.y === point.y,
+    (npc) => npc.floor === floor.id && npc.x === x && npc.y === y,
   );
   if (occupied) return state;
 
@@ -1358,8 +1362,8 @@ export function placeNpc(
   // routine omitted deliberately -- authoring stays JSON-side (c1a follow-up).
   const npc: NpcDocument = {
     id,
-    x: point.x,
-    y: point.y,
+    x,
+    y,
     floor: floor.id,
     facing: state.activeNpcFacing,
     sprite: {
@@ -1510,11 +1514,13 @@ export function placeTrigger(
   }
 
   const floor = activeFloorState(state);
+  const x = clampTileIndex(point.x, state.width);
+  const y = clampTileIndex(point.y, state.height);
   const id = nextTriggerId(state.triggers);
   const trigger: TriggerDocument = {
     id,
-    x: point.x,
-    y: point.y,
+    x,
+    y,
     floor: floor.id,
     on: state.activeTriggerOn,
     event: state.activeTriggerEventKey,
