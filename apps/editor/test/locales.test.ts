@@ -84,6 +84,8 @@ const NEW_KEYS = [
   'painter.community.clearQueue',
   'painter.community.queueCleared',
   'painter.community.queueList',
+  'painter.community.queueEmptyTitle',
+  'painter.community.queueEmptyBody',
   'painter.community.queueItem',
   'painter.community.removeJob',
   'painter.community.queueItemRemoved',

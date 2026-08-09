@@ -117,6 +117,7 @@ Maker Studio shell
 - WU-UTIL-01 `clampTileIndex` + editor `clampRange` tests; furniture density uses `clampRange`; `placeLight` clamps OOB tile coords so Place-at-tile cannot invent invalid lights
 - WU-UTIL-02 `placeProp` / `placeNpc` / `placeTrigger` clamp OOB tile coords (NPC occupancy uses clamped tile)
 - WU-UTIL-03 `setSpawn` clamps OOB tile coords; no-op on unknown floor id
+- WU-COMM-05 offline share queue empty state + push replaces same `mapId` (one newest job per map)
 
 ## PR Plan
 

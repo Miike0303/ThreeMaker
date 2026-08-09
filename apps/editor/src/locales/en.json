@@ -119,6 +119,8 @@
     "painter.community.clearQueue": "Clear offline queue",
     "painter.community.queueCleared": "Community offline queue cleared.",
     "painter.community.queueList": "Offline share queue",
+    "painter.community.queueEmptyTitle": "No offline share jobs",
+    "painter.community.queueEmptyBody": "Save a map with community share on, or paste queue JSON to restore jobs.",
     "painter.community.queueItem": "{name} · {at}",
     "painter.community.removeJob": "Remove",
     "painter.community.queueItemRemoved": "Removed “{name}” from offline queue.",

@@ -119,6 +119,8 @@
     "painter.community.clearQueue": "Vaciar cola offline",
     "painter.community.queueCleared": "Cola offline de comunidad vaciada.",
     "painter.community.queueList": "Cola de share offline",
+    "painter.community.queueEmptyTitle": "Sin trabajos de share offline",
+    "painter.community.queueEmptyBody": "Guardá un mapa con el share de comunidad activo, o pegá JSON de la cola para restaurar trabajos.",
     "painter.community.queueItem": "{name} · {at}",
     "painter.community.removeJob": "Quitar",
     "painter.community.queueItemRemoved": "Se quitó “{name}” de la cola offline.",

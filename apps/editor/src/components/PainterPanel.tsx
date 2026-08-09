@@ -1659,7 +1659,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                 name: communityStatus.lastMapName ?? '',
                               })}
                       </p>
-                      {communityQueue.length > 0 && (
+                      {communityQueue.length === 0 ? (
+                        <div className="ide-empty" role="status">
+                          <p className="ide-empty-title">{t('painter.community.queueEmptyTitle')}</p>
+                          <p className="ide-hint">{t('painter.community.queueEmptyBody')}</p>
+                        </div>
+                      ) : (
                         <ul className="ide-list" aria-label={t('painter.community.queueList')}>
                           {communityQueue.map((job) => (
                             <li key={`${job.mapId}:${job.at}`}>

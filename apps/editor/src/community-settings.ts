@@ -87,14 +87,16 @@ export function loadCommunityShareQueue(
 }
 
 /**
- * Prepend a share job and persist. Drops oldest when over the cap.
- * Returns the updated queue (newest first).
+ * Prepend a share job and persist. Replaces any prior job with the same
+ * `mapId` (re-save keeps one newest entry per map). Drops oldest when over
+ * the cap. Returns the updated queue (newest first).
  */
 export function pushCommunityShareQueue(
   job: CommunityShareEnqueue,
   storage: Pick<Storage, 'getItem' | 'setItem'> = globalThis.localStorage,
 ): readonly CommunityShareEnqueue[] {
-  const next = [job, ...loadCommunityShareQueue(storage)].slice(0, COMMUNITY_SHARE_QUEUE_MAX);
+  const rest = loadCommunityShareQueue(storage).filter((j) => j.mapId !== job.mapId);
+  const next = [job, ...rest].slice(0, COMMUNITY_SHARE_QUEUE_MAX);
   storage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(next));
   return next;
 }
