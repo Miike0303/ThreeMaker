@@ -75,3 +75,43 @@ export function mergeStampRoomLights(
   );
   return [...kept, ...stampLights];
 }
+
+export const DEFAULT_PLAYER_TORCH_ID = 'player-torch';
+export const DEFAULT_PLAYER_TORCH_COLOR = '#ff8800';
+export const DEFAULT_PLAYER_TORCH_INTENSITY = 1;
+export const DEFAULT_PLAYER_TORCH_RANGE = 3;
+
+export type PlayerTorchOptions = {
+  readonly id?: string;
+  readonly color?: string;
+  readonly intensity?: number;
+  readonly range?: number;
+  readonly kind?: LightDocument['kind'];
+};
+
+/** Attached point light on `player` (handheld torch). */
+export function playerTorchLight(options: PlayerTorchOptions = {}): LightDocument {
+  return {
+    id: options.id ?? DEFAULT_PLAYER_TORCH_ID,
+    kind: options.kind ?? 'point',
+    color: options.color ?? DEFAULT_PLAYER_TORCH_COLOR,
+    intensity: options.intensity ?? DEFAULT_PLAYER_TORCH_INTENSITY,
+    range: options.range ?? DEFAULT_PLAYER_TORCH_RANGE,
+    attach: 'player',
+  };
+}
+
+/**
+ * Ensure a player-attached torch exists. Replaces any prior `attach: player`
+ * lights (or same id) so re-Generate stays single-torch; keeps other attaches.
+ */
+export function ensurePlayerTorch(
+  existing: readonly LightDocument[],
+  options: PlayerTorchOptions = {},
+): readonly LightDocument[] {
+  const torch = playerTorchLight(options);
+  const kept = existing.filter(
+    (light) => light.attach !== 'player' && light.id !== torch.id,
+  );
+  return [...kept, torch];
+}

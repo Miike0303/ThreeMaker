@@ -5,8 +5,10 @@ import type { MapDocument } from '@threemaker/map-format';
 import { assignSemanticClass } from '../semantic-store.js';
 import { pickMainRoomSpawn, type DungeonStampResult } from './dungeon-stamp.js';
 import {
+  ensurePlayerTorch,
   lightsFromDungeonRooms,
   mergeStampRoomLights,
+  type PlayerTorchOptions,
   type StampRoomLightOptions,
 } from './lights-from-stamp.js';
 import { roomsFromDungeonStamp } from './rooms-from-stamp.js';
@@ -31,6 +33,13 @@ export type ApplyDungeonStampOptions = {
   readonly placeRoomLights?: boolean;
   /** Mood overrides for room lights (preset color/intensity/range/height). */
   readonly roomLightOptions?: StampRoomLightOptions;
+  /**
+   * When true, ensure a single `attach: player` torch light exists
+   * (re-Generate replaces prior player attaches). Default false.
+   */
+  readonly placePlayerTorch?: boolean;
+  /** Overrides for the player torch (color/intensity/range/id). */
+  readonly playerTorchOptions?: PlayerTorchOptions;
 };
 
 /** Collect distinct non-zero tile ids from a stamp layer. */
@@ -119,6 +128,12 @@ export function applyDungeonStampToMapDocument(
     next = {
       ...next,
       lights: mergeStampRoomLights(next.lights, floor0.id, stampLights),
+    };
+  }
+  if (options.placePlayerTorch) {
+    next = {
+      ...next,
+      lights: ensurePlayerTorch(next.lights, options.playerTorchOptions ?? {}),
     };
   }
   return next;

@@ -282,4 +282,34 @@ describe('applyDungeonStampToMapDocument', () => {
     const next = applyDungeonStampToMapDocument(doc, stamp);
     expect(next.lights).toEqual([]);
   });
+
+  it('places player torch when placePlayerTorch is true', () => {
+    const doc = createBlankMapDocument({
+      id: 'stamp-torch',
+      name: 'Torch',
+      width: 16,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 2,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      roomCount: 2,
+    });
+    const next = applyDungeonStampToMapDocument(doc, stamp, {
+      placeRoomLights: true,
+      placePlayerTorch: true,
+    });
+    const torch = next.lights.find((l) => l.attach === 'player');
+    expect(torch).toMatchObject({
+      id: 'player-torch',
+      attach: 'player',
+      color: '#ff8800',
+    });
+    expect(next.lights.filter((l) => l.floor === 'floor-0')).toHaveLength(stamp.rooms.length);
+  });
 });

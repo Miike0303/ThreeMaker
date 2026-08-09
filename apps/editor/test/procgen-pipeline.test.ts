@@ -70,6 +70,7 @@ describe('procgen pipeline regression', () => {
       placeSpawnInMainRoom: true,
       replaceFloor0Rooms: true,
       placeRoomLights: true,
+      placePlayerTorch: true,
     });
 
     const spawnPos = pickMainRoomSpawn(stamp.rooms, 32, 24);
@@ -80,6 +81,7 @@ describe('procgen pipeline regression', () => {
     expect(next.tileset.semantics[String(DOOR)]).toEqual({ class: 'door' });
     expect(next.rooms.filter((r) => r.floor === 'floor-0')).toHaveLength(stamp.rooms.length);
     expect(next.lights.filter((l) => l.floor === 'floor-0')).toHaveLength(stamp.rooms.length);
+    expect(next.lights.some((l) => l.attach === 'player')).toBe(true);
 
     const si = spawnPos.y * 32 + spawnPos.x;
     expect(next.floors[0]?.layers.tiles[0]?.[si]).toBe(GROUND);
