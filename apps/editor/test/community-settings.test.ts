@@ -8,7 +8,9 @@ import {
   loadCommunityShareQueue,
   maybeEnqueueCommunityShare,
   pushCommunityShareQueue,
+  removeCommunityShareQueueJob,
   saveCommunitySettings,
+  serializeCommunityShareQueue,
   type CommunityShareEnqueue,
 } from '../src/community-settings.js';
 
@@ -114,6 +116,36 @@ describe('community share offline queue', () => {
     expect(loadCommunityShareQueue(storage)).toHaveLength(2);
     expect(clearCommunityShareQueue(storage)).toEqual([]);
     expect(loadCommunityShareQueue(storage)).toEqual([]);
+  });
+
+  it('removeCommunityShareQueueJob drops matching mapId+at only', () => {
+    const storage = memoryStorage();
+    const a = sampleJob('a', '2026-08-08T00:00:00.000Z');
+    const a2 = sampleJob('a', '2026-08-08T02:00:00.000Z');
+    const b = sampleJob('b', '2026-08-08T01:00:00.000Z');
+    pushCommunityShareQueue(a, storage);
+    pushCommunityShareQueue(b, storage);
+    pushCommunityShareQueue(a2, storage);
+    // newest first: a2, b, a
+    expect(loadCommunityShareQueue(storage).map((j) => j.at)).toEqual([
+      a2.at,
+      b.at,
+      a.at,
+    ]);
+    const after = removeCommunityShareQueueJob('a', a2.at, storage);
+    expect(after.map((j) => `${j.mapId}:${j.at}`)).toEqual([
+      `b:${b.at}`,
+      `a:${a.at}`,
+    ]);
+    expect(removeCommunityShareQueueJob('missing', a.at, storage)).toEqual(after);
+    expect(loadCommunityShareQueue(storage).map((j) => j.mapId)).toEqual(['b', 'a']);
+  });
+
+  it('serializeCommunityShareQueue is pretty JSON of the queue', () => {
+    const jobs = [sampleJob('z'), sampleJob('y')];
+    const raw = serializeCommunityShareQueue(jobs);
+    expect(JSON.parse(raw)).toEqual(jobs);
+    expect(raw).toContain('\n');
   });
 });
 

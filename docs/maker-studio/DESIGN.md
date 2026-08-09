@@ -98,6 +98,7 @@ Maker Studio shell
 - WU-UX-06 Generate opens Map tab + selects main room (`pickMainRoomId`); stair links empty state
 - WU-UX-07 NPC/trigger floor lists + empty states; click row reuses placement brush (list-place)
 - WU-OBJ-02 placed prop row reuses object brush (`propPlacementFromDocument`); prop empty state parity
+- WU-COMM-03 offline queue list + remove job + copy JSON (`removeCommunityShareQueueJob`)
 
 ## PR Plan
 

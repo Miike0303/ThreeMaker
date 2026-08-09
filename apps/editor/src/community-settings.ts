@@ -111,6 +111,28 @@ export function clearCommunityShareQueue(
   return [];
 }
 
+/**
+ * Remove the first queue entry matching mapId + at (unique per save stamp).
+ * No-op identity when no match. Persists and returns the updated queue.
+ */
+export function removeCommunityShareQueueJob(
+  mapId: string,
+  at: string,
+  storage: Pick<Storage, 'getItem' | 'setItem'> = globalThis.localStorage,
+): readonly CommunityShareEnqueue[] {
+  const current = loadCommunityShareQueue(storage);
+  const idx = current.findIndex((job) => job.mapId === mapId && job.at === at);
+  if (idx === -1) return current;
+  const next = current.filter((_, i) => i !== idx);
+  storage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
+/** Pure: stable JSON export of the offline queue (for debug / future upload). */
+export function serializeCommunityShareQueue(queue: readonly CommunityShareEnqueue[]): string {
+  return JSON.stringify(queue, null, 2);
+}
+
 export type CommunityShareStatus = {
   readonly kind: 'off' | 'ready' | 'queued';
   readonly queueLength: number;

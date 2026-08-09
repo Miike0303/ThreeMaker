@@ -20,7 +20,9 @@ import {
   loadCommunityShareQueue,
   maybeEnqueueCommunityShare,
   pushCommunityShareQueue,
+  removeCommunityShareQueueJob,
   saveCommunitySettings,
+  serializeCommunityShareQueue,
 } from '../community-settings.js';
 import {
   canSavePainterDocument,
@@ -1465,17 +1467,60 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               })}
                       </p>
                       {communityQueue.length > 0 && (
-                        <div className="ide-row">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCommunityQueue(clearCommunityShareQueue());
-                              setStatusMessage(t('painter.community.queueCleared'));
-                            }}
-                          >
-                            {t('painter.community.clearQueue')}
-                          </button>
-                        </div>
+                        <>
+                          <ul className="ide-list" aria-label={t('painter.community.queueList')}>
+                            {communityQueue.map((job) => (
+                              <li key={`${job.mapId}:${job.at}`}>
+                                <span>
+                                  {formatTemplate(t('painter.community.queueItem'), {
+                                    name: job.mapName,
+                                    at: job.at,
+                                  })}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCommunityQueue(
+                                      removeCommunityShareQueueJob(job.mapId, job.at),
+                                    );
+                                    setStatusMessage(
+                                      formatTemplate(t('painter.community.queueItemRemoved'), {
+                                        name: job.mapName,
+                                      }),
+                                    );
+                                  }}
+                                >
+                                  {t('painter.community.removeJob')}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="ide-row">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const payload = serializeCommunityShareQueue(communityQueue);
+                                void navigator.clipboard?.writeText(payload).then(
+                                  () =>
+                                    setStatusMessage(t('painter.community.queueCopied')),
+                                  () =>
+                                    setStatusMessage(t('painter.community.queueCopyFailed')),
+                                );
+                              }}
+                            >
+                              {t('painter.community.copyQueue')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCommunityQueue(clearCommunityShareQueue());
+                                setStatusMessage(t('painter.community.queueCleared'));
+                              }}
+                            >
+                              {t('painter.community.clearQueue')}
+                            </button>
+                          </div>
+                        </>
                       )}
                       <label className="ide-check">
                         <input
