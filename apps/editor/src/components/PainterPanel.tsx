@@ -97,6 +97,7 @@ import {
   pushProcgenSeedHistory,
   randomProcgenSeed,
 } from '../procgen/seed.js';
+import { countStampStairLinks } from '../procgen/stairs-from-stamp.js';
 import { resolveDungeonTileIds } from '../procgen/tile-pick.js';
 import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
 import type { ToolId } from '../tool-sm.js';
@@ -581,6 +582,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
           doors: stamp.doors.length,
           furniture: stamp.furnitureCount,
           lights: stamped.lights.filter((l) => l.floor === stampedFloorId).length,
+          stairs: countStampStairLinks(stamped.stairLinks),
           seed: stamp.seed,
           preset: t(`painter.procgen.preset.${preset.id}`),
         }),

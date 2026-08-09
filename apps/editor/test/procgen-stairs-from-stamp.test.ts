@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  countStampStairLinks,
   mergeStampStairLinks,
   pickAdjacentFloorIndex,
   roomLandingTile,
@@ -86,5 +87,26 @@ describe('mergeStampStairLinks', () => {
 
   it('drops the pair when stamp link is undefined', () => {
     expect(mergeStampStairLinks([a, other], 'floor-0', 'floor-1', undefined)).toEqual([other]);
+  });
+});
+
+describe('countStampStairLinks (WU-PROC-19)', () => {
+  it('counts only stamp-prefixed stair ids', () => {
+    const stamp = stampStairLinkBetween('floor-1', { x: 1, y: 1 }, 'floor-0', { x: 2, y: 2 });
+    const authored = {
+      id: 'hand-drawn',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-1',
+      bidirectional: true,
+      waypoints: [
+        { x: 0, y: 0, floor: 'floor-0' },
+        { x: 1, y: 1, floor: 'floor-1' },
+      ],
+    };
+    expect(countStampStairLinks([stamp, authored, stampStairLinkBetween('a', { x: 0, y: 0 }, 'b', { x: 1, y: 1 })])).toBe(
+      2,
+    );
+    expect(countStampStairLinks([])).toBe(0);
+    expect(countStampStairLinks([authored])).toBe(0);
   });
 });

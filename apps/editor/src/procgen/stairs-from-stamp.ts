@@ -100,3 +100,15 @@ export function mergeStampStairLinks(
   const kept = existing.filter((link) => !linksConnectFloors(link, floorA, floorB));
   return stampLink === undefined ? kept : [...kept, stampLink];
 }
+
+/** Default id prefix from `stampStairLinkBetween` (success toast / filters). */
+export const STAMP_STAIR_ID_PREFIX = 'stamp-stair-';
+
+/** Count procgen-authored stair links (id prefix match). */
+export function countStampStairLinks(links: readonly StairLinkDocument[]): number {
+  let count = 0;
+  for (const link of links) {
+    if (link.id.startsWith(STAMP_STAIR_ID_PREFIX)) count += 1;
+  }
+  return count;
+}

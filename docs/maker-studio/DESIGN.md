@@ -128,6 +128,7 @@ Maker Studio shell
 - WU-UTIL-06 `removeFloor` prunes rooms/props/npcs/triggers/placed lights/stairs/spawn + NPC-attached lights; pure `entitiesOnKnownFloors` / `pruneStairLinksForFloors` / `pruneLightsForFloors`
 - WU-PROC-18 multi-floor Generate places bidirectional stair to adjacent floor (`placeStairToAdjacentFloor` / `stairs-from-stamp`); pair links replaced on re-Generate
 - WU-COMM-09 offline queue rows format `at` via `formatCommunityShareAt` (readable local date/time; invalid → raw)
+- WU-PROC-19 Generate success toast includes `{stairs}` via `countStampStairLinks` (en/es)
 
 ## PR Plan
 

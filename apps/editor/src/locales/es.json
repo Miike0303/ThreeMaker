@@ -108,7 +108,7 @@
     "painter.procgen.furnitureTileActive": "Override de muebles: {id}",
     "painter.procgen.furnitureTileAuto": "Muebles: auto (semántica furniture / ninguno)",
     "painter.procgen.needMap": "Cargá o creá un mapa antes de generar.",
-    "painter.procgen.success": "{preset} · {rooms} salas · {doors} puertas · {furniture} muebles · {lights} luces · seed {seed}",
+    "painter.procgen.success": "{preset} · {rooms} salas · {doors} puertas · {furniture} muebles · {lights} luces · {stairs} escaleras · seed {seed}",
     "painter.procgen.failed": "Falló la generación — mirá la consola.",
     "painter.community": "Comunidad",
     "painter.community.hint": "Por defecto los mapas se encolan para share comunitario al guardar (offline hasta el servidor). Desmarcá para guardar solo local.",
