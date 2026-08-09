@@ -6,6 +6,10 @@
  */
 
 const STORAGE_KEY = 'threemaker-maker-studio:community';
+const QUEUE_STORAGE_KEY = 'threemaker-maker-studio:community-queue';
+
+/** Max offline share jobs retained for the inspector status (newest first). */
+export const COMMUNITY_SHARE_QUEUE_MAX = 20;
 
 export type CommunitySettings = {
   /** When true, map saves enqueue a community share job (opt-out). */
@@ -54,6 +58,74 @@ export type CommunityShareEnqueue = {
   readonly tileObjectShas: readonly string[];
   readonly at: string;
 };
+
+function isShareEnqueue(value: unknown): value is CommunityShareEnqueue {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.mapId === 'string' &&
+    typeof v.mapName === 'string' &&
+    typeof v.at === 'string' &&
+    Array.isArray(v.tileObjectShas) &&
+    v.tileObjectShas.every((s) => typeof s === 'string')
+  );
+}
+
+/** Offline share jobs waiting for a future community API (newest first). */
+export function loadCommunityShareQueue(
+  storage: Pick<Storage, 'getItem'> = globalThis.localStorage,
+): readonly CommunityShareEnqueue[] {
+  try {
+    const raw = storage.getItem(QUEUE_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isShareEnqueue).slice(0, COMMUNITY_SHARE_QUEUE_MAX);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Prepend a share job and persist. Drops oldest when over the cap.
+ * Returns the updated queue (newest first).
+ */
+export function pushCommunityShareQueue(
+  job: CommunityShareEnqueue,
+  storage: Pick<Storage, 'getItem' | 'setItem'> = globalThis.localStorage,
+): readonly CommunityShareEnqueue[] {
+  const next = [job, ...loadCommunityShareQueue(storage)].slice(0, COMMUNITY_SHARE_QUEUE_MAX);
+  storage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
+export type CommunityShareStatus = {
+  readonly kind: 'off' | 'ready' | 'queued';
+  readonly queueLength: number;
+  readonly lastMapName?: string;
+};
+
+/**
+ * Pure inspector status for the community section (no I/O).
+ * `queue` is newest-first; lastMapName is the newest job when present.
+ */
+export function describeCommunityShareStatus(
+  settings: CommunitySettings,
+  queue: readonly CommunityShareEnqueue[],
+): CommunityShareStatus {
+  const lastMapName = queue[0]?.mapName;
+  const base =
+    lastMapName === undefined
+      ? { queueLength: queue.length }
+      : { queueLength: queue.length, lastMapName };
+  if (!settings.shareOnSave) {
+    return { kind: 'off', ...base };
+  }
+  if (queue.length === 0) {
+    return { kind: 'ready', queueLength: 0 };
+  }
+  return { kind: 'queued', ...base };
+}
 
 /**
  * Build a share payload if settings allow. Returns null when the user opted out.

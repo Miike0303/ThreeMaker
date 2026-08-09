@@ -104,9 +104,48 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus,
-button:focus-visible {
-  outline: 1px solid var(--tm-focus);
-  outline-offset: 1px;
+button:focus-visible,
+input[type='checkbox']:focus-visible,
+.ide-tool:focus-visible,
+.ide-inspector-tab:focus-visible {
+  outline: 2px solid var(--tm-focus);
+  outline-offset: 2px;
+}
+
+/* Empty states (inspector lists / no-map) */
+.ide-empty {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--tm-border-strong);
+  border-radius: var(--tm-radius);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ide-empty-title {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tm-text-dim);
+}
+
+.ide-status-badge {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: var(--tm-radius);
+  border: 1px solid var(--tm-border);
+  background: var(--tm-bg-2);
+  font-size: 11px;
+  color: var(--tm-text-dim);
+  line-height: 1.35;
+}
+
+.ide-status-badge-ok {
+  border-color: rgba(93, 206, 138, 0.35);
+  color: var(--tm-ok);
+}
+
+.ide-status-badge-muted {
+  color: var(--tm-text-faint);
 }
 
 label {

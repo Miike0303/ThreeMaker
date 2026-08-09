@@ -13,8 +13,12 @@ import {
 } from '../catalog-client.js';
 import {
   type CommunitySettings,
+  type CommunityShareEnqueue,
+  describeCommunityShareStatus,
   loadCommunitySettings,
+  loadCommunityShareQueue,
   maybeEnqueueCommunityShare,
+  pushCommunityShareQueue,
   saveCommunitySettings,
 } from '../community-settings.js';
 import {
@@ -236,6 +240,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
     'paint',
   );
   const [community, setCommunity] = useState<CommunitySettings>(() => loadCommunitySettings());
+  const [communityQueue, setCommunityQueue] = useState<readonly CommunityShareEnqueue[]>(() =>
+    loadCommunityShareQueue(),
+  );
   /** Procgen seed (uint32). Editable; randomize button rolls a new one. */
   const [procgenSeed, setProcgenSeed] = useState(() => (Date.now() >>> 0) % 1_000_000_000);
   const [procgenPreset, setProcgenPreset] = useState<ProcgenPresetId>(DEFAULT_PROCGEN_PRESET);
@@ -243,6 +250,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [procgenWallTileId, setProcgenWallTileId] = useState(0);
   /** 0 = auto (door-class semantics); else explicit mid-layer door tile id. */
   const [procgenDoorTileId, setProcgenDoorTileId] = useState(0);
+
+  const communityStatus = useMemo(
+    () => describeCommunityShareStatus(community, communityQueue),
+    [community, communityQueue],
+  );
 
   useEffect(() => {
     listGames()
@@ -387,6 +399,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       });
       if (enqueue) {
         console.info('[Maker Studio] community share queued (offline stub)', enqueue);
+        setCommunityQueue(pushCommunityShareQueue(enqueue));
         setStatusMessage(t('painter.saveSuccessShareQueued'));
       } else {
         setStatusMessage(t('painter.saveSuccess'));
@@ -965,6 +978,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
           <div className="ide-inspector-body" role="tabpanel">
             {!(mapReady && painterState) ? (
               <section className="ide-section">
+                <div className="ide-empty" role="status">
+                  <p className="ide-empty-title">{t('painter.empty.noMapTitle')}</p>
+                  <p className="ide-hint">{t('painter.empty.noMapBody')}</p>
+                </div>
                 <h3 className="ide-section-title">{t('painter.project')}</h3>
                 <div className="ide-row">
                   <GameTilesetPicker
@@ -1337,6 +1354,25 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     <section className="ide-section">
                       <h3 className="ide-section-title">{t('painter.community')}</h3>
                       <p className="ide-hint">{t('painter.community.hint')}</p>
+                      <p
+                        className={
+                          communityStatus.kind === 'off'
+                            ? 'ide-status-badge ide-status-badge-muted'
+                            : communityStatus.kind === 'queued'
+                              ? 'ide-status-badge ide-status-badge-ok'
+                              : 'ide-status-badge'
+                        }
+                        role="status"
+                      >
+                        {communityStatus.kind === 'off'
+                          ? t('painter.community.statusOff')
+                          : communityStatus.kind === 'ready'
+                            ? t('painter.community.statusReady')
+                            : formatTemplate(t('painter.community.statusQueued'), {
+                                count: communityStatus.queueLength,
+                                name: communityStatus.lastMapName ?? '',
+                              })}
+                      </p>
                       <label className="ide-check">
                         <input
                           type="checkbox"
@@ -1378,6 +1414,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       <p className="painter-events-validation-error" role="alert">
                         {eventsValidationError}
                       </p>
+                    )}
+                    {painterState.eventKeys.length === 0 && (
+                      <div className="ide-empty" role="status">
+                        <p className="ide-empty-title">{t('painter.events.emptyTitle')}</p>
+                        <p className="ide-hint">{t('painter.events.emptyBody')}</p>
+                      </div>
                     )}
                     <ul className="events-key-list">
                       {painterState.eventKeys.map((key) => {
