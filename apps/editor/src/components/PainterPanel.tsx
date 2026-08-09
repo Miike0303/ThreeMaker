@@ -16,6 +16,7 @@ import {
   type CommunitySettings,
   type CommunityShareEnqueue,
   communityShareTileCount,
+  formatCommunityShareMapId,
   describeCommunityShareStatus,
   formatCommunityShareAt,
   loadCommunitySettings,
@@ -1729,6 +1730,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               <span>
                                 {formatTemplate(t('painter.community.queueItem'), {
                                   name: job.mapName,
+                                  id: formatCommunityShareMapId(job.mapId),
                                   version: String(job.version),
                                   license: t(`painter.community.license.${job.licenseTag}`),
                                   tiles: String(communityShareTileCount(job.tileObjectShas)),

@@ -6,6 +6,7 @@ import {
   describeCommunityShareStatus,
   communityShareTileCount,
   formatCommunityShareAt,
+  formatCommunityShareMapId,
   loadCommunitySettings,
   loadCommunityShareQueue,
   maybeEnqueueCommunityShare,
@@ -126,6 +127,25 @@ describe('communityShareTileCount (WU-COMM-10)', () => {
     expect(communityShareTileCount([])).toBe(0);
     expect(communityShareTileCount(['', a, a, b, ''])).toBe(2);
     expect(communityShareTileCount([a])).toBe(1);
+  });
+});
+
+describe('formatCommunityShareMapId (WU-COMM-11)', () => {
+  it('returns short ids unchanged and trims whitespace', () => {
+    expect(formatCommunityShareMapId('abc')).toBe('abc');
+    expect(formatCommunityShareMapId('  map-1  ')).toBe('map-1');
+    expect(formatCommunityShareMapId('12345678')).toBe('12345678');
+  });
+
+  it('truncates long ids to the first maxLen chars (default 8)', () => {
+    expect(formatCommunityShareMapId('0123456789abcdef')).toBe('01234567');
+    expect(formatCommunityShareMapId('0123456789abcdef', 4)).toBe('0123');
+    expect(formatCommunityShareMapId('uuid-with-hyphens-long', 12)).toBe('uuid-with-hy');
+  });
+
+  it('returns empty string for blank input', () => {
+    expect(formatCommunityShareMapId('')).toBe('');
+    expect(formatCommunityShareMapId('   ')).toBe('');
   });
 });
 

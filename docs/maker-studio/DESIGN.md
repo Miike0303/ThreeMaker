@@ -134,6 +134,7 @@ Maker Studio shell
 - WU-UX-09 map display name: `normalizeMapName` + viewport `setMapName`/`mapName`; menubar field (blur commits; empty → Untitled Map)
 - WU-UX-10 room names: `addRoom`/`renameRoom` trim via `normalizeOptionalName`; blank clears; same-value no-op (no undo noise)
 - WU-COMM-10 offline queue rows show unique tile object count (`communityShareTileCount` + `{tiles}` in en/es)
+- WU-COMM-11 offline queue rows show short map id (`formatCommunityShareMapId` + `{id}` in en/es) for same-name disambiguation
 
 ## PR Plan
 

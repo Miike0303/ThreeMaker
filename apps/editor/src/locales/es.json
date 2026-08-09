@@ -122,7 +122,7 @@
     "painter.community.queueList": "Cola de share offline",
     "painter.community.queueEmptyTitle": "Sin trabajos de share offline",
     "painter.community.queueEmptyBody": "Guardá un mapa con el share de comunidad activo, o pegá JSON de la cola para restaurar trabajos.",
-    "painter.community.queueItem": "{name} · v{version} · {license} · {tiles} láminas · {at}",
+    "painter.community.queueItem": "{name} · {id} · v{version} · {license} · {tiles} láminas · {at}",
     "painter.community.license.user-owned": "propio",
     "painter.community.license.import-rpgm": "RPGM importado",
     "painter.community.license.mixed": "mixto",

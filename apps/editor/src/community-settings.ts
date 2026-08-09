@@ -264,6 +264,27 @@ export function communityShareTileCount(
   return seen.size;
 }
 
+/** Default visible prefix length for queue-row map ids (UUID disambiguation). */
+export const COMMUNITY_SHARE_MAP_ID_LABEL_LEN = 8;
+
+/**
+ * Short map id label for offline queue rows (WU-COMM-11).
+ * Trims whitespace; when longer than `maxLen`, returns the leading prefix
+ * so authors can tell same-named maps apart without dumping the full id.
+ */
+export function formatCommunityShareMapId(
+  mapId: string,
+  maxLen: number = COMMUNITY_SHARE_MAP_ID_LABEL_LEN,
+): string {
+  const id = mapId.trim();
+  if (id.length === 0) return '';
+  const limit =
+    typeof maxLen === 'number' && Number.isFinite(maxLen) && maxLen > 0
+      ? Math.trunc(maxLen)
+      : COMMUNITY_SHARE_MAP_ID_LABEL_LEN;
+  return id.length <= limit ? id : id.slice(0, limit);
+}
+
 /**
  * Pure inspector status for the community section (no I/O).
  * `queue` is newest-first; lastMapName is the newest job when present.
