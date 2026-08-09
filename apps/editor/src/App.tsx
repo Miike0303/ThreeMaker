@@ -1,16 +1,19 @@
-import { useCallback, useReducer, useState } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import type { AssetRow } from './catalog-client.js';
 import { CatalogBrowser } from './components/CatalogBrowser.js';
 import { MapViewer } from './components/MapViewer.js';
 import { PainterPanel } from './components/PainterPanel.js';
 import type { I18n } from './i18n.js';
+import {
+  footerStatusKind,
+  type WorkspaceId,
+  workspaceMountContract,
+} from './workspace-panels.js';
 
 export interface AppProps {
   readonly i18n: I18n;
   readonly localeStorageKey: string;
 }
-
-type Workspace = 'map' | 'assets';
 
 /**
  * Engine-style app shell: top brand bar + workspace tabs (Map Editor | Assets),
@@ -18,7 +21,7 @@ type Workspace = 'map' | 'assets';
  */
 export function App({ i18n, localeStorageKey }: AppProps) {
   const [selectedAsset, setSelectedAsset] = useState<AssetRow | null>(null);
-  const [workspace, setWorkspace] = useState<Workspace>('map');
+  const [workspace, setWorkspace] = useState<WorkspaceId>('map');
   // `i18n` mutates its own current-locale in place (see i18n.ts's
   // `setLocale`); React has no way to observe that mutation on its own, so
   // this counter is bumped on every locale change purely to force a
@@ -35,6 +38,9 @@ export function App({ i18n, localeStorageKey }: AppProps) {
   );
 
   const t = i18n.t;
+  // Always mount both panels — hide inactive via CSS + inert (see workspace-panels.ts).
+  const panels = useMemo(() => workspaceMountContract(workspace), [workspace]);
+  const statusKind = footerStatusKind(workspace, selectedAsset !== null);
 
   return (
     <div className="app-shell">
@@ -76,41 +82,35 @@ export function App({ i18n, localeStorageKey }: AppProps) {
       </header>
 
       <div className="app-body">
-        {/* Keep Map mounted when browsing Assets — unmounting disposed the viewport and
-            wiped the unsaved session (Maker Studio UX critical). Hide with CSS only. */}
-        <div
-          className={
-            workspace === 'map'
-              ? 'app-workspace-panel app-workspace-panel-active'
-              : 'app-workspace-panel'
-          }
-          aria-hidden={workspace !== 'map'}
-          inert={workspace !== 'map' ? true : undefined}
-        >
-          <PainterPanel t={t} />
-        </div>
-        <div
-          className={
-            workspace === 'assets'
-              ? 'app-workspace-panel app-workspace-panel-active app-workspace-assets'
-              : 'app-workspace-panel app-workspace-assets'
-          }
-          aria-hidden={workspace !== 'assets'}
-          inert={workspace !== 'assets' ? true : undefined}
-        >
-          <section className="app-panel app-panel-catalog">
-            <CatalogBrowser t={t} onSelectAsset={setSelectedAsset} />
-          </section>
-          <section className="app-panel app-panel-viewer">
-            <MapViewer t={t} />
-          </section>
-        </div>
+        {panels.map.alwaysMounted && (
+          <div
+            className={panels.map.className}
+            aria-hidden={panels.map.ariaHidden}
+            inert={panels.map.inert ? true : undefined}
+          >
+            <PainterPanel t={t} />
+          </div>
+        )}
+        {panels.assets.alwaysMounted && (
+          <div
+            className={panels.assets.className}
+            aria-hidden={panels.assets.ariaHidden}
+            inert={panels.assets.inert ? true : undefined}
+          >
+            <section className="app-panel app-panel-catalog">
+              <CatalogBrowser t={t} onSelectAsset={setSelectedAsset} />
+            </section>
+            <section className="app-panel app-panel-viewer">
+              <MapViewer t={t} />
+            </section>
+          </div>
+        )}
       </div>
 
       <footer className="app-footer">
-        {selectedAsset
+        {statusKind === 'asset-path' && selectedAsset
           ? selectedAsset.relPath
-          : workspace === 'map'
+          : statusKind === 'map'
             ? t('app.status.map')
             : t('app.status.assets')}
       </footer>

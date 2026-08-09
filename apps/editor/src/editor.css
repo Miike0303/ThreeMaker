@@ -294,10 +294,15 @@ label {
   display: flex;
 }
 
+/* Layout only — never set display here (would override .app-workspace-panel { display: none }
+   on the inactive Assets panel and show Map+Assets stacked). Active display comes from
+   .app-workspace-panel-active. */
 .app-workspace-assets {
   flex: 1;
   min-height: 0;
-  display: flex;
+}
+
+.app-workspace-panel-active.app-workspace-assets {
   flex-direction: row;
 }
 
