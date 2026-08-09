@@ -187,4 +187,72 @@ describe('applyDungeonStampToMapDocument', () => {
     expect(next.tileset.semantics['5001']).toEqual({ class: 'door' });
     expect(next.tileset.semantics['9001']).toEqual({ class: 'furniture' });
   });
+
+  it('places room-center lights when placeRoomLights is true', () => {
+    const base = createBlankMapDocument({
+      id: 'stamp-lights',
+      name: 'Lights',
+      width: 24,
+      height: 18,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const doc = {
+      ...base,
+      lights: [
+        {
+          id: 'old-floor',
+          kind: 'point' as const,
+          color: '#ffffff',
+          intensity: 1,
+          range: 2,
+          x: 0,
+          y: 0,
+          floor: 'floor-0',
+        },
+        {
+          id: 'torch',
+          kind: 'point' as const,
+          color: '#ff8800',
+          intensity: 1,
+          range: 3,
+          attach: 'player',
+        },
+      ],
+    };
+    const stamp = stampSimpleDungeon({
+      width: 24,
+      height: 18,
+      seed: 7,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      roomCount: 4,
+    });
+    const next = applyDungeonStampToMapDocument(doc, stamp, { placeRoomLights: true });
+    expect(next.lights.some((l) => l.id === 'torch')).toBe(true);
+    expect(next.lights.some((l) => l.id === 'old-floor')).toBe(false);
+    const roomLights = next.lights.filter((l) => l.floor === 'floor-0');
+    expect(roomLights).toHaveLength(stamp.rooms.length);
+    expect(roomLights.every((l) => l.id.startsWith('stamp-light-'))).toBe(true);
+  });
+
+  it('does not invent lights when placeRoomLights is omitted', () => {
+    const doc = createBlankMapDocument({
+      id: 'stamp-no-lights',
+      name: 'NoLights',
+      width: 16,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 1,
+      groundTileId: 2816,
+      wallTileId: 4352,
+    });
+    const next = applyDungeonStampToMapDocument(doc, stamp);
+    expect(next.lights).toEqual([]);
+  });
 });

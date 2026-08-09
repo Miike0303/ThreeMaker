@@ -4,6 +4,7 @@
 import type { MapDocument } from '@threemaker/map-format';
 import { assignSemanticClass } from '../semantic-store.js';
 import { pickMainRoomSpawn, type DungeonStampResult } from './dungeon-stamp.js';
+import { lightsFromDungeonRooms, mergeStampRoomLights } from './lights-from-stamp.js';
 import { roomsFromDungeonStamp } from './rooms-from-stamp.js';
 
 export type ApplyDungeonStampOptions = {
@@ -18,6 +19,12 @@ export type ApplyDungeonStampOptions = {
    * other floors). Default false preserves authored rooms.
    */
   readonly replaceFloor0Rooms?: boolean;
+  /**
+   * When true, place a point light at each stamp room center on floor 0
+   * (replaces prior floor-0 placed lights; keeps attached + other floors).
+   * Default false preserves existing lights.
+   */
+  readonly placeRoomLights?: boolean;
 };
 
 /** Collect distinct non-zero tile ids from a stamp layer. */
@@ -95,6 +102,13 @@ export function applyDungeonStampToMapDocument(
     next = {
       ...next,
       spawn: { x: pos.x, y: pos.y, floor: floor0.id },
+    };
+  }
+  if (options.placeRoomLights) {
+    const stampLights = lightsFromDungeonRooms(stamp.rooms, floor0.id);
+    next = {
+      ...next,
+      lights: mergeStampRoomLights(next.lights, floor0.id, stampLights),
     };
   }
   return next;
