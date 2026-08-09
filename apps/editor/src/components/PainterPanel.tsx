@@ -29,6 +29,7 @@ import {
   type WorldValueKind,
   worldValueKind,
 } from '../event-form-helpers.js';
+import { propObjectLibrary, propsOnFloor, roomsOnFloor } from '../entity-lists.js';
 import { formatTemplate } from '../format-template.js';
 import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
@@ -253,6 +254,20 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const communityStatus = useMemo(
     () => describeCommunityShareStatus(community, communityQueue),
     [community, communityQueue],
+  );
+
+  const activeFloorId = painterState?.floors[painterState.activeFloor]?.id;
+  const floorRooms = useMemo(
+    () => roomsOnFloor(painterState?.rooms ?? [], activeFloorId),
+    [painterState?.rooms, activeFloorId],
+  );
+  const floorProps = useMemo(
+    () => propsOnFloor(painterState?.props ?? [], activeFloorId),
+    [painterState?.props, activeFloorId],
+  );
+  const objectLibrary = useMemo(
+    () => propObjectLibrary(painterState?.props ?? [], painterState?.activePropObject),
+    [painterState?.props, painterState?.activePropObject],
   );
 
   useEffect(() => {
@@ -1087,13 +1102,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           {t('painter.room.redo')}
                         </button>
                       </div>
-                      <ul className="ide-list">
-                        {painterState.rooms
-                          .filter(
-                            (room) =>
-                              room.floor === painterState.floors[painterState.activeFloor]?.id,
-                          )
-                          .map((room) => (
+                      {floorRooms.length === 0 ? (
+                        <div className="ide-empty" role="status">
+                          <p className="ide-empty-title">{t('painter.rooms.emptyTitle')}</p>
+                          <p className="ide-hint">{t('painter.rooms.emptyBody')}</p>
+                        </div>
+                      ) : (
+                        <ul className="ide-list">
+                          {floorRooms.map((room) => (
                             <li
                               key={room.id}
                               className={
@@ -1133,7 +1149,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               </button>
                             </li>
                           ))}
-                      </ul>
+                        </ul>
+                      )}
                     </section>
 
                     <section className="ide-section">
@@ -1694,6 +1711,47 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       {!painterState.activePropObject && painterState.tool === 'prop' && (
                         <p className="ide-hint">{t('painter.props.selectHint')}</p>
                       )}
+                      <h4 className="ide-section-subtitle">{t('painter.props.library')}</h4>
+                      <p className="ide-hint">{t('painter.props.libraryHint')}</p>
+                      {objectLibrary.length === 0 ? (
+                        <div className="ide-empty" role="status">
+                          <p className="ide-empty-title">{t('painter.props.libraryEmptyTitle')}</p>
+                          <p className="ide-hint">{t('painter.props.libraryEmptyBody')}</p>
+                        </div>
+                      ) : (
+                        <ul
+                          className="ide-list ide-list-objects"
+                          aria-label={t('painter.props.library')}
+                        >
+                          {objectLibrary.map((objectSha) => (
+                            <li
+                              key={objectSha}
+                              className={
+                                painterState.activePropObject === objectSha
+                                  ? 'ide-list-active'
+                                  : undefined
+                              }
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  viewportRef.current?.setActivePropObject(objectSha);
+                                  viewportRef.current?.setTool('prop');
+                                  setStatusMessage(
+                                    formatTemplate(t('painter.props.selectedToast'), {
+                                      sha: shortSha(objectSha),
+                                    }),
+                                  );
+                                }}
+                              >
+                                {formatTemplate(t('painter.props.selectObject'), {
+                                  sha: shortSha(objectSha),
+                                })}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       <div className="painter-place-at-tile">
                         <label>
                           {t('painter.placeAtTile.x')}
@@ -1733,13 +1791,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           {t('painter.placeAtTile')}
                         </button>
                       </div>
-                      <ul className="ide-list">
-                        {painterState.props
-                          .filter(
-                            (prop) =>
-                              prop.floor === painterState.floors[painterState.activeFloor]?.id,
-                          )
-                          .map((prop) => (
+                      {floorProps.length === 0 ? (
+                        <p className="ide-hint">{t('painter.props.placedEmpty')}</p>
+                      ) : (
+                        <ul className="ide-list">
+                          {floorProps.map((prop) => (
                             <li key={prop.id}>
                               <span>
                                 {formatTemplate(t('painter.props.summary'), {
@@ -1756,7 +1812,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               </button>
                             </li>
                           ))}
-                      </ul>
+                        </ul>
+                      )}
                     </section>
 
                     <section className="ide-section">
