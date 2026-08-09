@@ -3,6 +3,7 @@
  * Keeps floor filtering and object-library order out of React components.
  */
 import type {
+  LightDocument,
   NpcDocument,
   NpcFacing,
   PropDocument,
@@ -140,4 +141,43 @@ export function propObjectLibrary(
     push(prop.object);
   }
   return out;
+}
+
+/**
+ * Placed lights on a floor (schema v6). Attached lights (`attach` only) have no
+ * floor and are excluded — list them separately when attached authoring lands.
+ */
+export function lightsOnFloor(
+  lights: readonly LightDocument[],
+  floorId: string | undefined,
+): readonly LightDocument[] {
+  if (floorId === undefined) return [];
+  return lights.filter((light) => light.floor === floorId);
+}
+
+/** Placement brush fields copied from an authored light (list-place reuse). */
+export type LightPlacementBrush = {
+  readonly kind: LightDocument['kind'];
+  readonly color: string;
+  readonly intensity: number;
+  readonly range: number;
+  /** World-Y offset; schema omittable (=1 at runtime). */
+  readonly height: number;
+};
+
+export function lightPlacementFromDocument(light: LightDocument): LightPlacementBrush {
+  return {
+    kind: light.kind,
+    color: light.color,
+    intensity: light.intensity,
+    range: light.range,
+    height: light.height ?? 1,
+  };
+}
+
+/** Lowercase `#rrggbb` or undefined when invalid (schema LIGHT_COLOR_RE). */
+export function normalizeLightColor(raw: string): string | undefined {
+  const color = raw.trim().toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(color)) return undefined;
+  return color;
 }

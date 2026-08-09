@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   entitiesOnFloor,
+  lightPlacementFromDocument,
+  lightsOnFloor,
+  normalizeLightColor,
   npcPlacementFromDocument,
   npcsOnFloor,
   pickMainRoomId,
@@ -203,5 +206,75 @@ describe('propPlacementFromDocument', () => {
   it('copies object sha for reuse', () => {
     expect(propPlacementFromDocument(PROP_1)).toEqual({ object: OBJ_A });
     expect(propPlacementFromDocument(PROP_2)).toEqual({ object: OBJ_B });
+  });
+});
+
+const LIGHT_PLACED = {
+  id: 'lamp-1',
+  kind: 'point' as const,
+  color: '#ffaa00',
+  intensity: 1.5,
+  range: 4,
+  x: 2,
+  y: 3,
+  floor: 'floor-0',
+  height: 2,
+};
+const LIGHT_OTHER_FLOOR = {
+  id: 'lamp-2',
+  kind: 'spot' as const,
+  color: '#00ffaa',
+  intensity: 1,
+  range: 3,
+  x: 0,
+  y: 0,
+  floor: 'floor-1',
+};
+const LIGHT_ATTACHED = {
+  id: 'torch',
+  kind: 'point' as const,
+  color: '#ff8800',
+  intensity: 1,
+  range: 3,
+  attach: 'player',
+};
+
+describe('lightsOnFloor', () => {
+  it('returns placed lights on the floor; excludes attached and other floors', () => {
+    expect(lightsOnFloor([LIGHT_PLACED, LIGHT_OTHER_FLOOR, LIGHT_ATTACHED], 'floor-0')).toEqual([
+      LIGHT_PLACED,
+    ]);
+    expect(lightsOnFloor([LIGHT_PLACED], undefined)).toEqual([]);
+    expect(lightsOnFloor([LIGHT_ATTACHED], 'floor-0')).toEqual([]);
+  });
+});
+
+describe('lightPlacementFromDocument', () => {
+  it('copies kind/color/intensity/range and default height 1 when omitted', () => {
+    expect(lightPlacementFromDocument(LIGHT_PLACED)).toEqual({
+      kind: 'point',
+      color: '#ffaa00',
+      intensity: 1.5,
+      range: 4,
+      height: 2,
+    });
+    expect(lightPlacementFromDocument(LIGHT_OTHER_FLOOR)).toEqual({
+      kind: 'spot',
+      color: '#00ffaa',
+      intensity: 1,
+      range: 3,
+      height: 1,
+    });
+    expect(lightPlacementFromDocument(LIGHT_ATTACHED).color).toBe('#ff8800');
+  });
+});
+
+describe('normalizeLightColor', () => {
+  it('lowercases valid #rrggbb and rejects invalid', () => {
+    expect(normalizeLightColor('#FFAA00')).toBe('#ffaa00');
+    expect(normalizeLightColor('  #00ff00  ')).toBe('#00ff00');
+    expect(normalizeLightColor('#fff')).toBeUndefined();
+    expect(normalizeLightColor('red')).toBeUndefined();
+    expect(normalizeLightColor('#GG0000')).toBeUndefined();
   });
 });

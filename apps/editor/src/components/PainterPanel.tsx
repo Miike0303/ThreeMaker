@@ -1,5 +1,5 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
-import type { MapDocument, NpcFacing, SemanticClass } from '@threemaker/map-format';
+import type { LightDocument, MapDocument, NpcFacing, SemanticClass } from '@threemaker/map-format';
 import type { SheetPixelSize } from '@threemaker/renderer';
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -34,6 +34,8 @@ import {
   worldValueKind,
 } from '../event-form-helpers.js';
 import {
+  lightPlacementFromDocument,
+  lightsOnFloor,
   npcPlacementFromDocument,
   npcsOnFloor,
   pickMainRoomId,
@@ -111,7 +113,10 @@ const TOOLS: readonly { readonly id: ToolId; readonly shortcut: string }[] = [
   { id: 'prop', shortcut: 'O' },
   { id: 'npc', shortcut: 'N' },
   { id: 'trigger', shortcut: 'T' },
+  { id: 'light', shortcut: 'L' },
 ];
+
+const LIGHT_KINDS: readonly LightDocument['kind'][] = ['point', 'spot'];
 
 /** Paint layer roles for 2.5D authoring (schema indices 0–3, RPG Maker–style). */
 const PAINT_LAYERS = [
@@ -252,6 +257,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [npcPlaceY, setNpcPlaceY] = useState(0);
   const [triggerPlaceX, setTriggerPlaceX] = useState(0);
   const [triggerPlaceY, setTriggerPlaceY] = useState(0);
+  const [lightPlaceX, setLightPlaceX] = useState(0);
+  const [lightPlaceY, setLightPlaceY] = useState(0);
   // Events section UI (events editor WU-02).
   const [selectedEventKey, setSelectedEventKey] = useState<string | undefined>(undefined);
   const [newEventKey, setNewEventKey] = useState('');
@@ -303,6 +310,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const floorTriggers = useMemo(
     () => triggersOnFloor(painterState?.triggers ?? [], activeFloorId),
     [painterState?.triggers, activeFloorId],
+  );
+  const floorLights = useMemo(
+    () => lightsOnFloor(painterState?.lights ?? [], activeFloorId),
+    [painterState?.lights, activeFloorId],
   );
   const objectLibrary = useMemo(
     () => propObjectLibrary(painterState?.props ?? [], painterState?.activePropObject),
@@ -607,6 +618,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     prop: 'O',
     npc: 'N',
     trigger: 'T',
+    light: 'L',
   };
 
   const INSPECTOR_TABS = INSPECTOR_TAB_IDS;
@@ -2380,6 +2392,163 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                 onClick={() => viewportRef.current?.removeTrigger(trigger.id)}
                               >
                                 {t('painter.triggers.remove')}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+
+                    <section className="ide-section">
+                      <h3 className="ide-section-title">{t('painter.lights')}</h3>
+                      <p className="ide-hint">{t('painter.lights.hint')}</p>
+                      <fieldset className="ide-fieldset">
+                        <legend>{t('painter.lights.kind')}</legend>
+                        {LIGHT_KINDS.map((kind) => (
+                          <label key={kind} className="ide-check">
+                            <input
+                              type="radio"
+                              name="light-kind"
+                              checked={painterState.activeLightKind === kind}
+                              onChange={() => viewportRef.current?.setActiveLightKind(kind)}
+                            />
+                            {t(`painter.lights.kind.${kind}`)}
+                          </label>
+                        ))}
+                      </fieldset>
+                      <label>
+                        {t('painter.lights.color')}
+                        <input
+                          type="text"
+                          value={painterState.activeLightColor}
+                          spellCheck={false}
+                          onChange={(event) =>
+                            viewportRef.current?.setActiveLightColor(event.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        {t('painter.lights.intensity')}
+                        <input
+                          type="number"
+                          min={0.01}
+                          step={0.1}
+                          value={painterState.activeLightIntensity}
+                          onChange={(event) => {
+                            const parsed = Number.parseFloat(event.target.value);
+                            if (Number.isFinite(parsed)) {
+                              viewportRef.current?.setActiveLightIntensity(parsed);
+                            }
+                          }}
+                        />
+                      </label>
+                      <label>
+                        {t('painter.lights.range')}
+                        <input
+                          type="number"
+                          min={0.01}
+                          step={0.5}
+                          value={painterState.activeLightRange}
+                          onChange={(event) => {
+                            const parsed = Number.parseFloat(event.target.value);
+                            if (Number.isFinite(parsed)) {
+                              viewportRef.current?.setActiveLightRange(parsed);
+                            }
+                          }}
+                        />
+                      </label>
+                      <label>
+                        {t('painter.lights.height')}
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.25}
+                          value={painterState.activeLightHeight}
+                          onChange={(event) => {
+                            const parsed = Number.parseFloat(event.target.value);
+                            if (Number.isFinite(parsed)) {
+                              viewportRef.current?.setActiveLightHeight(parsed);
+                            }
+                          }}
+                        />
+                      </label>
+                      <div className="painter-place-at-tile">
+                        <label>
+                          {t('painter.placeAtTile.x')}
+                          <input
+                            type="number"
+                            min={0}
+                            max={Math.max(0, painterState.width - 1)}
+                            step={1}
+                            value={lightPlaceX}
+                            onChange={(event) => {
+                              const parsed = Number.parseInt(event.target.value, 10);
+                              if (Number.isFinite(parsed)) setLightPlaceX(parsed);
+                            }}
+                          />
+                        </label>
+                        <label>
+                          {t('painter.placeAtTile.y')}
+                          <input
+                            type="number"
+                            min={0}
+                            max={Math.max(0, painterState.height - 1)}
+                            step={1}
+                            value={lightPlaceY}
+                            onChange={(event) => {
+                              const parsed = Number.parseInt(event.target.value, 10);
+                              if (Number.isFinite(parsed)) setLightPlaceY(parsed);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            viewportRef.current?.placeLightAtTile(lightPlaceX, lightPlaceY)
+                          }
+                        >
+                          {t('painter.placeAtTile')}
+                        </button>
+                      </div>
+                      {floorLights.length === 0 ? (
+                        <div className="ide-empty" role="status">
+                          <p className="ide-empty-title">{t('painter.lights.emptyTitle')}</p>
+                          <p className="ide-hint">{t('painter.lights.emptyBody')}</p>
+                        </div>
+                      ) : (
+                        <ul className="ide-list" aria-label={t('painter.lights')}>
+                          {floorLights.map((light) => (
+                            <li key={light.id}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const brush = lightPlacementFromDocument(light);
+                                  viewportRef.current?.setActiveLightKind(brush.kind);
+                                  viewportRef.current?.setActiveLightColor(brush.color);
+                                  viewportRef.current?.setActiveLightIntensity(brush.intensity);
+                                  viewportRef.current?.setActiveLightRange(brush.range);
+                                  viewportRef.current?.setActiveLightHeight(brush.height);
+                                  viewportRef.current?.setTool('light');
+                                  setStatusMessage(
+                                    formatTemplate(t('painter.lights.reuseToast'), {
+                                      id: light.id,
+                                    }),
+                                  );
+                                }}
+                              >
+                                {formatTemplate(t('painter.lights.summary'), {
+                                  id: light.id,
+                                  x: light.x ?? 0,
+                                  y: light.y ?? 0,
+                                  kind: light.kind,
+                                  color: light.color,
+                                })}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => viewportRef.current?.removeLight(light.id)}
+                              >
+                                {t('painter.lights.remove')}
                               </button>
                             </li>
                           ))}

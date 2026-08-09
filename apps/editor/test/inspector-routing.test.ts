@@ -13,6 +13,7 @@ const ALL_TOOLS: readonly ToolId[] = [
   'prop',
   'npc',
   'trigger',
+  'light',
 ];
 
 describe('inspectorTabForTool', () => {
@@ -33,6 +34,7 @@ describe('inspectorTabForTool', () => {
     expect(inspectorTabForTool('prop')).toBe('entities');
     expect(inspectorTabForTool('npc')).toBe('entities');
     expect(inspectorTabForTool('trigger')).toBe('entities');
+    expect(inspectorTabForTool('light')).toBe('entities');
   });
 
   it('covers every ToolId with a known inspector tab', () => {

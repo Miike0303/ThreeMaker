@@ -25,6 +25,7 @@ export function inspectorTabForTool(tool: ToolId): InspectorTabId {
     case 'prop':
     case 'npc':
     case 'trigger':
+    case 'light':
       return 'entities';
     case 'brush':
     case 'box-fill':

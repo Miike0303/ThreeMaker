@@ -15,6 +15,7 @@
 import type { RpgmMap, RpgmTileset, TileSheetNames } from '@threemaker/importer-rpgm';
 import type {
   FloorDocument,
+  LightDocument,
   MapDocument,
   MapLayers,
   MapSpawn,
@@ -271,6 +272,10 @@ export function composeDocumentFromPainterFloors(
   // state, stale-doc entries are NOT resurrected.
   events: MapDocument['events'] = doc.events,
   worldSeeds: MapDocument['worldSeeds'] = doc.worldSeeds,
+  // Live lights (schema v6 WU-LIGHT-01). Default to the source document so
+  // pre-light-store call sites stay byte-identical; floor-scoped placed lights
+  // drop when their floor is removed. Attached lights (no floor) always keep.
+  lights: readonly LightDocument[] = doc.lights,
 ): MapDocument {
   const originalById = new Map(doc.floors.map((floor) => [floor.id, floor] as const));
   const blankLayer = new Array(doc.width * doc.height).fill(0);
@@ -306,6 +311,10 @@ export function composeDocumentFromPainterFloors(
   // Schema v5 (depth-props-hd C5 WU-04): props join the same floor-scoped
   // filter so a deleted floor cannot leave a dangling prop.floor behind.
   const composedProps = props.filter((prop) => floorIds.has(prop.floor));
+  // Schema v6: placed lights are floor-scoped; attached lights have no floor.
+  const composedLights = lights.filter(
+    (light) => light.floor === undefined || floorIds.has(light.floor),
+  );
 
   const { spawn: _originalSpawn, ...docWithoutSpawn } = doc;
   const base = {
@@ -316,6 +325,7 @@ export function composeDocumentFromPainterFloors(
     npcs: composedNpcs,
     triggers: composedTriggers,
     props: composedProps,
+    lights: composedLights,
     events,
     worldSeeds,
   };

@@ -1,5 +1,6 @@
 import type { RampDirection, TileSheetId } from '@threemaker/importer-rpgm';
 import type {
+  LightDocument,
   MapDocument,
   NpcFacing,
   SemanticClass,
@@ -231,6 +232,7 @@ export class PainterViewport {
       props: doc.props,
       npcs: doc.npcs,
       triggers: doc.triggers,
+      lights: doc.lights,
       events: { ...doc.events },
       worldSeeds: { ...doc.worldSeeds },
       ...(doc.spawn !== undefined ? { spawn: doc.spawn } : {}),
@@ -488,6 +490,50 @@ export class PainterViewport {
     this.recomputeTriggerOverlay();
   }
 
+  // --- Lights (schema v6 WU-LIGHT-01; no overlay yet) ---
+
+  setActiveLightKind(kind: LightDocument['kind']): void {
+    if (!this.state) return;
+    this.state = painter.setActiveLightKind(this.state, kind);
+    this.emitState();
+  }
+
+  setActiveLightColor(color: string): void {
+    if (!this.state) return;
+    this.state = painter.setActiveLightColor(this.state, color);
+    this.emitState();
+  }
+
+  setActiveLightIntensity(intensity: number): void {
+    if (!this.state) return;
+    this.state = painter.setActiveLightIntensity(this.state, intensity);
+    this.emitState();
+  }
+
+  setActiveLightRange(range: number): void {
+    if (!this.state) return;
+    this.state = painter.setActiveLightRange(this.state, range);
+    this.emitState();
+  }
+
+  setActiveLightHeight(height: number): void {
+    if (!this.state) return;
+    this.state = painter.setActiveLightHeight(this.state, height);
+    this.emitState();
+  }
+
+  removeLight(id: string): void {
+    if (!this.state) return;
+    this.state = painter.removeLight(this.state, id);
+    this.emitState();
+  }
+
+  placeLightAtTile(x: number, y: number): void {
+    if (!this.state) return;
+    this.state = painter.placeLightAtTile(this.state, { x, y });
+    this.emitState();
+  }
+
   // --- Event scripts + worldSeeds (events editor WU-02; no overlay recompute) ---
 
   addEvent(key: string): void {
@@ -578,6 +624,7 @@ export class PainterViewport {
       this.state.triggers,
       this.state.events,
       this.state.worldSeeds,
+      this.state.lights,
     );
     return {
       ...composed,

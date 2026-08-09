@@ -64,6 +64,12 @@
  * stack undo for events/worldSeeds v1 (same stair-link/spawn precedent:
  * remove/re-add is the undo). Path addressing for nested commands uses a
  * flat tagged `CommandPath` (see type doc below).
+ *
+ * Light authoring (schema v6 WU-LIGHT-01): `PainterState.lights` mirrors
+ * `MapDocument.lights` exactly (flat, top-level). Place/remove only for the
+ * placed form (x/y/floor); attached lights stay JSON-side this WU.
+ * Deliberately NO per-floor command-stack undo v1 (remove is the undo),
+ * same stair-link/spawn precedent — undo stack can land with overlay WU.
  */
 
 import type { EventCommand } from '@threemaker/core';
@@ -71,6 +77,7 @@ import { parseEventScript } from '@threemaker/core';
 
 import type {
   CommandStackState,
+  LightDocument,
   MapEventScripts,
   MapSpawn,
   NpcDocument,
@@ -96,9 +103,17 @@ import {
   redoCommand,
   undoCommand,
 } from '@threemaker/map-format';
+import { normalizeLightColor } from './entity-lists.js';
 import { assignSemanticClass, resolveTouchedTileIds } from './semantic-store.js';
 import type { TilePoint, ToolId, ToolSMState, ToolSMStrokingState } from './tool-sm.js';
 import { beginStroke, continueStroke, endStroke, TOOL_SM_IDLE } from './tool-sm.js';
+
+/** Default placed light brush (warm point lamp). */
+export const DEFAULT_LIGHT_KIND: LightDocument['kind'] = 'point';
+export const DEFAULT_LIGHT_COLOR = '#ffaa00';
+export const DEFAULT_LIGHT_INTENSITY = 1;
+export const DEFAULT_LIGHT_RANGE = 4;
+export const DEFAULT_LIGHT_HEIGHT = 1;
 
 /**
  * One room mutation's before/after `RoomDocument` (Slice 5a room-undo
@@ -255,6 +270,8 @@ export interface PainterState {
   readonly npcs: readonly NpcDocument[];
   /** Every authored trigger across every floor (c1a follow-up), mirroring `MapDocument.triggers`. */
   readonly triggers: readonly TriggerDocument[];
+  /** Every authored light (schema v6), mirroring `MapDocument.lights`. */
+  readonly lights: readonly LightDocument[];
   /**
    * Authored event scripts (events editor WU-01), mirroring `MapDocument.events`
    * exactly. Mutable via `addEvent` / `renameEvent` / `removeEvent` /
@@ -295,6 +312,16 @@ export interface PainterState {
    * `eventKeys` (or placement is a no-op).
    */
   readonly activeTriggerEventKey?: string;
+  /** Kind for the next placed light (default `'point'`). */
+  readonly activeLightKind: LightDocument['kind'];
+  /** Lowercase `#rrggbb` color for the next placed light. */
+  readonly activeLightColor: string;
+  /** Intensity > 0 for the next placed light. */
+  readonly activeLightIntensity: number;
+  /** Range > 0 (world units) for the next placed light. */
+  readonly activeLightRange: number;
+  /** World-Y height offset (>= 0) for the next placed light. */
+  readonly activeLightHeight: number;
 }
 
 export interface CreatePainterStateOptions {
@@ -320,6 +347,8 @@ export interface CreatePainterStateOptions {
   readonly npcs?: readonly NpcDocument[];
   /** Initial triggers (map load path), matching `MapDocument.triggers`; defaults to none authored. */
   readonly triggers?: readonly TriggerDocument[];
+  /** Initial lights (map load path), matching `MapDocument.lights`; defaults to none authored. */
+  readonly lights?: readonly LightDocument[];
   /**
    * Initial event scripts (map load path), matching `MapDocument.events`.
    * When omitted, `eventKeys` (if provided) seeds empty scripts for those
@@ -345,6 +374,16 @@ export interface CreatePainterStateOptions {
   readonly activeTriggerOn?: 'enter' | 'interact';
   /** Initial trigger event key; defaults to the first of `eventKeys` when present. */
   readonly activeTriggerEventKey?: string;
+  /** Initial light brush kind (default `'point'`). */
+  readonly activeLightKind?: LightDocument['kind'];
+  /** Initial light color (default warm amber). */
+  readonly activeLightColor?: string;
+  /** Initial light intensity (default 1). */
+  readonly activeLightIntensity?: number;
+  /** Initial light range (default 4). */
+  readonly activeLightRange?: number;
+  /** Initial light height (default 1). */
+  readonly activeLightHeight?: number;
 }
 
 /** Adjacent same-typed args (`width`/`height`/`fillTileId`/`semantics`) are grouped into one options object -- see the gate-review "parameter objects" suggestion. Every floor gets a fresh, empty command stack, room-command stack, prop-command stack, AND npc/trigger command stacks: undo/redo history is session-local, never carried over from a saved document. */
@@ -363,6 +402,7 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     activePropObject,
     npcs = [],
     triggers = [],
+    lights = [],
     events: eventsOption,
     worldSeeds = {},
     eventKeys: eventKeysOption,
@@ -372,6 +412,11 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     activeNpcEventKey,
     activeTriggerOn = 'enter',
     activeTriggerEventKey,
+    activeLightKind = DEFAULT_LIGHT_KIND,
+    activeLightColor = DEFAULT_LIGHT_COLOR,
+    activeLightIntensity = DEFAULT_LIGHT_INTENSITY,
+    activeLightRange = DEFAULT_LIGHT_RANGE,
+    activeLightHeight = DEFAULT_LIGHT_HEIGHT,
   } = options;
   const events: MapEventScripts =
     eventsOption ?? Object.fromEntries((eventKeysOption ?? []).map((key) => [key, [] as const]));
@@ -401,12 +446,27 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     props,
     npcs,
     triggers,
+    lights,
     events,
     worldSeeds,
     eventKeys,
     activeNpcCharacterIndex,
     activeNpcFacing,
     activeTriggerOn,
+    activeLightKind,
+    activeLightColor: normalizeLightColor(activeLightColor) ?? DEFAULT_LIGHT_COLOR,
+    activeLightIntensity:
+      Number.isFinite(activeLightIntensity) && activeLightIntensity > 0
+        ? activeLightIntensity
+        : DEFAULT_LIGHT_INTENSITY,
+    activeLightRange:
+      Number.isFinite(activeLightRange) && activeLightRange > 0
+        ? activeLightRange
+        : DEFAULT_LIGHT_RANGE,
+    activeLightHeight:
+      Number.isFinite(activeLightHeight) && activeLightHeight >= 0
+        ? activeLightHeight
+        : DEFAULT_LIGHT_HEIGHT,
   };
   let next: PainterState = spawn === undefined ? base : { ...base, spawn };
   if (activePropObject !== undefined) next = { ...next, activePropObject };
@@ -589,9 +649,10 @@ export interface PointerDownOptions {
 
 /**
  * `pointerdown`: eyedropper picks immediately (no stroke) from the active
- * floor; 'spawn-point', 'stair-link' (Slice 5b), 'prop' (C5 WU-04), and
- * 'npc'/'trigger' (c1a follow-up) also act immediately with no stroke, same
- * short-circuit shape as eyedropper; every other tool begins a stroke.
+ * floor; 'spawn-point', 'stair-link' (Slice 5b), 'prop' (C5 WU-04),
+ * 'npc'/'trigger' (c1a follow-up), and 'light' (schema v6) also act
+ * immediately with no stroke, same short-circuit shape as eyedropper; every
+ * other tool begins a stroke.
  */
 export function pointerDown(
   state: PainterState,
@@ -620,6 +681,9 @@ export function pointerDown(
   }
   if (state.tool === 'trigger') {
     return { state: placeTriggerAtTile(state, { x: point.x, y: point.y }) };
+  }
+  if (state.tool === 'light') {
+    return { state: placeLightAtTile(state, { x: point.x, y: point.y }) };
   }
   const stroke = beginStroke(state.stroke, state.tool, state.activeLayer, point);
   return { state: { ...state, stroke } };
@@ -1483,6 +1547,115 @@ export function redoTrigger(state: PainterState): TriggerCommandStepOutcome {
   return { state: { ...withStack, triggers }, command: last };
 }
 
+// --- Light authoring (schema v6 WU-LIGHT-01; no undo stack) ---------------
+
+/** First free `light-N` id across the whole document. */
+export function nextLightId(lights: readonly LightDocument[]): string {
+  const used = new Set(lights.map((light) => light.id));
+  let n = 1;
+  while (used.has(`light-${n}`)) n += 1;
+  return `light-${n}`;
+}
+
+export function setActiveLightKind(
+  state: PainterState,
+  kind: LightDocument['kind'],
+): PainterState {
+  const idle = cancelStroke(state);
+  if (kind !== 'point' && kind !== 'spot') return idle;
+  return { ...idle, activeLightKind: kind };
+}
+
+/** Sets brush color; invalid `#rrggbb` is a no-op. */
+export function setActiveLightColor(state: PainterState, color: string): PainterState {
+  const idle = cancelStroke(state);
+  const normalized = normalizeLightColor(color);
+  if (normalized === undefined) return idle;
+  return { ...idle, activeLightColor: normalized };
+}
+
+export function setActiveLightIntensity(state: PainterState, intensity: number): PainterState {
+  const idle = cancelStroke(state);
+  if (!Number.isFinite(intensity) || intensity <= 0) return idle;
+  return { ...idle, activeLightIntensity: intensity };
+}
+
+export function setActiveLightRange(state: PainterState, range: number): PainterState {
+  const idle = cancelStroke(state);
+  if (!Number.isFinite(range) || range <= 0) return idle;
+  return { ...idle, activeLightRange: range };
+}
+
+export function setActiveLightHeight(state: PainterState, height: number): PainterState {
+  const idle = cancelStroke(state);
+  if (!Number.isFinite(height) || height < 0) return idle;
+  return { ...idle, activeLightHeight: height };
+}
+
+function upsertLight(
+  lights: readonly LightDocument[],
+  id: string,
+  next: LightDocument | undefined,
+): readonly LightDocument[] {
+  const index = lights.findIndex((light) => light.id === id);
+  if (next === undefined) {
+    return index === -1 ? lights : lights.filter((_, i) => i !== index);
+  }
+  if (index === -1) return [...lights, next];
+  return lights.map((light, i) => (i === index ? next : light));
+}
+
+/**
+ * Places a point/spot light on the ACTIVE floor at `point` using the active
+ * light brush and the next free `light-N` id. Lights MAY share a tile (schema).
+ * No-ops mid-stroke. Attached form is not authored here.
+ */
+export function placeLight(
+  state: PainterState,
+  point: { readonly x: number; readonly y: number },
+): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+
+  const floor = activeFloorState(state);
+  const id = nextLightId(state.lights);
+  const light: LightDocument = {
+    id,
+    kind: state.activeLightKind,
+    color: state.activeLightColor,
+    intensity: state.activeLightIntensity,
+    range: state.activeLightRange,
+    x: point.x,
+    y: point.y,
+    floor: floor.id,
+    height: state.activeLightHeight,
+  };
+  return { ...state, lights: upsertLight(state.lights, id, light) };
+}
+
+/**
+ * Shared placement path for the light tool canvas click and the panel
+ * "Place at tile" button: cancel a stuck stroke, then `placeLight`.
+ */
+export function placeLightAtTile(
+  state: PainterState,
+  point: { readonly x: number; readonly y: number },
+): PainterState {
+  const idle = cancelStroke(state);
+  return placeLight(idle, point);
+}
+
+/**
+ * Removes light `id` when it is a placed light on the ACTIVE floor.
+ * Attached lights and other floors are a safe no-op. Ignored mid-stroke.
+ */
+export function removeLight(state: PainterState, id: string): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const floor = activeFloorState(state);
+  const existing = state.lights.find((light) => light.id === id && light.floor === floor.id);
+  if (!existing) return state;
+  return { ...state, lights: upsertLight(state.lights, id, undefined) };
+}
+
 // --- Event scripts + worldSeeds (events editor WU-01; no undo stack) ----
 
 /**
@@ -1818,8 +1991,9 @@ function computeStrokeTouchedCells(
     case 'prop':
     case 'npc':
     case 'trigger':
+    case 'light':
       // Never reached: `pointerDown` short-circuits these tools before a
-      // stroke is ever begun (Slice 5b / C5 WU-04 / c1a follow-up), same as
+      // stroke is ever begun (Slice 5b / C5 WU-04 / c1a / lights), same as
       // 'eyedropper' above.
       return [];
     case 'room-box':

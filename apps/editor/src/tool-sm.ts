@@ -19,7 +19,8 @@ export type ToolId =
   | 'spawn-point'
   | 'prop'
   | 'npc'
-  | 'trigger';
+  | 'trigger'
+  | 'light';
 
 /**
  * Unity Tile Palette-style shortcuts (design: "B/U/G-style shortcuts"), plus
@@ -31,9 +32,10 @@ export type ToolId =
  * `painter-store.ts`'s `pointerDown` for how they short-circuit the stroking
  * state machine entirely, the same way `eyedropper` does), "O" for the
  * prop tool (C5 WU-04 depth-props-hd -- single-click place of an ingested
- * `.glb` object, same short-circuit shape as spawn-point), and "N"/"T" for
+ * `.glb` object, same short-circuit shape as spawn-point), "N"/"T" for
  * the NPC/trigger tools (c1a follow-up -- single-click place, same
- * short-circuit shape as prop/spawn-point).
+ * short-circuit shape as prop/spawn-point), and "L" for the light tool
+ * (schema v6 placed point/spot lights).
  *
  * PLAN_DEV_2 C2: these are **editor tool ids**, not remappable game
  * `ActionId`s from `@threemaker/input`. Pointer paint strokes and palette
@@ -51,6 +53,7 @@ export const TOOL_SHORTCUTS: Readonly<Record<string, ToolId>> = {
   o: 'prop',
   n: 'npc',
   t: 'trigger',
+  l: 'light',
 };
 
 /** Resolves a keyboard event's `key` (case-insensitive) to a tool, or `undefined` if it isn't a tool shortcut. */
