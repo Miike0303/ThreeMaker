@@ -457,10 +457,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
         corridorWidth: preset.corridorWidth,
         tightBorder: preset.tightBorder,
       });
-      // Stamp rewrites floor-0 tile layers; events/NPCs/worldSeeds stay.
+      // Stamp rewrites floor-0 tile layers + rooms; events/NPCs/worldSeeds stay.
       // Spawn is moved into the largest room so Generate is immediately playable.
       const stamped = applyDungeonStampToMapDocument(doc, stamp, {
         placeSpawnInMainRoom: true,
+        replaceFloor0Rooms: true,
       });
       const { textures, sheetPixelSizes } = await loadSlotTextures(stamped);
       viewport.loadMap(stamped, textures, sheetPixelSizes, groundTileId);

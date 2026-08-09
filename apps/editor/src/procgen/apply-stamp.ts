@@ -4,6 +4,7 @@
 import type { MapDocument } from '@threemaker/map-format';
 import { assignSemanticClass } from '../semantic-store.js';
 import { pickMainRoomSpawn, type DungeonStampResult } from './dungeon-stamp.js';
+import { roomsFromDungeonStamp } from './rooms-from-stamp.js';
 
 export type ApplyDungeonStampOptions = {
   /**
@@ -12,6 +13,11 @@ export type ApplyDungeonStampOptions = {
    * Default false preserves existing spawn/events/npcs narrative data.
    */
   readonly placeSpawnInMainRoom?: boolean;
+  /**
+   * When true, replace all rooms on floor 0 with stamp rooms (keeps rooms on
+   * other floors). Default false preserves authored rooms.
+   */
+  readonly replaceFloor0Rooms?: boolean;
 };
 
 /** Collect distinct non-zero tile ids from a stamp layer. */
@@ -63,6 +69,14 @@ export function applyDungeonStampToMapDocument(
     floors: doc.floors.map((f, i) => (i === 0 ? nextFloor : f)),
     tileset: { ...doc.tileset, semantics: nextSemantics },
   };
+  if (options.replaceFloor0Rooms) {
+    const stampedRooms = roomsFromDungeonStamp(stamp.rooms, floor0.id);
+    const otherFloors = doc.rooms.filter((r) => r.floor !== floor0.id);
+    next = {
+      ...next,
+      rooms: [...otherFloors, ...stampedRooms],
+    };
+  }
   if (options.placeSpawnInMainRoom) {
     const pos = pickMainRoomSpawn(stamp.rooms, doc.width, doc.height);
     next = {

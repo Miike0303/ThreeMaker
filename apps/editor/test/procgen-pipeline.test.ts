@@ -68,6 +68,7 @@ describe('procgen pipeline regression', () => {
 
     const next = applyDungeonStampToMapDocument(withNarrative, stamp, {
       placeSpawnInMainRoom: true,
+      replaceFloor0Rooms: true,
     });
 
     const spawnPos = pickMainRoomSpawn(stamp.rooms, 32, 24);
@@ -76,6 +77,7 @@ describe('procgen pipeline regression', () => {
     expect(next.worldSeeds).toEqual(withNarrative.worldSeeds);
     expect(next.tileset.semantics[String(WALL)]).toEqual({ class: 'wall' });
     expect(next.tileset.semantics[String(DOOR)]).toEqual({ class: 'door' });
+    expect(next.rooms.filter((r) => r.floor === 'floor-0')).toHaveLength(stamp.rooms.length);
 
     const si = spawnPos.y * 32 + spawnPos.x;
     expect(next.floors[0]?.layers.tiles[0]?.[si]).toBe(GROUND);

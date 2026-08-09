@@ -92,6 +92,7 @@ Maker Studio shell
 - WU-COMM-02 clear offline share queue; procgen pipeline regression test (stamp→apply spawn/doors/semantics)
 - WU-PROC-08 palette dock roles brush/wall/door — click catalog swatch sets fill or procgen overrides
 - WU-UX-04 workspace mount contract tests + fix Assets `display:flex` overriding inactive hide
+- WU-PROC-09 Generate writes floor-0 `rooms` from stamp (room overlay / occlusion ready)
 
 ## PR Plan
 
