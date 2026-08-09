@@ -130,6 +130,7 @@ Maker Studio shell
 - WU-COMM-09 offline queue rows format `at` via `formatCommunityShareAt` (readable local date/time; invalid → raw)
 - WU-PROC-19 Generate success toast includes `{stairs}` via `countStampStairLinks` (en/es)
 - WU-UX-08 `setFloorLabel` / `normalizeFloorLabel` + menubar name field for active floor (compose keeps label)
+- WU-PROC-20 door/furniture auto-pick prefers mid-layer majority classed tiles (`majorityClassedTileId` + `midLayer`); Generate passes layer 1
 
 ## PR Plan
 

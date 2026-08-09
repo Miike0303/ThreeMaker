@@ -24,18 +24,20 @@ export function majorityNonZeroTileId(layer: readonly number[]): number | undefi
 }
 
 /**
- * Most common non-zero id on `layer` whose semantic class is `wall`, if any.
+ * Most common non-zero id on `layer` whose semantic class is `cls`, if any.
+ * Used for wall (layer 2), door/furniture (mid layer) auto-pick (WU-PROC-20).
  */
-export function majorityWallClassedTileId(
+export function majorityClassedTileId(
   layer: readonly number[],
   semantics: SemanticOverrides,
+  cls: SemanticClass,
 ): number | undefined {
   const counts = new Map<number, number>();
   let bestId: number | undefined;
   let bestCount = 0;
   for (const id of layer) {
     if (id === 0) continue;
-    if (getSemanticClass(semantics, id) !== 'wall') continue;
+    if (getSemanticClass(semantics, id) !== cls) continue;
     const next = (counts.get(id) ?? 0) + 1;
     counts.set(id, next);
     if (next > bestCount) {
@@ -44,6 +46,16 @@ export function majorityWallClassedTileId(
     }
   }
   return bestId;
+}
+
+/**
+ * Most common non-zero id on `layer` whose semantic class is `wall`, if any.
+ */
+export function majorityWallClassedTileId(
+  layer: readonly number[],
+  semantics: SemanticOverrides,
+): number | undefined {
+  return majorityClassedTileId(layer, semantics, 'wall');
 }
 
 /**
@@ -83,12 +95,18 @@ export function firstWallClassedTileId(
  * Preference: brush fill for ground → majority on layer 0 → fallback.
  * Wall: override → wall-class majority on layer 2 → any wall-classed semantic
  * → layer-2 majority if distinct from ground → fallback wall id.
- * Door: override → first door-classed semantic id (optional; omitted when none).
+ * Door: override → door-class majority on mid → first door-classed semantic.
+ * Furniture: override → furniture-class majority on mid → first furniture semantic.
  */
 export function resolveDungeonTileIds(input: {
   readonly fillTileId: number;
   readonly groundLayer: readonly number[];
   readonly wallLayer: readonly number[];
+  /**
+   * Optional mid paint layer (layer 1). When present, door/furniture auto-pick
+   * prefers the majority classed id already painted there (WU-PROC-20).
+   */
+  readonly midLayer?: readonly number[];
   readonly fallbackGround: number;
   readonly fallbackWall: number;
   /**
@@ -115,6 +133,7 @@ export function resolveDungeonTileIds(input: {
   readonly furnitureTileId?: number;
 } {
   const semantics = input.semantics ?? {};
+  const midLayer = input.midLayer ?? [];
   const fromFill = input.fillTileId > 0 ? input.fillTileId : undefined;
   const fromGround = majorityNonZeroTileId(input.groundLayer);
   const groundTileId = fromFill ?? fromGround ?? input.fallbackGround;
@@ -153,6 +172,14 @@ export function resolveDungeonTileIds(input: {
     input.doorTileOverride !== wallTileId
       ? input.doorTileOverride
       : undefined;
+  const doorFromMid = majorityClassedTileId(midLayer, semantics, 'door');
+  const doorFromMidOk =
+    doorFromMid !== undefined &&
+    doorFromMid > 0 &&
+    doorFromMid !== groundTileId &&
+    doorFromMid !== wallTileId
+      ? doorFromMid
+      : undefined;
   const doorFromSemantics = firstClassedTileId(semantics, 'door', groundTileId);
   const doorFromSemanticsOk =
     doorFromSemantics !== undefined &&
@@ -160,7 +187,7 @@ export function resolveDungeonTileIds(input: {
     doorFromSemantics > 0
       ? doorFromSemantics
       : undefined;
-  const doorTileId = doorOverride ?? doorFromSemanticsOk;
+  const doorTileId = doorOverride ?? doorFromMidOk ?? doorFromSemanticsOk;
 
   const furnitureOverride =
     input.furnitureTileOverride !== undefined &&
@@ -170,6 +197,15 @@ export function resolveDungeonTileIds(input: {
     input.furnitureTileOverride !== doorTileId
       ? input.furnitureTileOverride
       : undefined;
+  const furnitureFromMid = majorityClassedTileId(midLayer, semantics, 'furniture');
+  const furnitureFromMidOk =
+    furnitureFromMid !== undefined &&
+    furnitureFromMid > 0 &&
+    furnitureFromMid !== groundTileId &&
+    furnitureFromMid !== wallTileId &&
+    furnitureFromMid !== doorTileId
+      ? furnitureFromMid
+      : undefined;
   const furnitureFromSemantics = firstClassedTileId(semantics, 'furniture', groundTileId);
   const furnitureFromSemanticsOk =
     furnitureFromSemantics !== undefined &&
@@ -178,7 +214,7 @@ export function resolveDungeonTileIds(input: {
     furnitureFromSemantics !== doorTileId
       ? furnitureFromSemantics
       : undefined;
-  const furnitureTileId = furnitureOverride ?? furnitureFromSemanticsOk;
+  const furnitureTileId = furnitureOverride ?? furnitureFromMidOk ?? furnitureFromSemanticsOk;
 
   const result: {
     groundTileId: number;

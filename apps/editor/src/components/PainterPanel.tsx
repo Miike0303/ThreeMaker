@@ -515,11 +515,13 @@ export function PainterPanel({ t }: PainterPanelProps) {
       );
       const targetFloor = doc.floors[targetFloorIndex];
       const groundLayer = targetFloor?.layers.tiles[0] ?? [];
+      const midLayer = targetFloor?.layers.tiles[1] ?? [];
       const wallLayer = targetFloor?.layers.tiles[2] ?? [];
       const { groundTileId, wallTileId, doorTileId, furnitureTileId } = resolveDungeonTileIds({
         fillTileId: state.fillTileId,
         groundLayer,
         wallLayer,
+        midLayer,
         fallbackGround: GROUND_TILE_ID,
         // A4 wall range start — only used when the map has no wall majority yet.
         fallbackWall: 4352,

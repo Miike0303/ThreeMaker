@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { majorityNonZeroTileId, resolveDungeonTileIds } from '../src/procgen/tile-pick.js';
+import {
+  majorityClassedTileId,
+  majorityNonZeroTileId,
+  resolveDungeonTileIds,
+} from '../src/procgen/tile-pick.js';
 
 describe('majorityNonZeroTileId', () => {
   it('returns undefined for empty/zero layers', () => {
@@ -114,6 +118,53 @@ describe('resolveDungeonTileIds', () => {
       wallLayer: [5],
       fallbackGround: 10,
       fallbackWall: 20,
+      semantics: {
+        '5': { class: 'wall' },
+        '77': { class: 'door' },
+        '80': { class: 'door' },
+      },
+    });
+    expect(r.doorTileId).toBe(77);
+  });
+
+  it('prefers majority door/furniture on mid layer over first semantic id (WU-PROC-20)', () => {
+    expect(
+      majorityClassedTileId(
+        [80, 80, 77, 0],
+        { '77': { class: 'door' }, '80': { class: 'door' } },
+        'door',
+      ),
+    ).toBe(80);
+
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      midLayer: [200, 200, 201, 80, 80, 80],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: {
+        '5': { class: 'wall' },
+        '77': { class: 'door' },
+        '80': { class: 'door' },
+        '200': { class: 'furniture' },
+        '201': { class: 'furniture' },
+      },
+    });
+    // Mid majority door is 80 (not first semantic 77); furniture majority 200.
+    expect(r.doorTileId).toBe(80);
+    expect(r.furnitureTileId).toBe(200);
+  });
+
+  it('doorTileOverride still wins over mid-layer majority', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      midLayer: [80, 80, 80],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      doorTileOverride: 77,
       semantics: {
         '5': { class: 'wall' },
         '77': { class: 'door' },
