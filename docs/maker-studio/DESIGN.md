@@ -93,6 +93,7 @@ Maker Studio shell
 - WU-PROC-08 palette dock roles brush/wall/door — click catalog swatch sets fill or procgen overrides
 - WU-UX-04 workspace mount contract tests + fix Assets `display:flex` overriding inactive hide
 - WU-PROC-09 Generate writes floor-0 `rooms` from stamp (room overlay / occlusion ready)
+- WU-UX-05 extract `inspectorTabForTool` tests; palette assign status toast (brush/wall/door)
 
 ## PR Plan
 

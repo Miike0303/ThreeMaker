@@ -47,10 +47,16 @@ import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
 import { applyDungeonStampToMapDocument } from '../procgen/apply-stamp.js';
 import { stampSimpleDungeon } from '../procgen/dungeon-stamp.js';
 import {
+  INSPECTOR_TAB_IDS,
+  inspectorTabForTool,
+  type InspectorTabId,
+} from '../inspector-routing.js';
+import {
   assignmentFromPaletteClick,
   PROCGEN_PALETTE_ROLES,
   type ProcgenPaletteRole,
   selectedTileIdForRole,
+  statusForPaletteAssignment,
 } from '../procgen/palette-role.js';
 import {
   DEFAULT_PROCGEN_PRESET,
@@ -90,22 +96,6 @@ const PAINT_LAYERS = [
   { index: 2 as const, nameKey: 'painter.layer.wall' },
   { index: 3 as const, nameKey: 'painter.layer.over' },
 ] as const;
-
-/** Which inspector tab to open when a tool is selected (studio routing). */
-function inspectorTabForTool(tool: ToolId): 'map' | 'paint' | 'events' | 'ink' | 'entities' {
-  switch (tool) {
-    case 'room-box':
-    case 'stair-link':
-    case 'spawn-point':
-      return 'map';
-    case 'prop':
-    case 'npc':
-    case 'trigger':
-      return 'entities';
-    default:
-      return 'paint';
-  }
-}
 
 const NPC_FACINGS: readonly NpcFacing[] = ['down', 'left', 'right', 'up'];
 
@@ -243,7 +233,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [newEventKey, setNewEventKey] = useState('');
   const [newWorldSeedKey, setNewWorldSeedKey] = useState('');
   const [newWorldSeedKind, setNewWorldSeedKind] = useState<WorldValueKind>('boolean');
-  const [inspectorTab, setInspectorTab] = useState<'map' | 'paint' | 'events' | 'ink' | 'entities'>(
+  const [inspectorTab, setInspectorTab] = useState<InspectorTabId>(
     'paint',
   );
   const [community, setCommunity] = useState<CommunitySettings>(() => loadCommunitySettings());
@@ -538,7 +528,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     trigger: 'T',
   };
 
-  const INSPECTOR_TABS = ['map', 'paint', 'events', 'ink', 'entities'] as const;
+  const INSPECTOR_TABS = INSPECTOR_TAB_IDS;
 
   return (
     <div className="ide-workspace">
@@ -995,6 +985,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     }
                     if (assignment.setDoorOverride !== undefined) {
                       setProcgenDoorTileId(assignment.setDoorOverride);
+                    }
+                    const status = statusForPaletteAssignment(assignment);
+                    if (status) {
+                      setStatusMessage(
+                        formatTemplate(t(status.messageKey), { id: status.id }),
+                      );
                     }
                   }}
                   tileAriaLabel={(tileId) =>

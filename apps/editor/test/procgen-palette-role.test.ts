@@ -3,6 +3,7 @@ import {
   assignmentFromPaletteClick,
   PROCGEN_PALETTE_ROLES,
   selectedTileIdForRole,
+  statusForPaletteAssignment,
 } from '../src/procgen/palette-role.js';
 
 describe('assignmentFromPaletteClick', () => {
@@ -45,5 +46,26 @@ describe('selectedTileIdForRole', () => {
 describe('PROCGEN_PALETTE_ROLES', () => {
   it('lists brush, wall, door in UI order', () => {
     expect(PROCGEN_PALETTE_ROLES).toEqual(['brush', 'wall', 'door']);
+  });
+});
+
+describe('statusForPaletteAssignment', () => {
+  it('returns undefined for empty assignment', () => {
+    expect(statusForPaletteAssignment({})).toBeUndefined();
+  });
+
+  it('prefers fill, then wall, then door message keys', () => {
+    expect(statusForPaletteAssignment({ setFill: 9 })).toEqual({
+      messageKey: 'painter.palette.assigned.brush',
+      id: 9,
+    });
+    expect(statusForPaletteAssignment({ setWallOverride: 11 })).toEqual({
+      messageKey: 'painter.palette.assigned.wall',
+      id: 11,
+    });
+    expect(statusForPaletteAssignment({ setDoorOverride: 13 })).toEqual({
+      messageKey: 'painter.palette.assigned.door',
+      id: 13,
+    });
   });
 });

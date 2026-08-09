@@ -68,3 +68,28 @@ export function selectedTileIdForRole(
     }
   }
 }
+
+export type PaletteAssignmentStatus = {
+  /** Locale key under painter.palette.* (uses `{id}` template). */
+  readonly messageKey: string;
+  readonly id: number;
+};
+
+/**
+ * Status toast payload after a successful palette assignment.
+ * Returns undefined when the assignment was empty (ignored click).
+ */
+export function statusForPaletteAssignment(
+  assignment: PaletteTileAssignment,
+): PaletteAssignmentStatus | undefined {
+  if (assignment.setFill !== undefined) {
+    return { messageKey: 'painter.palette.assigned.brush', id: assignment.setFill };
+  }
+  if (assignment.setWallOverride !== undefined) {
+    return { messageKey: 'painter.palette.assigned.wall', id: assignment.setWallOverride };
+  }
+  if (assignment.setDoorOverride !== undefined) {
+    return { messageKey: 'painter.palette.assigned.door', id: assignment.setDoorOverride };
+  }
+  return undefined;
+}
