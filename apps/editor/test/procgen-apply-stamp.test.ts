@@ -433,4 +433,125 @@ describe('applyDungeonStampToMapDocument', () => {
       applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 }),
     ).toThrow(/target floor/i);
   });
+
+  it('places a stair to the adjacent floor when multi-floor and requested', () => {
+    const blank = createBlankMapDocument({
+      id: 'stamp-stair',
+      name: 'Stair',
+      width: 20,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const size = blank.width * blank.height;
+    const floor1 = {
+      id: 'floor-1',
+      baseElevation: 1,
+      layers: {
+        tiles: [
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+        ] as [number[], number[], number[], number[]],
+        shadows: new Array(size).fill(0),
+        regions: new Array(size).fill(0),
+      },
+    };
+    const doc = {
+      ...blank,
+      floors: [blank.floors[0]!, floor1],
+      rooms: [
+        {
+          id: 'ground-hall',
+          floor: 'floor-0',
+          rects: [{ x: 2, y: 2, width: 6, height: 6 }],
+        },
+      ],
+      stairLinks: [
+        {
+          id: 'authored-other',
+          fromFloor: 'floor-0',
+          toFloor: 'floor-1',
+          bidirectional: true,
+          waypoints: [
+            { x: 0, y: 0, floor: 'floor-0' },
+            { x: 1, y: 1, floor: 'floor-1' },
+          ],
+        },
+        {
+          id: 'keep-far',
+          fromFloor: 'floor-1',
+          toFloor: 'floor-ghost',
+          bidirectional: false,
+          waypoints: [
+            { x: 0, y: 0, floor: 'floor-1' },
+            { x: 0, y: 1, floor: 'floor-ghost' },
+          ],
+        },
+      ],
+    };
+    const stamp = stampSimpleDungeon({
+      width: 20,
+      height: 16,
+      seed: 9,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      roomCount: 3,
+    });
+    const next = applyDungeonStampToMapDocument(doc, stamp, {
+      targetFloorIndex: 1,
+      replaceFloor0Rooms: true,
+      placeStairToAdjacentFloor: true,
+    });
+    const stampStairs = next.stairLinks.filter((l) => l.id.startsWith('stamp-stair-'));
+    expect(stampStairs).toHaveLength(1);
+    expect(stampStairs[0]?.fromFloor).toBe('floor-1');
+    expect(stampStairs[0]?.toFloor).toBe('floor-0');
+    expect(stampStairs[0]?.bidirectional).toBe(true);
+    // Pair links replaced; unrelated pair kept.
+    expect(next.stairLinks.some((l) => l.id === 'authored-other')).toBe(false);
+    expect(next.stairLinks.some((l) => l.id === 'keep-far')).toBe(true);
+  });
+
+  it('does not invent stairs when placeStairToAdjacentFloor is omitted', () => {
+    const blank = createBlankMapDocument({
+      id: 'stamp-no-stair',
+      name: 'NoStair',
+      width: 16,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const size = blank.width * blank.height;
+    const doc = {
+      ...blank,
+      floors: [
+        blank.floors[0]!,
+        {
+          id: 'floor-1',
+          baseElevation: 1,
+          layers: {
+            tiles: [
+              new Array(size).fill(0),
+              new Array(size).fill(0),
+              new Array(size).fill(0),
+              new Array(size).fill(0),
+            ] as [number[], number[], number[], number[]],
+            shadows: new Array(size).fill(0),
+            regions: new Array(size).fill(0),
+          },
+        },
+      ],
+    };
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 2,
+      groundTileId: 2816,
+      wallTileId: 4352,
+    });
+    const next = applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 });
+    expect(next.stairLinks).toEqual([]);
+  });
 });

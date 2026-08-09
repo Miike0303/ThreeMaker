@@ -13,6 +13,12 @@ import {
   type StampRoomLightOptions,
 } from './lights-from-stamp.js';
 import { roomsFromDungeonStamp } from './rooms-from-stamp.js';
+import {
+  mergeStampStairLinks,
+  pickAdjacentFloorIndex,
+  roomLandingTile,
+  stampStairLinkBetween,
+} from './stairs-from-stamp.js';
 
 export type ApplyDungeonStampOptions = {
   /**
@@ -47,6 +53,13 @@ export type ApplyDungeonStampOptions = {
   readonly placePlayerTorch?: boolean;
   /** Overrides for the player torch (color/intensity/range/id). */
   readonly playerTorchOptions?: PlayerTorchOptions;
+  /**
+   * When true and the map has 2+ floors, place a bidirectional stair between
+   * the stamped main room and the adjacent floor's main room (prefer floor
+   * below; ground links up). Replaces prior links for that floor pair only.
+   * No-op on single-floor maps. Default false preserves stairLinks.
+   */
+  readonly placeStairToAdjacentFloor?: boolean;
 };
 
 /** Collect distinct non-zero tile ids from a stamp layer. */
@@ -153,6 +166,31 @@ export function applyDungeonStampToMapDocument(
       ...next,
       lights: ensurePlayerTorch(next.lights, options.playerTorchOptions ?? {}),
     };
+  }
+  if (options.placeStairToAdjacentFloor) {
+    const adjacentIndex = pickAdjacentFloorIndex(targetFloorIndex, doc.floors.length);
+    if (adjacentIndex !== undefined) {
+      const adjacentFloor = doc.floors[adjacentIndex];
+      if (adjacentFloor) {
+        const entry = pickMainRoomSpawn(stamp.rooms, doc.width, doc.height);
+        const exit = roomLandingTile(next.rooms, adjacentFloor.id, doc.width, doc.height);
+        const link = stampStairLinkBetween(
+          targetFloor.id,
+          entry,
+          adjacentFloor.id,
+          exit,
+        );
+        next = {
+          ...next,
+          stairLinks: mergeStampStairLinks(
+            next.stairLinks,
+            targetFloor.id,
+            adjacentFloor.id,
+            link,
+          ),
+        };
+      }
+    }
   }
   return next;
 }

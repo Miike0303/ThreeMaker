@@ -126,6 +126,7 @@ Maker Studio shell
 - WU-UTIL-05 `clampRoomRect` + `addRoom`/`addRoomRect` clamp OOB footprints (schema-safe)
 - WU-PROC-17 Generate stamps **active floor** (`targetFloorIndex`); rooms/lights/spawn on that floor; floor-scoped light ids; other floors preserved
 - WU-UTIL-06 `removeFloor` prunes rooms/props/npcs/triggers/placed lights/stairs/spawn + NPC-attached lights; pure `entitiesOnKnownFloors` / `pruneStairLinksForFloors` / `pruneLightsForFloors`
+- WU-PROC-18 multi-floor Generate places bidirectional stair to adjacent floor (`placeStairToAdjacentFloor` / `stairs-from-stamp`); pair links replaced on re-Generate
 
 ## PR Plan
 

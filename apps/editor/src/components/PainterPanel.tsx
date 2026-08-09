@@ -558,6 +558,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
         placeRoomLights: true,
         roomLightOptions: stampRoomLightOptionsFromPreset(preset),
         placePlayerTorch: true,
+        // Multi-floor maps get a stair to the adjacent floor (prefer below).
+        placeStairToAdjacentFloor: doc.floors.length > 1,
       });
       const { textures, sheetPixelSizes } = await loadSlotTextures(stamped);
       viewport.loadMap(stamped, textures, sheetPixelSizes, groundTileId);
