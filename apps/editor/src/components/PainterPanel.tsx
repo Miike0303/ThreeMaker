@@ -1678,6 +1678,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               <span>
                                 {formatTemplate(t('painter.community.queueItem'), {
                                   name: job.mapName,
+                                  version: String(job.version),
+                                  license: t(`painter.community.license.${job.licenseTag}`),
                                   at: job.at,
                                 })}
                               </span>

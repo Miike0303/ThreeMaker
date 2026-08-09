@@ -122,6 +122,7 @@ Maker Studio shell
 - WU-UTIL-04 `addStairLink` / `setPendingStairEntry` clamp OOB tiles + no-op on unknown floor ids
 - WU-COMM-06 `usesOnlyImportedSlotSources` (catalog provenance on slots) wires save gate + blocked status toast
 - WU-COMM-07 share queue payload adds `version` + `licenseTag` (`user-owned`|`import-rpgm`|`mixed`); legacy jobs normalize
+- WU-COMM-08 offline queue rows show version + localized licenseTag
 
 ## PR Plan
 
