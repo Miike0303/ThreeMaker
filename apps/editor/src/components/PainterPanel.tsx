@@ -270,6 +270,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [procgenWallTileId, setProcgenWallTileId] = useState(0);
   /** 0 = auto (door-class semantics); else explicit mid-layer door tile id. */
   const [procgenDoorTileId, setProcgenDoorTileId] = useState(0);
+  /** 0 = auto (furniture-class semantics); else explicit mid-layer furniture tile id. */
+  const [procgenFurnitureTileId, setProcgenFurnitureTileId] = useState(0);
   /** Sparse furniture density 0–1 (mid layer); 0 disables scatter. */
   const [procgenFurnitureDensity, setProcgenFurnitureDensity] = useState(
     DEFAULT_FURNITURE_DENSITY,
@@ -480,6 +482,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
         semantics: state.semantics,
         ...(procgenWallTileId > 0 ? { wallTileOverride: procgenWallTileId } : {}),
         ...(procgenDoorTileId > 0 ? { doorTileOverride: procgenDoorTileId } : {}),
+        ...(procgenFurnitureTileId > 0
+          ? { furnitureTileOverride: procgenFurnitureTileId }
+          : {}),
       });
       const seed = procgenSeed >>> 0;
       const preset = getProcgenPreset(procgenPreset);
@@ -539,6 +544,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     procgenPreset,
     procgenWallTileId,
     procgenDoorTileId,
+    procgenFurnitureTileId,
     procgenFurnitureDensity,
   ]);
 
@@ -1045,6 +1051,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     fillTileId: painterState.fillTileId,
                     wallOverride: procgenWallTileId,
                     doorOverride: procgenDoorTileId,
+                    furnitureOverride: procgenFurnitureTileId,
                   })}
                   onSelect={(tileId) => {
                     const assignment = assignmentFromPaletteClick(paletteRole, tileId);
@@ -1056,6 +1063,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     }
                     if (assignment.setDoorOverride !== undefined) {
                       setProcgenDoorTileId(assignment.setDoorOverride);
+                    }
+                    if (assignment.setFurnitureOverride !== undefined) {
+                      setProcgenFurnitureTileId(assignment.setFurnitureOverride);
                     }
                     const status = statusForPaletteAssignment(assignment);
                     if (status) {
@@ -1493,6 +1503,45 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               id: procgenDoorTileId,
                             })
                           : t('painter.procgen.doorTileAuto')}
+                      </p>
+                      <div className="ide-row">
+                        <label>
+                          {t('painter.procgen.furnitureTile')}
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={procgenFurnitureTileId}
+                            onChange={(event) => {
+                              const n = Number.parseInt(event.target.value, 10);
+                              if (Number.isFinite(n)) setProcgenFurnitureTileId(Math.max(0, n));
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          title={t('painter.procgen.furnitureFromBrushHint')}
+                          onClick={() => {
+                            const fill = painterState.fillTileId;
+                            if (fill > 0) setProcgenFurnitureTileId(fill);
+                          }}
+                        >
+                          {t('painter.procgen.furnitureFromBrush')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProcgenFurnitureTileId(0)}
+                          title={t('painter.procgen.furnitureAutoHint')}
+                        >
+                          {t('painter.procgen.furnitureAuto')}
+                        </button>
+                      </div>
+                      <p className="ide-hint">
+                        {procgenFurnitureTileId > 0
+                          ? formatTemplate(t('painter.procgen.furnitureTileActive'), {
+                              id: procgenFurnitureTileId,
+                            })
+                          : t('painter.procgen.furnitureTileAuto')}
                       </p>
                       <button
                         type="button"

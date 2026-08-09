@@ -1,14 +1,15 @@
 /**
  * Palette-dock roles for Maker Studio procgen tile picking.
- * Pure: clicking a catalog swatch assigns brush fill, wall override, or door override.
+ * Pure: clicking a catalog swatch assigns brush fill, wall/door/furniture override.
  */
 
-export type ProcgenPaletteRole = 'brush' | 'wall' | 'door';
+export type ProcgenPaletteRole = 'brush' | 'wall' | 'door' | 'furniture';
 
 export const PROCGEN_PALETTE_ROLES: readonly ProcgenPaletteRole[] = [
   'brush',
   'wall',
   'door',
+  'furniture',
 ] as const;
 
 export type PaletteTileAssignment = {
@@ -18,11 +19,13 @@ export type PaletteTileAssignment = {
   readonly setWallOverride?: number;
   /** When set, becomes the explicit door tile override (0 means auto — never returned). */
   readonly setDoorOverride?: number;
+  /** When set, becomes the explicit furniture tile override (0 means auto — never returned). */
+  readonly setFurnitureOverride?: number;
 };
 
 /**
  * Map a palette click to the active role. Ignores non-positive tile ids.
- * Wall/door assignments never return 0 (auto is chosen via separate UI, not click).
+ * Wall/door/furniture assignments never return 0 (auto is chosen via separate UI).
  */
 export function assignmentFromPaletteClick(
   role: ProcgenPaletteRole,
@@ -39,6 +42,8 @@ export function assignmentFromPaletteClick(
       return { setWallOverride: id };
     case 'door':
       return { setDoorOverride: id };
+    case 'furniture':
+      return { setFurnitureOverride: id };
     default: {
       const _exhaustive: never = role;
       return _exhaustive;
@@ -53,6 +58,7 @@ export function selectedTileIdForRole(
     readonly fillTileId: number;
     readonly wallOverride: number;
     readonly doorOverride: number;
+    readonly furnitureOverride: number;
   },
 ): number {
   switch (role) {
@@ -62,6 +68,8 @@ export function selectedTileIdForRole(
       return state.wallOverride > 0 ? state.wallOverride : 0;
     case 'door':
       return state.doorOverride > 0 ? state.doorOverride : 0;
+    case 'furniture':
+      return state.furnitureOverride > 0 ? state.furnitureOverride : 0;
     default: {
       const _exhaustive: never = role;
       return _exhaustive;
@@ -90,6 +98,12 @@ export function statusForPaletteAssignment(
   }
   if (assignment.setDoorOverride !== undefined) {
     return { messageKey: 'painter.palette.assigned.door', id: assignment.setDoorOverride };
+  }
+  if (assignment.setFurnitureOverride !== undefined) {
+    return {
+      messageKey: 'painter.palette.assigned.furniture',
+      id: assignment.setFurnitureOverride,
+    };
   }
   return undefined;
 }
