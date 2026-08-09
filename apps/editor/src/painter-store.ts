@@ -1101,10 +1101,24 @@ export function setPendingStairEntry(
 
 // --- Spawn authoring (Slice 5a) ------------------------------------------
 
-/** Sets the player-spawn point, replacing any existing one (single spawn per map). Ignored mid-stroke, same as `setTool`. NOT part of any command-stack undo history -- overwriting/clearing IS the undo (see this module's doc comment). */
+/**
+ * Sets the player-spawn point, replacing any existing one (single spawn per
+ * map). Clamps tile x/y into map bounds (WU-UTIL-03). No-op when `spawn.floor`
+ * is not an existing floor id (schema would reject on save). Ignored mid-stroke,
+ * same as `setTool`. NOT part of any command-stack undo history -- overwriting
+ * /clearing IS the undo (see this module's doc comment).
+ */
 export function setSpawn(state: PainterState, spawn: MapSpawn): PainterState {
   if (state.stroke.status === 'stroking') return state;
-  return { ...state, spawn };
+  if (!state.floors.some((floor) => floor.id === spawn.floor)) return state;
+  return {
+    ...state,
+    spawn: {
+      x: clampTileIndex(spawn.x, state.width),
+      y: clampTileIndex(spawn.y, state.height),
+      floor: spawn.floor,
+    },
+  };
 }
 
 /** Clears the player-spawn point. Ignored mid-stroke. A safe no-op if no spawn is set. */

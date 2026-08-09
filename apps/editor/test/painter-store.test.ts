@@ -1052,6 +1052,19 @@ describe('painter-store: spawn authoring (Slice 5a -- loop-crear-jugar)', () => 
     expect(result).toBe(state);
   });
 
+  it('setSpawn clamps OOB tile coords into map bounds (WU-UTIL-03)', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setSpawn(state, { x: -2, y: 99, floor: 'floor-0' });
+    expect(state.spawn).toEqual({ x: 0, y: 3, floor: 'floor-0' });
+  });
+
+  it('setSpawn is a no-op when floor id is missing', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    const result = setSpawn(state, { x: 1, y: 1, floor: 'ghost-floor' });
+    expect(result).toBe(state);
+    expect(result.spawn).toBeUndefined();
+  });
+
   it('clearSpawn clears an existing spawn', () => {
     let state = createPainterState({
       ...oneFloor(4, 4),
