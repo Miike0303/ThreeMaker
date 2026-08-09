@@ -133,6 +133,7 @@ Maker Studio shell
 - WU-PROC-20 door/furniture auto-pick prefers mid-layer majority classed tiles (`majorityClassedTileId` + `midLayer`); Generate passes layer 1
 - WU-UX-09 map display name: `normalizeMapName` + viewport `setMapName`/`mapName`; menubar field (blur commits; empty → Untitled Map)
 - WU-UX-10 room names: `addRoom`/`renameRoom` trim via `normalizeOptionalName`; blank clears; same-value no-op (no undo noise)
+- WU-COMM-10 offline queue rows show unique tile object count (`communityShareTileCount` + `{tiles}` in en/es)
 
 ## PR Plan
 

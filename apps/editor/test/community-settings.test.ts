@@ -4,6 +4,7 @@ import {
   COMMUNITY_SHARE_QUEUE_MAX,
   DEFAULT_COMMUNITY_SETTINGS,
   describeCommunityShareStatus,
+  communityShareTileCount,
   formatCommunityShareAt,
   loadCommunitySettings,
   loadCommunityShareQueue,
@@ -115,6 +116,16 @@ describe('formatCommunityShareAt (WU-COMM-09)', () => {
   it('returns the original string when the value is not a date', () => {
     expect(formatCommunityShareAt('not-a-date')).toBe('not-a-date');
     expect(formatCommunityShareAt('')).toBe('');
+  });
+});
+
+describe('communityShareTileCount (WU-COMM-10)', () => {
+  it('counts unique non-empty shas only', () => {
+    const a = 'a'.repeat(64);
+    const b = 'b'.repeat(64);
+    expect(communityShareTileCount([])).toBe(0);
+    expect(communityShareTileCount(['', a, a, b, ''])).toBe(2);
+    expect(communityShareTileCount([a])).toBe(1);
   });
 });
 

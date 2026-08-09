@@ -251,6 +251,20 @@ export function formatCommunityShareAt(at: string, locale?: string): string {
 }
 
 /**
+ * Count unique non-empty tile object shas on a share job (WU-COMM-10).
+ * Duplicates and blank entries do not inflate the queue row badge.
+ */
+export function communityShareTileCount(
+  tileObjectShas: readonly string[],
+): number {
+  const seen = new Set<string>();
+  for (const sha of tileObjectShas) {
+    if (typeof sha === 'string' && sha.length > 0) seen.add(sha);
+  }
+  return seen.size;
+}
+
+/**
  * Pure inspector status for the community section (no I/O).
  * `queue` is newest-first; lastMapName is the newest job when present.
  */

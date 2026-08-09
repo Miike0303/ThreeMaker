@@ -15,6 +15,7 @@ import {
   clearCommunityShareQueue,
   type CommunitySettings,
   type CommunityShareEnqueue,
+  communityShareTileCount,
   describeCommunityShareStatus,
   formatCommunityShareAt,
   loadCommunitySettings,
@@ -1730,6 +1731,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   name: job.mapName,
                                   version: String(job.version),
                                   license: t(`painter.community.license.${job.licenseTag}`),
+                                  tiles: String(communityShareTileCount(job.tileObjectShas)),
                                   at: formatCommunityShareAt(job.at),
                                 })}
                               </span>
