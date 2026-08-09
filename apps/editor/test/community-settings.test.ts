@@ -13,6 +13,7 @@ import {
   replaceCommunityShareQueue,
   saveCommunitySettings,
   serializeCommunityShareQueue,
+  licenseTagFromSlots,
   usesOnlyImportedSlotSources,
   type CommunityShareEnqueue,
 } from '../src/community-settings.js';
@@ -32,6 +33,8 @@ const sampleJob = (id: string, at = '2026-08-08T00:00:00.000Z'): CommunityShareE
   mapName: `Map ${id}`,
   tileObjectShas: ['a'.repeat(64)],
   at,
+  version: 6,
+  licenseTag: 'user-owned',
 });
 
 describe('community-settings', () => {
@@ -58,6 +61,8 @@ describe('community-settings', () => {
       mapName: 'Demo',
       tileObjectShas: ['a'.repeat(64)],
       usesOnlyImportedAssets: false,
+      version: 6,
+      licenseTag: 'user-owned' as const,
       now: () => '2026-08-08T00:00:00.000Z',
     };
     expect(
@@ -67,6 +72,8 @@ describe('community-settings', () => {
       mapName: 'Demo',
       tileObjectShas: ['a'.repeat(64)],
       at: '2026-08-08T00:00:00.000Z',
+      version: 6,
+      licenseTag: 'user-owned',
     });
     expect(
       maybeEnqueueCommunityShare({ shareOnSave: false, allowImportedAssets: false }, base),
@@ -80,9 +87,16 @@ describe('community-settings', () => {
     expect(
       maybeEnqueueCommunityShare(
         { shareOnSave: true, allowImportedAssets: true },
-        { ...base, usesOnlyImportedAssets: true },
+        { ...base, usesOnlyImportedAssets: true, licenseTag: 'import-rpgm' },
       ),
-    ).not.toBeNull();
+    ).toEqual({
+      mapId: 'm1',
+      mapName: 'Demo',
+      tileObjectShas: ['a'.repeat(64)],
+      at: '2026-08-08T00:00:00.000Z',
+      version: 6,
+      licenseTag: 'import-rpgm',
+    });
   });
 });
 
@@ -112,6 +126,24 @@ describe('usesOnlyImportedSlotSources (WU-COMM-06)', () => {
         B: { object: 'b'.repeat(64) },
       }),
     ).toBe(false);
+  });
+});
+
+describe('licenseTagFromSlots (WU-COMM-07)', () => {
+  const SHA = 'a'.repeat(64);
+
+  it('classifies empty, user-owned, import-rpgm, and mixed', () => {
+    expect(licenseTagFromSlots({})).toBe('user-owned');
+    expect(licenseTagFromSlots({ A: { object: SHA } })).toBe('user-owned');
+    expect(
+      licenseTagFromSlots({ A: { object: SHA, sourceGameId: 1 } }),
+    ).toBe('import-rpgm');
+    expect(
+      licenseTagFromSlots({
+        A: { object: SHA, sourceGameId: 1 },
+        B: { object: 'b'.repeat(64) },
+      }),
+    ).toBe('mixed');
   });
 });
 
@@ -215,6 +247,25 @@ describe('community share offline queue', () => {
         JSON.stringify([sampleJob('ok'), { mapId: 1 }, sampleJob('two')]),
       ),
     ).toEqual({ ok: true, jobs: [sampleJob('ok'), sampleJob('two')] });
+  });
+
+  it('load/parse normalizes legacy jobs missing version and licenseTag', () => {
+    const legacy = {
+      mapId: 'legacy',
+      mapName: 'Old',
+      tileObjectShas: ['a'.repeat(64)],
+      at: '2026-08-08T00:00:00.000Z',
+    };
+    const storage = memoryStorage({
+      'threemaker-maker-studio:community-queue': JSON.stringify([legacy]),
+    });
+    expect(loadCommunityShareQueue(storage)).toEqual([
+      { ...legacy, version: 0, licenseTag: 'user-owned' },
+    ]);
+    expect(parseCommunityShareQueueJson(JSON.stringify([legacy]))).toEqual({
+      ok: true,
+      jobs: [{ ...legacy, version: 0, licenseTag: 'user-owned' }],
+    });
   });
 
   it('replaceCommunityShareQueue overwrites storage with filtered jobs', () => {

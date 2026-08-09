@@ -52,23 +52,61 @@ export function saveCommunitySettings(
   storage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
+/** Coarse license/provenance tag for the offline share queue (future API). */
+export type CommunityLicenseTag = 'user-owned' | 'import-rpgm' | 'mixed';
+
+export const COMMUNITY_LICENSE_TAGS: readonly CommunityLicenseTag[] = [
+  'user-owned',
+  'import-rpgm',
+  'mixed',
+] as const;
+
 export type CommunityShareEnqueue = {
   readonly mapId: string;
   readonly mapName: string;
   readonly tileObjectShas: readonly string[];
   readonly at: string;
+  /** MapDocument.version at enqueue time (DESIGN share payload). */
+  readonly version: number;
+  /** Coarse provenance tag (DESIGN share payload). */
+  readonly licenseTag: CommunityLicenseTag;
 };
 
-function isShareEnqueue(value: unknown): value is CommunityShareEnqueue {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
+function isCommunityLicenseTag(value: unknown): value is CommunityLicenseTag {
   return (
-    typeof v.mapId === 'string' &&
-    typeof v.mapName === 'string' &&
-    typeof v.at === 'string' &&
-    Array.isArray(v.tileObjectShas) &&
-    v.tileObjectShas.every((s) => typeof s === 'string')
+    value === 'user-owned' || value === 'import-rpgm' || value === 'mixed'
   );
+}
+
+/**
+ * Accepts well-shaped jobs including legacy queue entries missing version /
+ * licenseTag (normalized to version 0 + user-owned).
+ */
+function normalizeShareEnqueue(value: unknown): CommunityShareEnqueue | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v.mapId !== 'string' ||
+    typeof v.mapName !== 'string' ||
+    typeof v.at !== 'string' ||
+    !Array.isArray(v.tileObjectShas) ||
+    !v.tileObjectShas.every((s) => typeof s === 'string')
+  ) {
+    return null;
+  }
+  const version =
+    typeof v.version === 'number' && Number.isFinite(v.version)
+      ? Math.trunc(v.version)
+      : 0;
+  const licenseTag = isCommunityLicenseTag(v.licenseTag) ? v.licenseTag : 'user-owned';
+  return {
+    mapId: v.mapId,
+    mapName: v.mapName,
+    tileObjectShas: v.tileObjectShas as readonly string[],
+    at: v.at,
+    version,
+    licenseTag,
+  };
 }
 
 /** Offline share jobs waiting for a future community API (newest first). */
@@ -80,7 +118,10 @@ export function loadCommunityShareQueue(
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isShareEnqueue).slice(0, COMMUNITY_SHARE_QUEUE_MAX);
+    return parsed
+      .map(normalizeShareEnqueue)
+      .filter((job): job is CommunityShareEnqueue => job !== null)
+      .slice(0, COMMUNITY_SHARE_QUEUE_MAX);
   } catch {
     return [];
   }
@@ -156,7 +197,10 @@ export function parseCommunityShareQueueJson(raw: string): ParseCommunityShareQu
   if (!Array.isArray(parsed)) {
     return { ok: false, reason: 'not-array' };
   }
-  const jobs = parsed.filter(isShareEnqueue).slice(0, COMMUNITY_SHARE_QUEUE_MAX);
+  const jobs = parsed
+    .map(normalizeShareEnqueue)
+    .filter((job): job is CommunityShareEnqueue => job !== null)
+    .slice(0, COMMUNITY_SHARE_QUEUE_MAX);
   if (jobs.length === 0) {
     return { ok: false, reason: 'no-valid-jobs' };
   }
@@ -171,7 +215,10 @@ export function replaceCommunityShareQueue(
   jobs: readonly CommunityShareEnqueue[],
   storage: Pick<Storage, 'setItem'> = globalThis.localStorage,
 ): readonly CommunityShareEnqueue[] {
-  const next = jobs.filter(isShareEnqueue).slice(0, COMMUNITY_SHARE_QUEUE_MAX);
+  const next = jobs
+    .map(normalizeShareEnqueue)
+    .filter((job): job is CommunityShareEnqueue => job !== null)
+    .slice(0, COMMUNITY_SHARE_QUEUE_MAX);
   storage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(next));
   return next;
 }
@@ -218,6 +265,24 @@ export type SlotCompositionLike = Readonly<
   Partial<Record<string, SlotSourceLike | null | undefined>>
 >;
 
+function slotHasCatalogProvenance(source: SlotSourceLike): boolean {
+  return (
+    (typeof source.sourceGameId === 'number' && Number.isFinite(source.sourceGameId)) ||
+    (typeof source.sourceTilesetId === 'number' && Number.isFinite(source.sourceTilesetId))
+  );
+}
+
+function filledSlotSources(slots: SlotCompositionLike): readonly SlotSourceLike[] {
+  const filled: SlotSourceLike[] = [];
+  for (const source of Object.values(slots)) {
+    if (source == null || typeof source !== 'object') continue;
+    if (typeof source.object === 'string' && source.object.length > 0) {
+      filled.push(source);
+    }
+  }
+  return filled;
+}
+
 /**
  * True when every non-empty tile slot looks catalog-sourced (has
  * `sourceGameId` and/or `sourceTilesetId`) and at least one such slot exists.
@@ -227,19 +292,25 @@ export type SlotCompositionLike = Readonly<
  * an `object` hash (no source ids) are not "imported". Empty maps → false.
  */
 export function usesOnlyImportedSlotSources(slots: SlotCompositionLike): boolean {
-  const filled: SlotSourceLike[] = [];
-  for (const source of Object.values(slots)) {
-    if (source == null || typeof source !== 'object') continue;
-    if (typeof source.object === 'string' && source.object.length > 0) {
-      filled.push(source);
-    }
+  return licenseTagFromSlots(slots) === 'import-rpgm';
+}
+
+/**
+ * Coarse license tag for DESIGN share payload:
+ * - empty / all object-only → `user-owned`
+ * - all catalog provenance → `import-rpgm`
+ * - mix → `mixed`
+ */
+export function licenseTagFromSlots(slots: SlotCompositionLike): CommunityLicenseTag {
+  const filled = filledSlotSources(slots);
+  if (filled.length === 0) return 'user-owned';
+  let imported = 0;
+  for (const source of filled) {
+    if (slotHasCatalogProvenance(source)) imported += 1;
   }
-  if (filled.length === 0) return false;
-  return filled.every(
-    (source) =>
-      (typeof source.sourceGameId === 'number' && Number.isFinite(source.sourceGameId)) ||
-      (typeof source.sourceTilesetId === 'number' && Number.isFinite(source.sourceTilesetId)),
-  );
+  if (imported === filled.length) return 'import-rpgm';
+  if (imported === 0) return 'user-owned';
+  return 'mixed';
 }
 
 /**
@@ -254,15 +325,28 @@ export function maybeEnqueueCommunityShare(
     readonly mapName: string;
     readonly tileObjectShas: readonly string[];
     readonly usesOnlyImportedAssets: boolean;
+    /** MapDocument.version (defaults to 0). */
+    readonly version?: number;
+    /** Defaults from usesOnlyImportedAssets when omitted. */
+    readonly licenseTag?: CommunityLicenseTag;
     readonly now?: () => string;
   },
 ): CommunityShareEnqueue | null {
   if (!settings.shareOnSave) return null;
   if (input.usesOnlyImportedAssets && !settings.allowImportedAssets) return null;
+  const version =
+    typeof input.version === 'number' && Number.isFinite(input.version)
+      ? Math.trunc(input.version)
+      : 0;
+  const licenseTag =
+    input.licenseTag ??
+    (input.usesOnlyImportedAssets ? 'import-rpgm' : 'user-owned');
   return {
     mapId: input.mapId,
     mapName: input.mapName,
     tileObjectShas: input.tileObjectShas,
     at: (input.now ?? (() => new Date().toISOString()))(),
+    version,
+    licenseTag,
   };
 }

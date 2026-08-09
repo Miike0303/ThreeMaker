@@ -25,6 +25,7 @@ import {
   replaceCommunityShareQueue,
   saveCommunitySettings,
   serializeCommunityShareQueue,
+  licenseTagFromSlots,
   usesOnlyImportedSlotSources,
 } from '../community-settings.js';
 import {
@@ -471,12 +472,15 @@ export function PainterPanel({ t }: PainterPanelProps) {
       const tileShas = Object.values(doc.tileset.slots)
         .map((slot) => slot?.object)
         .filter((sha): sha is string => typeof sha === 'string' && sha.length > 0);
+      const licenseTag = licenseTagFromSlots(doc.tileset.slots);
       const onlyImported = usesOnlyImportedSlotSources(doc.tileset.slots);
       const enqueue = maybeEnqueueCommunityShare(community, {
         mapId: doc.id,
         mapName: doc.name,
         tileObjectShas: tileShas,
         usesOnlyImportedAssets: onlyImported,
+        version: doc.version,
+        licenseTag,
       });
       if (enqueue) {
         console.info('[Maker Studio] community share queued (offline stub)', enqueue);
