@@ -79,6 +79,14 @@ import {
   PROCGEN_PRESETS,
   type ProcgenPresetId,
 } from '../procgen/presets.js';
+import {
+  clampFurnitureDensity,
+  DEFAULT_FURNITURE_DENSITY,
+  furnitureDensityFromPercent,
+  furnitureDensityToPercent,
+  nextProcgenSeed,
+  randomProcgenSeed,
+} from '../procgen/seed.js';
 import { resolveDungeonTileIds } from '../procgen/tile-pick.js';
 import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
 import type { ToolId } from '../tool-sm.js';
@@ -262,6 +270,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [procgenWallTileId, setProcgenWallTileId] = useState(0);
   /** 0 = auto (door-class semantics); else explicit mid-layer door tile id. */
   const [procgenDoorTileId, setProcgenDoorTileId] = useState(0);
+  /** Sparse furniture density 0–1 (mid layer); 0 disables scatter. */
+  const [procgenFurnitureDensity, setProcgenFurnitureDensity] = useState(
+    DEFAULT_FURNITURE_DENSITY,
+  );
   /** Palette dock: click assigns brush fill, wall override, or door override. */
   const [paletteRole, setPaletteRole] = useState<ProcgenPaletteRole>('brush');
 
@@ -478,7 +490,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
         groundTileId,
         wallTileId,
         ...(doorTileId !== undefined ? { doorTileId } : {}),
-        ...(furnitureTileId !== undefined ? { furnitureTileId } : {}),
+        ...(furnitureTileId !== undefined
+          ? {
+              furnitureTileId,
+              furnitureDensity: clampFurnitureDensity(procgenFurnitureDensity),
+            }
+          : {}),
         roomCount: preset.roomCount,
         minRoomSize: preset.minRoomSize,
         maxRoomSize: preset.maxRoomSize,
@@ -501,6 +518,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
       const floor0Id = stamped.floors[0]?.id;
       const mainRoomId = pickMainRoomId(roomsOnFloor(stamped.rooms, floor0Id));
       viewport.setActiveRoomId(mainRoomId);
+      // Bump seed so the next Generate is a new layout without hitting Rnd.
+      setProcgenSeed(nextProcgenSeed(seed));
       setStatusMessage(
         formatTemplate(t('painter.procgen.success'), {
           rooms: stamp.rooms.length,
@@ -514,7 +533,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
       console.error('Dungeon procgen failed:', err);
       setStatusMessage(t('painter.procgen.failed'));
     }
-  }, [t, procgenSeed, procgenPreset, procgenWallTileId, procgenDoorTileId]);
+  }, [
+    t,
+    procgenSeed,
+    procgenPreset,
+    procgenWallTileId,
+    procgenDoorTileId,
+    procgenFurnitureDensity,
+  ]);
 
   // Keep selected event key in sync with the live eventKeys list.
   useEffect(() => {
@@ -624,7 +650,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
               <button
                 type="button"
                 title={t('painter.procgen.randomizeSeed')}
-                onClick={() => setProcgenSeed((Math.random() * 1_000_000_000) >>> 0)}
+                onClick={() => setProcgenSeed(randomProcgenSeed())}
               >
                 {t('painter.procgen.randomizeSeedShort')}
               </button>
@@ -1357,11 +1383,39 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         </label>
                         <button
                           type="button"
-                          onClick={() => setProcgenSeed((Math.random() * 1_000_000_000) >>> 0)}
+                          onClick={() => setProcgenSeed(randomProcgenSeed())}
                         >
                           {t('painter.procgen.randomizeSeed')}
                         </button>
                       </div>
+                      <label>
+                        {t('painter.procgen.furnitureDensity')}
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={furnitureDensityToPercent(procgenFurnitureDensity)}
+                          onChange={(event) => {
+                            const n = Number.parseInt(event.target.value, 10);
+                            if (Number.isFinite(n)) {
+                              setProcgenFurnitureDensity(furnitureDensityFromPercent(n));
+                            }
+                          }}
+                          aria-valuetext={formatTemplate(
+                            t('painter.procgen.furnitureDensityValue'),
+                            {
+                              percent: furnitureDensityToPercent(procgenFurnitureDensity),
+                            },
+                          )}
+                        />
+                      </label>
+                      <p className="ide-hint">
+                        {formatTemplate(t('painter.procgen.furnitureDensityValue'), {
+                          percent: furnitureDensityToPercent(procgenFurnitureDensity),
+                        })}{' '}
+                        {t('painter.procgen.furnitureDensityHint')}
+                      </p>
                       <div className="ide-row">
                         <label>
                           {t('painter.procgen.wallTile')}

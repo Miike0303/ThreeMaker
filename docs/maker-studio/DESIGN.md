@@ -101,6 +101,7 @@ Maker Studio shell
 - WU-COMM-03 offline queue list + remove job + copy JSON (`removeCommunityShareQueueJob`)
 - WU-COMM-04 paste/import queue JSON (`parseCommunityShareQueueJson` + `replaceCommunityShareQueue`)
 - WU-PROC-10 sparse room furniture on mid (`scatterFurnitureInRooms`); resolve furniture-class tiles; apply tags furniture vs door
+- WU-PROC-11 auto-bump seed after Generate (`nextProcgenSeed`); furniture density slider
 
 ## PR Plan
 

@@ -1,0 +1,45 @@
+/**
+ * Pure seed / density helpers for Maker Studio procgen UI.
+ */
+
+/** Default sparse furniture density (matches stampSimpleDungeon default). */
+export const DEFAULT_FURNITURE_DENSITY = 0.06;
+
+/**
+ * Advance seed after a successful Generate so the next click yields a new layout.
+ * Wraps uint32.
+ */
+export function nextProcgenSeed(current: number): number {
+  return ((current >>> 0) + 1) >>> 0;
+}
+
+/** Random 0..999_999_999 seed (uint32-safe). */
+export function randomProcgenSeed(rng: () => number = Math.random): number {
+  const r = rng();
+  if (!Number.isFinite(r)) return 0;
+  return (Math.abs(r) * 1_000_000_000) >>> 0;
+}
+
+/** Clamp furniture density to [0, 1]; non-finite → fallback (then default). */
+export function clampFurnitureDensity(
+  value: number,
+  fallback: number = DEFAULT_FURNITURE_DENSITY,
+): number {
+  if (!Number.isFinite(value)) {
+    return Number.isFinite(fallback)
+      ? Math.min(1, Math.max(0, fallback))
+      : DEFAULT_FURNITURE_DENSITY;
+  }
+  return Math.min(1, Math.max(0, value));
+}
+
+/** UI percent (0–100) → density 0–1. */
+export function furnitureDensityFromPercent(percent: number): number {
+  if (!Number.isFinite(percent)) return DEFAULT_FURNITURE_DENSITY;
+  return clampFurnitureDensity(percent / 100, 0);
+}
+
+/** Density 0–1 → rounded UI percent 0–100. */
+export function furnitureDensityToPercent(density: number): number {
+  return Math.round(clampFurnitureDensity(density) * 100);
+}
