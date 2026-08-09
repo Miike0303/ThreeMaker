@@ -12,6 +12,7 @@ import {
   propObjectLibrary,
   propPlacementFromDocument,
   propsOnFloor,
+  pruneLightsForNpcs,
   roomArea,
   roomsOnFloor,
   triggerPlacementFromDocument,
@@ -294,5 +295,41 @@ describe('lightAttachTargets', () => {
   it('always includes player then npc ids in document order', () => {
     expect(lightAttachTargets([])).toEqual(['player']);
     expect(lightAttachTargets([NPC_1, NPC_2])).toEqual(['player', 'n1', 'n2']);
+  });
+});
+
+describe('pruneLightsForNpcs', () => {
+  it('keeps player attach, placed lights, and lights on remaining npcs', () => {
+    const lights = [
+      LIGHT_PLACED,
+      LIGHT_ATTACHED,
+      {
+        id: 'on-n1',
+        kind: 'point' as const,
+        color: '#00ff00',
+        intensity: 1,
+        range: 2,
+        attach: 'n1',
+      },
+      {
+        id: 'orphan',
+        kind: 'point' as const,
+        color: '#0000ff',
+        intensity: 1,
+        range: 2,
+        attach: 'missing-npc',
+      },
+    ];
+    expect(pruneLightsForNpcs(lights, [NPC_1]).map((l) => l.id)).toEqual([
+      'lamp-1',
+      'torch',
+      'on-n1',
+    ]);
+  });
+
+  it('returns same reference when nothing to prune', () => {
+    const lights = [LIGHT_PLACED, LIGHT_ATTACHED];
+    const next = pruneLightsForNpcs(lights, [NPC_1]);
+    expect(next).toEqual(lights);
   });
 });

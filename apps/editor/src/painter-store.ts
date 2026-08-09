@@ -103,7 +103,7 @@ import {
   redoCommand,
   undoCommand,
 } from '@threemaker/map-format';
-import { normalizeLightColor } from './entity-lists.js';
+import { normalizeLightColor, pruneLightsForNpcs } from './entity-lists.js';
 import { assignSemanticClass, resolveTouchedTileIds } from './semantic-store.js';
 import type { TilePoint, ToolId, ToolSMState, ToolSMStrokingState } from './tool-sm.js';
 import { beginStroke, continueStroke, endStroke, TOOL_SM_IDLE } from './tool-sm.js';
@@ -1386,7 +1386,7 @@ export function placeNpcAtTile(
   return placeNpc(idle, point);
 }
 
-/** Removes the NPC `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no such NPC exists on the active floor. */
+/** Removes the NPC `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no such NPC exists on the active floor. Also drops lights attached to that NPC (WU-LIGHT-06). */
 export function removeNpc(state: PainterState, id: string): PainterState {
   if (state.stroke.status === 'stroking') return state;
   const floor = activeFloorState(state);
@@ -1394,12 +1394,21 @@ export function removeNpc(state: PainterState, id: string): PainterState {
   if (!existing) return state;
 
   const npcs = upsertNpc(state.npcs, id, undefined);
-  return applyNpcMutation(state, npcs, { floor: floor.id, id, before: existing });
+  const withNpcs = applyNpcMutation(state, npcs, { floor: floor.id, id, before: existing });
+  return withPrunedNpcLights(withNpcs);
 }
 
 export interface NpcCommandStepOutcome {
   readonly state: PainterState;
   readonly command?: NpcCommand;
+}
+
+/** After NPC set changes, drop attached lights whose target NPC no longer exists. */
+function withPrunedNpcLights(state: PainterState): PainterState {
+  const lights = pruneLightsForNpcs(state.lights, state.npcs);
+  // prune only removes entries — equal length means no change.
+  if (lights.length === state.lights.length) return state;
+  return { ...state, lights };
 }
 
 /** Undoes the most recent NPC command on the ACTIVE floor's OWN `npcCommandStack`, if any. */
@@ -1412,7 +1421,8 @@ export function undoNpc(state: PainterState): NpcCommandStepOutcome {
   const undoStack = floor.npcCommandStack.undoStack.slice(0, -1);
   const redoStack = [...floor.npcCommandStack.redoStack, last].slice(-COMMAND_STACK_CAP);
   const withStack = replaceActiveFloor(state, { npcCommandStack: { undoStack, redoStack } });
-  return { state: { ...withStack, npcs }, command: last };
+  const next = withPrunedNpcLights({ ...withStack, npcs });
+  return { state: next, command: last };
 }
 
 /** Re-applies the most recently undone NPC command on the ACTIVE floor's OWN `npcCommandStack`, if any. */
@@ -1425,7 +1435,8 @@ export function redoNpc(state: PainterState): NpcCommandStepOutcome {
   const redoStack = floor.npcCommandStack.redoStack.slice(0, -1);
   const undoStack = [...floor.npcCommandStack.undoStack, last].slice(-COMMAND_STACK_CAP);
   const withStack = replaceActiveFloor(state, { npcCommandStack: { undoStack, redoStack } });
-  return { state: { ...withStack, npcs }, command: last };
+  const next = withPrunedNpcLights({ ...withStack, npcs });
+  return { state: next, command: last };
 }
 
 // --- Trigger authoring (c1a follow-up) -----------------------------------

@@ -14,8 +14,10 @@ import {
   nextNpcId,
   nextPropId,
   nextTriggerId,
+  placeAttachedLight,
   placeNpc,
   placeNpcAtTile,
+  placeLight,
   placeProp,
   placePropAtTile,
   placeTrigger,
@@ -1560,6 +1562,21 @@ describe('painter-store: npc tool (c1a follow-up)', () => {
 
     ({ state } = redoNpc(state));
     expect(state.npcs.map((n) => n.id)).toEqual(['npc-2']);
+  });
+
+  it('removeNpc drops lights attached to that NPC (WU-LIGHT-06)', () => {
+    let state = npcReadyState();
+    state = placeNpc(state, { x: 0, y: 0 });
+    state = placeAttachedLight(state, 'npc-1');
+    state = placeAttachedLight(state, 'player');
+    state = placeLight(state, { x: 2, y: 2 });
+    expect(state.lights.some((l) => l.attach === 'npc-1')).toBe(true);
+
+    state = removeNpc(state, 'npc-1');
+    expect(state.npcs).toEqual([]);
+    expect(state.lights.some((l) => l.attach === 'npc-1')).toBe(false);
+    expect(state.lights.some((l) => l.attach === 'player')).toBe(true);
+    expect(state.lights.some((l) => l.floor === 'floor-0')).toBe(true);
   });
 
   it('undoNpc undoes a place as well', () => {

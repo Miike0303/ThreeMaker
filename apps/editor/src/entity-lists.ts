@@ -194,3 +194,22 @@ export function normalizeLightColor(raw: string): string | undefined {
   if (!/^#[0-9a-f]{6}$/.test(color)) return undefined;
   return color;
 }
+
+/**
+ * Drop attached lights whose `attach` is neither `'player'` nor an existing
+ * NPC id (schema would reject dangling attach on parse). Placed lights pass
+ * through unchanged.
+ */
+export function pruneLightsForNpcs(
+  lights: readonly LightDocument[],
+  npcs: readonly NpcDocument[],
+): readonly LightDocument[] {
+  const npcIds = new Set(npcs.map((npc) => npc.id));
+  const next = lights.filter(
+    (light) =>
+      light.attach === undefined ||
+      light.attach === 'player' ||
+      npcIds.has(light.attach),
+  );
+  return next.length === lights.length ? lights : next;
+}
