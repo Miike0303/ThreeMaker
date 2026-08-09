@@ -1,9 +1,6 @@
 /**
- * C6 WU-05: editor compose must not drop schema-v6 lights (and documents
- * lightMap floor-scalar behavior through the painter floor rebuild).
- *
- * Lights have no editor UI yet — compose from a document that already carries
- * them. Mirror of `map-compose-props.test.ts` / `map-compose-v4.test.ts`.
+ * C6 WU-05 / WU-LIGHT-03: editor compose must not drop schema-v6 lights or
+ * per-floor `lightMap` through the painter floor rebuild.
  */
 import type { LightDocument, MapDocument } from '@threemaker/map-format';
 import { parseMapDocument, serializeMapDocument } from '@threemaker/map-format';
@@ -73,12 +70,9 @@ describe('composeDocumentFromPainterFloors: lights + floor lightMap (C6)', () =>
     expect(reparsed.version).toBe(doc.version);
   });
 
-  it('documents that floor lightMap is dropped by the painter floor rebuild (product gap)', () => {
+  it('preserves floor lightMap through painter floor rebuild (WU-LIGHT-03)', () => {
     // composeDocumentFromPainterFloors rebuilds FloorDocument from painter
-    // layers and re-attaches shadows/regions from the original, but does NOT
-    // re-attach `lightMap`. Until editor lightMap UI (or compose) carries it,
-    // save-compose strips the baked lightmap sha. Tests/fixtures only — do
-    // not patch src here; flag for auditor / follow-up WU.
+    // layers and re-attaches shadows/regions/lightMap from the original.
     const blank = createBlankMapDocument(BLANK_OPTIONS);
     const ground = blank.floors[0];
     if (!ground) throw new Error('blank always has floors[0]');
@@ -101,9 +95,20 @@ describe('composeDocumentFromPainterFloors: lights + floor lightMap (C6)', () =>
     );
     const reparsed = parseMapDocument(JSON.parse(serializeMapDocument(composed)));
 
-    // Lights still ride the doc spread (collection not dropped).
     expect(reparsed.lights).toEqual([PLACED_LAMP]);
-    // Current product behavior: lightMap scalar is lost on compose.
+    expect(reparsed.floors[0]?.lightMap).toBe(LIGHTMAP_SHA);
+    expect(Object.hasOwn(JSON.parse(serializeMapDocument(composed)).floors[0], 'lightMap')).toBe(
+      true,
+    );
+  });
+
+  it('does not invent lightMap on floors that never had one', () => {
+    const blank = createBlankMapDocument(BLANK_OPTIONS);
+    const composed = composeDocumentFromPainterFloors(
+      blank,
+      painterFloorsFromDocument(blank),
+    );
+    const reparsed = parseMapDocument(JSON.parse(serializeMapDocument(composed)));
     expect(reparsed.floors[0]?.lightMap).toBeUndefined();
     expect(Object.hasOwn(JSON.parse(serializeMapDocument(composed)).floors[0], 'lightMap')).toBe(
       false,

@@ -106,6 +106,7 @@ Maker Studio shell
 - WU-PROC-13 recent seed history (`pushProcgenSeedHistory`) for one-click replay
 - WU-LIGHT-01 lights in painter store (place/remove, tool L, Entities list); compose threads live lights; attached keep / floor filter
 - WU-LIGHT-02 light viewport overlay (`computeLightOverlayPoints`); markers use authored color; spot vs point glyph
+- WU-LIGHT-03 compose re-attaches per-floor `lightMap` sha (no longer stripped on save)
 
 ## PR Plan
 

@@ -210,8 +210,8 @@ export interface PainterFloorSource {
 /**
  * Builds the painter store's initial per-floor list from a loaded/composed
  * document's `floors[]`. Only the 4 editable tile layers travel into the
- * painter store -- shadows/regions are read-only passthrough data, not
- * painted by this slice (see `composeDocumentFromPainterFloors`, which
+ * painter store -- shadows/regions/`lightMap` are read-only passthrough data,
+ * not painted by this slice (see `composeDocumentFromPainterFloors`, which
  * re-attaches them on save). Command-stack history is NOT restored here:
  * `painter-store.ts`'s `createPainterState` always starts every floor with
  * a fresh, empty undo/redo stack (session-local, never persisted).
@@ -226,11 +226,11 @@ export function painterFloorsFromDocument(doc: MapDocument): readonly PainterFlo
 }
 
 /**
- * Composes a full v3 `MapDocument` from the painter store's current
- * per-floor tile layers, re-attaching each floor's original shadows/
- * regions (untouched passthrough; a brand-new floor added in-session --
- * with no matching original floor id -- gets blank shadows/regions, same
- * as `createBlankMapDocument`). Any `stairLinks`/`rooms`/`spawn` entry
+ * Composes a full `MapDocument` from the painter store's current per-floor
+ * tile layers, re-attaching each floor's original shadows/regions/`lightMap`
+ * (untouched passthrough; a brand-new floor added in-session -- with no
+ * matching original floor id -- gets blank shadows/regions and no lightMap,
+ * same as `createBlankMapDocument`). Any `stairLinks`/`rooms`/`spawn` entry
  * referencing a floor id no longer present is dropped (spec/task: "remove
  * drops referencing stair-links"; rooms and spawn mirror this exactly --
  * see `validateRooms`/`validateSpawn`'s floor-ref checks, which would
@@ -287,9 +287,13 @@ export function composeDocumentFromPainterFloors(
       shadows: original?.layers.shadows ?? blankLayer,
       regions: original?.layers.regions ?? blankLayer,
     };
-    return floor.label !== undefined
-      ? { id: floor.id, label: floor.label, baseElevation: floor.baseElevation, layers }
-      : { id: floor.id, baseElevation: floor.baseElevation, layers };
+    // Schema v6: optional per-floor lightMap sha is passthrough (omit when absent).
+    const lightMap = original?.lightMap;
+    const baseFloor =
+      floor.label !== undefined
+        ? { id: floor.id, label: floor.label, baseElevation: floor.baseElevation, layers }
+        : { id: floor.id, baseElevation: floor.baseElevation, layers };
+    return lightMap !== undefined ? { ...baseFloor, lightMap } : baseFloor;
   });
 
   const floorIds = new Set(floors.map((floor) => floor.id));
