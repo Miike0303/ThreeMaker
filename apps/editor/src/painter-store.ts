@@ -103,7 +103,7 @@ import {
   redoCommand,
   undoCommand,
 } from '@threemaker/map-format';
-import { clampTileIndex } from './clamp.js';
+import { clampRoomRect, clampTileIndex } from './clamp.js';
 import {
   clampLightHeight,
   clampLightIntensity,
@@ -872,16 +872,23 @@ export interface AddRoomOptions {
   readonly rects: readonly RoomRect[];
 }
 
-/** Adds a new room to the ACTIVE floor (spec: rooms are authored per floor), referencing it by stable floor id. Ignored mid-stroke, same as `setTool`. A no-op if a room with `options.id` already exists on the active floor -- room ids are unique PER FLOOR (see `validateRooms`), so use `renameRoom`/`addRoomRect` to modify an existing one instead. */
+/** Adds a new room to the ACTIVE floor (spec: rooms are authored per floor), referencing it by stable floor id. Ignored mid-stroke, same as `setTool`. A no-op if a room with `options.id` already exists on the active floor -- room ids are unique PER FLOOR (see `validateRooms`), so use `renameRoom`/`addRoomRect` to modify an existing one instead. Rects are clamped into map bounds (WU-UTIL-05); no-op when no positive in-bounds rect remains. */
 export function addRoom(state: PainterState, options: AddRoomOptions): PainterState {
   if (state.stroke.status === 'stroking') return state;
   const floor = activeFloorState(state);
   if (state.rooms.some((room) => room.floor === floor.id && room.id === options.id)) return state;
 
+  const rects: RoomRect[] = [];
+  for (const rect of options.rects) {
+    const clamped = clampRoomRect(rect, state.width, state.height);
+    if (clamped !== undefined) rects.push(clamped);
+  }
+  if (rects.length === 0) return state;
+
   const room: RoomDocument =
     options.name !== undefined
-      ? { id: options.id, name: options.name, floor: floor.id, rects: options.rects }
-      : { id: options.id, floor: floor.id, rects: options.rects };
+      ? { id: options.id, name: options.name, floor: floor.id, rects }
+      : { id: options.id, floor: floor.id, rects };
   const rooms = upsertRoom(state.rooms, floor.id, options.id, room);
   return applyRoomMutation(state, rooms, { floor: floor.id, id: options.id, after: room });
 }
@@ -917,14 +924,16 @@ export function renameRoom(
   return applyRoomMutation(state, rooms, { floor: floor.id, id, before: existing, after: updated });
 }
 
-/** Appends `rect` to the room `id` on the ACTIVE floor's own rect list (a room may carry >=1 rects, e.g. an L-shaped footprint). Ignored mid-stroke. A safe no-op if no room with that id exists on the active floor. */
+/** Appends `rect` to the room `id` on the ACTIVE floor's own rect list (a room may carry >=1 rects, e.g. an L-shaped footprint). Clamps into map bounds (WU-UTIL-05). Ignored mid-stroke. A safe no-op if no room with that id exists on the active floor or the rect cannot fit. */
 export function addRoomRect(state: PainterState, id: string, rect: RoomRect): PainterState {
   if (state.stroke.status === 'stroking') return state;
   const floor = activeFloorState(state);
   const existing = state.rooms.find((room) => room.floor === floor.id && room.id === id);
   if (!existing) return state;
+  const clamped = clampRoomRect(rect, state.width, state.height);
+  if (clamped === undefined) return state;
 
-  const updated: RoomDocument = { ...existing, rects: [...existing.rects, rect] };
+  const updated: RoomDocument = { ...existing, rects: [...existing.rects, clamped] };
   const rooms = upsertRoom(state.rooms, floor.id, id, updated);
   return applyRoomMutation(state, rooms, { floor: floor.id, id, before: existing, after: updated });
 }

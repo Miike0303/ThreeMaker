@@ -123,6 +123,7 @@ Maker Studio shell
 - WU-COMM-06 `usesOnlyImportedSlotSources` (catalog provenance on slots) wires save gate + blocked status toast
 - WU-COMM-07 share queue payload adds `version` + `licenseTag` (`user-owned`|`import-rpgm`|`mixed`); legacy jobs normalize
 - WU-COMM-08 offline queue rows show version + localized licenseTag
+- WU-UTIL-05 `clampRoomRect` + `addRoom`/`addRoomRect` clamp OOB footprints (schema-safe)
 
 ## PR Plan
 

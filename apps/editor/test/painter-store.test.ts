@@ -650,6 +650,24 @@ describe('painter-store: room CRUD + per-floor undo (Slice 5a -- techos-y-oclusi
     ]);
   });
 
+  it('addRoom / addRoomRect clamp OOB rects into map bounds (WU-UTIL-05)', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, {
+      id: 'room-1',
+      rects: [{ x: -1, y: 2, width: 10, height: 10 }],
+    });
+    expect(state.rooms[0]?.rects).toEqual([{ x: 0, y: 2, width: 4, height: 2 }]);
+    state = addRoomRect(state, 'room-1', { x: 3, y: -5, width: 5, height: 2 });
+    expect(state.rooms[0]?.rects[1]).toEqual({ x: 3, y: 0, width: 1, height: 2 });
+  });
+
+  it('addRoom is a no-op when no rect can fit in bounds', () => {
+    const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    expect(addRoom(state, { id: 'room-1', rects: [{ x: 0, y: 0, width: 0, height: 1 }] })).toBe(
+      state,
+    );
+  });
+
   it('removeRoomRect removes the given rect', () => {
     let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
     state = addRoom(state, {
