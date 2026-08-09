@@ -312,4 +312,125 @@ describe('applyDungeonStampToMapDocument', () => {
     });
     expect(next.lights.filter((l) => l.floor === 'floor-0')).toHaveLength(stamp.rooms.length);
   });
+
+  it('stamps tiles/rooms/lights/spawn onto targetFloorIndex and leaves other floors', () => {
+    const blank = createBlankMapDocument({
+      id: 'stamp-floor1',
+      name: 'Floor1',
+      width: 20,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const ground = blank.floors[0]!;
+    const size = blank.width * blank.height;
+    // Marker tile on floor-0 so we can prove it survives stamping floor-1.
+    const floor0Tiles = ground.layers.tiles.map((layer, li) => {
+      const copy = layer.slice();
+      if (li === 0) copy[0] = 1111;
+      return copy;
+    }) as [number[], number[], number[], number[]];
+    const floor1 = {
+      id: 'floor-1',
+      baseElevation: 1,
+      layers: {
+        tiles: [
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+        ] as [number[], number[], number[], number[]],
+        shadows: new Array(size).fill(0),
+        regions: new Array(size).fill(0),
+      },
+    };
+    const doc = {
+      ...blank,
+      floors: [{ ...ground, layers: { ...ground.layers, tiles: floor0Tiles } }, floor1],
+      rooms: [
+        {
+          id: 'keep-0',
+          floor: 'floor-0',
+          rects: [{ x: 0, y: 0, width: 2, height: 2 }],
+        },
+        {
+          id: 'old-1',
+          floor: 'floor-1',
+          rects: [{ x: 1, y: 1, width: 2, height: 2 }],
+        },
+      ],
+      lights: [
+        {
+          id: 'floor0-lamp',
+          kind: 'point' as const,
+          color: '#ffffff',
+          intensity: 1,
+          range: 2,
+          x: 0,
+          y: 0,
+          floor: 'floor-0',
+        },
+      ],
+      spawn: { x: 0, y: 0, floor: 'floor-0' },
+    };
+    const stamp = stampSimpleDungeon({
+      width: 20,
+      height: 16,
+      seed: 5,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      roomCount: 3,
+    });
+    const next = applyDungeonStampToMapDocument(doc, stamp, {
+      targetFloorIndex: 1,
+      placeSpawnInMainRoom: true,
+      replaceFloor0Rooms: true,
+      placeRoomLights: true,
+    });
+
+    // Floor 0 tiles + rooms + lights untouched.
+    expect(next.floors[0]?.layers.tiles[0]?.[0]).toBe(1111);
+    expect(next.rooms.find((r) => r.id === 'keep-0')).toEqual(doc.rooms[0]);
+    expect(next.lights.some((l) => l.id === 'floor0-lamp')).toBe(true);
+
+    // Floor 1 receives stamp layers.
+    expect(next.floors[1]?.layers.tiles[0]).toEqual(stamp.layers[0]);
+    expect(next.floors[1]?.layers.tiles[2]).toEqual(stamp.layers[2]);
+
+    // Rooms replaced only on floor-1.
+    expect(next.rooms.some((r) => r.id === 'old-1')).toBe(false);
+    const floor1Rooms = next.rooms.filter((r) => r.floor === 'floor-1');
+    expect(floor1Rooms).toHaveLength(stamp.rooms.length);
+    expect(floor1Rooms.every((r) => r.id.startsWith('procgen-room-'))).toBe(true);
+
+    // Spawn + lights on floor-1; light ids stay unique vs floor-0 stamps.
+    const expected = pickMainRoomSpawn(stamp.rooms, 20, 16);
+    expect(next.spawn).toEqual({ x: expected.x, y: expected.y, floor: 'floor-1' });
+    const floor1Lights = next.lights.filter((l) => l.floor === 'floor-1');
+    expect(floor1Lights).toHaveLength(stamp.rooms.length);
+    expect(floor1Lights.every((l) => l.id.includes('floor-1'))).toBe(true);
+    const lightIds = next.lights.map((l) => l.id);
+    expect(new Set(lightIds).size).toBe(lightIds.length);
+  });
+
+  it('throws when targetFloorIndex is out of range', () => {
+    const doc = createBlankMapDocument({
+      id: 'stamp-oob-floor',
+      name: 'Oob',
+      width: 16,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 1,
+      groundTileId: 2816,
+      wallTileId: 4352,
+    });
+    expect(() =>
+      applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 }),
+    ).toThrow(/target floor/i);
+  });
 });

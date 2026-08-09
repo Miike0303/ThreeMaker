@@ -506,9 +506,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
       return;
     }
     try {
-      const floor0 = doc.floors[0];
-      const groundLayer = floor0?.layers.tiles[0] ?? [];
-      const wallLayer = floor0?.layers.tiles[2] ?? [];
+      // Stamp the active floor so multi-floor maps can Generate upper levels.
+      const targetFloorIndex = Math.min(
+        Math.max(0, state.activeFloor),
+        Math.max(0, doc.floors.length - 1),
+      );
+      const targetFloor = doc.floors[targetFloorIndex];
+      const groundLayer = targetFloor?.layers.tiles[0] ?? [];
+      const wallLayer = targetFloor?.layers.tiles[2] ?? [];
       const { groundTileId, wallTileId, doorTileId, furnitureTileId } = resolveDungeonTileIds({
         fillTileId: state.fillTileId,
         groundLayer,
@@ -544,9 +549,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
         corridorWidth: preset.corridorWidth,
         tightBorder: preset.tightBorder,
       });
-      // Stamp rewrites floor-0 tile layers + rooms; events/NPCs/worldSeeds stay.
+      // Stamp rewrites the active floor's tile layers + rooms; other floors + narrative stay.
       // Spawn + room lamps + player torch so Generate is immediately playable/lit.
       const stamped = applyDungeonStampToMapDocument(doc, stamp, {
+        targetFloorIndex,
         placeSpawnInMainRoom: true,
         replaceFloor0Rooms: true,
         placeRoomLights: true,
@@ -559,9 +565,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
       setMapReady(true);
       // Surface rooms list + highlight main chamber (matches spawn placement).
       setInspectorTab('map');
-      viewport.selectFloor(0);
-      const floor0Id = stamped.floors[0]?.id;
-      const mainRoomId = pickMainRoomId(roomsOnFloor(stamped.rooms, floor0Id));
+      viewport.selectFloor(targetFloorIndex);
+      const stampedFloorId = stamped.floors[targetFloorIndex]?.id;
+      const mainRoomId = pickMainRoomId(roomsOnFloor(stamped.rooms, stampedFloorId));
       viewport.setActiveRoomId(mainRoomId);
       // Remember used seed for replay; bump so the next Generate is new without Rnd.
       setProcgenSeedHistory((prev) => pushProcgenSeedHistory(prev, seed));
@@ -571,7 +577,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
           rooms: stamp.rooms.length,
           doors: stamp.doors.length,
           furniture: stamp.furnitureCount,
-          lights: stamped.lights.filter((l) => l.floor === stamped.floors[0]?.id).length,
+          lights: stamped.lights.filter((l) => l.floor === stampedFloorId).length,
           seed: stamp.seed,
           preset: t(`painter.procgen.preset.${preset.id}`),
         }),

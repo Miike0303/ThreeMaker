@@ -1,5 +1,6 @@
 /**
- * Apply a dungeon stamp onto floor 0 of a MapDocument (pure).
+ * Apply a dungeon stamp onto a target floor of a MapDocument (pure).
+ * Default target is floor index 0 (ground); multi-floor maps pass active index.
  */
 import type { MapDocument } from '@threemaker/map-format';
 import { assignSemanticClass } from '../semantic-store.js';
@@ -15,20 +16,26 @@ import { roomsFromDungeonStamp } from './rooms-from-stamp.js';
 
 export type ApplyDungeonStampOptions = {
   /**
+   * Floor stack index to overwrite with stamp layers (default 0 = ground).
+   * Out-of-range throws. Rooms/spawn/lights use that floor's id.
+   */
+  readonly targetFloorIndex?: number;
+  /**
    * When true, overwrite document spawn with the center of the largest
-   * stamped room on floor 0 (so Generate is immediately playable).
+   * stamped room on the target floor (so Generate is immediately playable).
    * Default false preserves existing spawn/events/npcs narrative data.
    */
   readonly placeSpawnInMainRoom?: boolean;
   /**
-   * When true, replace all rooms on floor 0 with stamp rooms (keeps rooms on
-   * other floors). Default false preserves authored rooms.
+   * When true, replace all rooms on the target floor with stamp rooms
+   * (keeps rooms on other floors). Name is historical (floor-0 default).
+   * Default false preserves authored rooms.
    */
   readonly replaceFloor0Rooms?: boolean;
   /**
-   * When true, place a point light at each stamp room center on floor 0
-   * (replaces prior floor-0 placed lights; keeps attached + other floors).
-   * Default false preserves existing lights.
+   * When true, place a point light at each stamp room center on the target
+   * floor (replaces prior placed lights on that floor; keeps attached +
+   * other floors). Default false preserves existing lights.
    */
   readonly placeRoomLights?: boolean;
   /** Mood overrides for room lights (preset color/intensity/range/height). */
@@ -56,8 +63,18 @@ export function applyDungeonStampToMapDocument(
   stamp: DungeonStampResult,
   options: ApplyDungeonStampOptions = {},
 ): MapDocument {
-  const floor0 = doc.floors[0];
-  if (!floor0) {
+  const targetFloorIndex = options.targetFloorIndex ?? 0;
+  if (
+    !Number.isInteger(targetFloorIndex) ||
+    targetFloorIndex < 0 ||
+    targetFloorIndex >= doc.floors.length
+  ) {
+    throw new Error(
+      `target floor index ${targetFloorIndex} is out of range (floors=${doc.floors.length})`,
+    );
+  }
+  const targetFloor = doc.floors[targetFloorIndex];
+  if (!targetFloor) {
     throw new Error('map document has no floors to stamp');
   }
   const expected = doc.width * doc.height;
@@ -70,9 +87,9 @@ export function applyDungeonStampToMapDocument(
   }
   const [tiles0, tiles1, tiles2, tiles3] = stamp.layers;
   const nextFloor = {
-    ...floor0,
+    ...targetFloor,
     layers: {
-      ...floor0.layers,
+      ...targetFloor.layers,
       tiles: [tiles0.slice(), tiles1.slice(), tiles2.slice(), tiles3.slice()] as [
         number[],
         number[],
@@ -101,12 +118,12 @@ export function applyDungeonStampToMapDocument(
   nextSemantics = assignSemanticClass(nextSemantics, furnitureIds, 'furniture');
   let next: MapDocument = {
     ...doc,
-    floors: doc.floors.map((f, i) => (i === 0 ? nextFloor : f)),
+    floors: doc.floors.map((f, i) => (i === targetFloorIndex ? nextFloor : f)),
     tileset: { ...doc.tileset, semantics: nextSemantics },
   };
   if (options.replaceFloor0Rooms) {
-    const stampedRooms = roomsFromDungeonStamp(stamp.rooms, floor0.id);
-    const otherFloors = doc.rooms.filter((r) => r.floor !== floor0.id);
+    const stampedRooms = roomsFromDungeonStamp(stamp.rooms, targetFloor.id);
+    const otherFloors = doc.rooms.filter((r) => r.floor !== targetFloor.id);
     next = {
       ...next,
       rooms: [...otherFloors, ...stampedRooms],
@@ -116,18 +133,19 @@ export function applyDungeonStampToMapDocument(
     const pos = pickMainRoomSpawn(stamp.rooms, doc.width, doc.height);
     next = {
       ...next,
-      spawn: { x: pos.x, y: pos.y, floor: floor0.id },
+      spawn: { x: pos.x, y: pos.y, floor: targetFloor.id },
     };
   }
   if (options.placeRoomLights) {
-    const stampLights = lightsFromDungeonRooms(
-      stamp.rooms,
-      floor0.id,
-      options.roomLightOptions ?? {},
-    );
+    const lightOpts = options.roomLightOptions ?? {};
+    // Floor-scoped default prefix keeps light ids unique across multi-floor Generate.
+    const stampLights = lightsFromDungeonRooms(stamp.rooms, targetFloor.id, {
+      ...lightOpts,
+      idPrefix: lightOpts.idPrefix ?? `stamp-light-${targetFloor.id}`,
+    });
     next = {
       ...next,
-      lights: mergeStampRoomLights(next.lights, floor0.id, stampLights),
+      lights: mergeStampRoomLights(next.lights, targetFloor.id, stampLights),
     };
   }
   if (options.placePlayerTorch) {

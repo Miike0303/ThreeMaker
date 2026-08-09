@@ -124,6 +124,7 @@ Maker Studio shell
 - WU-COMM-07 share queue payload adds `version` + `licenseTag` (`user-owned`|`import-rpgm`|`mixed`); legacy jobs normalize
 - WU-COMM-08 offline queue rows show version + localized licenseTag
 - WU-UTIL-05 `clampRoomRect` + `addRoom`/`addRoomRect` clamp OOB footprints (schema-safe)
+- WU-PROC-17 Generate stamps **active floor** (`targetFloorIndex`); rooms/lights/spawn on that floor; floor-scoped light ids; other floors preserved
 
 ## PR Plan
 
