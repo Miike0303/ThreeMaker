@@ -728,6 +728,30 @@ describe('painter-store: room CRUD + per-floor undo (Slice 5a -- techos-y-oclusi
     expect(state.rooms[0]?.name).toBeUndefined();
   });
 
+  it('renameRoom / addRoom trim names and clear whitespace (WU-UX-10)', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = addRoom(state, {
+      id: 'room-1',
+      name: '  Hall  ',
+      rects: [{ x: 0, y: 0, width: 1, height: 1 }],
+    });
+    expect(state.rooms[0]?.name).toBe('Hall');
+
+    state = addRoom(state, {
+      id: 'room-2',
+      name: '   ',
+      rects: [{ x: 1, y: 1, width: 1, height: 1 }],
+    });
+    expect(state.rooms[1]?.name).toBeUndefined();
+
+    state = renameRoom(state, 'room-1', '  Library  ');
+    expect(state.rooms[0]?.name).toBe('Library');
+    const same = renameRoom(state, 'room-1', 'Library');
+    expect(same).toBe(state);
+    state = renameRoom(state, 'room-1', '  ');
+    expect(state.rooms[0]?.name).toBeUndefined();
+  });
+
   it('renameRoom is a safe no-op for an unknown room id', () => {
     const state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
     expect(renameRoom(state, 'nope', 'x')).toBe(state);

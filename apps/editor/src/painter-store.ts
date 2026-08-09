@@ -574,12 +574,16 @@ export function addFloor(state: PainterState, options: AddFloorOptions): Painter
 }
 
 /**
- * Trimmed display label for a floor. Empty / whitespace-only → clear (undefined).
+ * Trimmed optional display name (floors, rooms). Empty / whitespace-only → clear
+ * (undefined). Shared by setFloorLabel / addRoom / renameRoom (WU-UX-08/10).
  */
 export function normalizeFloorLabel(raw: string): string | undefined {
   const trimmed = raw.trim();
   return trimmed.length === 0 ? undefined : trimmed;
 }
+
+/** Alias for room/floor optional titles (same trim/clear contract). */
+export const normalizeOptionalName = normalizeFloorLabel;
 
 /**
  * Sets or clears the optional display `label` on floor `index` (WU-UX-08).
@@ -971,9 +975,12 @@ export function addRoom(state: PainterState, options: AddRoomOptions): PainterSt
   }
   if (rects.length === 0) return state;
 
+  // WU-UX-10: trim optional name; whitespace-only omits the key (schema-friendly).
+  const nextName =
+    options.name === undefined ? undefined : normalizeOptionalName(options.name);
   const room: RoomDocument =
-    options.name !== undefined
-      ? { id: options.id, name: options.name, floor: floor.id, rects }
+    nextName !== undefined
+      ? { id: options.id, name: nextName, floor: floor.id, rects }
       : { id: options.id, floor: floor.id, rects };
   const rooms = upsertRoom(state.rooms, floor.id, options.id, room);
   return applyRoomMutation(state, rooms, { floor: floor.id, id: options.id, after: room });
@@ -991,7 +998,12 @@ export function removeRoom(state: PainterState, id: string): PainterState {
   return mutated.activeRoomId === id ? setActiveRoomId(mutated, undefined) : mutated;
 }
 
-/** Renames the room `id` on the ACTIVE floor (`name: undefined` clears an existing name), leaving its `rects` untouched. Ignored mid-stroke. A safe no-op if no room with that id exists on the active floor. */
+/**
+ * Renames the room `id` on the ACTIVE floor (`name: undefined` or blank clears
+ * an existing name), leaving its `rects` untouched. Trims input (WU-UX-10).
+ * Same-value is a no-op (no undo entry). Ignored mid-stroke. Safe no-op if no
+ * room with that id exists on the active floor.
+ */
 export function renameRoom(
   state: PainterState,
   id: string,
@@ -1002,9 +1014,12 @@ export function renameRoom(
   const existing = state.rooms.find((room) => room.floor === floor.id && room.id === id);
   if (!existing) return state;
 
+  const nextName = name === undefined ? undefined : normalizeOptionalName(name);
+  if (existing.name === nextName) return state;
+
   const updated: RoomDocument =
-    name !== undefined
-      ? { id: existing.id, name, floor: existing.floor, rects: existing.rects }
+    nextName !== undefined
+      ? { id: existing.id, name: nextName, floor: existing.floor, rects: existing.rects }
       : { id: existing.id, floor: existing.floor, rects: existing.rects };
   const rooms = upsertRoom(state.rooms, floor.id, id, updated);
   return applyRoomMutation(state, rooms, { floor: floor.id, id, before: existing, after: updated });
