@@ -16,6 +16,7 @@ import {
   type CommunitySettings,
   type CommunityShareEnqueue,
   communityShareTileCount,
+  communityShareQueueLicenseCounts,
   communityShareQueueTileTotal,
   formatCommunityShareMapId,
   describeCommunityShareStatus,
@@ -1761,6 +1762,16 @@ export function PainterPanel({ t }: PainterPanelProps) {
                             {formatTemplate(t('painter.community.queueTileTotal'), {
                               tiles: String(communityShareQueueTileTotal(communityQueue)),
                             })}
+                          </p>
+                          <p className="ide-hint">
+                            {communityShareQueueLicenseCounts(communityQueue)
+                              .map(({ tag, count }) =>
+                                formatTemplate(t('painter.community.queueLicenseCount'), {
+                                  count: String(count),
+                                  license: t(`painter.community.license.${tag}`),
+                                }),
+                              )
+                              .join(' · ')}
                           </p>
                         </>
                       )}

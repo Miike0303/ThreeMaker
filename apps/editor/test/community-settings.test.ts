@@ -5,6 +5,7 @@ import {
   DEFAULT_COMMUNITY_SETTINGS,
   describeCommunityShareStatus,
   communityShareTileCount,
+  communityShareQueueLicenseCounts,
   communityShareQueueTileTotal,
   formatCommunityShareAt,
   formatCommunityShareMapId,
@@ -174,6 +175,33 @@ describe('communityShareQueueTileTotal (WU-COMM-12)', () => {
     expect(
       communityShareQueueTileTotal([{ ...sampleJob('solo'), tileObjectShas: [a] }]),
     ).toBe(1);
+  });
+});
+
+describe('communityShareQueueLicenseCounts (WU-COMM-13)', () => {
+  it('returns empty for an empty queue', () => {
+    expect(communityShareQueueLicenseCounts([])).toEqual([]);
+  });
+
+  it('counts per license tag in canonical order, omitting zero tags', () => {
+    expect(
+      communityShareQueueLicenseCounts([
+        { ...sampleJob('1'), licenseTag: 'mixed' },
+        { ...sampleJob('2'), licenseTag: 'user-owned' },
+        { ...sampleJob('3'), licenseTag: 'user-owned' },
+      ]),
+    ).toEqual([
+      { tag: 'user-owned', count: 2 },
+      { tag: 'mixed', count: 1 },
+    ]);
+  });
+
+  it('keeps a single-tag queue to one entry', () => {
+    expect(
+      communityShareQueueLicenseCounts([
+        { ...sampleJob('1'), licenseTag: 'import-rpgm' },
+      ]),
+    ).toEqual([{ tag: 'import-rpgm', count: 1 }]);
   });
 });
 

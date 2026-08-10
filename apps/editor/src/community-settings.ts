@@ -302,6 +302,19 @@ export function communityShareQueueTileTotal(
 }
 
 /**
+ * Per-license job counts across the offline queue (WU-COMM-13).
+ * Canonical COMMUNITY_LICENSE_TAGS order; tags with zero jobs are omitted.
+ */
+export function communityShareQueueLicenseCounts(
+  jobs: readonly Pick<CommunityShareEnqueue, 'licenseTag'>[],
+): readonly { readonly tag: CommunityLicenseTag; readonly count: number }[] {
+  return COMMUNITY_LICENSE_TAGS.map((tag) => ({
+    tag,
+    count: jobs.filter((job) => job.licenseTag === tag).length,
+  })).filter((entry) => entry.count > 0);
+}
+
+/**
  * Pure inspector status for the community section (no I/O).
  * `queue` is newest-first; lastMapName is the newest job when present.
  */
