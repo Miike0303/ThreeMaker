@@ -1743,6 +1743,26 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    const payload = serializeCommunityShareQueue([job]);
+                                    void navigator.clipboard?.writeText(payload).then(
+                                      () =>
+                                        setStatusMessage(
+                                          formatTemplate(t('painter.community.jobCopied'), {
+                                            name: job.mapName,
+                                          }),
+                                        ),
+                                      () =>
+                                        setStatusMessage(
+                                          t('painter.community.queueCopyFailed'),
+                                        ),
+                                    );
+                                  }}
+                                >
+                                  {t('painter.community.copyJob')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
                                     setCommunityQueue(
                                       removeCommunityShareQueueJob(job.mapId, job.at),
                                     );

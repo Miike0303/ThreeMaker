@@ -129,6 +129,8 @@
     "painter.community.license.import-rpgm": "RPGM importado",
     "painter.community.license.mixed": "mixto",
     "painter.community.removeJob": "Quitar",
+    "painter.community.copyJob": "Copiar",
+    "painter.community.jobCopied": "JSON del trabajo {name} copiado al portapapeles.",
     "painter.community.queueItemRemoved": "Se quitó “{name}” de la cola offline.",
     "painter.community.copyQueue": "Copiar JSON de la cola",
     "painter.community.queueCopied": "JSON de la cola offline copiado al portapapeles.",

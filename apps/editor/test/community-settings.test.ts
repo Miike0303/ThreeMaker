@@ -328,6 +328,14 @@ describe('community share offline queue', () => {
     expect(raw).toContain('\n');
   });
 
+  it('single-job export round-trips through paste import (WU-COMM-14)', () => {
+    const job = sampleJob('solo');
+    expect(parseCommunityShareQueueJson(serializeCommunityShareQueue([job]))).toEqual({
+      ok: true,
+      jobs: [job],
+    });
+  });
+
   it('parseCommunityShareQueueJson accepts export and rejects bad input', () => {
     const jobs = [sampleJob('z'), sampleJob('y')];
     expect(parseCommunityShareQueueJson(serializeCommunityShareQueue(jobs))).toEqual({

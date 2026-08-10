@@ -129,6 +129,8 @@
     "painter.community.license.import-rpgm": "import-rpgm",
     "painter.community.license.mixed": "mixed",
     "painter.community.removeJob": "Remove",
+    "painter.community.copyJob": "Copy",
+    "painter.community.jobCopied": "{name} job JSON copied to clipboard.",
     "painter.community.queueItemRemoved": "Removed “{name}” from offline queue.",
     "painter.community.copyQueue": "Copy queue JSON",
     "painter.community.queueCopied": "Offline queue JSON copied to clipboard.",
