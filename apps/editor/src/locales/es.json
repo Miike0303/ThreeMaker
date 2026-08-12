@@ -1,13 +1,13 @@
 {
   "name": "Español",
   "strings": {
-    "app.title": "Maker Studio",
-    "app.brand.subtitle": "ThreeMaker",
+    "app.title": "ThreeMaker",
+    "app.brand.subtitle": "Editor",
     "app.workspace": "Espacio de trabajo",
     "app.workspace.map": "Mapa",
     "app.workspace.assets": "Recursos",
-    "app.status.map": "Maker Studio — mapa, eventos, ink, entidades",
-    "app.status.assets": "Maker Studio — catálogo, tilesets, sprites",
+    "app.status.map": "Mapa · eventos · ink · entidades",
+    "app.status.assets": "Catálogo · tilesets · sprites · audio",
     "locale.selectorLabel": "Idioma",
     "catalog.loading": "Cargando catálogo…",
     "catalog.empty": "Todavía no hay juegos en el catálogo — importá juegos RPG Maker para empezar.",
@@ -45,7 +45,7 @@
     "painter.gameB": "Tileset de decoración (juego B)",
     "painter.selectGame": "Elegí un juego…",
     "painter.selectTileset": "Elegí un tileset…",
-    "painter.welcome.title": "Bienvenido a Maker Studio",
+    "painter.welcome.title": "Bienvenido a ThreeMaker",
     "painter.welcome.body": "Autorá mapas, eventos, diálogos y entidades en un solo estudio. Creá un mapa desde tilesets del catálogo o abrí el último guardado — herramientas a la izquierda, inspector a la derecha, canvas al centro.",
     "painter.welcome.newMap": "Crear mapa",
     "painter.welcome.openMap": "Abrir mapa guardado",
@@ -303,7 +303,6 @@
     "painter.ink.dirty": "sin guardar",
     "painter.ink.graph": "Grafo de nudos Ink",
     "painter.ink.graphHint": "Arrastrá nudos para guardar el layout en comentarios @tm-node. Las aristas son solo guía visual.",
-
     "painter.events.field.ifKey": "Clave if",
     "painter.events.field.ifOp": "Operador",
     "painter.events.field.ifSource": "Fuente",
@@ -434,6 +433,17 @@
     "painter.rampDirection.north": "norte",
     "painter.rampDirection.south": "sur",
     "painter.rampDirection.east": "este",
-    "painter.rampDirection.west": "oeste"
+    "painter.rampDirection.west": "oeste",
+    "catalog.toolbar": "Biblioteca",
+    "catalog.typeChips": "Tipo de recurso",
+    "catalog.type.all": "Todos",
+    "catalog.preview.heading": "Vista previa",
+    "catalog.preview.audio": "Recurso de audio — sin vista previa visual. Elegí tileset, personaje o imagen para ver arte.",
+    "catalog.preview.pickType": "Consejo: filtrá por tileset o personaje para ver arte en lugar de listados de audio.",
+    "catalog.row.type": "Tipo",
+    "catalog.import.hint": "Importá carpetas de juegos RPG Maker MV/MZ a tu biblioteca local.",
+    "catalog.empty.title": "Todavía no hay juegos",
+    "catalog.empty.body": "Importá una carpeta RPG Maker para cargar tilesets, personajes y audio.",
+    "catalog.pageOf": "Página {page} de {pages}"
   }
 }

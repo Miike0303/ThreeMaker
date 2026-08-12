@@ -1,13 +1,13 @@
 {
   "name": "English",
   "strings": {
-    "app.title": "Maker Studio",
-    "app.brand.subtitle": "ThreeMaker",
+    "app.title": "ThreeMaker",
+    "app.brand.subtitle": "Editor",
     "app.workspace": "Workspace",
     "app.workspace.map": "Map",
     "app.workspace.assets": "Assets",
-    "app.status.map": "Maker Studio — map, events, ink, entities",
-    "app.status.assets": "Maker Studio — catalog, tilesets, sprites",
+    "app.status.map": "Map · events · ink · entities",
+    "app.status.assets": "Catalog · tilesets · sprites · audio",
     "locale.selectorLabel": "Language",
     "catalog.loading": "Loading catalog…",
     "catalog.empty": "No games in the catalog yet — import RPG Maker games to get started.",
@@ -45,7 +45,7 @@
     "painter.gameB": "Decor tileset (game B)",
     "painter.selectGame": "Select a game…",
     "painter.selectTileset": "Select a tileset…",
-    "painter.welcome.title": "Welcome to Maker Studio",
+    "painter.welcome.title": "Welcome to ThreeMaker",
     "painter.welcome.body": "Author maps, events, dialogue, and entities in one studio. Create a map from catalog tilesets or open your last save — tools on the left, inspector on the right, canvas in the center.",
     "painter.welcome.newMap": "Create map",
     "painter.welcome.openMap": "Open saved map",
@@ -303,7 +303,6 @@
     "painter.ink.dirty": "unsaved",
     "painter.ink.graph": "Ink knot graph",
     "painter.ink.graphHint": "Drag knots to save layout in @tm-node comments. Edges are a visual guide only.",
-
     "painter.events.field.ifKey": "If key",
     "painter.events.field.ifOp": "Operator",
     "painter.events.field.ifSource": "Source",
@@ -434,6 +433,17 @@
     "painter.rampDirection.north": "north",
     "painter.rampDirection.south": "south",
     "painter.rampDirection.east": "east",
-    "painter.rampDirection.west": "west"
+    "painter.rampDirection.west": "west",
+    "catalog.toolbar": "Library",
+    "catalog.typeChips": "Asset type",
+    "catalog.type.all": "All",
+    "catalog.preview.heading": "Preview",
+    "catalog.preview.audio": "Audio asset — no visual preview. Select a tileset, character, or picture to see art here.",
+    "catalog.preview.pickType": "Tip: filter by tileset or character to browse art instead of raw audio dumps.",
+    "catalog.row.type": "Type",
+    "catalog.import.hint": "Import RPG Maker MV/MZ game folders into your local library.",
+    "catalog.empty.title": "No games yet",
+    "catalog.empty.body": "Import an RPG Maker folder to populate tilesets, characters, and audio.",
+    "catalog.pageOf": "Page {page} of {pages}"
   }
 }
