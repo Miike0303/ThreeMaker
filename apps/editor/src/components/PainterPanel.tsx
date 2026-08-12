@@ -161,28 +161,28 @@ const TOOL_GROUPS: readonly {
   {
     id: 'paint',
     tools: [
-      { id: 'brush', shortcut: 'B', glyph: '✎' },
-      { id: 'box-fill', shortcut: 'U', glyph: '▣' },
-      { id: 'flood-fill', shortcut: 'G', glyph: '▨' },
-      { id: 'eyedropper', shortcut: 'I', glyph: '◉' },
-      { id: 'eraser', glyph: '⌫' },
+      { id: 'brush', shortcut: 'B', glyph: 'B' },
+      { id: 'box-fill', shortcut: 'U', glyph: 'U' },
+      { id: 'flood-fill', shortcut: 'G', glyph: 'G' },
+      { id: 'eyedropper', shortcut: 'I', glyph: 'I' },
+      { id: 'eraser', shortcut: 'E', glyph: 'E' },
     ],
   },
   {
     id: 'structure',
     tools: [
-      { id: 'room-box', shortcut: 'R', glyph: '▱' },
-      { id: 'stair-link', shortcut: 'S', glyph: '↕' },
-      { id: 'spawn-point', shortcut: 'P', glyph: '★' },
+      { id: 'room-box', shortcut: 'R', glyph: 'R' },
+      { id: 'stair-link', shortcut: 'S', glyph: 'S' },
+      { id: 'spawn-point', shortcut: 'P', glyph: 'P' },
     ],
   },
   {
     id: 'entities',
     tools: [
-      { id: 'prop', shortcut: 'O', glyph: '◆' },
-      { id: 'npc', shortcut: 'N', glyph: '☺' },
-      { id: 'trigger', shortcut: 'T', glyph: '◎' },
-      { id: 'light', shortcut: 'L', glyph: '☀' },
+      { id: 'prop', shortcut: 'O', glyph: 'O' },
+      { id: 'npc', shortcut: 'N', glyph: 'N' },
+      { id: 'trigger', shortcut: 'T', glyph: 'T' },
+      { id: 'light', shortcut: 'L', glyph: 'L' },
     ],
   },
 ];
@@ -416,7 +416,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const activeFloorId = activeFloorState?.id;
   const activeFloorDisplayName =
     activeFloorState?.label ??
-    formatTemplate(t('painter.floorOption'), { index: painterState?.activeFloor ?? 0 });
+    formatTemplate(t('painter.floorOption'), {
+      // Display floors as 1-based for humans (storage/index stays 0-based).
+      index: (painterState?.activeFloor ?? 0) + 1,
+    });
   const floorRooms = useMemo(
     () => roomsOnFloor(painterState?.rooms ?? [], activeFloorId),
     [painterState?.rooms, activeFloorId],
@@ -643,7 +646,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
         licenseTag,
       });
       if (enqueue) {
-        console.info('[Maker Studio] community share queued (offline stub)', enqueue);
+        console.info('[Three Maker] community share queued (offline stub)', enqueue);
         setCommunityQueue(pushCommunityShareQueue(enqueue));
         reportStatus({ message: t('painter.saveSuccessShareQueued'), severity: 'success' });
       } else if (community.shareOnSave && onlyImported && !community.allowImportedAssets) {
@@ -1094,10 +1097,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
       </div>
 
       <div className="ide-body">
-        <aside className="ide-tool-rail" aria-label={t('painter.tools')}>
+<aside className="ide-tool-rail" aria-label={t('painter.tools')}>
           {TOOL_GROUPS.map((group) => (
             <fieldset key={group.id} className="ide-tool-group">
-              <legend className="sr-only">{t(`painter.toolGroup.${group.id}`)}</legend>
+              <legend className="ide-tool-group-label">{t(`painter.toolGroup.${group.id}`)}</legend>
               {group.tools.map((tool) => {
                 const active =
                   mapReady &&
@@ -1128,7 +1131,6 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     <span className="ide-tool-glyph" aria-hidden="true">
                       {tool.glyph}
                     </span>
-                    {tool.shortcut && <span className="ide-tool-key">{tool.shortcut}</span>}
                   </button>
                 );
               })}
