@@ -59,6 +59,7 @@ import {
 import {
   canSavePainterDocument,
   defaultWorldSeedValue,
+  type InkKnotInventory,
   parseWorldValue,
   type WorldValueKind,
   worldValueKind,
@@ -66,9 +67,15 @@ import {
 import { formatTemplate } from '../format-template.js';
 import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
 import {
+  isSafeStoryId,
+  listInkKnots,
+  listInkStoryIdsFromEvents,
+  loadInkSidecar,
+} from '../ink-sidecar.js';
+import {
+  INSPECTOR_TAB_IDS,
   initialInspectorRoutingState,
   inspectorRoutingReducer,
-  INSPECTOR_TAB_IDS,
 } from '../inspector-routing.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, normalizeMapName, seedDemoTiles } from '../map-compose.js';
@@ -356,6 +363,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [newEventKey, setNewEventKey] = useState('');
   const [newWorldSeedKey, setNewWorldSeedKey] = useState('');
   const [newWorldSeedKind, setNewWorldSeedKind] = useState<WorldValueKind>('boolean');
+  // Disk sidecars are the picker source. InkPanel's unsaved buffer intentionally remains isolated.
+  const [inkInventories, setInkInventories] = useState<
+    Readonly<Record<string, InkKnotInventory | undefined>>
+  >({});
   const [inspectorRouting, dispatchInspectorRouting] = useReducer(
     inspectorRoutingReducer,
     initialInspectorRoutingState,
@@ -523,10 +534,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const handleCreateMap = useCallback(async () => {
     if (tilesetAId === undefined || tilesetBId === undefined || !newMapResult.valid) return;
     const { name, width, height } = newMapResult.value;
-    if (
-      mapReady &&
-      !window.confirm(formatTemplate(t('painter.newMap.replaceConfirm'), { name }))
-    ) {
+    if (mapReady && !window.confirm(formatTemplate(t('painter.newMap.replaceConfirm'), { name }))) {
       return;
     }
     clearStatus();
@@ -750,6 +758,57 @@ export function PainterPanel({ t }: PainterPanelProps) {
     () => (painterState ? validateEventsDraft(painterState.events) : null),
     [painterState],
   );
+  const inkStoryIds = useMemo(
+    () => (painterState ? listInkStoryIdsFromEvents(painterState.events) : []),
+    [painterState],
+  );
+  const inkStoryIdsKey = inkStoryIds.join('\u0000');
+  const inkStoryIdsRef = useRef(inkStoryIds);
+  inkStoryIdsRef.current = inkStoryIds;
+  const inkInventoriesRef = useRef(inkInventories);
+  inkInventoriesRef.current = inkInventories;
+  const inkInventoryRequestRef = useRef<Record<string, number>>({});
+  const loadInkInventory = useCallback((id: string) => {
+    if (!isSafeStoryId(id) || !inkStoryIdsRef.current.includes(id)) return;
+    const request = (inkInventoryRequestRef.current[id] ?? 0) + 1;
+    inkInventoryRequestRef.current[id] = request;
+    setInkInventories((previous) => ({ ...previous, [id]: { status: 'loading' } }));
+    void loadInkSidecar(id)
+      .then((source) => {
+        if (
+          inkInventoryRequestRef.current[id] !== request ||
+          !inkStoryIdsRef.current.includes(id)
+        ) {
+          return;
+        }
+        setInkInventories((previous) => ({
+          ...previous,
+          [id]:
+            source === null
+              ? { status: 'missing' }
+              : { status: 'loaded', knots: listInkKnots(source) },
+        }));
+      })
+      .catch(() => {
+        if (inkInventoryRequestRef.current[id] === request && inkStoryIdsRef.current.includes(id)) {
+          setInkInventories((previous) => ({ ...previous, [id]: { status: 'error' } }));
+        }
+      });
+  }, []);
+  useEffect(() => {
+    const ids = inkStoryIdsKey === '' ? [] : inkStoryIdsKey.split('\u0000').filter(isSafeStoryId);
+    const cached = inkInventoriesRef.current;
+    setInkInventories((previous) => {
+      const next: Record<string, InkKnotInventory> = {};
+      for (const id of ids) next[id] = previous[id] ?? { status: 'loading' };
+      return next;
+    });
+    for (const id of ids) {
+      if (cached[id]) continue;
+      loadInkInventory(id);
+    }
+    // The joined key bounds cache membership and prevents equivalent event emissions reloading.
+  }, [inkStoryIdsKey, loadInkInventory]);
 
   // Hydration and other incidental state emissions may route only until the user picks a tab.
   // Viewport keyboard shortcuts currently have no source callback, so they intentionally follow
@@ -983,9 +1042,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         : painterState?.tool === tool.id &&
                           (tool.id !== 'brush' || painterState.fillTileId !== 0));
                     const label = t(`painter.tool.${tool.id}`);
-                    const accessibleLabel = tool.shortcut
-                      ? `${label} (${tool.shortcut})`
-                      : label;
+                const accessibleLabel = tool.shortcut ? `${label} (${tool.shortcut})` : label;
                     return (
                       <button
                         key={tool.id}
@@ -1709,9 +1766,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       </div>
                           {procgenSeedHistory.length > 0 && (
                             <fieldset className="ide-row ide-seed-history">
-                              <legend className="sr-only">
-                                {t('painter.procgen.seedHistory')}
-                              </legend>
+                        <legend className="sr-only">{t('painter.procgen.seedHistory')}</legend>
                               <span className="ide-hint">{t('painter.procgen.seedHistory')}:</span>
                           {procgenSeedHistory.map((s) => (
                             <button
@@ -1915,9 +1970,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       </p>
                       {communityQueue.length === 0 ? (
                         <div className="ide-empty" role="status">
-                          <p className="ide-empty-title">
-                            {t('painter.community.queueEmptyTitle')}
-                          </p>
+                        <p className="ide-empty-title">{t('painter.community.queueEmptyTitle')}</p>
                           <p className="ide-hint">{t('painter.community.queueEmptyBody')}</p>
                         </div>
                       ) : (
@@ -1964,9 +2017,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                       removeCommunityShareQueueJob(job.mapId, job.at),
                                     );
                                     reportStatus({
-                                      message: formatTemplate(t('painter.community.queueItemRemoved'), {
+                                    message: formatTemplate(
+                                      t('painter.community.queueItemRemoved'),
+                                      {
                                         name: job.mapName,
-                                      }),
+                                      },
+                                    ),
                                       severity: 'info',
                                     });
                                   }}
@@ -2182,6 +2238,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           t={t}
                           basePath={[]}
                           commands={painterState.events[selectedEventKey] ?? []}
+                          inkStoryIds={inkStoryIds}
+                          inkInventories={inkInventories}
                           onUpdate={(path, patch) =>
                             viewportRef.current?.updateCommand(selectedEventKey, path, patch)
                           }
@@ -2307,7 +2365,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                 )}
 
                 {inspectorTab === 'ink' && (
-                  <InkPanel t={t} painterState={painterState} onStatus={reportStatus} />
+                  <InkPanel
+                    t={t}
+                    painterState={painterState}
+                    onStatus={reportStatus}
+                    onStorySaved={loadInkInventory}
+                  />
                 )}
 
                 {inspectorTab === 'entities' && (
@@ -3126,9 +3189,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
           ) : (
             <span className="ide-status-ok">{t('painter.status.ready')}</span>
           ))}
-        {statusFeedback.message && (
-          <span className="ide-status-msg">{statusFeedback.message}</span>
-        )}
+        {statusFeedback.message && <span className="ide-status-msg">{statusFeedback.message}</span>}
       </footer>
     </div>
   );

@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  buildInkDialoguePickerModel,
   canSavePainterDocument,
   defaultWorldSeedValue,
   dialogueLinesFromTextarea,
@@ -88,6 +89,50 @@ describe('event-form-helpers: command kinds', () => {
       'giveItem',
       'modifyStat',
     ]);
+  });
+});
+
+describe('event-form-helpers: Ink dialogue picker model', () => {
+  const inventories = {
+    loaded: { status: 'loaded' as const, knots: ['start', 'ending'] },
+    missing: { status: 'missing' as const },
+    broken: { status: 'error' as const },
+    pending: { status: 'loading' as const },
+  };
+
+  it('preserves custom values and reports loaded story/knot status', () => {
+    expect(
+      buildInkDialoguePickerModel(['loaded', 'other'], inventories, 'loaded', 'ending'),
+    ).toEqual({
+      storyOptions: ['loaded', 'other'],
+      knotOptions: ['start', 'ending'],
+      storyStatus: 'ready',
+      knotStatus: 'ready',
+    });
+    expect(buildInkDialoguePickerModel(['loaded'], inventories, 'loaded', 'custom')).toMatchObject({
+      knotOptions: ['start', 'ending', 'custom'],
+      knotStatus: 'unknown-knot',
+    });
+    expect(buildInkDialoguePickerModel(['loaded'], inventories, 'custom', '')).toMatchObject({
+      storyOptions: ['loaded', 'custom'],
+      storyStatus: 'unknown-story',
+      knotStatus: 'ready',
+    });
+  });
+
+  it('distinguishes unsafe, loading, missing, and failed inventories; empty knot is valid', () => {
+    expect(buildInkDialoguePickerModel([], inventories, '../bad', 'knot').storyStatus).toBe(
+      'unsafe-story-id',
+    );
+    expect(buildInkDialoguePickerModel(['pending'], inventories, 'pending', '').storyStatus).toBe(
+      'loading',
+    );
+    expect(buildInkDialoguePickerModel(['missing'], inventories, 'missing', '').storyStatus).toBe(
+      'missing-sidecar',
+    );
+    expect(buildInkDialoguePickerModel(['broken'], inventories, 'broken', '').storyStatus).toBe(
+      'sidecar-error',
+    );
   });
 });
 

@@ -12,9 +12,11 @@ import type {
 } from '@threemaker/core';
 import { useState } from 'react';
 import {
+  buildInkDialoguePickerModel,
   dialogueLinesFromTextarea,
   dialogueLinesToTextarea,
   EVENT_COMMAND_KINDS,
+  type InkKnotInventory,
   parseIntField,
   parseNumberField,
   parseWorldValue,
@@ -40,12 +42,16 @@ export interface CommandListProps extends CommandMutators {
   /** Path prefix before each command index (empty = event root script). */
   readonly basePath: CommandPath;
   readonly commands: readonly EventCommand[];
+  readonly inkStoryIds?: readonly string[];
+  readonly inkInventories?: Readonly<Record<string, InkKnotInventory | undefined>>;
 }
 
 export function CommandList({
   t,
   basePath,
   commands,
+  inkStoryIds = [],
+  inkInventories = {},
   onUpdate,
   onRemove,
   onMove,
@@ -64,6 +70,8 @@ export function CommandList({
                 command={command}
                 index={index}
                 total={commands.length}
+                inkStoryIds={inkStoryIds}
+                inkInventories={inkInventories}
                 onUpdate={onUpdate}
                 onRemove={onRemove}
                 onMove={onMove}
@@ -84,6 +92,8 @@ interface CommandFormProps extends CommandMutators {
   readonly command: EventCommand;
   readonly index: number;
   readonly total: number;
+  readonly inkStoryIds: readonly string[];
+  readonly inkInventories: Readonly<Record<string, InkKnotInventory | undefined>>;
 }
 
 function CommandForm({
@@ -92,6 +102,8 @@ function CommandForm({
   command,
   index,
   total,
+  inkStoryIds,
+  inkInventories,
   onUpdate,
   onRemove,
   onMove,
@@ -123,7 +135,14 @@ function CommandForm({
           {t('painter.events.removeCommand')}
         </button>
       </div>
-      <CommandFields t={t} path={path} command={command} onUpdate={onUpdate} />
+      <CommandFields
+        t={t}
+        path={path}
+        command={command}
+        inkStoryIds={inkStoryIds}
+        inkInventories={inkInventories}
+        onUpdate={onUpdate}
+      />
       {command.type === 'conditional' && (
         <div className="painter-events-branches">
           <div className="painter-events-branch">
@@ -132,6 +151,8 @@ function CommandForm({
               t={t}
               basePath={[...path, 'then']}
               commands={command.then}
+              inkStoryIds={inkStoryIds}
+              inkInventories={inkInventories}
               onUpdate={onUpdate}
               onRemove={onRemove}
               onMove={onMove}
@@ -144,6 +165,8 @@ function CommandForm({
               t={t}
               basePath={[...path, 'else']}
               commands={command.else ?? []}
+              inkStoryIds={inkStoryIds}
+              inkInventories={inkInventories}
               onUpdate={onUpdate}
               onRemove={onRemove}
               onMove={onMove}
@@ -160,10 +183,19 @@ interface CommandFieldsProps {
   readonly t: (key: string) => string;
   readonly path: CommandPath;
   readonly command: EventCommand;
+  readonly inkStoryIds: readonly string[];
+  readonly inkInventories: Readonly<Record<string, InkKnotInventory | undefined>>;
   readonly onUpdate: (path: CommandPath, patch: Readonly<Record<string, unknown>>) => void;
 }
 
-function CommandFields({ t, path, command, onUpdate }: CommandFieldsProps) {
+function CommandFields({
+  t,
+  path,
+  command,
+  inkStoryIds,
+  inkInventories,
+  onUpdate,
+}: CommandFieldsProps) {
   switch (command.type) {
     case 'moveEntity':
       return (
@@ -208,6 +240,16 @@ function CommandFields({ t, path, command, onUpdate }: CommandFieldsProps) {
         command.source.kind === 'text' ? command.source.lines : ([] as readonly string[]);
       const inkStoryId = command.source.kind === 'ink' ? command.source.storyId : '';
       const inkKnot = command.source.kind === 'ink' ? (command.source.knot ?? '') : '';
+      const picker = buildInkDialoguePickerModel(inkStoryIds, inkInventories, inkStoryId, inkKnot);
+      const idBase = `ink-${pathKey(path).replace(/[^A-Za-z0-9_-]/g, '-')}`;
+      const storyWarning =
+        picker.storyStatus === 'ready'
+          ? undefined
+          : t(`painter.events.inkWarning.${picker.storyStatus}`);
+      const knotWarning =
+        picker.knotStatus === 'unknown-knot'
+          ? t('painter.events.inkWarning.unknown-knot')
+          : undefined;
       return (
         <div className="painter-events-fields">
           <p className="painter-events-hint">{t('painter.events.dialogueInkHint')}</p>
@@ -249,7 +291,10 @@ function CommandFields({ t, path, command, onUpdate }: CommandFieldsProps) {
                 {t('painter.events.field.storyId')}
                 <input
                   type="text"
+                  list={`${idBase}-stories`}
                   value={inkStoryId}
+                  aria-invalid={storyWarning !== undefined}
+                  aria-describedby={storyWarning ? `${idBase}-story-warning` : undefined}
                   onChange={(e) =>
                     onUpdate(path, {
                       source: {
@@ -260,12 +305,25 @@ function CommandFields({ t, path, command, onUpdate }: CommandFieldsProps) {
                     })
                   }
                 />
+                <datalist id={`${idBase}-stories`}>
+                  {picker.storyOptions.map((story) => (
+                    <option key={story} value={story} />
+                  ))}
+                </datalist>
+                {storyWarning && (
+                  <span id={`${idBase}-story-warning`} className="painter-events-soft-warning">
+                    {storyWarning}
+                  </span>
+                )}
               </label>
               <label>
                 {t('painter.events.field.knot')}
                 <input
                   type="text"
+                  list={`${idBase}-knots`}
                   value={inkKnot}
+                  aria-invalid={knotWarning !== undefined}
+                  aria-describedby={knotWarning ? `${idBase}-knot-warning` : undefined}
                   onChange={(e) => {
                     const knot = e.target.value;
                     onUpdate(path, {
@@ -276,6 +334,16 @@ function CommandFields({ t, path, command, onUpdate }: CommandFieldsProps) {
                     });
                   }}
                 />
+                <datalist id={`${idBase}-knots`}>
+                  {picker.knotOptions.map((knot) => (
+                    <option key={knot} value={knot} />
+                  ))}
+                </datalist>
+                {knotWarning && (
+                  <span id={`${idBase}-knot-warning`} className="painter-events-soft-warning">
+                    {knotWarning}
+                  </span>
+                )}
               </label>
             </>
           ) : (

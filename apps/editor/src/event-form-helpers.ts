@@ -7,7 +7,56 @@
  */
 
 import type { EventCommand, WorldValue } from '@threemaker/core';
+import { isSafeStoryId } from './ink-sidecar.js';
 import { type EventCommandKind, validateEventsDraft } from './painter-store.js';
+
+export type InkKnotInventory =
+  | { readonly status: 'loading' }
+  | { readonly status: 'loaded'; readonly knots: readonly string[] }
+  | { readonly status: 'missing' }
+  | { readonly status: 'error' };
+
+export type InkStoryPickerStatus =
+  | 'ready'
+  | 'unsafe-story-id'
+  | 'unknown-story'
+  | 'loading'
+  | 'missing-sidecar'
+  | 'sidecar-error';
+
+export interface InkDialoguePickerModel {
+  readonly storyOptions: readonly string[];
+  readonly knotOptions: readonly string[];
+  readonly storyStatus: InkStoryPickerStatus;
+  readonly knotStatus: 'ready' | 'unknown-knot';
+}
+
+/** Pure presentation model; custom/dangling values remain selectable and editable. */
+export function buildInkDialoguePickerModel(
+  knownStoryIds: readonly string[],
+  inventories: Readonly<Record<string, InkKnotInventory | undefined>>,
+  storyId: string,
+  knot: string,
+): InkDialoguePickerModel {
+  const storyOptions = [...new Set([...knownStoryIds, ...(storyId ? [storyId] : [])])];
+  const inventory = inventories[storyId];
+  let storyStatus: InkStoryPickerStatus;
+  if (!isSafeStoryId(storyId)) storyStatus = 'unsafe-story-id';
+  else if (!knownStoryIds.includes(storyId)) storyStatus = 'unknown-story';
+  else if (!inventory) storyStatus = 'unknown-story';
+  else if (inventory.status === 'loaded') storyStatus = 'ready';
+  else if (inventory.status === 'loading') storyStatus = 'loading';
+  else if (inventory.status === 'missing') storyStatus = 'missing-sidecar';
+  else storyStatus = 'sidecar-error';
+  const loadedKnots = inventory?.status === 'loaded' ? inventory.knots : [];
+  const knotStatus = knot === '' || loadedKnots.includes(knot) ? 'ready' : 'unknown-knot';
+  return {
+    storyOptions,
+    knotOptions: [...new Set([...loadedKnots, ...(knot ? [knot] : [])])],
+    storyStatus,
+    knotStatus,
+  };
+}
 
 /** Discriminator for WorldValue / WorldSeedValue type selectors in forms. */
 export type WorldValueKind = 'boolean' | 'number' | 'string';

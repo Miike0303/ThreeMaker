@@ -1075,6 +1075,12 @@ label {
   color: var(--tm-text-faint);
 }
 
+.painter-events-soft-warning {
+  display: block;
+  color: var(--tm-warning, #d99a36);
+  font-size: 11px;
+}
+
 /* Ink workbench — text | graph split */
 .ink-workbench {
   display: flex;
