@@ -1695,6 +1695,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         <button
                           type="button"
                           title={t('painter.procgen.wallFromBrushHint')}
+                          disabled={painterState.fillTileId <= 0}
                           onClick={() => {
                             const fill = painterState.fillTileId;
                             if (fill > 0) setProcgenWallTileId(fill);
@@ -1734,6 +1735,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         <button
                           type="button"
                           title={t('painter.procgen.doorFromBrushHint')}
+                          disabled={painterState.fillTileId <= 0}
                           onClick={() => {
                             const fill = painterState.fillTileId;
                             if (fill > 0) setProcgenDoorTileId(fill);
@@ -1773,6 +1775,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         <button
                           type="button"
                           title={t('painter.procgen.furnitureFromBrushHint')}
+                          disabled={painterState.fillTileId <= 0}
                           onClick={() => {
                             const fill = painterState.fillTileId;
                             if (fill > 0) setProcgenFurnitureTileId(fill);
