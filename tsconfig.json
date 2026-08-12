@@ -11,6 +11,7 @@
     { "path": "./packages/input" },
     { "path": "./packages/save" },
     { "path": "./apps/desktop" },
-    { "path": "./apps/editor" }
+    { "path": "./apps/editor" },
+    { "path": "./apps/mcp-server" }
   ]
 }

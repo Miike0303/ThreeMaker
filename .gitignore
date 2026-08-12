@@ -37,3 +37,5 @@ fixtures/
 
 # Private planning documents, never committed
 planes/
+# Local Pi runtime state
+.atl/

@@ -28,7 +28,7 @@ import type {
   TileSheetSlot,
   TriggerDocument,
 } from '@threemaker/map-format';
-import { CURRENT_MAP_FORMAT_VERSION, MAP_FORMAT_MAGIC } from '@threemaker/map-format';
+import { createBlankMapDocument } from '@threemaker/map-format';
 import { pruneLightsForNpcs } from './entity-lists.js';
 
 /**
@@ -72,14 +72,8 @@ export function mergeSlotFlags(sources: readonly SlotSourceFlags[]): number[] {
   return merged;
 }
 
-export interface CreateBlankMapDocumentOptions {
-  readonly id: string;
-  readonly name: string;
-  readonly width: number;
-  readonly height: number;
-  readonly slots: SlotComposition;
-  readonly flags: readonly number[];
-}
+export type { CreateBlankMapDocumentOptions } from '@threemaker/map-format';
+export { createBlankMapDocument } from '@threemaker/map-format';
 
 /** Default display name when the author clears the map name field (WU-UX-09). */
 export const DEFAULT_MAP_NAME = 'Untitled Map';
@@ -88,59 +82,9 @@ export const DEFAULT_MAP_NAME = 'Untitled Map';
  * Trim map display name for save/export. Empty / whitespace-only → `fallback`
  * (schema allows `""`, but Maker Studio refuses blank titles in the UI).
  */
-export function normalizeMapName(
-  raw: string,
-  fallback: string = DEFAULT_MAP_NAME,
-): string {
+export function normalizeMapName(raw: string, fallback: string = DEFAULT_MAP_NAME): string {
   const trimmed = raw.trim();
   return trimmed.length === 0 ? fallback : trimmed;
-}
-
-/**
- * A blank (all-zero) map at the current format version, with the given slot
- * composition already set. Schema v2 (plantas-apiladas Slice 1): this
- * package is not yet floor-aware -- the blank map is a single floor
- * (`floor-0`, `baseElevation: 0`) with no stair-links, matching how a v1
- * document migrates. Multi-floor authoring lands in Slice 4.
- */
-export function createBlankMapDocument(options: CreateBlankMapDocumentOptions): MapDocument {
-  const size = options.width * options.height;
-  const emptyLayer = (): number[] => new Array(size).fill(0);
-  return {
-    format: MAP_FORMAT_MAGIC,
-    version: CURRENT_MAP_FORMAT_VERSION,
-    id: options.id,
-    name: options.name,
-    width: options.width,
-    height: options.height,
-    tileset: { slots: options.slots, flags: options.flags, semantics: {}, tilePixelSize: 48 },
-    floors: [
-      {
-        id: 'floor-0',
-        baseElevation: 0,
-        layers: {
-          tiles: [emptyLayer(), emptyLayer(), emptyLayer(), emptyLayer()],
-          shadows: emptyLayer(),
-          regions: emptyLayer(),
-        },
-      },
-    ],
-    stairLinks: [],
-    // Schema v3 (techos-y-oclusion-interiores): a freshly-created blank map
-    // authors no rooms yet -- see `composeDocumentFromPainterFloors` for the
-    // real room-authoring compose path (Slice 5a).
-    rooms: [],
-    // Schema v4 (c1a-authored-events-npcs): a blank map authors no narrative
-    // content yet -- the painter's authoring path fills these in.
-    npcs: [],
-    triggers: [],
-    events: {},
-    worldSeeds: {},
-    // Schema v5 (depth-props-hd): a blank map authors no props yet.
-    props: [],
-    // Schema v6 (lighting): a blank map authors no lights yet.
-    lights: [],
-  };
 }
 
 /**

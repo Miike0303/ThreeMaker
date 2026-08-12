@@ -1,3 +1,5 @@
+export type { CreateBlankMapDocumentOptions } from './blank-document.js';
+export { createBlankMapDocument } from './blank-document.js';
 export type { MapMigration } from './migrate.js';
 export {
   clearMigrations,
