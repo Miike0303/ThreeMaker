@@ -3,6 +3,8 @@ import {
   buildDevAssetsUrl,
   buildDevGamesUrl,
   buildDevObjectUrl,
+  ImportClientError,
+  importPath,
   KNOWN_ASSET_TYPES,
 } from '../src/catalog-client.js';
 
@@ -43,5 +45,11 @@ describe('KNOWN_ASSET_TYPES', () => {
 
   it('has no duplicate entries', () => {
     expect(new Set(KNOWN_ASSET_TYPES).size).toBe(KNOWN_ASSET_TYPES.length);
+  });
+});
+
+describe('importPath', () => {
+  it('throws ImportClientError outside the Tauri host', async () => {
+    await expect(importPath('/tmp/games')).rejects.toBeInstanceOf(ImportClientError);
   });
 });

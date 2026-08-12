@@ -197,6 +197,59 @@ export async function listTilesetsForGame(gameId: number): Promise<readonly Tile
   return (await response.json()) as TilesetSummaryRow[];
 }
 
+export async function reloadCatalog(): Promise<void> {
+  if (!isTauriAvailable()) return;
+  await invokeTauri<void>('catalog_reload');
+}
+
+export interface ImportSummary {
+  readonly gamesImported: number;
+  readonly assetsStored: number;
+  readonly tilesetsIngested: number;
+  readonly sheetsLinked: number;
+  readonly sheetsSkipped: number;
+  readonly scanErrors: readonly {
+    readonly path: string;
+    readonly code: string;
+    readonly message: string;
+  }[];
+  readonly gameFailures: readonly {
+    readonly rootPath: string;
+    readonly message: string;
+  }[];
+}
+
+export type ImportErrorCode = 'PathNotFound' | 'PathNotDirectory' | 'StoreFailed';
+
+export class ImportClientError extends Error {
+  readonly code: ImportErrorCode;
+
+  constructor(code: ImportErrorCode, message: string) {
+    super(message);
+    this.name = 'ImportClientError';
+    this.code = code;
+  }
+}
+
+/** Native bulk import: scan a host directory, ingest assets + tilesets, reload catalog. */
+export async function importPath(path: string, maxDepth?: number): Promise<ImportSummary> {
+  if (!isTauriAvailable()) {
+    throw new ImportClientError('StoreFailed', 'importPath requires the Tauri host');
+  }
+  try {
+    return await invokeTauri<ImportSummary>('catalog_import_path', {
+      path,
+      maxDepth,
+    });
+  } catch (err) {
+    const payload = err as { code?: ImportErrorCode; message?: string } | string;
+    if (typeof payload === 'object' && payload?.code) {
+      throw new ImportClientError(payload.code, payload.message ?? payload.code);
+    }
+    throw new ImportClientError('StoreFailed', String(payload));
+  }
+}
+
 /**
  * Resolves a browser-usable URL for an object's raw bytes (image preview).
  * In the real Tauri host this goes through the asset protocol

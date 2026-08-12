@@ -1123,6 +1123,58 @@ label {
 }
 
 /* Catalog */
+.catalog-import {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--tm-border);
+}
+
+.catalog-import-form label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.catalog-import-row {
+  display: flex;
+  gap: 6px;
+}
+
+.catalog-import-path {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.catalog-import-status {
+  margin: 0;
+  font-size: 11px;
+  color: var(--tm-text-dim);
+}
+
+.catalog-import-status:empty {
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.catalog-import-status-error {
+  color: var(--tm-danger);
+}
+
+.catalog-import-status-success {
+  color: var(--tm-text);
+}
+
+.catalog-import-status-warning {
+  color: var(--tm-warning, var(--tm-text-dim));
+}
+
 .catalog-browser {
   display: flex;
   flex-direction: column;
