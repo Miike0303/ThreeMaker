@@ -43,6 +43,8 @@
     "painter.inspector": "Inspector",
     "painter.inspector.map": "Mapa",
     "painter.inspector.paint": "Pintar",
+    "painter.inspector.procgen": "Generación",
+    "painter.inspector.community": "Comunidad",
     "painter.inspector.events": "Eventos",
     "painter.inspector.ink": "Ink",
     "painter.inspector.entities": "Entidades",

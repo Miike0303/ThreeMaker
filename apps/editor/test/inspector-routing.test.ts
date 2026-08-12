@@ -52,6 +52,16 @@ describe('inspectorRoutingReducer', () => {
 });
 
 describe('inspectorTabForTool', () => {
+  it('exposes dedicated procgen and community tabs without routing tools to them', () => {
+    expect(INSPECTOR_TAB_IDS).toContain('procgen');
+    expect(INSPECTOR_TAB_IDS).toContain('community');
+
+    for (const tool of ALL_TOOLS) {
+      expect(inspectorTabForTool(tool)).not.toBe('procgen');
+      expect(inspectorTabForTool(tool)).not.toBe('community');
+    }
+  });
+
   it('routes paint tools to paint', () => {
     expect(inspectorTabForTool('brush')).toBe('paint');
     expect(inspectorTabForTool('box-fill')).toBe('paint');

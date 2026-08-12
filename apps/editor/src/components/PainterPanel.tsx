@@ -776,46 +776,6 @@ export function PainterPanel({ t }: PainterPanelProps) {
               <button type="button" onClick={() => viewportRef.current?.redo()}>
                 {t('painter.redo')}
               </button>
-              <label className="ide-menubar-seed">
-                {t('painter.procgen.preset')}
-                <select
-                  value={procgenPreset}
-                  onChange={(event) => setProcgenPreset(event.target.value as ProcgenPresetId)}
-                >
-                  {PROCGEN_PRESETS.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {t(`painter.procgen.preset.${p.id}`)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="ide-menubar-seed">
-                {t('painter.procgen.seed')}
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={procgenSeed}
-                  onChange={(event) => {
-                    const n = Number.parseInt(event.target.value, 10);
-                    if (Number.isFinite(n)) setProcgenSeed(n >>> 0);
-                  }}
-                />
-              </label>
-              <button
-                type="button"
-                title={t('painter.procgen.randomizeSeed')}
-                onClick={() => setProcgenSeed(randomProcgenSeed())}
-              >
-                {t('painter.procgen.randomizeSeedShort')}
-              </button>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => void handleGenerateDungeon()}
-              >
-                {t('painter.procgen.generate')}
-              </button>
             </>
           )}
         </div>
@@ -1609,8 +1569,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         {t('painter.createMap')}
                       </button>
                     </section>
-                    <section className="ide-section">
-                      <h3 className="ide-section-title">{t('painter.procgen')}</h3>
+                  </>
+                )}
+
+                {inspectorTab === 'procgen' && (
+                  <section className="ide-section">
+                    <h3 className="ide-section-title">{t('painter.procgen')}</h3>
                       <p className="ide-hint">{t('painter.procgen.hint')}</p>
                       <label>
                         {t('painter.procgen.preset')}
@@ -1822,9 +1786,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       >
                         {t('painter.procgen.generate')}
                       </button>
-                    </section>
-                    <section className="ide-section">
-                      <h3 className="ide-section-title">{t('painter.community')}</h3>
+                  </section>
+                )}
+
+                {inspectorTab === 'community' && (
+                  <section className="ide-section">
+                    <h3 className="ide-section-title">{t('painter.community')}</h3>
                       <p className="ide-hint">{t('painter.community.hint')}</p>
                       <p
                         className={
@@ -2031,8 +1998,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         />
                         {t('painter.community.allowImported')}
                       </label>
-                    </section>
-                  </>
+                  </section>
                 )}
 
                 {inspectorTab === 'events' && (

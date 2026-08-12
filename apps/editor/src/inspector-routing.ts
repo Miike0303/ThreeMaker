@@ -5,11 +5,20 @@
 
 import type { ToolId } from './tool-sm.js';
 
-export type InspectorTabId = 'map' | 'paint' | 'events' | 'ink' | 'entities';
+export type InspectorTabId =
+  | 'map'
+  | 'paint'
+  | 'procgen'
+  | 'community'
+  | 'events'
+  | 'ink'
+  | 'entities';
 
 export const INSPECTOR_TAB_IDS: readonly InspectorTabId[] = [
   'map',
   'paint',
+  'procgen',
+  'community',
   'events',
   'ink',
   'entities',

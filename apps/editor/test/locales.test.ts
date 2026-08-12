@@ -35,6 +35,8 @@ const NEW_KEYS = [
   'painter.inspector',
   'painter.inspector.map',
   'painter.inspector.paint',
+  'painter.inspector.procgen',
+  'painter.inspector.community',
   'painter.inspector.events',
   'painter.inspector.ink',
   'painter.inspector.entities',

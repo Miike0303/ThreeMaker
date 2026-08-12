@@ -43,6 +43,8 @@
     "painter.inspector": "Inspector",
     "painter.inspector.map": "Map",
     "painter.inspector.paint": "Paint",
+    "painter.inspector.procgen": "Procgen",
+    "painter.inspector.community": "Community",
     "painter.inspector.events": "Events",
     "painter.inspector.ink": "Ink",
     "painter.inspector.entities": "Entities",
