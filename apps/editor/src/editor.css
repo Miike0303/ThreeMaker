@@ -841,6 +841,22 @@ label {
   font-size: 13px;
 }
 
+.ide-welcome-path {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--tm-border);
+  border-radius: var(--tm-radius);
+  background: var(--tm-bg-2);
+}
+
+.ide-welcome-prerequisite {
+  padding: 7px 9px;
+  border-left: 3px solid var(--tm-accent);
+  background: var(--tm-bg-0);
+}
+
 /* Events — dual pane (RPG Maker event list + command stack) */
 .events-workbench {
   display: flex;

@@ -289,6 +289,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [gameBId, setGameBId] = useState<number | undefined>(undefined);
   const [tilesetAId, setTilesetAId] = useState<number | undefined>(undefined);
   const [tilesetBId, setTilesetBId] = useState<number | undefined>(undefined);
+  const handleGameAChange = useCallback((gameId: number | undefined) => {
+    setTilesetAId(undefined);
+    setGameAId(gameId);
+  }, []);
+  const handleGameBChange = useCallback((gameId: number | undefined) => {
+    setTilesetBId(undefined);
+    setGameBId(gameId);
+  }, []);
 
   const [mapReady, setMapReady] = useState(false);
   /** Document display name draft (WU-UX-09); committed on blur via setMapName. */
@@ -742,9 +750,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
               {t('painter.save')}
             </button>
           )}
-          <button type="button" onClick={handleLoad}>
-            {t('painter.load')}
-          </button>
+              {mapReady && (
+                <button type="button" onClick={handleLoad}>
+                  {t('painter.load')}
+                </button>
+              )}
           {mapReady && (
             <>
               <button type="button" onClick={() => viewportRef.current?.undo()}>
@@ -1205,46 +1215,63 @@ export function PainterPanel({ t }: PainterPanelProps) {
                 <div className="ide-welcome-card">
                   <h2>{t('painter.welcome.title')}</h2>
                   <p>{t('painter.welcome.body')}</p>
-                  <div className="ide-section">
-                    <h3 className="ide-section-title">{t('painter.welcome.newMap')}</h3>
-                    <div className="ide-row">
-                      <GameTilesetPicker
-                        label={t('painter.gameA')}
-                        games={games}
-                        gameId={gameAId}
-                        onGameChange={setGameAId}
-                        tilesetId={tilesetAId}
-                        onTilesetChange={setTilesetAId}
-                        selectGameLabel={t('painter.selectGame')}
-                        selectTilesetLabel={t('painter.selectTileset')}
-                      />
-                    </div>
-                    <div className="ide-row">
-                      <GameTilesetPicker
-                        label={t('painter.gameB')}
-                        games={games}
-                        gameId={gameBId}
-                        onGameChange={setGameBId}
-                        tilesetId={tilesetBId}
-                        onTilesetChange={setTilesetBId}
-                        selectGameLabel={t('painter.selectGame')}
-                        selectTilesetLabel={t('painter.selectTileset')}
-                      />
-                    </div>
-                    <div className="ide-row">
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={tilesetAId === undefined || tilesetBId === undefined}
-                        onClick={handleCreateMap}
-                      >
-                        {t('painter.createMap')}
-                      </button>
-                      <button type="button" onClick={handleLoad}>
-                        {t('painter.load')}
-                      </button>
-                    </div>
-                  </div>
+                    <section className="ide-welcome-path">
+                      <h3 className="ide-section-title">{t('painter.welcome.openMap')}</h3>
+                      <p className="ide-hint">{t('painter.welcome.openMapHint')}</p>
+                      <div className="ide-row">
+                        <button type="button" onClick={handleLoad}>
+                          {t('painter.load')}
+                        </button>
+                      </div>
+                    </section>
+                    <section className="ide-welcome-path">
+                      <h3 className="ide-section-title">{t('painter.welcome.newMap')}</h3>
+                      <p className="ide-hint">{t('painter.welcome.createMapHint')}</p>
+                      <div className="ide-row">
+                        <GameTilesetPicker
+                          label={t('painter.gameA')}
+                          games={games}
+                          gameId={gameAId}
+                          onGameChange={handleGameAChange}
+                          tilesetId={tilesetAId}
+                          onTilesetChange={setTilesetAId}
+                          selectGameLabel={t('painter.selectGame')}
+                          selectTilesetLabel={t('painter.selectTileset')}
+                        />
+                      </div>
+                      <div className="ide-row">
+                        <GameTilesetPicker
+                          label={t('painter.gameB')}
+                          games={games}
+                          gameId={gameBId}
+                          onGameChange={handleGameBChange}
+                          tilesetId={tilesetBId}
+                          onTilesetChange={setTilesetBId}
+                          selectGameLabel={t('painter.selectGame')}
+                          selectTilesetLabel={t('painter.selectTileset')}
+                        />
+                      </div>
+                      <p className="ide-welcome-prerequisite" role="status">
+                        {games.length === 0
+                          ? t('painter.welcome.noCatalog')
+                          : tilesetAId === undefined || tilesetBId === undefined
+                            ? t('painter.welcome.chooseTilesets')
+                            : t('painter.welcome.ready')}
+                      </p>
+                      {games.length === 0 && (
+                        <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
+                      )}
+                      <div className="ide-row">
+                        <button
+                          type="button"
+                          className="primary"
+                          disabled={tilesetAId === undefined || tilesetBId === undefined}
+                          onClick={handleCreateMap}
+                        >
+                          {t('painter.createMap')}
+                        </button>
+                      </div>
+                    </section>
                   {statusFeedback.message && <p className="ide-hint">{statusFeedback.message}</p>}
                 </div>
               </div>
@@ -1346,44 +1373,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                 <div className="ide-empty" role="status">
                   <p className="ide-empty-title">{t('painter.empty.noMapTitle')}</p>
                   <p className="ide-hint">{t('painter.empty.noMapBody')}</p>
-                </div>
-                <h3 className="ide-section-title">{t('painter.project')}</h3>
-                <div className="ide-row">
-                  <GameTilesetPicker
-                    label={t('painter.gameA')}
-                    games={games}
-                    gameId={gameAId}
-                    onGameChange={setGameAId}
-                    tilesetId={tilesetAId}
-                    onTilesetChange={setTilesetAId}
-                    selectGameLabel={t('painter.selectGame')}
-                    selectTilesetLabel={t('painter.selectTileset')}
-                  />
-                </div>
-                <div className="ide-row">
-                  <GameTilesetPicker
-                    label={t('painter.gameB')}
-                    games={games}
-                    gameId={gameBId}
-                    onGameChange={setGameBId}
-                    tilesetId={tilesetBId}
-                    onTilesetChange={setTilesetBId}
-                    selectGameLabel={t('painter.selectGame')}
-                    selectTilesetLabel={t('painter.selectTileset')}
-                  />
-                </div>
-                <div className="ide-row">
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={tilesetAId === undefined || tilesetBId === undefined}
-                    onClick={handleCreateMap}
-                  >
-                    {t('painter.createMap')}
-                  </button>
-                  <button type="button" onClick={handleLoad}>
-                    {t('painter.load')}
-                  </button>
+                  <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
                 </div>
               </section>
             ) : (
@@ -1573,7 +1563,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           label={t('painter.gameA')}
                           games={games}
                           gameId={gameAId}
-                          onGameChange={setGameAId}
+                          onGameChange={handleGameAChange}
                           tilesetId={tilesetAId}
                           onTilesetChange={setTilesetAId}
                           selectGameLabel={t('painter.selectGame')}
@@ -1585,7 +1575,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           label={t('painter.gameB')}
                           games={games}
                           gameId={gameBId}
-                          onGameChange={setGameBId}
+                          onGameChange={handleGameBChange}
                           tilesetId={tilesetBId}
                           onTilesetChange={setTilesetBId}
                           selectGameLabel={t('painter.selectGame')}
