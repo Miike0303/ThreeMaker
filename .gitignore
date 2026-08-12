@@ -39,3 +39,7 @@ fixtures/
 planes/
 # Local Pi runtime state
 .atl/
+
+# Local UI shots / scratch
+tmp/
+tmp-ui-baseline.png

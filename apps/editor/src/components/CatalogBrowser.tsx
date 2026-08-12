@@ -17,7 +17,7 @@ import { computePageRange } from '../pagination.js';
 
 export interface CatalogBrowserProps {
   readonly t: (key: string) => string;
-  /** Called whenever the user picks a `type: 'tileset'` asset row, so a parent can show a preview. */
+  /** Called whenever the user picks a tileset (or any) asset row for parent preview. */
   readonly onSelectAsset?: (asset: AssetRow | null) => void;
 }
 
@@ -25,8 +25,35 @@ type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
 const AUDIO_ASSET_TYPES = new Set<string>(['bgm', 'bgs', 'me', 'se']);
 
+/** Prefer art-first browsing; full library still available via All. */
+const TYPE_CHIP_ORDER: readonly string[] = [
+  'tileset',
+  'character',
+  'face',
+  'picture',
+  'parallax',
+  'enemy',
+  'animation',
+  'bgm',
+  'bgs',
+  'se',
+  'me',
+];
+
 function isImagePreviewAsset(asset: AssetRow): boolean {
   return !AUDIO_ASSET_TYPES.has(asset.type);
+}
+
+function basename(path: string): string {
+  const norm = path.replace(/\\/g, '/');
+  const i = norm.lastIndexOf('/');
+  return i >= 0 ? norm.slice(i + 1) : norm;
+}
+
+function dirname(path: string): string {
+  const norm = path.replace(/\\/g, '/');
+  const i = norm.lastIndexOf('/');
+  return i >= 0 ? norm.slice(0, i) : '';
 }
 
 function CatalogAssetThumb({
@@ -62,7 +89,21 @@ function CatalogAssetThumb({
     };
   }, [asset, storeDir]);
 
-  if (!thumbUrl || hidden) return null;
+  if (AUDIO_ASSET_TYPES.has(asset.type)) {
+    return (
+      <span className="catalog-asset-glyph catalog-asset-glyph-audio" aria-hidden>
+        ♪
+      </span>
+    );
+  }
+
+  if (!thumbUrl || hidden) {
+    return (
+      <span className="catalog-asset-glyph" aria-hidden>
+        {asset.type.slice(0, 2).toUpperCase()}
+      </span>
+    );
+  }
 
   return (
     <img
@@ -70,8 +111,8 @@ function CatalogAssetThumb({
       alt=""
       aria-hidden
       loading="lazy"
-      width={32}
-      height={32}
+      width={36}
+      height={36}
       className="catalog-asset-thumb"
       onError={() => setHidden(true)}
     />
@@ -79,18 +120,15 @@ function CatalogAssetThumb({
 }
 
 /**
- * Thin component: browse cataloged games, filter assets by game+type,
- * paginate results, preview a selected tileset image. All catalog IO goes
- * through `catalog-client.ts`; this component owns only UI state (selected
- * filters/page/asset) and render wiring -- left untested per this repo's
- * convention (pure logic lives in catalog-client.ts's and pagination.ts's
- * tested functions).
+ * Browse cataloged games, filter assets by game+type, paginate, preview.
+ * Pure IO lives in catalog-client.ts; this component owns UI state only.
  */
 export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [games, setGames] = useState<readonly GameRow[]>([]);
   const [gameId, setGameId] = useState<number | undefined>(undefined);
-  const [type, setType] = useState<string | undefined>(undefined);
+  // Default to tileset so Assets opens on art, not 200k audio paths.
+  const [type, setType] = useState<string | undefined>('tileset');
   const [page, setPage] = useState(0);
   const [assets, setAssets] = useState<readonly AssetRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -98,6 +136,7 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
   const [selectedAsset, setSelectedAsset] = useState<AssetRow | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [storeDir, setStoreDir] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (!isTauriAvailable()) return;
@@ -182,26 +221,43 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
     [games],
   );
 
-  // Row labels only need an explicit game tag when browsing across ALL
-  // games at once (gameId filter absent) -- with a specific game selected,
-  // every row already belongs to it, so repeating the title would be noise.
   const gamesById = useMemo(
     () => new Map(games.map((game) => [game.id, game.title ?? game.rootPath])),
     [games],
   );
 
-  const range = computePageRange(page, pageSize, total);
+  const typeChips = useMemo(() => {
+    const known = new Set(KNOWN_ASSET_TYPES);
+    const ordered = TYPE_CHIP_ORDER.filter((id) => known.has(id));
+    for (const id of KNOWN_ASSET_TYPES) {
+      if (!ordered.includes(id)) ordered.push(id);
+    }
+    return ordered;
+  }, []);
 
-  // Changing a filter always jumps back to page 0 -- batched into the same
-  // event handler as the filter change itself (not a separate effect) so
-  // the fetch effect below only runs once per filter change, not twice.
+  const filteredAssets = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return assets;
+    return assets.filter(
+      (a) =>
+        a.relPath.toLowerCase().includes(q) ||
+        a.type.toLowerCase().includes(q) ||
+        (gamesById.get(a.gameId) ?? '').toLowerCase().includes(q),
+    );
+  }, [assets, query, gamesById]);
+
+  const range = computePageRange(page, pageSize, total);
+  const pageCount = Math.max(1, Math.ceil(total / Math.max(1, pageSize)));
+
   const handleGameChange = (value: string) => {
     setGameId(value ? Number(value) : undefined);
     setPage(0);
+    setSelectedAsset(null);
   };
-  const handleTypeChange = (value: string) => {
-    setType(value || undefined);
+  const handleTypeChange = (value: string | undefined) => {
+    setType(value);
     setPage(0);
+    setSelectedAsset(null);
   };
 
   if (loadState === 'loading') {
@@ -209,38 +265,68 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
   }
 
   if (loadState === 'empty') {
-    return <p className="catalog-status">{t('catalog.empty')}</p>;
+    return (
+      <div className="catalog-empty-card">
+        <p className="catalog-empty-title">{t('catalog.empty.title')}</p>
+        <p className="catalog-empty-body">{t('catalog.empty.body')}</p>
+      </div>
+    );
   }
 
   if (loadState === 'error') {
     return <p className="catalog-status catalog-status-error">{t('catalog.error')}</p>;
   }
 
+  const selectedIsAudio = selectedAsset ? AUDIO_ASSET_TYPES.has(selectedAsset.type) : false;
+
   return (
     <div className="catalog-browser">
-      <div className="catalog-filters">
-        <label>
-          {t('catalog.filterGame')}
-          <select value={gameId ?? ''} onChange={(event) => handleGameChange(event.target.value)}>
-            <option value="">{t('catalog.allGames')}</option>
-            {gameOptions.map((game) => (
-              <option key={game.id} value={game.id}>
-                {game.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t('catalog.filterType')}
-          <select value={type ?? ''} onChange={(event) => handleTypeChange(event.target.value)}>
-            <option value="">{t('catalog.allTypes')}</option>
-            {KNOWN_ASSET_TYPES.map((known) => (
-              <option key={known} value={known}>
-                {known}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="catalog-toolbar">
+        <div className="catalog-toolbar-title">{t('catalog.toolbar')}</div>
+        <div className="catalog-filters">
+          <label className="catalog-filter">
+            {t('catalog.filterGame')}
+            <select value={gameId ?? ''} onChange={(event) => handleGameChange(event.target.value)}>
+              <option value="">{t('catalog.allGames')}</option>
+              {gameOptions.map((game) => (
+                <option key={game.id} value={game.id}>
+                  {game.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="catalog-filter catalog-filter-search">
+            <span className="sr-only">Search</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter this page…"
+              className="catalog-search"
+              spellCheck={false}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="catalog-type-chips" role="toolbar" aria-label={t('catalog.typeChips')}>
+        <button
+          type="button"
+          className={`catalog-type-chip${!type ? ' catalog-type-chip-active' : ''}`}
+          onClick={() => handleTypeChange(undefined)}
+        >
+          {t('catalog.type.all')}
+        </button>
+        {typeChips.map((known) => (
+          <button
+            key={known}
+            type="button"
+            className={`catalog-type-chip${type === known ? ' catalog-type-chip-active' : ''}`}
+            onClick={() => handleTypeChange(known)}
+          >
+            {known}
+          </button>
+        ))}
       </div>
 
       {total === 0 ? (
@@ -253,20 +339,36 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
               end: range.end,
               count: total,
             })}
+            <span className="catalog-count-sep">·</span>
+            {formatTemplate(t('catalog.pageOf'), { page: page + 1, pages: pageCount })}
           </p>
-          <button type="button" disabled={!range.hasPrev} onClick={() => setPage((p) => p - 1)}>
-            {t('catalog.prevPage')}
-          </button>
-          <button type="button" disabled={!range.hasNext} onClick={() => setPage((p) => p + 1)}>
-            {t('catalog.nextPage')}
-          </button>
+          <div className="catalog-pagination-actions">
+            <button
+              type="button"
+              className="ide-btn-quiet"
+              disabled={!range.hasPrev}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              {t('catalog.prevPage')}
+            </button>
+            <button
+              type="button"
+              className="ide-btn-quiet"
+              disabled={!range.hasNext}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              {t('catalog.nextPage')}
+            </button>
+          </div>
         </div>
       )}
 
       <div className="catalog-browser-body">
         <ul className="catalog-asset-list">
-          {assets.map((asset) => {
+          {filteredAssets.map((asset) => {
             const gameLabel = gameId === undefined ? gamesById.get(asset.gameId) : undefined;
+            const name = basename(asset.relPath);
+            const folder = dirname(asset.relPath);
             return (
               <li key={asset.id}>
                 <button
@@ -275,8 +377,13 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
                   onClick={() => setSelectedAsset(asset)}
                 >
                   <CatalogAssetThumb asset={asset} storeDir={storeDir} />
-                  <span className="catalog-asset-label">
-                    {gameLabel ? `${asset.relPath} (${gameLabel})` : asset.relPath}
+                  <span className="catalog-asset-meta">
+                    <span className="catalog-asset-name">{name}</span>
+                    <span className="catalog-asset-sub">
+                      <span className="catalog-asset-type-badge">{asset.type}</span>
+                      {folder ? <span className="catalog-asset-folder">{folder}</span> : null}
+                      {gameLabel ? <span className="catalog-asset-game">{gameLabel}</span> : null}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -285,13 +392,38 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
         </ul>
 
         <div className="catalog-preview-pane">
+          <div className="catalog-preview-heading">{t('catalog.preview.heading')}</div>
           {previewUrl && selectedAsset ? (
             <div className="catalog-preview">
               <p className="catalog-preview-path">{selectedAsset.relPath}</p>
-              <img src={previewUrl} alt={selectedAsset.relPath} className="catalog-preview-image" />
+              <div className="catalog-preview-stage">
+                <img
+                  src={previewUrl}
+                  alt={selectedAsset.relPath}
+                  className="catalog-preview-image"
+                />
+              </div>
+              <div className="catalog-preview-meta">
+                <span className="catalog-asset-type-badge">{selectedAsset.type}</span>
+                <span>{basename(selectedAsset.relPath)}</span>
+              </div>
+            </div>
+          ) : selectedIsAudio && selectedAsset ? (
+            <div className="catalog-preview-empty-card">
+              <div className="catalog-preview-empty-icon" aria-hidden>
+                ♪
+              </div>
+              <p className="catalog-preview-empty-title">{basename(selectedAsset.relPath)}</p>
+              <p className="catalog-preview-empty">{t('catalog.preview.audio')}</p>
             </div>
           ) : (
-            <p className="catalog-preview-empty">{t('catalog.preview.empty')}</p>
+            <div className="catalog-preview-empty-card">
+              <div className="catalog-preview-empty-icon catalog-preview-empty-icon-art" aria-hidden>
+                ▦
+              </div>
+              <p className="catalog-preview-empty">{t('catalog.preview.empty')}</p>
+              <p className="catalog-preview-tip">{t('catalog.preview.pickType')}</p>
+            </div>
           )}
         </div>
       </div>

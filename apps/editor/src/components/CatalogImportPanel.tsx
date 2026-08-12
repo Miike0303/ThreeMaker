@@ -75,8 +75,12 @@ export function CatalogImportPanel({ t, onImportComplete }: CatalogImportPanelPr
     );
   }
 
-  return (
+return (
     <div className="catalog-import">
+      <div className="catalog-import-copy">
+        <p className="catalog-import-label">{t('catalog.import.pathLabel')}</p>
+        <p className="catalog-import-hint">{t('catalog.import.hint')}</p>
+      </div>
       <div className="catalog-import-form">
         <div className="catalog-import-row">
           <label className="sr-only" htmlFor="catalog-import-path">
@@ -99,7 +103,12 @@ export function CatalogImportPanel({ t, onImportComplete }: CatalogImportPanelPr
             spellCheck={false}
             autoComplete="off"
           />
-          <button type="button" disabled={importDisabled} onClick={() => void handleImport()}>
+          <button
+            type="button"
+            className="primary"
+            disabled={importDisabled}
+            onClick={() => void handleImport()}
+          >
             {t('catalog.import.button')}
           </button>
         </div>

@@ -20,7 +20,11 @@ export type NewMapDraftResult =
   | { readonly valid: true; readonly value: NewMapValues }
   | {
       readonly valid: false;
-      readonly errors: { readonly name: boolean; readonly width: boolean; readonly height: boolean };
+      readonly errors: {
+        readonly name: boolean;
+        readonly width: boolean;
+        readonly height: boolean;
+      };
     };
 
 export function normalizeNewMapName(input: string): string | null {
