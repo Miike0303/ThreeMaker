@@ -12,12 +12,13 @@ import {
   tryCompileInkSource,
 } from '../ink-sidecar.js';
 import type { PainterState } from '../painter-store.js';
+import type { StatusReport } from '../status-feedback.js';
 import { InkGraph } from './InkGraph.js';
 
 export interface InkPanelProps {
   readonly t: (key: string) => string;
   readonly painterState: PainterState | null;
-  readonly onStatus: (message: string) => void;
+  readonly onStatus: (report: StatusReport) => void;
 }
 
 export function InkPanel({ t, painterState, onStatus }: InkPanelProps) {
@@ -62,7 +63,9 @@ export function InkPanel({ t, painterState, onStatus }: InkPanelProps) {
       })
       .catch((err) => {
         console.error('Failed to load ink sidecar:', err);
-        if (!cancelled) onStatus(t('painter.ink.loadFailed'));
+        if (!cancelled) {
+            onStatus({ message: t('painter.ink.loadFailed'), severity: 'error' });
+          }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -77,16 +80,16 @@ export function InkPanel({ t, painterState, onStatus }: InkPanelProps) {
   const handleSave = useCallback(async () => {
     if (selectedStoryId === undefined || !isSafeStoryId(selectedStoryId)) return;
     if (!compile.ok) {
-      onStatus(t('painter.ink.saveBlocked'));
+      onStatus({ message: t('painter.ink.saveBlocked'), severity: 'warning' });
       return;
     }
     try {
       await saveInkSidecar(selectedStoryId, source);
       setDirty(false);
-      onStatus(t('painter.ink.saveSuccess'));
+      onStatus({ message: t('painter.ink.saveSuccess'), severity: 'success' });
     } catch (err) {
       console.error('Failed to save ink sidecar:', err);
-      onStatus(t('painter.ink.saveFailed'));
+      onStatus({ message: t('painter.ink.saveFailed'), severity: 'error' });
     }
   }, [selectedStoryId, compile.ok, source, onStatus, t]);
 
@@ -95,7 +98,7 @@ export function InkPanel({ t, painterState, onStatus }: InkPanelProps) {
   const openStory = () => {
     const id = manualStoryId.trim();
     if (!isSafeStoryId(id)) {
-      onStatus(t('painter.ink.invalidStoryId'));
+      onStatus({ message: t('painter.ink.invalidStoryId'), severity: 'warning' });
       return;
     }
     if (!extraIds.includes(id) && !referencedIds.includes(id)) {

@@ -1,7 +1,15 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import type { LightDocument, MapDocument, NpcFacing, SemanticClass } from '@threemaker/map-format';
 import type { SheetPixelSize } from '@threemaker/renderer';
-import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import {
   type AssetRow,
   type GameRow,
@@ -105,6 +113,11 @@ import {
 import { countStampStairLinks } from '../procgen/stairs-from-stamp.js';
 import { resolveDungeonTileIds } from '../procgen/tile-pick.js';
 import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
+import {
+  initialStatusFeedback,
+  type StatusReport,
+  transitionStatusFeedback,
+} from '../status-feedback.js';
 import type { ToolId } from '../tool-sm.js';
 import { CommandList } from './CommandForm.js';
 import { GameTilesetPicker } from './GameTilesetPicker.js';
@@ -255,7 +268,16 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [mapNameDraft, setMapNameDraft] = useState('');
   const [painterState, setPainterState] = useState<PainterState | undefined>(undefined);
   const [paletteSlots, setPaletteSlots] = useState<readonly PaletteSlotInfo[]>([]);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusFeedback, dispatchStatusFeedback] = useReducer(
+    transitionStatusFeedback,
+    initialStatusFeedback,
+  );
+  const reportStatus = useCallback((report: StatusReport) => {
+    dispatchStatusFeedback({ type: 'report', report });
+  }, []);
+  const clearStatus = useCallback(() => {
+    dispatchStatusFeedback({ type: 'clear' });
+  }, []);
   const [rampGlyphs, setRampGlyphs] = useState<readonly RampGlyphOverlayItem[]>([]);
   const [roomOverlay, setRoomOverlay] = useState<readonly RoomOverlayItem[]>([]);
   const [stairOverlay, setStairOverlay] = useState<readonly StairOverlayItem[]>([]);
@@ -347,6 +369,15 @@ export function PainterPanel({ t }: PainterPanelProps) {
   );
 
   useEffect(() => {
+    const toastId = statusFeedback.toast?.id;
+    if (toastId === undefined) return;
+    const timeout = window.setTimeout(() => {
+      dispatchStatusFeedback({ type: 'dismiss-toast', id: toastId });
+    }, 4_000);
+    return () => window.clearTimeout(timeout);
+  }, [statusFeedback.toast?.id]);
+
+  useEffect(() => {
     listGames()
       .then(setGames)
       .catch((err) => console.error('Failed to load games for the painter:', err));
@@ -403,39 +434,42 @@ export function PainterPanel({ t }: PainterPanelProps) {
       // Allow re-selecting the same file later.
       event.target.value = '';
       if (!file) return;
-      setStatusMessage(null);
+      clearStatus();
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
         if (!isTauriAvailable()) {
-          setStatusMessage(t('painter.props.ingestNeedsTauri'));
+          reportStatus({ message: t('painter.props.ingestNeedsTauri'), severity: 'warning' });
           return;
         }
         const deps = await buildTauriGlbIngestDeps();
         const result = await ingestGlbBytes(bytes, deps);
         viewportRef.current?.setActivePropObject(result.sha256);
-        setStatusMessage(
-          formatTemplate(t('painter.props.ingestSuccess'), { sha: shortSha(result.sha256) }),
-        );
+        reportStatus({
+          message: formatTemplate(t('painter.props.ingestSuccess'), {
+            sha: shortSha(result.sha256),
+          }),
+          severity: 'success',
+        });
       } catch (err) {
         console.error('Failed to ingest .glb:', err);
         const message =
           err instanceof GlbIngestError ? err.message : t('painter.props.ingestFailed');
-        setStatusMessage(message);
+        reportStatus({ message, severity: 'error' });
       }
     },
-    [t],
+    [t, clearStatus, reportStatus],
   );
 
   const handleCreateMap = useCallback(async () => {
     if (tilesetAId === undefined || tilesetBId === undefined) return;
-    setStatusMessage(null);
+    clearStatus();
     try {
       const [tilesetA, tilesetB] = await Promise.all([
         getTileset(tilesetAId),
         getTileset(tilesetBId),
       ]);
       if (!tilesetA || !tilesetB) {
-        setStatusMessage(t('painter.createFailed'));
+        reportStatus({ message: t('painter.createFailed'), severity: 'error' });
         return;
       }
       const doc = seedDemoTiles(
@@ -463,16 +497,16 @@ export function PainterPanel({ t }: PainterPanelProps) {
       setMapReady(true);
     } catch (err) {
       console.error('Failed to create the painter demo map:', err);
-      setStatusMessage(t('painter.createFailed'));
+      reportStatus({ message: t('painter.createFailed'), severity: 'error' });
     }
-  }, [tilesetAId, tilesetBId, t, characterSprites]);
+  }, [tilesetAId, tilesetBId, t, characterSprites, clearStatus, reportStatus]);
 
   const handleSave = useCallback(async () => {
     const liveState = viewportRef.current?.painterState;
     if (liveState) {
       const block = canSavePainterDocument(liveState);
       if (block !== null) {
-        setStatusMessage(block);
+        reportStatus({ message: block, severity: 'warning' });
         return;
       }
     }
@@ -497,17 +531,20 @@ export function PainterPanel({ t }: PainterPanelProps) {
       if (enqueue) {
         console.info('[Maker Studio] community share queued (offline stub)', enqueue);
         setCommunityQueue(pushCommunityShareQueue(enqueue));
-        setStatusMessage(t('painter.saveSuccessShareQueued'));
+        reportStatus({ message: t('painter.saveSuccessShareQueued'), severity: 'success' });
       } else if (community.shareOnSave && onlyImported && !community.allowImportedAssets) {
-        setStatusMessage(t('painter.saveSuccessShareBlockedImported'));
+        reportStatus({
+            message: t('painter.saveSuccessShareBlockedImported'),
+            severity: 'warning',
+          });
       } else {
-        setStatusMessage(t('painter.saveSuccess'));
+        reportStatus({ message: t('painter.saveSuccess'), severity: 'success' });
       }
     } catch (err) {
       console.error('Failed to save the map:', err);
-      setStatusMessage(t('painter.saveFailed'));
+      reportStatus({ message: t('painter.saveFailed'), severity: 'error' });
     }
-  }, [t, community]);
+  }, [t, community, reportStatus]);
 
   // Keep the viewport's Ctrl/Cmd+S chord pointing at the CURRENT Save handler.
   useEffect(() => {
@@ -521,7 +558,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     const doc = viewport?.currentDocument();
     const state = viewport?.painterState;
     if (!viewport || !doc || !state) {
-      setStatusMessage(t('painter.procgen.needMap'));
+      reportStatus({ message: t('painter.procgen.needMap'), severity: 'warning' });
       return;
     }
     try {
@@ -594,8 +631,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
       // Remember used seed for replay; bump so the next Generate is new without Rnd.
       setProcgenSeedHistory((prev) => pushProcgenSeedHistory(prev, seed));
       setProcgenSeed(nextProcgenSeed(seed));
-      setStatusMessage(
-        formatTemplate(t('painter.procgen.success'), {
+      reportStatus({
+        message: formatTemplate(t('painter.procgen.success'), {
           rooms: stamp.rooms.length,
           doors: stamp.doors.length,
           furniture: stamp.furnitureCount,
@@ -604,10 +641,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
           seed: stamp.seed,
           preset: t(`painter.procgen.preset.${preset.id}`),
         }),
-      );
+        severity: 'success',
+      });
     } catch (err) {
       console.error('Dungeon procgen failed:', err);
-      setStatusMessage(t('painter.procgen.failed'));
+      reportStatus({ message: t('painter.procgen.failed'), severity: 'error' });
     }
   }, [
     t,
@@ -617,6 +655,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     procgenDoorTileId,
     procgenFurnitureTileId,
     procgenFurnitureDensity,
+    reportStatus,
   ]);
 
   // Keep selected event key in sync with the live eventKeys list.
@@ -647,7 +686,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     try {
       const doc = await loadMapDocument();
       if (!doc) {
-        setStatusMessage(t('painter.loadEmpty'));
+        reportStatus({ message: t('painter.loadEmpty'), severity: 'info' });
         return;
       }
       const { textures, sheetPixelSizes } = await loadSlotTextures(doc);
@@ -657,12 +696,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
       setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
       setMapNameDraft(doc.name);
       setMapReady(true);
-      setStatusMessage(t('painter.loadSuccess'));
+      reportStatus({ message: t('painter.loadSuccess'), severity: 'success' });
     } catch (err) {
       console.error('Failed to load the map:', err);
-      setStatusMessage(t('painter.loadFailed'));
+      reportStatus({ message: t('painter.loadFailed'), severity: 'error' });
     }
-  }, [t, characterSprites]);
+  }, [t, characterSprites, reportStatus]);
 
   const TOOL_GLYPHS: Readonly<Record<ToolId, string>> = {
     brush: 'B',
@@ -1163,7 +1202,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       </button>
                     </div>
                   </div>
-                  {statusMessage && <p className="ide-hint">{statusMessage}</p>}
+                  {statusFeedback.message && <p className="ide-hint">{statusFeedback.message}</p>}
                 </div>
               </div>
             )}
@@ -1227,7 +1266,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     }
                     const status = statusForPaletteAssignment(assignment);
                     if (status) {
-                      setStatusMessage(formatTemplate(t(status.messageKey), { id: status.id }));
+                      reportStatus({
+                        message: formatTemplate(t(status.messageKey), { id: status.id }),
+                        severity: 'info',
+                      });
                     }
                   }}
                   tileAriaLabel={(tileId) =>
@@ -1780,13 +1822,17 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                     const payload = serializeCommunityShareQueue([job]);
                                     void navigator.clipboard?.writeText(payload).then(
                                       () =>
-                                        setStatusMessage(
-                                          formatTemplate(t('painter.community.jobCopied'), {
+                                        reportStatus({
+                                          message: formatTemplate(t('painter.community.jobCopied'), {
                                             name: job.mapName,
                                           }),
-                                        ),
+                                          severity: 'success',
+                                        }),
                                       () =>
-                                        setStatusMessage(t('painter.community.queueCopyFailed')),
+                                        reportStatus({
+                                          message: t('painter.community.queueCopyFailed'),
+                                          severity: 'error',
+                                        }),
                                     );
                                   }}
                                 >
@@ -1798,11 +1844,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                     setCommunityQueue(
                                       removeCommunityShareQueueJob(job.mapId, job.at),
                                     );
-                                    setStatusMessage(
-                                      formatTemplate(t('painter.community.queueItemRemoved'), {
+                                    reportStatus({
+                                      message: formatTemplate(t('painter.community.queueItemRemoved'), {
                                         name: job.mapName,
                                       }),
-                                    );
+                                      severity: 'info',
+                                    });
                                   }}
                                 >
                                   {t('painter.community.removeJob')}
@@ -1834,8 +1881,16 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           onClick={() => {
                             const payload = serializeCommunityShareQueue(communityQueue);
                             void navigator.clipboard?.writeText(payload).then(
-                              () => setStatusMessage(t('painter.community.queueCopied')),
-                              () => setStatusMessage(t('painter.community.queueCopyFailed')),
+                              () =>
+                                  reportStatus({
+                                    message: t('painter.community.queueCopied'),
+                                    severity: 'success',
+                                  }),
+                              () =>
+                                reportStatus({
+                                  message: t('painter.community.queueCopyFailed'),
+                                  severity: 'error',
+                                }),
                             );
                           }}
                         >
@@ -1846,26 +1901,35 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           onClick={() => {
                             const clipboard = navigator.clipboard;
                             if (!clipboard?.readText) {
-                              setStatusMessage(t('painter.community.queuePasteFailed'));
+                              reportStatus({
+                                message: t('painter.community.queuePasteFailed'),
+                                severity: 'error',
+                              });
                               return;
                             }
                             void clipboard.readText().then(
                               (raw) => {
                                 const parsed = parseCommunityShareQueueJson(raw);
                                 if (!parsed.ok) {
-                                  setStatusMessage(
-                                    t(`painter.community.queuePaste.${parsed.reason}`),
-                                  );
+                                  reportStatus({
+                                    message: t(`painter.community.queuePaste.${parsed.reason}`),
+                                    severity: 'error',
+                                  });
                                   return;
                                 }
                                 setCommunityQueue(replaceCommunityShareQueue(parsed.jobs));
-                                setStatusMessage(
-                                  formatTemplate(t('painter.community.queuePasted'), {
+                                reportStatus({
+                                  message: formatTemplate(t('painter.community.queuePasted'), {
                                     count: parsed.jobs.length,
                                   }),
-                                );
+                                  severity: 'success',
+                                });
                               },
-                              () => setStatusMessage(t('painter.community.queuePasteFailed')),
+                              () =>
+                                reportStatus({
+                                  message: t('painter.community.queuePasteFailed'),
+                                  severity: 'error',
+                                }),
                             );
                           }}
                         >
@@ -1876,7 +1940,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
                             type="button"
                             onClick={() => {
                               setCommunityQueue(clearCommunityShareQueue());
-                              setStatusMessage(t('painter.community.queueCleared'));
+                              reportStatus({
+                              message: t('painter.community.queueCleared'),
+                              severity: 'info',
+                            });
                             }}
                           >
                             {t('painter.community.clearQueue')}
@@ -2122,7 +2189,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                 )}
 
                 {inspectorTab === 'ink' && (
-                  <InkPanel t={t} painterState={painterState} onStatus={setStatusMessage} />
+                  <InkPanel t={t} painterState={painterState} onStatus={reportStatus} />
                 )}
 
                 {inspectorTab === 'entities' && (
@@ -2174,11 +2241,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                 onClick={() => {
                                   viewportRef.current?.setActivePropObject(objectSha);
                                   viewportRef.current?.setTool('prop');
-                                  setStatusMessage(
-                                    formatTemplate(t('painter.props.selectedToast'), {
+                                  reportStatus({
+                                    message: formatTemplate(t('painter.props.selectedToast'), {
                                       sha: shortSha(objectSha),
                                     }),
-                                  );
+                                    severity: 'info',
+                                  });
                                 }}
                               >
                                 {formatTemplate(t('painter.props.selectObject'), {
@@ -2250,12 +2318,13 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   const brush = propPlacementFromDocument(prop);
                                   viewportRef.current?.setActivePropObject(brush.object);
                                   viewportRef.current?.setTool('prop');
-                                  setStatusMessage(
-                                    formatTemplate(t('painter.props.reuseToast'), {
+                                  reportStatus({
+                                    message: formatTemplate(t('painter.props.reuseToast'), {
                                       id: prop.id,
                                       sha: shortSha(brush.object),
                                     }),
-                                  );
+                                    severity: 'info',
+                                  });
                                 }}
                               >
                                 {formatTemplate(t('painter.props.summary'), {
@@ -2422,11 +2491,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   viewportRef.current?.setActiveNpcFacing(brush.facing);
                                   viewportRef.current?.setActiveNpcEventKey(brush.eventKey);
                                   viewportRef.current?.setTool('npc');
-                                  setStatusMessage(
-                                    formatTemplate(t('painter.npcs.reuseToast'), {
+                                  reportStatus({
+                                    message: formatTemplate(t('painter.npcs.reuseToast'), {
                                       id: npc.id,
                                     }),
-                                  );
+                                    severity: 'info',
+                                  });
                                 }}
                               >
                                 {formatTemplate(t('painter.npcs.summary'), {
@@ -2557,11 +2627,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   viewportRef.current?.setActiveTriggerOn(brush.on);
                                   viewportRef.current?.setActiveTriggerEventKey(brush.eventKey);
                                   viewportRef.current?.setTool('trigger');
-                                  setStatusMessage(
-                                    formatTemplate(t('painter.triggers.reuseToast'), {
+                                  reportStatus({
+                                    message: formatTemplate(t('painter.triggers.reuseToast'), {
                                       id: trigger.id,
                                     }),
-                                  );
+                                    severity: 'info',
+                                  });
                                 }}
                               >
                                 {formatTemplate(t('painter.triggers.summary'), {
@@ -2725,11 +2796,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   viewportRef.current?.setActiveLightRange(brush.range);
                                   viewportRef.current?.setActiveLightHeight(brush.height);
                                   viewportRef.current?.setTool('light');
-                                  setStatusMessage(
-                                    formatTemplate(t('painter.lights.reuseToast'), {
+                                  reportStatus({
+                                    message: formatTemplate(t('painter.lights.reuseToast'), {
                                       id: light.id,
                                     }),
-                                  );
+                                    severity: 'info',
+                                  });
                                 }}
                               >
                                 {formatTemplate(t('painter.lights.summary'), {
@@ -2782,11 +2854,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               ? lightAttachTarget
                               : 'player';
                             viewportRef.current?.placeAttachedLight(target);
-                            setStatusMessage(
-                              formatTemplate(t('painter.lights.attached.toast'), {
+                            reportStatus({
+                              message: formatTemplate(t('painter.lights.attached.toast'), {
                                 attach: target,
                               }),
-                            );
+                              severity: 'success',
+                            });
                           }}
                         >
                           {t('painter.lights.attach')}
@@ -2812,11 +2885,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   viewportRef.current?.setActiveLightIntensity(brush.intensity);
                                   viewportRef.current?.setActiveLightRange(brush.range);
                                   if (light.attach) setLightAttachTarget(light.attach);
-                                  setStatusMessage(
-                                    formatTemplate(t('painter.lights.reuseToast'), {
+                                  reportStatus({
+                                    message: formatTemplate(t('painter.lights.reuseToast'), {
                                       id: light.id,
                                     }),
-                                  );
+                                    severity: 'info',
+                                  });
                                 }}
                               >
                                 {formatTemplate(t('painter.lights.attached.summary'), {
@@ -2845,6 +2919,18 @@ export function PainterPanel({ t }: PainterPanelProps) {
         </aside>
       </div>
 
+      {statusFeedback.toast && (
+        <div
+          key={statusFeedback.toast.id}
+          className={`ide-toast ide-toast-${statusFeedback.toast.severity}`}
+          role={statusFeedback.toast.severity === 'error' ? 'alert' : 'status'}
+          aria-live={statusFeedback.toast.severity === 'error' ? 'assertive' : 'polite'}
+          aria-atomic="true"
+        >
+          {statusFeedback.toast.message}
+        </div>
+      )}
+
       <footer className="ide-status">
         {mapReady && painterState ? (
           <span>
@@ -2866,7 +2952,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
           ) : (
             <span className="ide-status-ok">{t('painter.status.ready')}</span>
           ))}
-        {statusMessage && <span className="ide-status-msg">{statusMessage}</span>}
+        {statusFeedback.message && (
+          <span className="ide-status-msg">{statusFeedback.message}</span>
+        )}
       </footer>
     </div>
   );

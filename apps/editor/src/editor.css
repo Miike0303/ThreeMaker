@@ -398,6 +398,7 @@ label {
   flex: 1;
   min-height: 0;
   display: flex;
+  position: relative;
   flex-direction: column;
   background: var(--tm-bg-0);
 }
@@ -749,6 +750,47 @@ label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ide-toast {
+  position: absolute;
+  right: 12px;
+  bottom: calc(var(--tm-status-h) + 12px);
+  z-index: 10;
+  max-width: min(420px, calc(100% - 24px));
+  padding: 9px 12px;
+  border: 1px solid var(--tm-accent);
+  border-left-width: 4px;
+  border-radius: var(--tm-radius);
+  background: var(--tm-bg-2);
+  color: var(--tm-text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: ide-toast-in 140ms ease-out;
+}
+
+.ide-toast-success {
+  border-color: var(--tm-ok);
+}
+
+.ide-toast-warning {
+  border-color: var(--tm-warn);
+}
+
+.ide-toast-error {
+  border-color: var(--tm-danger);
+}
+
+@keyframes ide-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ide-toast {
+    animation: none;
+  }
 }
 
 /* Welcome / empty project */
