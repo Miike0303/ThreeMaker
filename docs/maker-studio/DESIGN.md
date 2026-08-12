@@ -136,6 +136,10 @@ Maker Studio shell
 - WU-COMM-10 offline queue rows show unique tile object count (`communityShareTileCount` + `{tiles}` in en/es)
 - WU-COMM-11 offline queue rows show short map id (`formatCommunityShareMapId` + `{id}` in en/es) for same-name disambiguation
 - WU-COMM-12 offline queue summary: unique tiles across all jobs (`communityShareQueueTileTotal` + `queueTileTotal` en/es)
+- WU-VIEW-02 viewport controls: right-drag pan (trackpad fallback) + contextmenu suppressed + left-button-only strokes; floating zoom −/+ cluster with % readout (`onCameraChange`) and reset-view (`zoomCameraDistanceByFactor`/`zoomPercentForDistance`)
+- WU-UX-11 status bar shows named tool/layer/floor (`painter-status.ts`: `statusToolKey` eraser-aware, `statusLayerNameKey`) instead of raw `L0 · F0`
+- WU-UX-12 toast severity: errors persist until dismissed (`toastAutoDismissMs` → null), warnings 6.5s, all toasts get a dismiss button
+- WU-UX-13 unsaved-changes indicator: `painterDocumentSlicesChanged` slice-ref diff on emitted states; Save button dot + status chip; rename marks dirty; load/create re-baseline; save clears
 
 ## PR Plan
 

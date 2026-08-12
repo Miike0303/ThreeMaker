@@ -5,6 +5,8 @@ import {
   panCameraTarget,
   projectToScreenFraction,
   zoomCameraDistance,
+  zoomCameraDistanceByFactor,
+  zoomPercentForDistance,
 } from '../src/viewer-camera.js';
 
 describe('computeOverviewCameraDistance', () => {
@@ -64,6 +66,41 @@ describe('zoomCameraDistance (WU-UX-01)', () => {
   it('clamps at both bounds', () => {
     expect(zoomCameraDistance(39, 10_000, bounds)).toBe(40);
     expect(zoomCameraDistance(6, -10_000, bounds)).toBe(5);
+  });
+});
+
+describe('zoomCameraDistanceByFactor (WU-VIEW-02)', () => {
+  const bounds = { min: 5, max: 40 };
+
+  it('factor > 1 zooms out, factor < 1 zooms in', () => {
+    expect(zoomCameraDistanceByFactor(20, 1.25, bounds)).toBeCloseTo(25);
+    expect(zoomCameraDistanceByFactor(20, 0.8, bounds)).toBeCloseTo(16);
+  });
+
+  it('reciprocal factors cancel each other out', () => {
+    const out = zoomCameraDistanceByFactor(20, 1.25, bounds);
+    expect(zoomCameraDistanceByFactor(out, 1 / 1.25, bounds)).toBeCloseTo(20);
+  });
+
+  it('clamps at both bounds', () => {
+    expect(zoomCameraDistanceByFactor(39, 2, bounds)).toBe(40);
+    expect(zoomCameraDistanceByFactor(6, 0.1, bounds)).toBe(5);
+  });
+});
+
+describe('zoomPercentForDistance (WU-VIEW-02)', () => {
+  it('is 100% at the reference framing distance', () => {
+    expect(zoomPercentForDistance(20, 20)).toBe(100);
+  });
+
+  it('reads higher zoomed out and lower zoomed in', () => {
+    expect(zoomPercentForDistance(20, 40)).toBe(50);
+    expect(zoomPercentForDistance(20, 10)).toBe(200);
+  });
+
+  it('rounds to whole percents and survives a missing reference', () => {
+    expect(zoomPercentForDistance(20, 15)).toBe(133);
+    expect(zoomPercentForDistance(0, 15)).toBe(100);
   });
 });
 

@@ -64,6 +64,29 @@ export function zoomCameraDistance(
   );
 }
 
+/**
+ * Multiplicative button-zoom step (WU-VIEW-02): the on-screen +/- controls
+ * apply a fixed ratio per click, clamped into the same bounds as wheel-zoom.
+ * Factor > 1 zooms OUT (farther), < 1 zooms IN (closer).
+ */
+export function zoomCameraDistanceByFactor(
+  current: number,
+  factor: number,
+  bounds: ZoomBounds,
+): number {
+  return clampRange(current * factor, bounds.min, bounds.max);
+}
+
+/**
+ * Zoom readout as a percentage of the map's framing distance (WU-VIEW-02):
+ * 100% = the whole-map framing `loadMap` resets to, 200% = twice as far
+ * (zoomed out), 50% = half as far (zoomed in).
+ */
+export function zoomPercentForDistance(reference: number, current: number): number {
+  if (reference <= 0) return 100;
+  return Math.round((reference / current) * 100);
+}
+
 export interface CameraPanTarget {
   readonly x: number;
   readonly z: number;

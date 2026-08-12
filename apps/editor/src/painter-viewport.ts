@@ -44,6 +44,8 @@ import {
   panCameraTarget,
   projectToScreenFraction,
   zoomCameraDistance,
+  zoomCameraDistanceByFactor,
+  zoomPercentForDistance,
 } from './viewer-camera.js';
 
 /** Loads a texture (+ its pixel size) for every composed slot that has a resolved object hash. Thin IO glue, untested per this module's convention. */
@@ -175,6 +177,8 @@ export interface PainterViewportCallbacks {
   readonly onHoverChange?: (tile: HoverOverlayItem | null) => void;
   /** Fired on the Ctrl/Cmd+S chord (WU-UX-03) so the surrounding UI can run its existing Save flow. */
   readonly onSaveRequest?: () => void;
+  /** Fired after every camera pose change (load framing, wheel/button zoom, drag-pan, reset) with the zoom readout as a percent of the framing distance (WU-VIEW-02). */
+  readonly onCameraChange?: (zoomPercent: number) => void;
 }
 
 /**
@@ -203,6 +207,9 @@ export class PainterViewport {
   private readonly onPointerLeave = () => this.updateHoverTile(undefined);
   private readonly onWheel = (event: WheelEvent) => this.handleWheel(event);
   private readonly onKeyDown = (event: KeyboardEvent) => this.handleKeyDown(event);
+  // The canvas is an editing surface, not a document: the browser context
+  // menu must never cover it (right-drag pans, WU-VIEW-02).
+  private readonly onContextMenu = (event: MouseEvent) => event.preventDefault();
 
   private tilemap: StreamingTilemapScene | undefined;
   private animationHandle: number | undefined;
@@ -250,6 +257,7 @@ export class PainterViewport {
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
     this.renderer.domElement.addEventListener('pointermove', this.onPointerMove);
     this.renderer.domElement.addEventListener('pointerleave', this.onPointerLeave);
+    this.renderer.domElement.addEventListener('contextmenu', this.onContextMenu);
     // passive: false so wheel-zoom can preventDefault the page scroll (WU-UX-01).
     this.renderer.domElement.addEventListener('wheel', this.onWheel, { passive: false });
     window.addEventListener('pointerup', this.onPointerUp);
@@ -793,14 +801,18 @@ export class PainterViewport {
   }
 
   private handlePointerDown(event: PointerEvent): void {
-    // Middle-button drag pans the camera (WU-UX-01); it never paints.
-    if (event.button === 1) {
+    // Middle- OR right-button drag pans the camera (WU-UX-01/WU-VIEW-02);
+    // it never paints. Right-drag is the trackpad/mouse fallback since
+    // middle-drag is unavailable on most laptops.
+    if (event.button === 1 || event.button === 2) {
       if (!this.doc) return;
       event.preventDefault();
       this.renderer.domElement.setPointerCapture(event.pointerId);
       this.panState = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
       return;
     }
+    // Only the left button paints (WU-VIEW-02: stray buttons must not stroke).
+    if (event.button !== 0) return;
     if (!this.state) return;
     const point = this.pickTile(event);
     if (!point) return;
@@ -866,6 +878,29 @@ export class PainterViewport {
     if (next === this.cameraDistance) return;
     this.cameraDistance = next;
     this.applyCameraPose();
+    this.recomputeOverlays();
+  }
+
+  /**
+   * On-screen zoom control (WU-VIEW-02): one click = one fixed-ratio step
+   * through the same bounds as wheel-zoom. `factor` > 1 zooms out, < 1 in.
+   */
+  zoomViewBy(factor: number): void {
+    if (!this.doc || this.referenceCameraDistance <= 0) return;
+    const next = zoomCameraDistanceByFactor(this.cameraDistance, factor, {
+      min: this.referenceCameraDistance * ZOOM_MIN_DISTANCE_FACTOR,
+      max: this.referenceCameraDistance * ZOOM_MAX_DISTANCE_FACTOR,
+    });
+    if (next === this.cameraDistance) return;
+    this.cameraDistance = next;
+    this.applyCameraPose();
+    this.recomputeOverlays();
+  }
+
+  /** Re-frames the whole map from its center (WU-VIEW-02) — the same reset `loadMap` applies, on demand. */
+  resetCameraView(): void {
+    if (!this.doc) return;
+    this.frameCamera(this.doc.width, this.doc.height);
     this.recomputeOverlays();
   }
 
@@ -1018,6 +1053,11 @@ export class PainterViewport {
     this.cameraPose = pose;
     this.camera.position.set(pose.position.x, pose.position.y, pose.position.z);
     this.camera.lookAt(pose.lookAt.x, pose.lookAt.y, pose.lookAt.z);
+    if (this.referenceCameraDistance > 0) {
+      this.callbacks.onCameraChange?.(
+        zoomPercentForDistance(this.referenceCameraDistance, this.cameraDistance),
+      );
+    }
   }
 
   /**
@@ -1324,6 +1364,7 @@ export class PainterViewport {
     this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
     this.renderer.domElement.removeEventListener('pointermove', this.onPointerMove);
     this.renderer.domElement.removeEventListener('pointerleave', this.onPointerLeave);
+    this.renderer.domElement.removeEventListener('contextmenu', this.onContextMenu);
     this.renderer.domElement.removeEventListener('wheel', this.onWheel);
     this.tilemap?.dispose();
     this.renderer.dispose();

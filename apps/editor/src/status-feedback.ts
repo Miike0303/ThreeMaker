@@ -26,6 +26,22 @@ export const initialStatusFeedback: StatusFeedback = {
   nextToastId: 1,
 };
 
+/**
+ * Auto-dismiss delay per severity (WU-UX-12). `null` = the toast persists
+ * until the user dismisses it — errors must not vanish on their own.
+ * Warnings linger longer than info/success but still clear themselves.
+ */
+export function toastAutoDismissMs(severity: StatusSeverity): number | null {
+  switch (severity) {
+    case 'error':
+      return null;
+    case 'warning':
+      return 6_500;
+    default:
+      return 4_000;
+  }
+}
+
 export function transitionStatusFeedback(
   state: StatusFeedback,
   action: StatusFeedbackAction,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   initialStatusFeedback,
+  toastAutoDismissMs,
   transitionStatusFeedback,
 } from '../src/status-feedback.js';
 
@@ -70,5 +71,21 @@ describe('status feedback transitions', () => {
     expect(cleared.message).toBeNull();
     expect(cleared.toast).toBeNull();
     expect(afterClear.toast?.id).toBe(2);
+  });
+});
+
+describe('toastAutoDismissMs (WU-UX-12)', () => {
+  it('errors persist until dismissed (no auto-dismiss)', () => {
+    expect(toastAutoDismissMs('error')).toBeNull();
+  });
+
+  it('warnings outlast info/success but still auto-dismiss', () => {
+    const warning = toastAutoDismissMs('warning');
+    const info = toastAutoDismissMs('info');
+    const success = toastAutoDismissMs('success');
+    expect(warning).not.toBeNull();
+    expect(info).toBe(4_000);
+    expect(success).toBe(4_000);
+    expect(warning ?? 0).toBeGreaterThan(info ?? 0);
   });
 });

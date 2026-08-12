@@ -87,6 +87,8 @@ import {
   MAP_DIMENSION_MIN,
   validateNewMapDraft,
 } from '../new-map-wizard.js';
+import { painterDocumentSlicesChanged } from '../painter-dirty.js';
+import { statusLayerNameKey, statusToolKey } from '../painter-status.js';
 import { isEventReferenced, type PainterState, validateEventsDraft } from '../painter-store.js';
 import type {
   HoverOverlayItem,
@@ -131,6 +133,7 @@ import { RAMP_DIRECTION_ARROW } from '../ramp-glyph.js';
 import {
   initialStatusFeedback,
   type StatusReport,
+  toastAutoDismissMs,
   transitionStatusFeedback,
 } from '../status-feedback.js';
 import type { ToolId } from '../tool-sm.js';
@@ -232,6 +235,8 @@ const SEMANTIC_CLASSES: readonly SemanticClass[] = [
 
 /** First A2 autotile id (kind 0, shape 0) -- a valid, always-populated ground tile for any properly-formed A2 sheet. */
 const GROUND_TILE_ID = 2816;
+/** One on-screen zoom click ≈ one gentle wheel notch (WU-VIEW-02). */
+const VIEW_ZOOM_STEP = 1.25;
 /** B-sheet local index 1 (id 0 on the B sheet is treated as "empty" everywhere in this codebase). */
 const DECOR_TILE_ID = 1;
 
@@ -343,6 +348,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [lightOverlay, setLightOverlay] = useState<readonly LightOverlayItem[]>([]);
   /** Hovered tile highlight + status readout (WU-UX-04); null off-map. */
   const [hoverOverlay, setHoverOverlay] = useState<HoverOverlayItem | null>(null);
+  /** Zoom readout (% of the map's framing distance) for the viewport control cluster (WU-VIEW-02). */
+  const [zoomPercent, setZoomPercent] = useState(100);
+  /** Unsaved-changes indicator (WU-UX-13): derived from emitted painter-state slice refs. */
+  const [docDirty, setDocDirty] = useState(false);
+  /** Last emitted painter state — the dirty checker's baseline (reset on fresh load/create). */
+  const prevPainterStateRef = useRef<PainterState | undefined>(undefined);
   /** Live Save handler for the viewport's Ctrl/Cmd+S chord (WU-UX-03) -- a ref because the viewport (and its callbacks object) mounts once while handleSave re-binds with settings. */
   const saveRequestRef = useRef<() => void>(() => {});
   const [characterSprites, setCharacterSprites] = useState<readonly AssetRow[]>([]);
@@ -440,13 +451,27 @@ export function PainterPanel({ t }: PainterPanelProps) {
   );
 
   useEffect(() => {
-    const toastId = statusFeedback.toast?.id;
-    if (toastId === undefined) return;
+    const toast = statusFeedback.toast;
+    if (!toast) return;
+    // Errors persist until dismissed (WU-UX-12); lesser severities auto-dismiss.
+    const ms = toastAutoDismissMs(toast.severity);
+    if (ms === null) return;
     const timeout = window.setTimeout(() => {
-      dispatchStatusFeedback({ type: 'dismiss-toast', id: toastId });
-    }, 4_000);
+      dispatchStatusFeedback({ type: 'dismiss-toast', id: toast.id });
+    }, ms);
     return () => window.clearTimeout(timeout);
-  }, [statusFeedback.toast?.id]);
+  }, [statusFeedback.toast]);
+
+  // WU-UX-13: any emitted state whose DOCUMENT slices differ from the previous
+  // emission means unsaved edits exist. Fresh loads re-baseline synchronously
+  // in handleLoad/handleCreateMap so they never read as dirty; procgen Generate
+  // intentionally flows through here (it reloads via loadMap with unsaved output).
+  useEffect(() => {
+    const prev = prevPainterStateRef.current;
+    prevPainterStateRef.current = painterState;
+    if (!prev || !painterState) return;
+    if (painterDocumentSlicesChanged(prev, painterState)) setDocDirty(true);
+  }, [painterState]);
 
   useEffect(() => {
     listGames()
@@ -491,6 +516,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       onLightOverlayChange: setLightOverlay,
       onHoverChange: setHoverOverlay,
       onSaveRequest: () => saveRequestRef.current(),
+      onCameraChange: setZoomPercent,
     });
     viewportRef.current = viewport;
     return () => {
@@ -570,6 +596,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
       setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
       setMapNameDraft(doc.name);
       setMapReady(true);
+      // Fresh document = clean baseline for the unsaved-changes indicator.
+      prevPainterStateRef.current = viewportRef.current?.painterState;
+      setDocDirty(false);
     } catch (err) {
       console.error('Failed to create the painter map:', err);
       reportStatus({ message: t('painter.createFailed'), severity: 'error' });
@@ -598,6 +627,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     if (!doc) return;
     try {
       await saveMapDocument(doc);
+      setDocDirty(false);
       // Community share is opt-out (default on); no network in v0 — enqueue only.
       const tileShas = Object.values(doc.tileset.slots)
         .map((slot) => slot?.object)
@@ -618,9 +648,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
         reportStatus({ message: t('painter.saveSuccessShareQueued'), severity: 'success' });
       } else if (community.shareOnSave && onlyImported && !community.allowImportedAssets) {
         reportStatus({
-            message: t('painter.saveSuccessShareBlockedImported'),
-            severity: 'warning',
-          });
+          message: t('painter.saveSuccessShareBlockedImported'),
+          severity: 'warning',
+        });
       } else {
         reportStatus({ message: t('painter.saveSuccess'), severity: 'success' });
       }
@@ -833,6 +863,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
       setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
       setMapNameDraft(doc.name);
       setMapReady(true);
+      // Fresh document = clean baseline for the unsaved-changes indicator.
+      prevPainterStateRef.current = viewportRef.current?.painterState;
+      setDocDirty(false);
       reportStatus({ message: t('painter.loadSuccess'), severity: 'success' });
     } catch (err) {
       console.error('Failed to load the map:', err);
@@ -885,20 +918,48 @@ export function PainterPanel({ t }: PainterPanelProps) {
     </div>
   );
 
+  // Errors stay until dismissed (WU-UX-12); every toast is manually dismissible.
+  const toast = statusFeedback.toast;
+  const toastView = toast ? (
+    <div
+      key={toast.id}
+      className={`ide-toast ide-toast-${toast.severity}`}
+      role={toast.severity === 'error' ? 'alert' : 'status'}
+      aria-live={toast.severity === 'error' ? 'assertive' : 'polite'}
+      aria-atomic="true"
+    >
+      <span className="ide-toast-message">{toast.message}</span>
+      <button
+        type="button"
+        className="ide-toast-dismiss"
+        aria-label={t('painter.toast.dismiss')}
+        onClick={() => dispatchStatusFeedback({ type: 'dismiss-toast', id: toast.id })}
+      >
+        ✕
+      </button>
+    </div>
+  ) : null;
+
   return (
     <div className="ide-workspace">
       <div className="ide-menubar">
         <div className="ide-menubar-group">
           {mapReady && (
-            <button type="button" className="primary" onClick={handleSave}>
+            <button
+              type="button"
+              className="primary"
+              title={docDirty ? t('painter.status.unsaved') : undefined}
+              onClick={handleSave}
+            >
               {t('painter.save')}
+              {docDirty && <span className="ide-dirty-dot" aria-hidden="true" />}
             </button>
           )}
-              {mapReady && (
-                <button type="button" onClick={handleLoad}>
-                  {t('painter.load')}
-                </button>
-              )}
+          {mapReady && (
+            <button type="button" onClick={handleLoad}>
+              {t('painter.load')}
+            </button>
+          )}
           {mapReady && (
             <>
               <button
@@ -931,7 +992,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
                   onBlur={() => {
                     const next = normalizeMapName(mapNameDraft);
                     setMapNameDraft(next);
+                    // The name lives on the doc, not in painter state — mark dirty here.
+                    const before = viewportRef.current?.mapName();
                     viewportRef.current?.setMapName(next);
+                    if (before !== undefined && before !== next) setDocDirty(true);
                   }}
                 />
               </label>
@@ -1030,47 +1094,47 @@ export function PainterPanel({ t }: PainterPanelProps) {
       </div>
 
       <div className="ide-body">
-            <aside className="ide-tool-rail" aria-label={t('painter.tools')}>
-              {TOOL_GROUPS.map((group) => (
-                <fieldset key={group.id} className="ide-tool-group">
-                  <legend className="sr-only">{t(`painter.toolGroup.${group.id}`)}</legend>
-                  {group.tools.map((tool) => {
-                    const active =
-                      mapReady &&
-                      (tool.id === 'eraser'
-                        ? painterState?.tool === 'brush' && painterState.fillTileId === 0
-                        : painterState?.tool === tool.id &&
-                          (tool.id !== 'brush' || painterState.fillTileId !== 0));
-                    const label = t(`painter.tool.${tool.id}`);
+        <aside className="ide-tool-rail" aria-label={t('painter.tools')}>
+          {TOOL_GROUPS.map((group) => (
+            <fieldset key={group.id} className="ide-tool-group">
+              <legend className="sr-only">{t(`painter.toolGroup.${group.id}`)}</legend>
+              {group.tools.map((tool) => {
+                const active =
+                  mapReady &&
+                  (tool.id === 'eraser'
+                    ? painterState?.tool === 'brush' && painterState.fillTileId === 0
+                    : painterState?.tool === tool.id &&
+                      (tool.id !== 'brush' || painterState.fillTileId !== 0));
+                const label = t(`painter.tool.${tool.id}`);
                 const accessibleLabel = tool.shortcut ? `${label} (${tool.shortcut})` : label;
-                    return (
-                      <button
-                        key={tool.id}
-                        type="button"
-                        disabled={!mapReady}
-                        aria-label={accessibleLabel}
-                        aria-pressed={active}
-                        className={`ide-tool-btn${active ? ' ide-tool-btn-active' : ''}`}
-                        title={accessibleLabel}
-                        onClick={() => {
-                          if (tool.id === 'eraser') {
-                            viewportRef.current?.setFillTileId(0);
-                            routeExplicitToolSelection('brush');
-                          } else {
-                            routeExplicitToolSelection(tool.id);
-                          }
-                        }}
-                      >
-                        <span className="ide-tool-glyph" aria-hidden="true">
-                          {tool.glyph}
-                        </span>
-                        {tool.shortcut && <span className="ide-tool-key">{tool.shortcut}</span>}
-                      </button>
-                    );
-                  })}
-                </fieldset>
-              ))}
-            </aside>
+                return (
+                  <button
+                    key={tool.id}
+                    type="button"
+                    disabled={!mapReady}
+                    aria-label={accessibleLabel}
+                    aria-pressed={active}
+                    className={`ide-tool-btn${active ? ' ide-tool-btn-active' : ''}`}
+                    title={accessibleLabel}
+                    onClick={() => {
+                      if (tool.id === 'eraser') {
+                        viewportRef.current?.setFillTileId(0);
+                        routeExplicitToolSelection('brush');
+                      } else {
+                        routeExplicitToolSelection(tool.id);
+                      }
+                    }}
+                  >
+                    <span className="ide-tool-glyph" aria-hidden="true">
+                      {tool.glyph}
+                    </span>
+                    {tool.shortcut && <span className="ide-tool-key">{tool.shortcut}</span>}
+                  </button>
+                );
+              })}
+            </fieldset>
+          ))}
+        </aside>
 
         <div className="ide-center">
           <div className="ide-viewport-stage">
@@ -1323,73 +1387,104 @@ export function PainterPanel({ t }: PainterPanelProps) {
               </div>
             )}
 
+            {mapReady && painterState && (
+              <fieldset className="ide-viewport-controls" title={t('painter.view.hint')}>
+                <legend className="sr-only">{t('painter.view.controls')}</legend>
+                <button
+                  type="button"
+                  className="ide-viewport-btn"
+                  aria-label={t('painter.view.zoomOut')}
+                  onClick={() => viewportRef.current?.zoomViewBy(1 / VIEW_ZOOM_STEP)}
+                >
+                  −
+                </button>
+                <span className="ide-viewport-zoom">{zoomPercent}%</span>
+                <button
+                  type="button"
+                  className="ide-viewport-btn"
+                  aria-label={t('painter.view.zoomIn')}
+                  onClick={() => viewportRef.current?.zoomViewBy(VIEW_ZOOM_STEP)}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="ide-viewport-btn"
+                  aria-label={t('painter.view.reset')}
+                  onClick={() => viewportRef.current?.resetCameraView()}
+                >
+                  ⛶
+                </button>
+              </fieldset>
+            )}
+
             {(!mapReady || !painterState) && (
               <div className="ide-welcome" style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
                 <div className="ide-welcome-card">
                   <h2>{t('painter.welcome.title')}</h2>
                   <p>{t('painter.welcome.body')}</p>
-                    <section className="ide-welcome-path">
-                      <h3 className="ide-section-title">{t('painter.welcome.openMap')}</h3>
-                      <p className="ide-hint">{t('painter.welcome.openMapHint')}</p>
-                      <div className="ide-row">
-                        <button type="button" onClick={handleLoad}>
-                          {t('painter.load')}
-                        </button>
-                      </div>
-                    </section>
-                    <section className="ide-welcome-path">
-                      <h3 className="ide-section-title">{t('painter.welcome.newMap')}</h3>
-                      <p className="ide-hint">{t('painter.welcome.createMapHint')}</p>
-                      {newMapFields}
-                      <div className="ide-row">
-                        <GameTilesetPicker
-                          label={t('painter.gameA')}
-                          games={games}
-                          gameId={gameAId}
-                          onGameChange={handleGameAChange}
-                          tilesetId={tilesetAId}
-                          onTilesetChange={setTilesetAId}
-                          selectGameLabel={t('painter.selectGame')}
-                          selectTilesetLabel={t('painter.selectTileset')}
-                        />
-                      </div>
-                      <div className="ide-row">
-                        <GameTilesetPicker
-                          label={t('painter.gameB')}
-                          games={games}
-                          gameId={gameBId}
-                          onGameChange={handleGameBChange}
-                          tilesetId={tilesetBId}
-                          onTilesetChange={setTilesetBId}
-                          selectGameLabel={t('painter.selectGame')}
-                          selectTilesetLabel={t('painter.selectTileset')}
-                        />
-                      </div>
-                      <p className="ide-welcome-prerequisite" role="status">
-                        {games.length === 0
-                          ? t('painter.welcome.noCatalog')
-                          : tilesetAId === undefined || tilesetBId === undefined
-                            ? t('painter.welcome.chooseTilesets')
-                            : t('painter.welcome.ready')}
-                      </p>
-                      {games.length === 0 && (
-                        <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
-                      )}
-                      <div className="ide-row">
-                            <button
-                              type="button"
-                              className="primary"
-                              disabled={
-                                tilesetAId === undefined ||
-                                tilesetBId === undefined ||
-                                !newMapResult.valid
-                              }
-                              onClick={handleCreateMap}
-                        >
-                          {t('painter.createMap')}
-                        </button>
-                      </div>
-                    </section>
+                  <section className="ide-welcome-path">
+                    <h3 className="ide-section-title">{t('painter.welcome.openMap')}</h3>
+                    <p className="ide-hint">{t('painter.welcome.openMapHint')}</p>
+                    <div className="ide-row">
+                      <button type="button" onClick={handleLoad}>
+                        {t('painter.load')}
+                      </button>
+                    </div>
+                  </section>
+                  <section className="ide-welcome-path">
+                    <h3 className="ide-section-title">{t('painter.welcome.newMap')}</h3>
+                    <p className="ide-hint">{t('painter.welcome.createMapHint')}</p>
+                    {newMapFields}
+                    <div className="ide-row">
+                      <GameTilesetPicker
+                        label={t('painter.gameA')}
+                        games={games}
+                        gameId={gameAId}
+                        onGameChange={handleGameAChange}
+                        tilesetId={tilesetAId}
+                        onTilesetChange={setTilesetAId}
+                        selectGameLabel={t('painter.selectGame')}
+                        selectTilesetLabel={t('painter.selectTileset')}
+                      />
+                    </div>
+                    <div className="ide-row">
+                      <GameTilesetPicker
+                        label={t('painter.gameB')}
+                        games={games}
+                        gameId={gameBId}
+                        onGameChange={handleGameBChange}
+                        tilesetId={tilesetBId}
+                        onTilesetChange={setTilesetBId}
+                        selectGameLabel={t('painter.selectGame')}
+                        selectTilesetLabel={t('painter.selectTileset')}
+                      />
+                    </div>
+                    <p className="ide-welcome-prerequisite" role="status">
+                      {games.length === 0
+                        ? t('painter.welcome.noCatalog')
+                        : tilesetAId === undefined || tilesetBId === undefined
+                          ? t('painter.welcome.chooseTilesets')
+                          : t('painter.welcome.ready')}
+                    </p>
+                    {games.length === 0 && (
+                      <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
+                    )}
+                    <div className="ide-row">
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={
+                          tilesetAId === undefined ||
+                          tilesetBId === undefined ||
+                          !newMapResult.valid
+                        }
+                        onClick={handleCreateMap}
+                      >
+                        {t('painter.createMap')}
+                      </button>
+                    </div>
+                  </section>
                   {statusFeedback.message && <p className="ide-hint">{statusFeedback.message}</p>}
                 </div>
               </div>
@@ -1712,14 +1807,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           selectTilesetLabel={t('painter.selectTileset')}
                         />
                       </div>
-                          <button
-                            type="button"
-                            disabled={
-                              tilesetAId === undefined ||
-                              tilesetBId === undefined ||
-                              !newMapResult.valid
-                            }
-                            onClick={handleCreateMap}
+                      <button
+                        type="button"
+                        disabled={
+                          tilesetAId === undefined ||
+                          tilesetBId === undefined ||
+                          !newMapResult.valid
+                        }
+                        onClick={handleCreateMap}
                       >
                         {t('painter.createMap')}
                       </button>
@@ -1730,431 +1825,428 @@ export function PainterPanel({ t }: PainterPanelProps) {
                 {inspectorTab === 'procgen' && (
                   <section className="ide-section">
                     <h3 className="ide-section-title">{t('painter.procgen')}</h3>
-                      <p className="ide-hint">{t('painter.procgen.hint')}</p>
+                    <p className="ide-hint">{t('painter.procgen.hint')}</p>
+                    <label>
+                      {t('painter.procgen.preset')}
+                      <select
+                        value={procgenPreset}
+                        onChange={(event) =>
+                          setProcgenPreset(event.target.value as ProcgenPresetId)
+                        }
+                      >
+                        {PROCGEN_PRESETS.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {t(`painter.procgen.preset.${p.id}`)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="ide-row">
                       <label>
-                        {t('painter.procgen.preset')}
-                        <select
-                          value={procgenPreset}
-                          onChange={(event) =>
-                            setProcgenPreset(event.target.value as ProcgenPresetId)
-                          }
-                        >
-                          {PROCGEN_PRESETS.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {t(`painter.procgen.preset.${p.id}`)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="ide-row">
-                        <label>
-                          {t('painter.procgen.seed')}
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={procgenSeed}
-                            onChange={(event) => {
-                              const n = Number.parseInt(event.target.value, 10);
-                              if (Number.isFinite(n)) setProcgenSeed(n >>> 0);
-                            }}
-                          />
-                        </label>
-                        <button type="button" onClick={() => setProcgenSeed(randomProcgenSeed())}>
-                          {t('painter.procgen.randomizeSeed')}
-                        </button>
-                      </div>
-                          {procgenSeedHistory.length > 0 && (
-                            <fieldset className="ide-row ide-seed-history">
-                        <legend className="sr-only">{t('painter.procgen.seedHistory')}</legend>
-                              <span className="ide-hint">{t('painter.procgen.seedHistory')}:</span>
-                          {procgenSeedHistory.map((s) => (
-                            <button
-                              key={s}
-                              type="button"
-                              className={
-                                procgenSeed === s
-                                  ? 'ide-seed-history-btn ide-seed-history-btn-active'
-                                  : 'ide-seed-history-btn'
-                              }
-                              title={formatTemplate(t('painter.procgen.seedHistoryUse'), {
-                                seed: s,
-                              })}
-                              onClick={() => setProcgenSeed(s >>> 0)}
-                            >
-                              {s}
-                            </button>
-                          ))}
-                        </fieldset>
-                      )}
-                      <label>
-                        {t('painter.procgen.furnitureDensity')}
+                        {t('painter.procgen.seed')}
                         <input
-                          type="range"
+                          type="number"
                           min={0}
-                          max={100}
                           step={1}
-                          value={furnitureDensityToPercent(procgenFurnitureDensity)}
+                          value={procgenSeed}
                           onChange={(event) => {
                             const n = Number.parseInt(event.target.value, 10);
-                            if (Number.isFinite(n)) {
-                              setProcgenFurnitureDensity(furnitureDensityFromPercent(n));
-                            }
+                            if (Number.isFinite(n)) setProcgenSeed(n >>> 0);
                           }}
-                          aria-valuetext={formatTemplate(
-                            t('painter.procgen.furnitureDensityValue'),
-                            {
-                              percent: furnitureDensityToPercent(procgenFurnitureDensity),
-                            },
-                          )}
                         />
                       </label>
-                      <p className="ide-hint">
-                        {formatTemplate(t('painter.procgen.furnitureDensityValue'), {
+                      <button type="button" onClick={() => setProcgenSeed(randomProcgenSeed())}>
+                        {t('painter.procgen.randomizeSeed')}
+                      </button>
+                    </div>
+                    {procgenSeedHistory.length > 0 && (
+                      <fieldset className="ide-row ide-seed-history">
+                        <legend className="sr-only">{t('painter.procgen.seedHistory')}</legend>
+                        <span className="ide-hint">{t('painter.procgen.seedHistory')}:</span>
+                        {procgenSeedHistory.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            className={
+                              procgenSeed === s
+                                ? 'ide-seed-history-btn ide-seed-history-btn-active'
+                                : 'ide-seed-history-btn'
+                            }
+                            title={formatTemplate(t('painter.procgen.seedHistoryUse'), {
+                              seed: s,
+                            })}
+                            onClick={() => setProcgenSeed(s >>> 0)}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </fieldset>
+                    )}
+                    <label>
+                      {t('painter.procgen.furnitureDensity')}
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={furnitureDensityToPercent(procgenFurnitureDensity)}
+                        onChange={(event) => {
+                          const n = Number.parseInt(event.target.value, 10);
+                          if (Number.isFinite(n)) {
+                            setProcgenFurnitureDensity(furnitureDensityFromPercent(n));
+                          }
+                        }}
+                        aria-valuetext={formatTemplate(t('painter.procgen.furnitureDensityValue'), {
                           percent: furnitureDensityToPercent(procgenFurnitureDensity),
-                        })}{' '}
-                        {t('painter.procgen.furnitureDensityHint')}
-                      </p>
-                      <div className="ide-row">
-                        <label>
-                          {t('painter.procgen.wallTile')}
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={procgenWallTileId}
-                            onChange={(event) => {
-                              const n = Number.parseInt(event.target.value, 10);
-                              if (Number.isFinite(n)) setProcgenWallTileId(Math.max(0, n));
-                            }}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          title={t('painter.procgen.wallFromBrushHint')}
-                          disabled={painterState.fillTileId <= 0}
-                          onClick={() => {
-                            const fill = painterState.fillTileId;
-                            if (fill > 0) setProcgenWallTileId(fill);
+                        })}
+                      />
+                    </label>
+                    <p className="ide-hint">
+                      {formatTemplate(t('painter.procgen.furnitureDensityValue'), {
+                        percent: furnitureDensityToPercent(procgenFurnitureDensity),
+                      })}{' '}
+                      {t('painter.procgen.furnitureDensityHint')}
+                    </p>
+                    <div className="ide-row">
+                      <label>
+                        {t('painter.procgen.wallTile')}
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={procgenWallTileId}
+                          onChange={(event) => {
+                            const n = Number.parseInt(event.target.value, 10);
+                            if (Number.isFinite(n)) setProcgenWallTileId(Math.max(0, n));
                           }}
-                        >
-                          {t('painter.procgen.wallFromBrush')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setProcgenWallTileId(0)}
-                          title={t('painter.procgen.wallAutoHint')}
-                        >
-                          {t('painter.procgen.wallAuto')}
-                        </button>
-                      </div>
-                      <p className="ide-hint">
-                        {procgenWallTileId > 0
-                          ? formatTemplate(t('painter.procgen.wallTileActive'), {
-                              id: procgenWallTileId,
-                            })
-                          : t('painter.procgen.wallTileAuto')}
-                      </p>
-                      <div className="ide-row">
-                        <label>
-                          {t('painter.procgen.doorTile')}
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={procgenDoorTileId}
-                            onChange={(event) => {
-                              const n = Number.parseInt(event.target.value, 10);
-                              if (Number.isFinite(n)) setProcgenDoorTileId(Math.max(0, n));
-                            }}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          title={t('painter.procgen.doorFromBrushHint')}
-                          disabled={painterState.fillTileId <= 0}
-                          onClick={() => {
-                            const fill = painterState.fillTileId;
-                            if (fill > 0) setProcgenDoorTileId(fill);
-                          }}
-                        >
-                          {t('painter.procgen.doorFromBrush')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setProcgenDoorTileId(0)}
-                          title={t('painter.procgen.doorAutoHint')}
-                        >
-                          {t('painter.procgen.doorAuto')}
-                        </button>
-                      </div>
-                      <p className="ide-hint">
-                        {procgenDoorTileId > 0
-                          ? formatTemplate(t('painter.procgen.doorTileActive'), {
-                              id: procgenDoorTileId,
-                            })
-                          : t('painter.procgen.doorTileAuto')}
-                      </p>
-                      <div className="ide-row">
-                        <label>
-                          {t('painter.procgen.furnitureTile')}
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={procgenFurnitureTileId}
-                            onChange={(event) => {
-                              const n = Number.parseInt(event.target.value, 10);
-                              if (Number.isFinite(n)) setProcgenFurnitureTileId(Math.max(0, n));
-                            }}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          title={t('painter.procgen.furnitureFromBrushHint')}
-                          disabled={painterState.fillTileId <= 0}
-                          onClick={() => {
-                            const fill = painterState.fillTileId;
-                            if (fill > 0) setProcgenFurnitureTileId(fill);
-                          }}
-                        >
-                          {t('painter.procgen.furnitureFromBrush')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setProcgenFurnitureTileId(0)}
-                          title={t('painter.procgen.furnitureAutoHint')}
-                        >
-                          {t('painter.procgen.furnitureAuto')}
-                        </button>
-                      </div>
-                      <p className="ide-hint">
-                        {procgenFurnitureTileId > 0
-                          ? formatTemplate(t('painter.procgen.furnitureTileActive'), {
-                              id: procgenFurnitureTileId,
-                            })
-                          : t('painter.procgen.furnitureTileAuto')}
-                      </p>
+                        />
+                      </label>
                       <button
                         type="button"
-                        className="primary"
-                        onClick={() => void handleGenerateDungeon()}
+                        title={t('painter.procgen.wallFromBrushHint')}
+                        disabled={painterState.fillTileId <= 0}
+                        onClick={() => {
+                          const fill = painterState.fillTileId;
+                          if (fill > 0) setProcgenWallTileId(fill);
+                        }}
                       >
-                        {t('painter.procgen.generate')}
+                        {t('painter.procgen.wallFromBrush')}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setProcgenWallTileId(0)}
+                        title={t('painter.procgen.wallAutoHint')}
+                      >
+                        {t('painter.procgen.wallAuto')}
+                      </button>
+                    </div>
+                    <p className="ide-hint">
+                      {procgenWallTileId > 0
+                        ? formatTemplate(t('painter.procgen.wallTileActive'), {
+                            id: procgenWallTileId,
+                          })
+                        : t('painter.procgen.wallTileAuto')}
+                    </p>
+                    <div className="ide-row">
+                      <label>
+                        {t('painter.procgen.doorTile')}
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={procgenDoorTileId}
+                          onChange={(event) => {
+                            const n = Number.parseInt(event.target.value, 10);
+                            if (Number.isFinite(n)) setProcgenDoorTileId(Math.max(0, n));
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        title={t('painter.procgen.doorFromBrushHint')}
+                        disabled={painterState.fillTileId <= 0}
+                        onClick={() => {
+                          const fill = painterState.fillTileId;
+                          if (fill > 0) setProcgenDoorTileId(fill);
+                        }}
+                      >
+                        {t('painter.procgen.doorFromBrush')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProcgenDoorTileId(0)}
+                        title={t('painter.procgen.doorAutoHint')}
+                      >
+                        {t('painter.procgen.doorAuto')}
+                      </button>
+                    </div>
+                    <p className="ide-hint">
+                      {procgenDoorTileId > 0
+                        ? formatTemplate(t('painter.procgen.doorTileActive'), {
+                            id: procgenDoorTileId,
+                          })
+                        : t('painter.procgen.doorTileAuto')}
+                    </p>
+                    <div className="ide-row">
+                      <label>
+                        {t('painter.procgen.furnitureTile')}
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={procgenFurnitureTileId}
+                          onChange={(event) => {
+                            const n = Number.parseInt(event.target.value, 10);
+                            if (Number.isFinite(n)) setProcgenFurnitureTileId(Math.max(0, n));
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        title={t('painter.procgen.furnitureFromBrushHint')}
+                        disabled={painterState.fillTileId <= 0}
+                        onClick={() => {
+                          const fill = painterState.fillTileId;
+                          if (fill > 0) setProcgenFurnitureTileId(fill);
+                        }}
+                      >
+                        {t('painter.procgen.furnitureFromBrush')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProcgenFurnitureTileId(0)}
+                        title={t('painter.procgen.furnitureAutoHint')}
+                      >
+                        {t('painter.procgen.furnitureAuto')}
+                      </button>
+                    </div>
+                    <p className="ide-hint">
+                      {procgenFurnitureTileId > 0
+                        ? formatTemplate(t('painter.procgen.furnitureTileActive'), {
+                            id: procgenFurnitureTileId,
+                          })
+                        : t('painter.procgen.furnitureTileAuto')}
+                    </p>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => void handleGenerateDungeon()}
+                    >
+                      {t('painter.procgen.generate')}
+                    </button>
                   </section>
                 )}
 
                 {inspectorTab === 'community' && (
                   <section className="ide-section">
                     <h3 className="ide-section-title">{t('painter.community')}</h3>
-                      <p className="ide-hint">{t('painter.community.hint')}</p>
-                      <p
-                        className={
-                          communityStatus.kind === 'off'
-                            ? 'ide-status-badge ide-status-badge-muted'
-                            : communityStatus.kind === 'queued'
-                              ? 'ide-status-badge ide-status-badge-ok'
-                              : 'ide-status-badge'
-                        }
-                        role="status"
-                      >
-                        {communityStatus.kind === 'off'
-                          ? t('painter.community.statusOff')
-                          : communityStatus.kind === 'ready'
-                            ? t('painter.community.statusReady')
-                            : formatTemplate(t('painter.community.statusQueued'), {
-                                count: communityStatus.queueLength,
-                                name: communityStatus.lastMapName ?? '',
-                              })}
-                      </p>
-                      {communityQueue.length === 0 ? (
-                        <div className="ide-empty" role="status">
+                    <p className="ide-hint">{t('painter.community.hint')}</p>
+                    <p
+                      className={
+                        communityStatus.kind === 'off'
+                          ? 'ide-status-badge ide-status-badge-muted'
+                          : communityStatus.kind === 'queued'
+                            ? 'ide-status-badge ide-status-badge-ok'
+                            : 'ide-status-badge'
+                      }
+                      role="status"
+                    >
+                      {communityStatus.kind === 'off'
+                        ? t('painter.community.statusOff')
+                        : communityStatus.kind === 'ready'
+                          ? t('painter.community.statusReady')
+                          : formatTemplate(t('painter.community.statusQueued'), {
+                              count: communityStatus.queueLength,
+                              name: communityStatus.lastMapName ?? '',
+                            })}
+                    </p>
+                    {communityQueue.length === 0 ? (
+                      <div className="ide-empty" role="status">
                         <p className="ide-empty-title">{t('painter.community.queueEmptyTitle')}</p>
-                          <p className="ide-hint">{t('painter.community.queueEmptyBody')}</p>
-                        </div>
-                      ) : (
-                        <>
-                          <ul className="ide-list" aria-label={t('painter.community.queueList')}>
-                            {communityQueue.map((job) => (
-                              <li key={`${job.mapId}:${job.at}`}>
-                                <span>
-                                  {formatTemplate(t('painter.community.queueItem'), {
-                                    name: job.mapName,
-                                    id: formatCommunityShareMapId(job.mapId),
-                                    version: String(job.version),
-                                    license: t(`painter.community.license.${job.licenseTag}`),
-                                    tiles: String(communityShareTileCount(job.tileObjectShas)),
-                                    at: formatCommunityShareAt(job.at),
-                                  })}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const payload = serializeCommunityShareQueue([job]);
-                                    void navigator.clipboard?.writeText(payload).then(
-                                      () =>
-                                        reportStatus({
-                                          message: formatTemplate(t('painter.community.jobCopied'), {
-                                            name: job.mapName,
-                                          }),
-                                          severity: 'success',
+                        <p className="ide-hint">{t('painter.community.queueEmptyBody')}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <ul className="ide-list" aria-label={t('painter.community.queueList')}>
+                          {communityQueue.map((job) => (
+                            <li key={`${job.mapId}:${job.at}`}>
+                              <span>
+                                {formatTemplate(t('painter.community.queueItem'), {
+                                  name: job.mapName,
+                                  id: formatCommunityShareMapId(job.mapId),
+                                  version: String(job.version),
+                                  license: t(`painter.community.license.${job.licenseTag}`),
+                                  tiles: String(communityShareTileCount(job.tileObjectShas)),
+                                  at: formatCommunityShareAt(job.at),
+                                })}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const payload = serializeCommunityShareQueue([job]);
+                                  void navigator.clipboard?.writeText(payload).then(
+                                    () =>
+                                      reportStatus({
+                                        message: formatTemplate(t('painter.community.jobCopied'), {
+                                          name: job.mapName,
                                         }),
-                                      () =>
-                                        reportStatus({
-                                          message: t('painter.community.queueCopyFailed'),
-                                          severity: 'error',
-                                        }),
-                                    );
-                                  }}
-                                >
-                                  {t('painter.community.copyJob')}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setCommunityQueue(
-                                      removeCommunityShareQueueJob(job.mapId, job.at),
-                                    );
-                                    reportStatus({
+                                        severity: 'success',
+                                      }),
+                                    () =>
+                                      reportStatus({
+                                        message: t('painter.community.queueCopyFailed'),
+                                        severity: 'error',
+                                      }),
+                                  );
+                                }}
+                              >
+                                {t('painter.community.copyJob')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCommunityQueue(
+                                    removeCommunityShareQueueJob(job.mapId, job.at),
+                                  );
+                                  reportStatus({
                                     message: formatTemplate(
                                       t('painter.community.queueItemRemoved'),
                                       {
                                         name: job.mapName,
                                       },
                                     ),
-                                      severity: 'info',
-                                    });
-                                  }}
-                                >
-                                  {t('painter.community.removeJob')}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                          <p className="ide-hint" role="status">
-                            {formatTemplate(t('painter.community.queueTileTotal'), {
-                              tiles: String(communityShareQueueTileTotal(communityQueue)),
-                            })}
-                          </p>
-                          <p className="ide-hint">
-                            {communityShareQueueLicenseCounts(communityQueue)
-                              .map(({ tag, count }) =>
-                                formatTemplate(t('painter.community.queueLicenseCount'), {
-                                  count: String(count),
-                                  license: t(`painter.community.license.${tag}`),
-                                }),
-                              )
-                              .join(' · ')}
-                          </p>
-                        </>
-                      )}
-                      <div className="ide-row">
-                        <button
-                          type="button"
-                          disabled={communityQueue.length === 0}
-                          onClick={() => {
-                            const payload = serializeCommunityShareQueue(communityQueue);
-                            void navigator.clipboard?.writeText(payload).then(
-                              () =>
-                                  reportStatus({
-                                    message: t('painter.community.queueCopied'),
-                                    severity: 'success',
-                                  }),
-                              () =>
+                                    severity: 'info',
+                                  });
+                                }}
+                              >
+                                {t('painter.community.removeJob')}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="ide-hint" role="status">
+                          {formatTemplate(t('painter.community.queueTileTotal'), {
+                            tiles: String(communityShareQueueTileTotal(communityQueue)),
+                          })}
+                        </p>
+                        <p className="ide-hint">
+                          {communityShareQueueLicenseCounts(communityQueue)
+                            .map(({ tag, count }) =>
+                              formatTemplate(t('painter.community.queueLicenseCount'), {
+                                count: String(count),
+                                license: t(`painter.community.license.${tag}`),
+                              }),
+                            )
+                            .join(' · ')}
+                        </p>
+                      </>
+                    )}
+                    <div className="ide-row">
+                      <button
+                        type="button"
+                        disabled={communityQueue.length === 0}
+                        onClick={() => {
+                          const payload = serializeCommunityShareQueue(communityQueue);
+                          void navigator.clipboard?.writeText(payload).then(
+                            () =>
+                              reportStatus({
+                                message: t('painter.community.queueCopied'),
+                                severity: 'success',
+                              }),
+                            () =>
+                              reportStatus({
+                                message: t('painter.community.queueCopyFailed'),
+                                severity: 'error',
+                              }),
+                          );
+                        }}
+                      >
+                        {t('painter.community.copyQueue')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const clipboard = navigator.clipboard;
+                          if (!clipboard?.readText) {
+                            reportStatus({
+                              message: t('painter.community.queuePasteFailed'),
+                              severity: 'error',
+                            });
+                            return;
+                          }
+                          void clipboard.readText().then(
+                            (raw) => {
+                              const parsed = parseCommunityShareQueueJson(raw);
+                              if (!parsed.ok) {
                                 reportStatus({
-                                  message: t('painter.community.queueCopyFailed'),
+                                  message: t(`painter.community.queuePaste.${parsed.reason}`),
                                   severity: 'error',
+                                });
+                                return;
+                              }
+                              setCommunityQueue(replaceCommunityShareQueue(parsed.jobs));
+                              reportStatus({
+                                message: formatTemplate(t('painter.community.queuePasted'), {
+                                  count: parsed.jobs.length,
                                 }),
-                            );
-                          }}
-                        >
-                          {t('painter.community.copyQueue')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const clipboard = navigator.clipboard;
-                            if (!clipboard?.readText) {
+                                severity: 'success',
+                              });
+                            },
+                            () =>
                               reportStatus({
                                 message: t('painter.community.queuePasteFailed'),
                                 severity: 'error',
-                              });
-                              return;
-                            }
-                            void clipboard.readText().then(
-                              (raw) => {
-                                const parsed = parseCommunityShareQueueJson(raw);
-                                if (!parsed.ok) {
-                                  reportStatus({
-                                    message: t(`painter.community.queuePaste.${parsed.reason}`),
-                                    severity: 'error',
-                                  });
-                                  return;
-                                }
-                                setCommunityQueue(replaceCommunityShareQueue(parsed.jobs));
-                                reportStatus({
-                                  message: formatTemplate(t('painter.community.queuePasted'), {
-                                    count: parsed.jobs.length,
-                                  }),
-                                  severity: 'success',
-                                });
-                              },
-                              () =>
-                                reportStatus({
-                                  message: t('painter.community.queuePasteFailed'),
-                                  severity: 'error',
-                                }),
-                            );
-                          }}
-                        >
-                          {t('painter.community.pasteQueue')}
-                        </button>
-                        {communityQueue.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCommunityQueue(clearCommunityShareQueue());
-                              reportStatus({
+                              }),
+                          );
+                        }}
+                      >
+                        {t('painter.community.pasteQueue')}
+                      </button>
+                      {communityQueue.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCommunityQueue(clearCommunityShareQueue());
+                            reportStatus({
                               message: t('painter.community.queueCleared'),
                               severity: 'info',
                             });
-                            }}
-                          >
-                            {t('painter.community.clearQueue')}
-                          </button>
-                        )}
-                      </div>
-                      <label className="ide-check">
-                        <input
-                          type="checkbox"
-                          checked={community.shareOnSave}
-                          onChange={(event) => {
-                            const next = {
-                              ...community,
-                              shareOnSave: event.target.checked,
-                            };
-                            setCommunity(next);
-                            saveCommunitySettings(next);
                           }}
-                        />
-                        {t('painter.community.shareOnSave')}
-                      </label>
-                      <label className="ide-check">
-                        <input
-                          type="checkbox"
-                          checked={community.allowImportedAssets}
-                          onChange={(event) => {
-                            const next = {
-                              ...community,
-                              allowImportedAssets: event.target.checked,
-                            };
-                            setCommunity(next);
-                            saveCommunitySettings(next);
-                          }}
-                        />
-                        {t('painter.community.allowImported')}
-                      </label>
+                        >
+                          {t('painter.community.clearQueue')}
+                        </button>
+                      )}
+                    </div>
+                    <label className="ide-check">
+                      <input
+                        type="checkbox"
+                        checked={community.shareOnSave}
+                        onChange={(event) => {
+                          const next = {
+                            ...community,
+                            shareOnSave: event.target.checked,
+                          };
+                          setCommunity(next);
+                          saveCommunitySettings(next);
+                        }}
+                      />
+                      {t('painter.community.shareOnSave')}
+                    </label>
+                    <label className="ide-check">
+                      <input
+                        type="checkbox"
+                        checked={community.allowImportedAssets}
+                        onChange={(event) => {
+                          const next = {
+                            ...community,
+                            allowImportedAssets: event.target.checked,
+                          };
+                          setCommunity(next);
+                          saveCommunitySettings(next);
+                        }}
+                      />
+                      {t('painter.community.allowImported')}
+                    </label>
                   </section>
                 )}
 
@@ -3156,23 +3248,16 @@ export function PainterPanel({ t }: PainterPanelProps) {
         </aside>
       </div>
 
-      {statusFeedback.toast && (
-        <div
-          key={statusFeedback.toast.id}
-          className={`ide-toast ide-toast-${statusFeedback.toast.severity}`}
-          role={statusFeedback.toast.severity === 'error' ? 'alert' : 'status'}
-          aria-live={statusFeedback.toast.severity === 'error' ? 'assertive' : 'polite'}
-          aria-atomic="true"
-        >
-          {statusFeedback.toast.message}
-        </div>
-      )}
+      {toastView}
 
       <footer className="ide-status">
         {mapReady && painterState ? (
           <span>
-            {t(`painter.tool.${painterState.tool}`)} · L{painterState.activeLayer} · F
-            {painterState.activeFloor}
+            {formatTemplate(t('painter.status.context'), {
+              tool: t(statusToolKey(painterState.tool, painterState.fillTileId)),
+              layer: t(statusLayerNameKey(painterState.activeLayer)),
+              floor: activeFloorDisplayName,
+            })}
             {hoverOverlay &&
               ` · ${formatTemplate(t('painter.status.hover'), {
                 x: hoverOverlay.x,
@@ -3186,6 +3271,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
           painterState &&
           (eventsValidationError !== null ? (
             <span className="ide-status-err">{t('painter.status.eventsInvalid')}</span>
+          ) : docDirty ? (
+            <span className="ide-status-warn">{t('painter.status.unsaved')}</span>
           ) : (
             <span className="ide-status-ok">{t('painter.status.ready')}</span>
           ))}
