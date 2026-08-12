@@ -6,6 +6,8 @@
 mod catalog_ipc;
 mod import_catalog;
 mod import_scan;
+#[cfg(test)]
+mod real_game_test;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
