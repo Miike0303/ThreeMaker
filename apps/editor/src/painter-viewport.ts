@@ -463,6 +463,20 @@ export class PainterViewport {
     this.recomputePropOverlay();
   }
 
+  undoProp(): void {
+    if (!this.state) return;
+    this.state = painter.undoProp(this.state).state;
+    this.emitState();
+    this.recomputePropOverlay();
+  }
+
+  redoProp(): void {
+    if (!this.state) return;
+    this.state = painter.redoProp(this.state).state;
+    this.emitState();
+    this.recomputePropOverlay();
+  }
+
   /** Sets the selected NPC sprite sheet sha for the npc tool (c1a follow-up). */
   setActiveNpcSpriteObject(object: string | undefined): void {
     if (!this.state) return;
@@ -507,6 +521,20 @@ export class PainterViewport {
     this.recomputeNpcOverlay();
   }
 
+  undoNpc(): void {
+    if (!this.state) return;
+    this.state = painter.undoNpc(this.state).state;
+    this.emitState();
+    this.recomputeNpcOverlay();
+  }
+
+  redoNpc(): void {
+    if (!this.state) return;
+    this.state = painter.redoNpc(this.state).state;
+    this.emitState();
+    this.recomputeNpcOverlay();
+  }
+
   setActiveTriggerOn(on: 'enter' | 'interact'): void {
     if (!this.state) return;
     this.state = painter.setActiveTriggerOn(this.state, on);
@@ -535,6 +563,20 @@ export class PainterViewport {
   placeTriggerAtTile(x: number, y: number): void {
     if (!this.state) return;
     this.state = painter.placeTriggerAtTile(this.state, { x, y });
+    this.emitState();
+    this.recomputeTriggerOverlay();
+  }
+
+  undoTrigger(): void {
+    if (!this.state) return;
+    this.state = painter.undoTrigger(this.state).state;
+    this.emitState();
+    this.recomputeTriggerOverlay();
+  }
+
+  redoTrigger(): void {
+    if (!this.state) return;
+    this.state = painter.redoTrigger(this.state).state;
     this.emitState();
     this.recomputeTriggerOverlay();
   }

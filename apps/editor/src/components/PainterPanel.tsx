@@ -334,7 +334,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
     [community, communityQueue],
   );
 
-  const activeFloorId = painterState?.floors[painterState.activeFloor]?.id;
+  const activeFloorState = painterState?.floors[painterState.activeFloor];
+  const activeFloorId = activeFloorState?.id;
   const floorRooms = useMemo(
     () => roomsOnFloor(painterState?.rooms ?? [], activeFloorId),
     [painterState?.rooms, activeFloorId],
@@ -2196,6 +2197,22 @@ export function PainterPanel({ t }: PainterPanelProps) {
                   <>
                     <section className="ide-section">
                       <h3 className="ide-section-title">{t('painter.props')}</h3>
+                      <div className="ide-row">
+                        <button
+                          type="button"
+                          disabled={!activeFloorState?.propCommandStack.undoStack.length}
+                          onClick={() => viewportRef.current?.undoProp()}
+                        >
+                          {t('painter.props.undo')}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!activeFloorState?.propCommandStack.redoStack.length}
+                          onClick={() => viewportRef.current?.redoProp()}
+                        >
+                          {t('painter.props.redo')}
+                        </button>
+                      </div>
                       <label>
                         {t('painter.props.pickGlb')}
                         <input
@@ -2348,6 +2365,22 @@ export function PainterPanel({ t }: PainterPanelProps) {
 
                     <section className="ide-section">
                       <h3 className="ide-section-title">{t('painter.npcs')}</h3>
+                      <div className="ide-row">
+                        <button
+                          type="button"
+                          disabled={!activeFloorState?.npcCommandStack.undoStack.length}
+                          onClick={() => viewportRef.current?.undoNpc()}
+                        >
+                          {t('painter.npcs.undo')}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!activeFloorState?.npcCommandStack.redoStack.length}
+                          onClick={() => viewportRef.current?.redoNpc()}
+                        >
+                          {t('painter.npcs.redo')}
+                        </button>
+                      </div>
                       <p className="ide-hint">{t('painter.npcs.eventsHint')}</p>
                       {painterState.eventKeys.length === 0 && (
                         <p className="ide-hint">{t('painter.npcs.noEventsHint')}</p>
@@ -2520,6 +2553,22 @@ export function PainterPanel({ t }: PainterPanelProps) {
 
                     <section className="ide-section">
                       <h3 className="ide-section-title">{t('painter.triggers')}</h3>
+                      <div className="ide-row">
+                        <button
+                          type="button"
+                          disabled={!activeFloorState?.triggerCommandStack.undoStack.length}
+                          onClick={() => viewportRef.current?.undoTrigger()}
+                        >
+                          {t('painter.triggers.undo')}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!activeFloorState?.triggerCommandStack.redoStack.length}
+                          onClick={() => viewportRef.current?.redoTrigger()}
+                        >
+                          {t('painter.triggers.redo')}
+                        </button>
+                      </div>
                       <p className="ide-hint">{t('painter.triggers.eventsHint')}</p>
                       {painterState.eventKeys.length === 0 && (
                         <p className="ide-hint">{t('painter.triggers.noEventsHint')}</p>
