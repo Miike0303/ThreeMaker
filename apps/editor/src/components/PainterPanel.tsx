@@ -128,18 +128,45 @@ export interface PainterPanelProps {
   readonly t: (key: string) => string;
 }
 
-const TOOLS: readonly { readonly id: ToolId; readonly shortcut: string }[] = [
-  { id: 'brush', shortcut: 'B' },
-  { id: 'box-fill', shortcut: 'U' },
-  { id: 'flood-fill', shortcut: 'G' },
-  { id: 'eyedropper', shortcut: 'I' },
-  { id: 'room-box', shortcut: 'R' },
-  { id: 'stair-link', shortcut: 'S' },
-  { id: 'spawn-point', shortcut: 'P' },
-  { id: 'prop', shortcut: 'O' },
-  { id: 'npc', shortcut: 'N' },
-  { id: 'trigger', shortcut: 'T' },
-  { id: 'light', shortcut: 'L' },
+type ToolbarToolId = ToolId | 'eraser';
+
+interface ToolbarTool {
+  readonly id: ToolbarToolId;
+  readonly shortcut?: string;
+  readonly glyph: string;
+}
+
+const TOOL_GROUPS: readonly {
+  readonly id: 'paint' | 'structure' | 'entities';
+  readonly tools: readonly ToolbarTool[];
+}[] = [
+  {
+    id: 'paint',
+    tools: [
+      { id: 'brush', shortcut: 'B', glyph: '✎' },
+      { id: 'box-fill', shortcut: 'U', glyph: '▣' },
+      { id: 'flood-fill', shortcut: 'G', glyph: '▨' },
+      { id: 'eyedropper', shortcut: 'I', glyph: '◉' },
+      { id: 'eraser', glyph: '⌫' },
+    ],
+  },
+  {
+    id: 'structure',
+    tools: [
+      { id: 'room-box', shortcut: 'R', glyph: '▱' },
+      { id: 'stair-link', shortcut: 'S', glyph: '↕' },
+      { id: 'spawn-point', shortcut: 'P', glyph: '★' },
+    ],
+  },
+  {
+    id: 'entities',
+    tools: [
+      { id: 'prop', shortcut: 'O', glyph: '◆' },
+      { id: 'npc', shortcut: 'N', glyph: '☺' },
+      { id: 'trigger', shortcut: 'T', glyph: '◎' },
+      { id: 'light', shortcut: 'L', glyph: '☀' },
+    ],
+  },
 ];
 
 const LIGHT_KINDS: readonly LightDocument['kind'][] = ['point', 'spot'];
@@ -704,20 +731,6 @@ export function PainterPanel({ t }: PainterPanelProps) {
     }
   }, [t, characterSprites, reportStatus]);
 
-  const TOOL_GLYPHS: Readonly<Record<ToolId, string>> = {
-    brush: 'B',
-    'box-fill': 'U',
-    'flood-fill': 'G',
-    eyedropper: 'I',
-    'room-box': 'R',
-    'stair-link': 'S',
-    'spawn-point': 'P',
-    prop: 'O',
-    npc: 'N',
-    trigger: 'T',
-    light: 'L',
-  };
-
   const INSPECTOR_TABS = INSPECTOR_TAB_IDS;
 
   return (
@@ -888,24 +901,53 @@ export function PainterPanel({ t }: PainterPanelProps) {
       </div>
 
       <div className="ide-body">
-        <aside className="ide-tool-rail" aria-label={t('painter.tools')}>
-          {TOOLS.map((tool) => {
-            const active = mapReady && painterState?.tool === tool.id;
-            return (
-              <button
-                key={tool.id}
-                type="button"
-                disabled={!mapReady}
-                className={`ide-tool-btn${active ? ' ide-tool-btn-active' : ''}`}
-                title={`${t(`painter.tool.${tool.id}`)} (${tool.shortcut})`}
-                onClick={() => viewportRef.current?.setTool(tool.id)}
-              >
-                <span className="ide-tool-glyph">{TOOL_GLYPHS[tool.id]}</span>
-                <span className="ide-tool-key">{tool.shortcut}</span>
-              </button>
-            );
-          })}
-        </aside>
+            <aside className="ide-tool-rail" aria-label={t('painter.tools')}>
+              {TOOL_GROUPS.map((group) => (
+                <div
+                  key={group.id}
+                  className="ide-tool-group"
+                  role="group"
+                  aria-label={t(`painter.toolGroup.${group.id}`)}
+                >
+                  {group.tools.map((tool) => {
+                    const active =
+                      mapReady &&
+                      (tool.id === 'eraser'
+                        ? painterState?.tool === 'brush' && painterState.fillTileId === 0
+                        : painterState?.tool === tool.id &&
+                          (tool.id !== 'brush' || painterState.fillTileId !== 0));
+                    const label = t(`painter.tool.${tool.id}`);
+                    const accessibleLabel = tool.shortcut
+                      ? `${label} (${tool.shortcut})`
+                      : label;
+                    return (
+                      <button
+                        key={tool.id}
+                        type="button"
+                        disabled={!mapReady}
+                        aria-label={accessibleLabel}
+                        aria-pressed={active}
+                        className={`ide-tool-btn${active ? ' ide-tool-btn-active' : ''}`}
+                        title={accessibleLabel}
+                        onClick={() => {
+                          if (tool.id === 'eraser') {
+                            viewportRef.current?.setFillTileId(0);
+                            viewportRef.current?.setTool('brush');
+                          } else {
+                            viewportRef.current?.setTool(tool.id);
+                          }
+                        }}
+                      >
+                        <span className="ide-tool-glyph" aria-hidden="true">
+                          {tool.glyph}
+                        </span>
+                        {tool.shortcut && <span className="ide-tool-key">{tool.shortcut}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </aside>
 
         <div className="ide-center">
           <div className="ide-viewport-stage">

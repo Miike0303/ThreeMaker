@@ -461,6 +461,18 @@ label {
   overflow-y: auto;
 }
 
+.ide-tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ide-tool-group + .ide-tool-group {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--tm-border);
+}
+
 .ide-tool-btn {
   width: 100%;
   aspect-ratio: 1;
@@ -491,8 +503,9 @@ label {
 }
 
 .ide-tool-glyph {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
+  line-height: 1;
   font-family: var(--tm-mono);
   letter-spacing: -0.02em;
 }
