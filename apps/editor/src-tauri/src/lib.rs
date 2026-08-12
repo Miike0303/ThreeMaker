@@ -4,6 +4,7 @@
 // startup (see catalog_ipc.rs's module doc for the design rationale).
 
 mod catalog_ipc;
+mod import_scan;
 
 use std::sync::{Mutex, MutexGuard};
 
