@@ -1,8 +1,8 @@
 {
   "name": "Español",
   "strings": {
-    "app.title": "ThreeMaker",
-    "app.brand.subtitle": "Editor",
+    "app.title": "Three Maker",
+    "app.brand.subtitle": "HD-2D",
     "app.workspace": "Espacio de trabajo",
     "app.workspace.map": "Mapa",
     "app.workspace.assets": "Recursos",
@@ -45,8 +45,8 @@
     "painter.gameB": "Tileset de decoración (juego B)",
     "painter.selectGame": "Elegí un juego…",
     "painter.selectTileset": "Elegí un tileset…",
-    "painter.welcome.title": "Bienvenido a ThreeMaker",
-    "painter.welcome.body": "Autorá mapas, eventos, diálogos y entidades en un solo estudio. Creá un mapa desde tilesets del catálogo o abrí el último guardado — herramientas a la izquierda, inspector a la derecha, canvas al centro.",
+    "painter.welcome.title": "Bienvenido a Three Maker",
+    "painter.welcome.body": "Creá mapas HD-2D desde tu biblioteca RPG Maker. Herramientas a la izquierda, inspector a la derecha, canvas al centro.",
     "painter.welcome.newMap": "Crear mapa",
     "painter.welcome.openMap": "Abrir mapa guardado",
     "painter.welcome.openMapHint": "Continuá desde el mapa guardado en este dispositivo.",

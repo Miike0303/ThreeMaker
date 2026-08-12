@@ -72,18 +72,18 @@ function CatalogAssetThumb({
       return;
     }
     let cancelled = false;
-    const resolve = isTauriAvailable()
-      ? storeDir
-        ? objectPreviewUrlFromStoreDir(storeDir, asset.sha256)
-        : Promise.resolve(null)
-      : Promise.resolve(buildDevObjectUrl(asset.sha256, 'png'));
-    resolve
-      .then((url) => {
+    void (async () => {
+      try {
+        const url = !isTauriAvailable()
+          ? buildDevObjectUrl(asset.sha256, 'png')
+          : storeDir
+            ? await objectPreviewUrlFromStoreDir(storeDir, asset.sha256)
+            : null;
         if (!cancelled) setThumbUrl(url);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setHidden(true);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -141,13 +141,14 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
   useEffect(() => {
     if (!isTauriAvailable()) return;
     let cancelled = false;
-    getAssetStoreDir()
-      .then((dir) => {
+    void (async () => {
+      try {
+        const dir = await getAssetStoreDir();
         if (!cancelled) setStoreDir(dir);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('Failed to resolve catalog asset store directory:', err);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -155,18 +156,19 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
 
   useEffect(() => {
     let cancelled = false;
-    listGames()
-      .then((rows) => {
+    void (async () => {
+      try {
+        const rows = await listGames();
         if (cancelled) return;
         setGames(rows);
         setLoadState(rows.length === 0 ? 'empty' : 'ready');
-      })
-      .catch((err) => {
+      } catch (err) {
         if (cancelled) return;
         const isNotFound = err instanceof CatalogClientError && err.code === 'NotFound';
         if (!isNotFound) console.error('Failed to load the catalog games list:', err);
         setLoadState(isNotFound ? 'empty' : 'error');
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -175,23 +177,27 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
   useEffect(() => {
     if (loadState !== 'ready') return;
     let cancelled = false;
-    listAssets(
-      { ...(gameId !== undefined ? { gameId } : {}), ...(type !== undefined ? { type } : {}) },
-      page,
-    )
-      .then((result) => {
+    void (async () => {
+      try {
+        const result = await listAssets(
+          {
+            ...(gameId !== undefined ? { gameId } : {}),
+            ...(type !== undefined ? { type } : {}),
+          },
+          page,
+        );
         if (cancelled) return;
         setAssets(result.rows);
         setTotal(result.total);
         setPageSize(result.pageSize);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('Failed to load a page of catalog assets:', err);
         if (!cancelled) {
           setAssets([]);
           setTotal(0);
         }
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -204,13 +210,14 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
       return;
     }
     let cancelled = false;
-    objectPreviewUrl(selectedAsset.sha256, 'png')
-      .then((url) => {
+    void (async () => {
+      try {
+        const url = await objectPreviewUrl(selectedAsset.sha256, 'png');
         if (!cancelled) setPreviewUrl(url);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setPreviewUrl(null);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -418,7 +425,10 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
             </div>
           ) : (
             <div className="catalog-preview-empty-card">
-              <div className="catalog-preview-empty-icon catalog-preview-empty-icon-art" aria-hidden>
+              <div
+                className="catalog-preview-empty-icon catalog-preview-empty-icon-art"
+                aria-hidden
+              >
                 ▦
               </div>
               <p className="catalog-preview-empty">{t('catalog.preview.empty')}</p>

@@ -43,3 +43,4 @@ planes/
 # Local UI shots / scratch
 tmp/
 tmp-ui-baseline.png
+.tmp-shots/

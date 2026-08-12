@@ -1,8 +1,8 @@
 {
   "name": "English",
   "strings": {
-    "app.title": "ThreeMaker",
-    "app.brand.subtitle": "Editor",
+    "app.title": "Three Maker",
+    "app.brand.subtitle": "HD-2D",
     "app.workspace": "Workspace",
     "app.workspace.map": "Map",
     "app.workspace.assets": "Assets",
@@ -45,8 +45,8 @@
     "painter.gameB": "Decor tileset (game B)",
     "painter.selectGame": "Select a game…",
     "painter.selectTileset": "Select a tileset…",
-    "painter.welcome.title": "Welcome to ThreeMaker",
-    "painter.welcome.body": "Author maps, events, dialogue, and entities in one studio. Create a map from catalog tilesets or open your last save — tools on the left, inspector on the right, canvas in the center.",
+    "painter.welcome.title": "Welcome to Three Maker",
+    "painter.welcome.body": "Create HD-2D maps from your RPG Maker library. Tools on the left, inspector on the right, canvas in the center.",
     "painter.welcome.newMap": "Create map",
     "painter.welcome.openMap": "Open saved map",
     "painter.welcome.openMapHint": "Continue from the map saved on this device.",

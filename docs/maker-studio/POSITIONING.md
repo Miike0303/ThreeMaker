@@ -1,6 +1,6 @@
-# Maker Studio positioning
+# Three Maker positioning
 
-**Product:** Maker Studio (engine brand: ThreeMaker)  
+**Product:** Three Maker (HD-2D studio)  
 **Look:** open-source **2.5D HD-2D** (Octopath-style), not voxel 3D.
 
 ## vs RPG-Cobo

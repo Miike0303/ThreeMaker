@@ -1,8 +1,8 @@
-# Design: Maker Studio (UX + 2.5D layers + procgen + community)
+# Design: Three Maker (UX + 2.5D layers + procgen + community)
 
 **Date:** 2026-08-08  
 **Status:** active implementation guide  
-**Product:** Maker Studio (engine brand: ThreeMaker)
+**Product:** Three Maker (HD-2D studio)
 
 ## One-line outcome
 
