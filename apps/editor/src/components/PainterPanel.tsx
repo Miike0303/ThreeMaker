@@ -371,6 +371,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
 
   const activeFloorState = painterState?.floors[painterState.activeFloor];
   const activeFloorId = activeFloorState?.id;
+  const activeFloorDisplayName =
+    activeFloorState?.label ??
+    formatTemplate(t('painter.floorOption'), { index: painterState?.activeFloor ?? 0 });
   const floorRooms = useMemo(
     () => roomsOnFloor(painterState?.rooms ?? [], activeFloorId),
     [painterState?.rooms, activeFloorId],
@@ -848,7 +851,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
               <button
                 type="button"
                 disabled={painterState.floors.length <= 1}
-                onClick={() => viewportRef.current?.removeFloor(painterState.activeFloor)}
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    formatTemplate(t('painter.removeFloorConfirm'), {
+                      floor: activeFloorDisplayName,
+                    }),
+                  );
+                  if (confirmed) viewportRef.current?.removeFloor(painterState.activeFloor);
+                }}
               >
                 {t('painter.removeFloor')}
               </button>
@@ -913,12 +923,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
       <div className="ide-body">
             <aside className="ide-tool-rail" aria-label={t('painter.tools')}>
               {TOOL_GROUPS.map((group) => (
-                <div
-                  key={group.id}
-                  className="ide-tool-group"
-                  role="group"
-                  aria-label={t(`painter.toolGroup.${group.id}`)}
-                >
+                <fieldset key={group.id} className="ide-tool-group">
+                  <legend className="sr-only">{t(`painter.toolGroup.${group.id}`)}</legend>
                   {group.tools.map((tool) => {
                     const active =
                       mapReady &&
@@ -955,7 +961,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       </button>
                     );
                   })}
-                </div>
+                </fieldset>
               ))}
             </aside>
 
@@ -1287,20 +1293,23 @@ export function PainterPanel({ t }: PainterPanelProps) {
               >
                 <span className="ide-palette-roles-label">{t('painter.palette.role')}</span>
                 {PROCGEN_PALETTE_ROLES.map((role) => (
-                  <button
+                  <label
                     key={role}
-                    type="button"
-                    role="radio"
-                    aria-checked={paletteRole === role}
                     className={
                       paletteRole === role
                         ? 'ide-palette-role ide-palette-role-active'
                         : 'ide-palette-role'
                     }
-                    onClick={() => setPaletteRole(role)}
                   >
-                    {t(`painter.palette.role.${role}`)}
-                  </button>
+                    <input
+                      className="sr-only"
+                      type="radio"
+                      name="painter-palette-role"
+                      checked={paletteRole === role}
+                      onChange={() => setPaletteRole(role)}
+                    />
+                    <span>{t(`painter.palette.role.${role}`)}</span>
+                  </label>
                 ))}
               </div>
               <p className="ide-hint ide-palette-role-hint">
@@ -1626,13 +1635,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           {t('painter.procgen.randomizeSeed')}
                         </button>
                       </div>
-                      {procgenSeedHistory.length > 0 && (
-                        <div
-                          className="ide-row ide-seed-history"
-                          role="group"
-                          aria-label={t('painter.procgen.seedHistory')}
-                        >
-                          <span className="ide-hint">{t('painter.procgen.seedHistory')}:</span>
+                          {procgenSeedHistory.length > 0 && (
+                            <fieldset className="ide-row ide-seed-history">
+                              <legend className="sr-only">
+                                {t('painter.procgen.seedHistory')}
+                              </legend>
+                              <span className="ide-hint">{t('painter.procgen.seedHistory')}:</span>
                           {procgenSeedHistory.map((s) => (
                             <button
                               key={s}
@@ -1650,7 +1658,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                               {s}
                             </button>
                           ))}
-                        </div>
+                        </fieldset>
                       )}
                       <label>
                         {t('painter.procgen.furnitureDensity')}

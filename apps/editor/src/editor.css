@@ -54,6 +54,18 @@ body {
   flex-direction: column;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 button,
 input,
 select,
@@ -462,6 +474,10 @@ label {
 }
 
 .ide-tool-group {
+  min-inline-size: 0;
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -562,6 +578,12 @@ label {
   border: 1px solid var(--tm-border-strong);
   background: var(--tm-bg-2);
   color: var(--tm-text-dim);
+  cursor: pointer;
+}
+
+.ide-palette-role:focus-within {
+  outline: 2px solid var(--tm-focus);
+  outline-offset: 2px;
 }
 
 .ide-palette-role-active {
@@ -682,6 +704,10 @@ label {
 }
 
 .ide-seed-history {
+  min-inline-size: 0;
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
   align-items: center;
   gap: 4px;
 }
