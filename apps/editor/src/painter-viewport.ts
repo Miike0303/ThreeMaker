@@ -55,13 +55,15 @@ export async function loadSlotTextures(doc: MapDocument): Promise<{
   const sheetPixelSizes: SheetPixelSizes = {};
   await Promise.all(
     Object.entries(doc.tileset.slots).map(async ([slot, source]) => {
-      if (!source?.object) return;
-      const url = await objectPreviewUrl(source.object, 'png');
-      const texture = await loadSheetTexture(url);
-      const sheetId = slot as TileSheetId;
-      textures[sheetId] = texture;
-      const image = texture.image as { width: number; height: number };
-      sheetPixelSizes[sheetId] = { width: image.width, height: image.height };
+      if (source?.object) {
+        const url = await objectPreviewUrl(source.object, 'png');
+        const texture = await loadSheetTexture(url);
+        const sheetId = slot as TileSheetId;
+        textures[sheetId] = texture;
+        const image = texture.image as { width: number; height: number };
+        sheetPixelSizes[sheetId] = { width: image.width, height: image.height };
+      }
+      return undefined;
     }),
   );
   return { textures, sheetPixelSizes };
