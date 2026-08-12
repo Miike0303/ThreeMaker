@@ -97,6 +97,8 @@ describe('scanGames — folder-agnostic MV/MZ auto-detect', () => {
     expect(mv?.encryptionKey).toBeNull();
     expect(mv?.imageAssets).toEqual(['characters/Actor1.png']);
     expect(mv?.audioAssets).toEqual([]);
+    expect(mz?.systemTitle).toBe('Encrypted Game');
+    expect(mv?.systemTitle).toBe('Test Game');
   });
 });
 

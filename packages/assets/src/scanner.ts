@@ -41,6 +41,8 @@ const AUDIO_EXTENSIONS: ReadonlySet<string> = new Set([
 export interface GameRecord {
   readonly rootPath: string;
   readonly engine: 'mv' | 'mz';
+  /** Non-empty trimmed `System.json` `gameTitle`, when present. */
+  readonly systemTitle: string | null;
   /** Ground truth from `System.json`, NOT derived from whether a key happens to parse. */
   readonly hasEncryptedImages: boolean;
   /** Ground truth from `System.json`, NOT derived from whether a key happens to parse. */
@@ -249,6 +251,15 @@ function readBooleanFlag(systemJson: unknown, key: string): boolean {
   return (systemJson as Record<string, unknown>)[key] === true;
 }
 
+/** Reads a non-empty trimmed `gameTitle` from parsed `System.json`. */
+function readSystemTitle(systemJson: unknown): string | null {
+  if (typeof systemJson !== 'object' || systemJson === null) return null;
+  const gameTitle = (systemJson as Record<string, unknown>).gameTitle;
+  if (typeof gameTitle !== 'string') return null;
+  const trimmed = gameTitle.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
 function buildGameRecord(
   rootPath: string,
   detected: DetectedDataDir,
@@ -285,11 +296,13 @@ function buildGameRecord(
   const hasEncryptedImages = readBooleanFlag(systemJson, 'hasEncryptedImages');
   const hasEncryptedAudio = readBooleanFlag(systemJson, 'hasEncryptedAudio');
   const encryptionKey = parseEncryptionKey(systemJson);
+  const systemTitle = readSystemTitle(systemJson);
   const assetRoot = dirname(detected.dataDir);
 
   return {
     rootPath,
     engine: detected.engine,
+    systemTitle,
     hasEncryptedImages,
     hasEncryptedAudio,
     encryptionKey,

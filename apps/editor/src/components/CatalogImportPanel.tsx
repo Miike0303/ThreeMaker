@@ -8,6 +8,7 @@ import {
 import {
   buildImportSummaryMessage,
   importErrorLocaleKey,
+  importUnitLocaleKey,
   isImportPathReady,
   trimImportPath,
 } from '../catalog-import-panel-helpers.js';
@@ -47,7 +48,14 @@ export function CatalogImportPanel({ t, onImportComplete }: CatalogImportPanelPr
       onImportComplete?.();
 
       const message = buildImportSummaryMessage(summary);
-      setStatusMessage(formatTemplate(t(message.localeKey), message.values));
+      const templateValues: Record<string, string | number> = { ...message.values };
+      if (message.variant !== 'empty') {
+        const { games = 0, assets = 0, tilesets = 0 } = message.values;
+        templateValues.gamesUnit = t(importUnitLocaleKey('game', games));
+        templateValues.assetsUnit = t(importUnitLocaleKey('asset', assets));
+        templateValues.tilesetsUnit = t(importUnitLocaleKey('tileset', tilesets));
+      }
+      setStatusMessage(formatTemplate(t(message.localeKey), templateValues));
       setPanelState('success');
     } catch (err) {
       console.error('Catalog import failed:', err);

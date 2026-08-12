@@ -5,9 +5,9 @@
 //! Source game folders are read-only; writes happen only under an explicit
 //! `store_dir` passed to `store_asset`.
 //!
-//! `games.title` parity with `packages/assets/src/catalog.ts` is intentional:
-//! both importers must persist the folder basename (`ScannedGame::folder_title`),
-//! not `System.json`'s `gameTitle`.
+//! `games.title` parity with `packages/assets/src/catalog.ts`: both importers
+//! prefer a non-empty trimmed `System.json` `gameTitle`, falling back to the
+//! folder basename (`ScannedGame::folder_title`).
 #![allow(dead_code)] // Slice A1: wired by A2 Tauri commands and catalog writer.
 
 use std::collections::HashSet;
@@ -36,6 +36,8 @@ const RIFF_MAGIC: [u8; 4] = [0x52, 0x49, 0x46, 0x46];
 const WEBP_FOURCC_MAGIC: [u8; 4] = [0x57, 0x45, 0x42, 0x50];
 const WAVE_FOURCC_MAGIC: [u8; 4] = [0x57, 0x41, 0x56, 0x45];
 const RIFF_FOURCC_OFFSET: usize = 8;
+const JPEG_SOI_MAGIC: [u8; 3] = [0xff, 0xd8, 0xff];
+const GIF8_MAGIC: [u8; 4] = [0x47, 0x49, 0x46, 0x38];
 const ID3_MAGIC: [u8; 3] = [0x49, 0x44, 0x33];
 
 const IMAGE_EXTENSIONS: &[&str] = &[".png", ".rpgmvp", ".png_"];
@@ -63,11 +65,9 @@ impl RpgmEngine {
 pub struct ScannedGame {
     pub root_path: PathBuf,
     pub engine: RpgmEngine,
-    /// Folder basename of `root_path` — the value A2 must write into `games.title`
-    /// to match `basenameOf(game.rootPath)` in `packages/assets/src/catalog.ts`.
+    /// Folder basename of `root_path` — used when `system_title` is absent or blank.
     pub folder_title: String,
-    /// `System.json` `gameTitle` when present; metadata only — neither importer
-    /// currently persists this into `games.title`.
+    /// `System.json` `gameTitle` when present; persisted into `games.title` when non-empty.
     pub system_title: Option<String>,
     pub has_encrypted_images: bool,
     pub has_encrypted_audio: bool,
@@ -645,6 +645,8 @@ fn is_riff_container(data: &[u8], fourcc: &[u8]) -> bool {
 
 fn has_known_magic(data: &[u8]) -> bool {
     bytes_match_at(data, 0, &PNG_MAGIC)
+        || bytes_match_at(data, 0, &JPEG_SOI_MAGIC)
+        || bytes_match_at(data, 0, &GIF8_MAGIC)
         || bytes_match_at(data, 0, &OGG_MAGIC)
         || bytes_match_at(data, M4A_FTYP_OFFSET, &M4A_FTYP_MAGIC)
         || is_riff_container(data, &WEBP_FOURCC_MAGIC)
@@ -899,6 +901,29 @@ mod tests {
 
         let without_key = serde_json::from_str::<Value>(VALID_SYSTEM_JSON).expect("json");
         assert!(parse_encryption_key(&without_key).is_none());
+    }
+
+    #[test]
+    fn decrypts_jpeg_and_gif_renamed_png_fixtures() {
+        let key = key_bytes();
+
+        let mut jpeg = vec![0xff, 0xd8, 0xff, 0xe0];
+        jpeg.extend_from_slice(b"synthetic-jpeg-body");
+        let encrypted_jpeg = encrypt_fixture(&jpeg, &key);
+        let decrypted_jpeg =
+            decode_asset_bytes("tilesets/Outside.png_", &encrypted_jpeg, Some(&key))
+                .expect("decrypt jpeg fixture");
+        assert!(decrypted_jpeg.was_encrypted);
+        assert_eq!(decrypted_jpeg.bytes, jpeg);
+
+        let mut gif = b"GIF8".to_vec();
+        gif.extend_from_slice(b"9a-synthetic-body");
+        let encrypted_gif = encrypt_fixture(&gif, &key);
+        let decrypted_gif =
+            decode_asset_bytes("tilesets/Outside.png_", &encrypted_gif, Some(&key))
+                .expect("decrypt gif fixture");
+        assert!(decrypted_gif.was_encrypted);
+        assert_eq!(decrypted_gif.bytes, gif);
     }
 
     #[test]

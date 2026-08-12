@@ -204,7 +204,10 @@ export async function reloadCatalog(): Promise<void> {
 
 export interface ImportSummary {
   readonly gamesImported: number;
+  /** Unique object blobs created this run (CLI parity). */
   readonly assetsStored: number;
+  /** Asset rows linked or updated this run (user-facing import count). */
+  readonly assetsLinked: number;
   readonly tilesetsIngested: number;
   readonly sheetsLinked: number;
   readonly sheetsSkipped: number;

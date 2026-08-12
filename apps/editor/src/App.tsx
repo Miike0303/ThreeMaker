@@ -2,7 +2,6 @@ import { useCallback, useMemo, useReducer, useState } from 'react';
 import type { AssetRow } from './catalog-client.js';
 import { CatalogBrowser } from './components/CatalogBrowser.js';
 import { CatalogImportPanel } from './components/CatalogImportPanel.js';
-import { MapViewer } from './components/MapViewer.js';
 import { PainterPanel } from './components/PainterPanel.js';
 import type { I18n } from './i18n.js';
 import { footerStatusKind, type WorkspaceId, workspaceMountContract } from './workspace-panels.js';
@@ -102,9 +101,6 @@ export function App({ i18n, localeStorageKey }: AppProps) {
             <section className="app-panel app-panel-catalog">
               <CatalogImportPanel t={t} onImportComplete={handleCatalogImportComplete} />
               <CatalogBrowser key={catalogRefreshKey} t={t} onSelectAsset={setSelectedAsset} />
-            </section>
-            <section className="app-panel app-panel-viewer">
-              <MapViewer t={t} />
             </section>
           </div>
         )}

@@ -18,6 +18,7 @@ const TINY_OGG = new Uint8Array([0x4f, 0x67, 0x67, 0x53, 0, 0, 0, 0]);
 function makeGame(overrides: Partial<GameRecord> & { rootPath: string }): GameRecord {
   return {
     engine: 'mz',
+    systemTitle: null,
     hasEncryptedImages: false,
     hasEncryptedAudio: false,
     encryptionKey: null,
@@ -160,7 +161,44 @@ describe('catalog', () => {
     expect(parallaxAssets[0]?.relPath).toBe('img/parallaxes/Clouds.png');
   });
 
-  it('re-ingesting the same game updates rows instead of duplicating them', () => {
+      it('uses System.json gameTitle for games.title when present', () => {
+        const gameRoot = join(workDir, 'Folder Name');
+        writeAsset(gameRoot, 'img', 'tilesets/Overworld.png', TINY_PNG);
+
+        const record = makeGame({
+          rootPath: gameRoot,
+          systemTitle: 'Display Title',
+          imageAssets: ['tilesets/Overworld.png'],
+        });
+        ingestGame(catalog, record, { storeDir });
+
+        expect(catalog.listGames()[0]?.title).toBe('Display Title');
+      });
+
+      it('falls back to folder basename when systemTitle is missing or empty', () => {
+        const gameRoot = join(workDir, 'Folder Name');
+        writeAsset(gameRoot, 'img', 'tilesets/Overworld.png', TINY_PNG);
+
+        const missing = makeGame({
+          rootPath: gameRoot,
+          imageAssets: ['tilesets/Overworld.png'],
+        });
+        ingestGame(catalog, missing, { storeDir });
+        expect(catalog.listGames()[0]?.title).toBe('Folder Name');
+
+        const empty = makeGame({
+          rootPath: join(workDir, 'Whitespace Title'),
+          systemTitle: '   ',
+          imageAssets: ['tilesets/Overworld.png'],
+        });
+        writeAsset(empty.rootPath, 'img', 'tilesets/Overworld.png', TINY_PNG);
+        ingestGame(catalog, empty, { storeDir });
+        expect(catalog.listGames().find((g) => g.rootPath === empty.rootPath)?.title).toBe(
+          'Whitespace Title',
+        );
+      });
+
+      it('re-ingesting the same game updates rows instead of duplicating them', () => {
     const gameRoot = join(workDir, 'Game');
     writeAsset(gameRoot, 'img', 'tilesets/Overworld.png', TINY_PNG);
     const record = makeGame({ rootPath: gameRoot, imageAssets: ['tilesets/Overworld.png'] });

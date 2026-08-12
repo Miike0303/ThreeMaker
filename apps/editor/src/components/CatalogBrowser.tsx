@@ -19,6 +19,12 @@ export interface CatalogBrowserProps {
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
+const AUDIO_ASSET_TYPES = new Set<string>(['bgm', 'bgs', 'me', 'se']);
+
+function isImagePreviewAsset(asset: AssetRow): boolean {
+  return !AUDIO_ASSET_TYPES.has(asset.type);
+}
+
 /**
  * Thin component: browse cataloged games, filter assets by game+type,
  * paginate results, preview a selected tileset image. All catalog IO goes
@@ -85,7 +91,7 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
 
   useEffect(() => {
     onSelectAsset?.(selectedAsset);
-    if (selectedAsset?.type !== 'tileset') {
+    if (!selectedAsset || !isImagePreviewAsset(selectedAsset)) {
       setPreviewUrl(null);
       return;
     }
@@ -188,29 +194,33 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
         </div>
       )}
 
-      <ul className="catalog-asset-list">
-        {assets.map((asset) => {
-          const gameLabel = gameId === undefined ? gamesById.get(asset.gameId) : undefined;
-          return (
-            <li key={asset.id}>
-              <button
-                type="button"
-                className={selectedAsset?.id === asset.id ? 'catalog-asset-selected' : undefined}
-                onClick={() => setSelectedAsset(asset)}
-              >
-                {gameLabel ? `${asset.relPath} (${gameLabel})` : asset.relPath}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="catalog-browser-body">
+        <ul className="catalog-asset-list">
+          {assets.map((asset) => {
+            const gameLabel = gameId === undefined ? gamesById.get(asset.gameId) : undefined;
+            return (
+              <li key={asset.id}>
+                <button
+                  type="button"
+                  className={selectedAsset?.id === asset.id ? 'catalog-asset-selected' : undefined}
+                  onClick={() => setSelectedAsset(asset)}
+                >
+                  {gameLabel ? `${asset.relPath} (${gameLabel})` : asset.relPath}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
 
-      {previewUrl && selectedAsset && (
-        <div className="catalog-preview">
-          <p>{selectedAsset.relPath}</p>
-          <img src={previewUrl} alt={selectedAsset.relPath} className="catalog-preview-image" />
+        <div className="catalog-preview-pane">
+          {previewUrl && selectedAsset && (
+            <div className="catalog-preview">
+              <p className="catalog-preview-path">{selectedAsset.relPath}</p>
+              <img src={previewUrl} alt={selectedAsset.relPath} className="catalog-preview-image" />
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import type { ImportSummary } from '../src/catalog-client.js';
 import {
   buildImportSummaryMessage,
   importErrorLocaleKey,
+  importUnitLocaleKey,
   isImportPathReady,
   trimImportPath,
 } from '../src/catalog-import-panel-helpers.js';
@@ -10,6 +11,7 @@ import {
 const emptySummary = (): ImportSummary => ({
   gamesImported: 0,
   assetsStored: 0,
+  assetsLinked: 0,
   tilesetsIngested: 0,
   sheetsLinked: 0,
   sheetsSkipped: 0,
@@ -32,6 +34,15 @@ describe('catalog-import-panel-helpers: path input', () => {
   });
 });
 
+describe('catalog-import-panel-helpers: import unit locale keys', () => {
+  it('uses one for count 1 and other otherwise', () => {
+    expect(importUnitLocaleKey('game', 1)).toBe('catalog.import.unit.game.one');
+    expect(importUnitLocaleKey('game', 0)).toBe('catalog.import.unit.game.other');
+    expect(importUnitLocaleKey('asset', 2)).toBe('catalog.import.unit.asset.other');
+    expect(importUnitLocaleKey('tileset', 1)).toBe('catalog.import.unit.tileset.one');
+  });
+});
+
 describe('catalog-import-panel-helpers: import error locale keys', () => {
   it('maps known error codes to catalog.import.error.* keys', () => {
     expect(importErrorLocaleKey('PathNotFound')).toBe('catalog.import.error.PathNotFound');
@@ -46,12 +57,13 @@ describe('catalog-import-panel-helpers: import error locale keys', () => {
 });
 
 describe('catalog-import-panel-helpers: import summary messages', () => {
-  it('reports a clean success with counts', () => {
+  it('reports a clean success with counts from assetsLinked', () => {
     expect(
       buildImportSummaryMessage({
         ...emptySummary(),
         gamesImported: 2,
-        assetsStored: 120,
+        assetsStored: 5,
+        assetsLinked: 120,
         tilesetsIngested: 8,
       }),
     ).toEqual({
@@ -61,12 +73,29 @@ describe('catalog-import-panel-helpers: import summary messages', () => {
     });
   });
 
+  it('treats reimport with linked assets but no new blobs as success content', () => {
+    expect(
+      buildImportSummaryMessage({
+        ...emptySummary(),
+        gamesImported: 1,
+        assetsStored: 0,
+        assetsLinked: 42,
+        tilesetsIngested: 3,
+      }),
+    ).toEqual({
+      variant: 'success',
+      localeKey: 'catalog.import.success',
+      values: { games: 1, assets: 42, tilesets: 3 },
+    });
+  });
+
   it('reports partial success when some games failed', () => {
     expect(
       buildImportSummaryMessage({
         ...emptySummary(),
         gamesImported: 1,
-        assetsStored: 40,
+        assetsStored: 10,
+        assetsLinked: 40,
         tilesetsIngested: 3,
         gameFailures: [{ rootPath: '/bad', message: 'parse error' }],
       }),
@@ -82,7 +111,8 @@ describe('catalog-import-panel-helpers: import summary messages', () => {
       buildImportSummaryMessage({
         ...emptySummary(),
         gamesImported: 0,
-        assetsStored: 5,
+        assetsStored: 0,
+        assetsLinked: 5,
         tilesetsIngested: 0,
         scanErrors: [{ path: '/x', code: 'ReadFailed', message: 'denied' }],
       }),

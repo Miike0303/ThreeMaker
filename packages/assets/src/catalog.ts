@@ -682,6 +682,12 @@ export function sumResults(results: readonly IngestGameResult[]): AggregateInges
   );
 }
 
+function resolveGameTitle(game: GameRecord): string {
+  const systemTitle = game.systemTitle?.trim();
+  if (systemTitle) return systemTitle;
+  return basenameOf(game.rootPath);
+}
+
 /**
  * Ingests one scanned game into the catalog: decrypts (per FILE extension —
  * `.rpgmvp`/`.png_`/`.rpgmvo`/`.ogg_`/`.m4a_` always need decryption, plain
@@ -699,7 +705,7 @@ export function ingestGame(
 ): IngestGameResult {
   const gameId = catalog.upsertGame({
     rootPath: game.rootPath,
-    title: basenameOf(game.rootPath),
+    title: resolveGameTitle(game),
     engine: game.engine,
     encryptionKey: game.encryptionKey ? bytesToHex(game.encryptionKey) : null,
     scannedAt: new Date().toISOString(),

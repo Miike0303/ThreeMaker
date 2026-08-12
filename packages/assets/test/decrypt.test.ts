@@ -144,6 +144,30 @@ describe('decryptRpgmv', () => {
     }
   });
 
+  it('decrypts a JPEG renamed .png_ back to its original bytes (real games ship JPEG under the PNG extension)', () => {
+    const plain = concat(
+      new Uint8Array([0xff, 0xd8, 0xff, 0xe0]),
+      new TextEncoder().encode('synthetic-jpeg-body'),
+    );
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+
+    const decrypted = decryptRpgmv(encrypted, KEY_BYTES);
+
+    expect(Array.from(decrypted)).toEqual(Array.from(plain));
+  });
+
+  it('decrypts a GIF renamed .png_ back to its original bytes (real games ship GIF under the PNG extension)', () => {
+    const plain = concat(
+      new TextEncoder().encode('GIF8'),
+      new TextEncoder().encode('9a-synthetic-body'),
+    );
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+
+    const decrypted = decryptRpgmv(encrypted, KEY_BYTES);
+
+    expect(Array.from(decrypted)).toEqual(Array.from(plain));
+  });
+
   it('decrypts a WebP renamed .png_ back to its original bytes (real games ship WebP under the PNG extension)', () => {
     // RIFF....WEBP -- the WEBP fourcc sits at offset 8, RIFF at offset 0.
     const plain = concat(

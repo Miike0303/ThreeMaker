@@ -37,8 +37,16 @@ export function importErrorLocaleKey(code: string): string {
   return 'catalog.import.error.generic';
 }
 
+export type ImportUnit = 'game' | 'asset' | 'tileset';
+
+/** Pick catalog.import.unit.*.one vs .other for a count (no full i18n plural engine). */
+export function importUnitLocaleKey(unit: ImportUnit, count: number): string {
+  const form = count === 1 ? 'one' : 'other';
+  return `catalog.import.unit.${unit}.${form}`;
+}
+
 function hasImportedContent(summary: ImportSummary): boolean {
-  return summary.gamesImported > 0 || summary.assetsStored > 0 || summary.tilesetsIngested > 0;
+  return summary.gamesImported > 0 || summary.assetsLinked > 0 || summary.tilesetsIngested > 0;
 }
 
 function hasFailures(summary: ImportSummary): boolean {
@@ -53,7 +61,7 @@ export function buildImportSummaryMessage(summary: ImportSummary): ImportSummary
 
   const values = {
     games: summary.gamesImported,
-    assets: summary.assetsStored,
+    assets: summary.assetsLinked,
     tilesets: summary.tilesetsIngested,
     gameFailures: summary.gameFailures.length,
     scanErrors: summary.scanErrors.length,
@@ -68,7 +76,7 @@ export function buildImportSummaryMessage(summary: ImportSummary): ImportSummary
     localeKey: 'catalog.import.success',
     values: {
       games: summary.gamesImported,
-      assets: summary.assetsStored,
+      assets: summary.assetsLinked,
       tilesets: summary.tilesetsIngested,
     },
   };

@@ -33,6 +33,8 @@ const RIFF_MAGIC: readonly number[] = [0x52, 0x49, 0x46, 0x46]; // "RIFF"
 const WEBP_FOURCC_MAGIC: readonly number[] = [0x57, 0x45, 0x42, 0x50]; // "WEBP", at offset 8
 const WAVE_FOURCC_MAGIC: readonly number[] = [0x57, 0x41, 0x56, 0x45]; // "WAVE", at offset 8
 const RIFF_FOURCC_OFFSET = 8;
+const JPEG_SOI_MAGIC: readonly number[] = [0xff, 0xd8, 0xff];
+const GIF8_MAGIC: readonly number[] = [0x47, 0x49, 0x46, 0x38];
 const ID3_MAGIC: readonly number[] = [0x49, 0x44, 0x33]; // "ID3" (ID3v2 tag)
 
 export type DecryptErrorCode = 'bad-header' | 'truncated' | 'bad-key' | 'magic-mismatch';
@@ -68,6 +70,8 @@ function isRiffContainer(data: Uint8Array, fourcc: readonly number[]): boolean {
 function hasKnownMagic(data: Uint8Array): boolean {
   return (
     bytesMatchAt(data, 0, PNG_MAGIC) ||
+    bytesMatchAt(data, 0, JPEG_SOI_MAGIC) ||
+    bytesMatchAt(data, 0, GIF8_MAGIC) ||
     bytesMatchAt(data, 0, OGG_MAGIC) ||
     bytesMatchAt(data, M4A_FTYP_OFFSET, M4A_FTYP_MAGIC) ||
     isRiffContainer(data, WEBP_FOURCC_MAGIC) ||
@@ -107,7 +111,7 @@ export function parseEncryptionKey(systemJson: unknown): Uint8Array | null {
  * - `bad-header`: the fake header's magic bytes don't match `RPGMV`.
  * - `bad-key`: `key` is not exactly 16 bytes.
  * - `magic-mismatch`: the decrypted output doesn't match any known asset
- *   magic (PNG, OGG, M4A `ftyp`, WebP/WAVE-in-RIFF, or MP3 `ID3`/frame
+ *   magic (PNG, JPEG, GIF, OGG, M4A `ftyp`, WebP/WAVE-in-RIFF, or MP3 `ID3`/frame
  *   sync — real games ship these under the `.png`/`.ogg` extensions too)
  *   — the key is likely wrong.
  */

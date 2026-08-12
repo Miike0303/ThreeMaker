@@ -53,6 +53,7 @@ pub struct IngestGameResult {
     pub files_seen: u32,
     pub files_failed: u32,
     pub objects_created: u32,
+    pub assets_linked: u32,
     pub bytes_scanned: u64,
     pub bytes_stored: u64,
 }
@@ -69,6 +70,7 @@ pub struct GameImportFailure {
 pub struct ImportSummary {
     pub games_imported: usize,
     pub assets_stored: u32,
+    pub assets_linked: u32,
     pub tilesets_ingested: u32,
     pub sheets_linked: u32,
     pub sheets_skipped: u32,
@@ -89,6 +91,7 @@ pub enum ImportError {
 pub struct ImportCatalogSummary {
     pub games_imported: usize,
     pub assets_stored: u32,
+    pub assets_linked: u32,
     pub game_failures: Vec<GameImportFailure>,
     pub scan_errors: Vec<ScanError>,
     pub failures_by_code: HashMap<String, u32>,
@@ -187,6 +190,7 @@ pub fn import_catalog(
 
     let mut games_imported = 0usize;
     let mut assets_stored = 0u32;
+    let mut assets_linked = 0u32;
     let mut game_failures = Vec::new();
 
     for game in &scan_result.games {
@@ -194,6 +198,7 @@ pub fn import_catalog(
             Ok(result) => {
                 games_imported += 1;
                 assets_stored += result.objects_created;
+                assets_linked += result.assets_linked;
             }
             Err(err) => {
                 let root_path = game.root_path.display().to_string();
@@ -218,6 +223,7 @@ pub fn import_catalog(
     Ok(ImportCatalogSummary {
         games_imported,
         assets_stored,
+        assets_linked,
         game_failures,
         scan_errors: scan_result.errors.clone(),
         failures_by_code,
@@ -231,10 +237,11 @@ fn ingest_game_in_tx(
 ) -> Result<IngestGameResult, CatalogWriteError> {
     let root_path = game.root_path.display().to_string();
     let scanned_at = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let game_title = resolve_game_title(game);
     let game_id = upsert_game(
         conn,
         &root_path,
-        &game.folder_title,
+        &game_title,
         engine_str(&game.engine),
         game.encryption_key.as_deref(),
         &scanned_at,
@@ -334,6 +341,7 @@ fn ingest_game_in_tx(
         files_seen,
         files_failed,
         objects_created,
+        assets_linked: files_seen - files_failed,
         bytes_scanned,
         bytes_stored,
     })
@@ -399,6 +407,15 @@ fn object_exists(store_dir: &Path, bytes: &[u8]) -> bool {
         .join(&sha256[..2])
         .join(&sha256)
         .exists()
+}
+
+fn resolve_game_title(game: &ScannedGame) -> String {
+    game.system_title
+        .as_deref()
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| game.folder_title.clone())
 }
 
 fn upsert_game(
@@ -630,6 +647,7 @@ pub fn import_path(
     Ok(ImportSummary {
         games_imported: catalog_summary.games_imported,
         assets_stored: catalog_summary.assets_stored,
+        assets_linked: catalog_summary.assets_linked,
         tilesets_ingested,
         sheets_linked,
         sheets_skipped,
@@ -896,7 +914,7 @@ mod tests {
     }
 
     #[test]
-    fn ingest_game_upserts_folder_title_not_system_title() {
+    fn ingest_game_upserts_system_title_when_present() {
         let work = TempDir::new().expect("tempdir");
         let game_root = work.path().join("Folder Name");
         write_system_json(
@@ -918,7 +936,56 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("title row");
+        assert_eq!(title, "Display Title");
+    }
+
+    #[test]
+    fn ingest_game_falls_back_to_folder_title_when_system_title_missing_or_empty() {
+        let work = TempDir::new().expect("tempdir");
+
+        let missing_root = work.path().join("Folder Name");
+        write_system_json(
+            &missing_root.join("data"),
+            r#"{"hasEncryptedImages":false}"#,
+        );
+        fs::create_dir_all(missing_root.join("img/tilesets")).expect("img dir");
+        fs::write(missing_root.join("img/tilesets/A.png"), tiny_png()).expect("png");
+
+        let scan = scan_games(work.path(), 12).expect("scan missing title");
+        let conn = open_catalog_for_write(work.path()).expect("open");
+        ingest_game(&conn, &scan.games[0], work.path()).expect("ingest missing title");
+        let title: String = conn
+            .query_row(
+                "SELECT title FROM games WHERE root_path = ?1",
+                [scan.games[0].root_path.display().to_string()],
+                |row| row.get(0),
+            )
+            .expect("missing title row");
         assert_eq!(title, "Folder Name");
+
+        let empty_root = work.path().join("Whitespace Title");
+        write_system_json(
+            &empty_root.join("data"),
+            r#"{"gameTitle":"   ","hasEncryptedImages":false}"#,
+        );
+        fs::create_dir_all(empty_root.join("img/tilesets")).expect("img dir");
+        fs::write(empty_root.join("img/tilesets/A.png"), tiny_png()).expect("png");
+
+        let scan2 = scan_games(work.path(), 12).expect("scan empty title");
+        let empty_game = scan2
+            .games
+            .iter()
+            .find(|game| game.root_path.ends_with("Whitespace Title"))
+            .expect("empty-title game");
+        ingest_game(&conn, empty_game, work.path()).expect("ingest empty title");
+        let empty_title: String = conn
+            .query_row(
+                "SELECT title FROM games WHERE root_path = ?1",
+                [empty_game.root_path.display().to_string()],
+                |row| row.get(0),
+            )
+            .expect("empty title row");
+        assert_eq!(empty_title, "Whitespace Title");
     }
 
     #[test]
@@ -948,6 +1015,33 @@ mod tests {
             .expect("root_path");
         assert!(!stored.starts_with(r"\\?\"));
         assert_eq!(stored, normalized.display().to_string());
+    }
+
+    #[test]
+    fn reimport_reports_assets_linked_without_new_objects() {
+        let work = TempDir::new().expect("tempdir");
+        let game_root = work.path().join("Game");
+        write_system_json(&game_root.join("data"), VALID_SYSTEM_JSON);
+        fs::create_dir_all(game_root.join("img/tilesets")).expect("img dir");
+        fs::write(game_root.join("img/tilesets/A.png"), tiny_png()).expect("png");
+
+        let scan = scan_games(work.path(), 12).expect("scan");
+        let game = scan.games[0].clone();
+        let conn = open_catalog_for_write(work.path()).expect("open");
+
+        let first = ingest_game(&conn, &game, work.path()).expect("first ingest");
+        assert!(first.objects_created > 0);
+        assert_eq!(first.assets_linked, 1);
+
+        let second = ingest_game(&conn, &game, work.path()).expect("second ingest");
+        assert_eq!(second.objects_created, 0);
+        assert_eq!(second.assets_linked, 1);
+
+        let scan2 = scan_games(work.path(), 12).expect("rescan");
+        let summary = import_catalog(&scan2, work.path()).expect("import");
+        assert_eq!(summary.games_imported, 1);
+        assert_eq!(summary.assets_stored, 0);
+        assert_eq!(summary.assets_linked, 1);
     }
 
     #[test]
@@ -1226,6 +1320,7 @@ mod tests {
         let summary = ImportSummary {
             games_imported: 2,
             assets_stored: 5,
+            assets_linked: 12,
             tilesets_ingested: 3,
             sheets_linked: 4,
             sheets_skipped: 1,
@@ -1238,6 +1333,7 @@ mod tests {
         let json: serde_json::Value = serde_json::to_value(summary).expect("summary");
         assert_eq!(json["gamesImported"], 2);
         assert_eq!(json["assetsStored"], 5);
+        assert_eq!(json["assetsLinked"], 12);
         assert_eq!(json["tilesetsIngested"], 3);
         assert_eq!(json["gameFailures"][0]["rootPath"], "/games/foo");
         assert!(json.get("games_imported").is_none());

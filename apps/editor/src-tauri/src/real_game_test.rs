@@ -68,11 +68,12 @@ fn real_game_imports_read_only_and_is_idempotent() {
     );
 
     let (expected_engine, system_json_path) = expected_engine_and_system_json(&source_dir);
-    let expected_title = source_dir
+    let folder_basename = source_dir
         .file_name()
         .expect("real game path must have a folder basename")
         .to_string_lossy()
         .into_owned();
+    let expected_title = game_title_from_system_json(&system_json_path, &folder_basename);
     let expected_root = normalize_root_path(
         &fs::canonicalize(&source_dir).expect("canonicalize real game directory"),
     )
@@ -259,6 +260,19 @@ fn encryption_key_from_system_json(system_json_path: &Path) -> Option<String> {
         .and_then(serde_json::Value::as_str)
         .filter(|key| key.len() == 32 && key.chars().all(|ch| ch.is_ascii_hexdigit()))
         .map(str::to_ascii_lowercase)
+}
+
+fn game_title_from_system_json(system_json_path: &Path, folder_basename: &str) -> String {
+    let raw = fs::read_to_string(system_json_path).expect("read real System.json");
+    let value: serde_json::Value =
+        serde_json::from_str(raw.trim_start_matches('\u{feff}')).expect("parse real System.json");
+    value
+        .get("gameTitle")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| folder_basename.to_string())
 }
 
 fn snapshot_source(root: &Path) -> BTreeMap<PathBuf, SourceEntry> {
