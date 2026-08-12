@@ -288,6 +288,8 @@ export class PainterViewport {
     this.frameCamera(doc.width, doc.height);
     this.startRenderLoop();
     this.emitState();
+    // The previous document's hovered tile may not exist on this one; drop it before overlays re-project.
+    this.updateHoverTile(undefined);
     this.recomputeOverlays();
   }
 
