@@ -130,6 +130,7 @@ const NEW_KEYS = [
   'painter.palette.assigned.furniture',
   'painter.status.eventsInvalid',
   'painter.status.ready',
+  'painter.status.hover',
   'painter.tool.stair-link',
   'painter.tool.spawn-point',
   'painter.tool.prop',

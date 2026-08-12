@@ -38,6 +38,66 @@ export function computeOverviewCameraPose(
   };
 }
 
+export interface ZoomBounds {
+  readonly min: number;
+  readonly max: number;
+}
+
+/** Exponential wheel-zoom step: e per ~667 wheel-delta units, tuned for one ~120-delta notch to feel like a gentle ~20% step. */
+const ZOOM_WHEEL_SENSITIVITY = 0.0015;
+
+/**
+ * Pure wheel-zoom for the painter overview camera (WU-UX-01): scales the
+ * current boom distance by an exponential step of the wheel delta (so equal
+ * notches apply equal ratios at any distance, and opposite notches cancel),
+ * clamped into `bounds`. Positive `wheelDeltaY` (scroll down) zooms OUT.
+ */
+export function zoomCameraDistance(
+  current: number,
+  wheelDeltaY: number,
+  bounds: ZoomBounds,
+): number {
+  return clampRange(
+    current * Math.exp(wheelDeltaY * ZOOM_WHEEL_SENSITIVITY),
+    bounds.min,
+    bounds.max,
+  );
+}
+
+export interface CameraPanTarget {
+  readonly x: number;
+  readonly z: number;
+}
+
+/**
+ * Pure drag-pan for the painter overview camera (WU-UX-01): converts a
+ * screen-pixel drag into a ground-plane (y = 0) offset of the camera's
+ * look-at target so content follows the cursor. Derived from the same pose
+ * math as `computeOverviewCameraPose`/`projectToScreenFraction`, linearized
+ * at the look-at point:
+ * - world units per vertical pixel = 2 * distance * tan(fov/2) / viewportHeight
+ * - a vertical drag maps along the ground-plane z axis, foreshortened by the
+ *   camera tilt (1/sin(tilt); sqrt(2) at the 45-degree overview tilt).
+ * The target moves OPPOSITE the drag ("grab the map" semantics).
+ */
+export function panCameraTarget(
+  target: CameraPanTarget,
+  screenDx: number,
+  screenDy: number,
+  distance: number,
+  viewportHeight: number,
+  fovDeg: number,
+  tiltDeg: number,
+): CameraPanTarget {
+  const worldPerPixel =
+    (2 * distance * Math.tan((fovDeg * Math.PI) / 180 / 2)) / Math.max(viewportHeight, 1);
+  const tiltRad = (clampRange(tiltDeg, 1, 89) * Math.PI) / 180;
+  return {
+    x: target.x - screenDx * worldPerPixel,
+    z: target.z - (screenDy * worldPerPixel) / Math.sin(tiltRad),
+  };
+}
+
 export interface Vec3 {
   readonly x: number;
   readonly y: number;
@@ -80,9 +140,9 @@ const WORLD_UP: Vec3 = { x: 0, y: 1, z: 0 };
  * produces. Lets the painter's display-only ramp-direction glyph overlay
  * (see `ramp-glyph.ts` + `PainterViewport`) place a DOM label over its cell
  * without holding a live `THREE.Camera` -- this stays pure/unit-testable,
- * mirroring this module's other camera math (the overview camera never
- * pans/zooms at runtime, so this projection is stable for a whole session
- * except across a resize, which only changes `aspect`).
+ * mirroring this module's other camera math (callers re-project whenever the
+ * pose changes: on resize, and on the painter's wheel-zoom/drag-pan, see
+ * WU-UX-01's `zoomCameraDistance`/`panCameraTarget`).
  *
  * Returns `undefined` when `point` is behind the camera (nothing to render).
  */

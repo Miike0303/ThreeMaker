@@ -60,6 +60,7 @@
     "painter.palette.assigned.furniture": "Furniture tile set to {id}",
     "painter.status.eventsInvalid": "Events invalid — fix before save",
     "painter.status.ready": "Ready",
+    "painter.status.hover": "({x}, {y})",
     "painter.createMap": "Create demo map",
     "painter.createFailed": "Failed to create the map — see console for details.",
     "painter.load": "Load",

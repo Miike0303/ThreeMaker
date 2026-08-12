@@ -60,6 +60,7 @@
     "painter.palette.assigned.furniture": "Muebles fijados a tile {id}",
     "painter.status.eventsInvalid": "Eventos inválidos — corregí antes de guardar",
     "painter.status.ready": "Listo",
+    "painter.status.hover": "({x}, {y})",
     "painter.createMap": "Crear mapa de demostración",
     "painter.createFailed": "No se pudo crear el mapa — ver la consola para más detalles.",
     "painter.load": "Cargar",

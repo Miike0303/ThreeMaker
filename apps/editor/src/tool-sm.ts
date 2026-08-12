@@ -61,6 +61,63 @@ export function resolveToolShortcut(key: string): ToolId | undefined {
   return TOOL_SHORTCUTS[key.toLowerCase()];
 }
 
+/** Structural stand-in for a keydown `event.target` element, so the guard stays pure/unit-testable with no DOM dependency. */
+export interface EditableTargetLike {
+  readonly tagName?: string;
+  readonly isContentEditable?: boolean;
+}
+
+export interface ShortcutModifiers {
+  readonly ctrlKey?: boolean;
+  readonly metaKey?: boolean;
+  readonly altKey?: boolean;
+}
+
+const EDITABLE_TAGS: ReadonlySet<string> = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+
+/**
+ * True when a bare-letter tool shortcut must NOT fire (WU-UX-02): the key
+ * event targets a text-entry element (input/textarea/select/contentEditable
+ * -- typing "b" in the map-name field is text, not a tool switch), or a
+ * ctrl/meta/alt modifier is held (those belong to editor chords, see
+ * `resolveEditorChord`, or to the browser).
+ */
+export function shouldIgnoreToolShortcut(
+  target: EditableTargetLike | null | undefined,
+  modifiers: ShortcutModifiers,
+): boolean {
+  if (modifiers.ctrlKey || modifiers.metaKey || modifiers.altKey) return true;
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+  return target.tagName !== undefined && EDITABLE_TAGS.has(target.tagName.toUpperCase());
+}
+
+export type EditorChord = 'undo' | 'redo' | 'save' | 'cancel';
+
+/** Structural stand-in for the chord-relevant fields of a `KeyboardEvent`, keeping `resolveEditorChord` pure/unit-testable. */
+export interface ChordEventLike {
+  readonly key: string;
+  readonly ctrlKey?: boolean;
+  readonly metaKey?: boolean;
+  readonly shiftKey?: boolean;
+}
+
+/**
+ * Resolves editor-level keyboard chords (WU-UX-03): Ctrl/Cmd+Z = undo,
+ * Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z = redo, Ctrl/Cmd+S = save, Escape = cancel
+ * (no modifier). Anything else is `null` -- notably every bare letter, which
+ * stays in `resolveToolShortcut`'s namespace.
+ */
+export function resolveEditorChord(event: ChordEventLike): EditorChord | null {
+  if (event.key === 'Escape') return 'cancel';
+  if (!event.ctrlKey && !event.metaKey) return null;
+  const key = event.key.toLowerCase();
+  if (key === 'z') return event.shiftKey ? 'redo' : 'undo';
+  if (key === 'y') return 'redo';
+  if (key === 's') return 'save';
+  return null;
+}
+
 export interface TilePoint {
   readonly x: number;
   readonly y: number;

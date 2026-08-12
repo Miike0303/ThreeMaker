@@ -105,7 +105,7 @@ input:focus,
 select:focus,
 textarea:focus,
 button:focus-visible,
-input[type='checkbox']:focus-visible,
+input[type="checkbox"]:focus-visible,
 .ide-tool:focus-visible,
 .ide-inspector-tab:focus-visible {
   outline: 2px solid var(--tm-focus);
@@ -1117,10 +1117,16 @@ label {
 .painter-prop-marker,
 .painter-npc-marker,
 .painter-trigger-marker,
-.painter-light-marker {
+.painter-light-marker,
+.painter-hover-marker {
   font-size: 14px;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
   user-select: none;
+}
+
+.painter-hover-marker {
+  color: var(--tm-accent);
+  opacity: 0.75;
 }
 
 .painter-room-rect {

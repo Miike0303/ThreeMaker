@@ -3,7 +3,9 @@ import {
   beginStroke,
   continueStroke,
   endStroke,
+  resolveEditorChord,
   resolveToolShortcut,
+  shouldIgnoreToolShortcut,
   TOOL_SM_IDLE,
 } from '../src/tool-sm.js';
 
@@ -22,6 +24,71 @@ describe('resolveToolShortcut', () => {
   it('returns undefined for a non-shortcut key', () => {
     expect(resolveToolShortcut('x')).toBeUndefined();
     expect(resolveToolShortcut('Enter')).toBeUndefined();
+  });
+});
+
+describe('shouldIgnoreToolShortcut (WU-UX-02 keyboard guard)', () => {
+  const noModifiers = {};
+
+  it('ignores shortcuts while focus is in an input, textarea, or select', () => {
+    expect(shouldIgnoreToolShortcut({ tagName: 'INPUT' }, noModifiers)).toBe(true);
+    expect(shouldIgnoreToolShortcut({ tagName: 'TEXTAREA' }, noModifiers)).toBe(true);
+    expect(shouldIgnoreToolShortcut({ tagName: 'SELECT' }, noModifiers)).toBe(true);
+  });
+
+  it('matches tag names case-insensitively', () => {
+    expect(shouldIgnoreToolShortcut({ tagName: 'input' }, noModifiers)).toBe(true);
+  });
+
+  it('ignores shortcuts while focus is in a contentEditable element', () => {
+    expect(shouldIgnoreToolShortcut({ tagName: 'DIV', isContentEditable: true }, noModifiers)).toBe(
+      true,
+    );
+  });
+
+  it('ignores shortcuts while ctrl, meta, or alt is held', () => {
+    expect(shouldIgnoreToolShortcut({ tagName: 'CANVAS' }, { ctrlKey: true })).toBe(true);
+    expect(shouldIgnoreToolShortcut({ tagName: 'CANVAS' }, { metaKey: true })).toBe(true);
+    expect(shouldIgnoreToolShortcut({ tagName: 'CANVAS' }, { altKey: true })).toBe(true);
+  });
+
+  it('allows shortcuts from non-editable targets with no modifiers held', () => {
+    expect(shouldIgnoreToolShortcut({ tagName: 'CANVAS' }, noModifiers)).toBe(false);
+    expect(shouldIgnoreToolShortcut({ tagName: 'BODY' }, noModifiers)).toBe(false);
+    expect(shouldIgnoreToolShortcut(null, noModifiers)).toBe(false);
+    expect(
+      shouldIgnoreToolShortcut({ tagName: 'DIV', isContentEditable: false }, noModifiers),
+    ).toBe(false);
+  });
+});
+
+describe('resolveEditorChord (WU-UX-03 editor chords)', () => {
+  it('resolves Ctrl/Cmd+Z to undo', () => {
+    expect(resolveEditorChord({ key: 'z', ctrlKey: true })).toBe('undo');
+    expect(resolveEditorChord({ key: 'Z', metaKey: true })).toBe('undo');
+  });
+
+  it('resolves Ctrl/Cmd+Y and Ctrl/Cmd+Shift+Z to redo', () => {
+    expect(resolveEditorChord({ key: 'y', ctrlKey: true })).toBe('redo');
+    expect(resolveEditorChord({ key: 'Y', metaKey: true })).toBe('redo');
+    expect(resolveEditorChord({ key: 'z', ctrlKey: true, shiftKey: true })).toBe('redo');
+    expect(resolveEditorChord({ key: 'Z', metaKey: true, shiftKey: true })).toBe('redo');
+  });
+
+  it('resolves Ctrl/Cmd+S to save', () => {
+    expect(resolveEditorChord({ key: 's', ctrlKey: true })).toBe('save');
+    expect(resolveEditorChord({ key: 'S', metaKey: true })).toBe('save');
+  });
+
+  it('resolves Escape to cancel with no modifier required', () => {
+    expect(resolveEditorChord({ key: 'Escape' })).toBe('cancel');
+  });
+
+  it('returns null for bare keys and non-chord combinations', () => {
+    expect(resolveEditorChord({ key: 'z' })).toBeNull();
+    expect(resolveEditorChord({ key: 's' })).toBeNull();
+    expect(resolveEditorChord({ key: 'b', ctrlKey: true })).toBeNull();
+    expect(resolveEditorChord({ key: 'z', shiftKey: true })).toBeNull();
   });
 });
 

@@ -18,6 +18,7 @@ import {
 import * as THREE from 'three';
 import { objectPreviewUrl } from './catalog-client.js';
 import { computeDirtyChunkKeys } from './dirty-region.js';
+import { computeLightOverlayPoints } from './light-overlay.js';
 import {
   composeDocumentFromPainterFloors,
   normalizeMapName,
@@ -25,7 +26,6 @@ import {
   toRenderableMap,
   toRenderableTileset,
 } from './map-compose.js';
-import { computeLightOverlayPoints } from './light-overlay.js';
 import { computeNpcOverlayPoints } from './npc-overlay.js';
 import type { PainterState } from './painter-store.js';
 import * as painter from './painter-store.js';
@@ -34,14 +34,16 @@ import { computeRampGlyphCells } from './ramp-glyph.js';
 import { computeRoomOverlayRects, roomRectCorners } from './room-overlay.js';
 import { computeSpawnOverlayPoint } from './spawn-overlay.js';
 import { computeStairOverlayPoints } from './stair-overlay.js';
-import type { TilePoint, ToolId } from './tool-sm.js';
-import { resolveToolShortcut } from './tool-sm.js';
+import type { EditableTargetLike, TilePoint, ToolId } from './tool-sm.js';
+import { resolveEditorChord, resolveToolShortcut, shouldIgnoreToolShortcut } from './tool-sm.js';
 import { computeTriggerOverlayPoints } from './trigger-overlay.js';
 import type { OverviewCameraPose } from './viewer-camera.js';
 import {
   computeOverviewCameraDistance,
   computeOverviewCameraPose,
+  panCameraTarget,
   projectToScreenFraction,
+  zoomCameraDistance,
 } from './viewer-camera.js';
 
 /** Loads a texture (+ its pixel size) for every composed slot that has a resolved object hash. Thin IO glue, untested per this module's convention. */
@@ -70,6 +72,9 @@ const OVERVIEW_TILT_DEG = 45;
 const OVERVIEW_DISTANCE_FACTOR = 1.6;
 const OVERVIEW_MAX_DISTANCE = 60;
 const OVERVIEW_FOV_DEG = 45;
+/** Wheel-zoom bounds relative to the map's framing distance (`computeOverviewCameraDistance`), WU-UX-01. */
+const ZOOM_MIN_DISTANCE_FACTOR = 0.2;
+const ZOOM_MAX_DISTANCE_FACTOR = 2.5;
 
 /** One ramp cell's display-only direction glyph, already projected to a screen-space fraction (see `viewer-camera.ts`'s `projectToScreenFraction`) for the surrounding UI to position a DOM label with, no camera object needed. */
 export interface RampGlyphOverlayItem {
@@ -135,6 +140,14 @@ export interface LightOverlayItem {
   readonly color: string;
 }
 
+/** The tile under the pointer while NOT stroking (WU-UX-04): tile coords for the status-bar readout plus the projected screen fraction for the highlight marker (so it re-projects on camera zoom/pan/resize like every other overlay). */
+export interface HoverOverlayItem {
+  readonly x: number;
+  readonly y: number;
+  readonly xFrac: number;
+  readonly yFrac: number;
+}
+
 export interface PainterViewportCallbacks {
   /** Fired after every painter-store transition (tool switch, stroke commit, undo/redo, semantic assignment...) so the surrounding UI can re-render its toolbar/inspector. */
   readonly onStateChange?: (state: PainterState) => void;
@@ -156,6 +169,10 @@ export interface PainterViewportCallbacks {
   readonly onTriggerOverlayChange?: (points: readonly TriggerOverlayItem[]) => void;
   /** Fired whenever the active floor's light markers change (schema v6 WU-LIGHT-02). */
   readonly onLightOverlayChange?: (points: readonly LightOverlayItem[]) => void;
+  /** Fired when the hovered tile changes while not stroking (WU-UX-04): the picked tile + its screen projection, or `null` when the pointer leaves the canvas / misses the map. Also re-fired (re-projected) on camera zoom/pan/resize. */
+  readonly onHoverChange?: (tile: HoverOverlayItem | null) => void;
+  /** Fired on the Ctrl/Cmd+S chord (WU-UX-03) so the surrounding UI can run its existing Save flow. */
+  readonly onSaveRequest?: () => void;
 }
 
 /**
@@ -180,7 +197,9 @@ export class PainterViewport {
   private readonly onResize = () => this.handleResize();
   private readonly onPointerDown = (event: PointerEvent) => this.handlePointerDown(event);
   private readonly onPointerMove = (event: PointerEvent) => this.handlePointerMove(event);
-  private readonly onPointerUp = () => this.handlePointerUp();
+  private readonly onPointerUp = (event: PointerEvent) => this.handlePointerUp(event);
+  private readonly onPointerLeave = () => this.updateHoverTile(undefined);
+  private readonly onWheel = (event: WheelEvent) => this.handleWheel(event);
   private readonly onKeyDown = (event: KeyboardEvent) => this.handleKeyDown(event);
 
   private tilemap: StreamingTilemapScene | undefined;
@@ -189,8 +208,19 @@ export class PainterViewport {
   private sheetPixelSizes: SheetPixelSizes = {};
   private textures: Partial<Record<TileSheetId, THREE.Texture>> = {};
   private state: PainterState | undefined;
-  /** Set by `frameCamera`; the overview camera never pans/zooms afterward, so this stays valid for the whole session (see `recomputeRampGlyphs`). */
+  /** Set by `frameCamera` and updated by every wheel-zoom/drag-pan (`applyCameraPose`); every overlay projection reads it, and every camera change re-fires the shared `recomputeOverlays` path (WU-UX-01). */
   private cameraPose: OverviewCameraPose | undefined;
+  /** The map's framing distance (`computeOverviewCameraDistance`), the reference the wheel-zoom bounds scale from. Reset by `frameCamera` on every load. */
+  private referenceCameraDistance = 0;
+  /** Current camera boom distance (wheel-zoom state, WU-UX-01). */
+  private cameraDistance = 0;
+  /** Current camera look-at target on the ground plane (drag-pan state, WU-UX-01). */
+  private cameraTargetX = 0;
+  private cameraTargetZ = 0;
+  /** In-progress middle-button drag-pan, if any (WU-UX-01). */
+  private panState: { pointerId: number; lastX: number; lastY: number } | undefined;
+  /** The tile currently under the pointer while not stroking (WU-UX-04); `undefined` off-map/off-canvas. */
+  private hoverTile: TilePoint | undefined;
 
   constructor(container: HTMLElement, callbacks: PainterViewportCallbacks = {}) {
     this.container = container;
@@ -217,6 +247,9 @@ export class PainterViewport {
     window.addEventListener('keydown', this.onKeyDown);
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
     this.renderer.domElement.addEventListener('pointermove', this.onPointerMove);
+    this.renderer.domElement.addEventListener('pointerleave', this.onPointerLeave);
+    // passive: false so wheel-zoom can preventDefault the page scroll (WU-UX-01).
+    this.renderer.domElement.addEventListener('wheel', this.onWheel, { passive: false });
     window.addEventListener('pointerup', this.onPointerUp);
   }
 
@@ -255,14 +288,7 @@ export class PainterViewport {
     this.frameCamera(doc.width, doc.height);
     this.startRenderLoop();
     this.emitState();
-    this.recomputeRampGlyphs();
-    this.recomputeRoomOverlay();
-    this.recomputeStairOverlay();
-    this.recomputeSpawnOverlay();
-    this.recomputePropOverlay();
-    this.recomputeNpcOverlay();
-    this.recomputeTriggerOverlay();
-    this.recomputeLightOverlay();
+    this.recomputeOverlays();
   }
 
   /** Adds a new blank floor on top of the stack and makes it active (spec: "adding a floor"). No-op if no map is loaded. */
@@ -316,14 +342,7 @@ export class PainterViewport {
     this.state = next;
     this.rebuildActiveFloorScene();
     this.emitState();
-    this.recomputeRampGlyphs();
-    this.recomputeRoomOverlay();
-    this.recomputeStairOverlay();
-    this.recomputeSpawnOverlay();
-    this.recomputePropOverlay();
-    this.recomputeNpcOverlay();
-    this.recomputeTriggerOverlay();
-    this.recomputeLightOverlay();
+    this.recomputeOverlays();
   }
 
   setTool(tool: ToolId): void {
@@ -661,6 +680,15 @@ export class PainterViewport {
     this.emitState();
   }
 
+  /** Cancels any in-progress stroke without committing tiles (Escape chord, WU-UX-03) -- delegates to `painter-store.ts`'s `cancelStroke`. No-op while idle. */
+  cancelStroke(): void {
+    if (!this.state) return;
+    const next = painter.cancelStroke(this.state);
+    if (next === this.state) return;
+    this.state = next;
+    this.emitState();
+  }
+
   /** The current map state (ALL floors' layers + semantics), for saving -- not just the active floor. `undefined` if no map is loaded. */
   currentDocument(): MapDocument | undefined {
     if (!this.doc || !this.state) return undefined;
@@ -719,6 +747,14 @@ export class PainterViewport {
   }
 
   private handlePointerDown(event: PointerEvent): void {
+    // Middle-button drag pans the camera (WU-UX-01); it never paints.
+    if (event.button === 1) {
+      if (!this.doc) return;
+      event.preventDefault();
+      this.renderer.domElement.setPointerCapture(event.pointerId);
+      this.panState = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
+      return;
+    }
     if (!this.state) return;
     const point = this.pickTile(event);
     if (!point) return;
@@ -737,13 +773,61 @@ export class PainterViewport {
   }
 
   private handlePointerMove(event: PointerEvent): void {
-    if (this.state?.stroke.status !== 'stroking') return;
+    if (this.panState) {
+      this.handlePanMove(event);
+      return;
+    }
+    if (this.state?.stroke.status !== 'stroking') {
+      // Not stroking: track the hovered tile for the highlight + status readout (WU-UX-04).
+      this.updateHoverTile(this.pickTile(event));
+      return;
+    }
     const point = this.pickTile(event);
     if (!point) return;
     this.state = painter.pointerMove(this.state, point);
   }
 
-  private handlePointerUp(): void {
+  /** Applies one middle-drag increment: converts the pixel delta to a ground-plane target offset and re-fires the shared overlay recompute path (WU-UX-01). */
+  private handlePanMove(event: PointerEvent): void {
+    if (!this.panState || event.pointerId !== this.panState.pointerId) return;
+    const dx = event.clientX - this.panState.lastX;
+    const dy = event.clientY - this.panState.lastY;
+    this.panState = { ...this.panState, lastX: event.clientX, lastY: event.clientY };
+    if (dx === 0 && dy === 0) return;
+    const next = panCameraTarget(
+      { x: this.cameraTargetX, z: this.cameraTargetZ },
+      dx,
+      dy,
+      this.cameraDistance,
+      Math.max(this.container.clientHeight, 1),
+      OVERVIEW_FOV_DEG,
+      OVERVIEW_TILT_DEG,
+    );
+    this.cameraTargetX = next.x;
+    this.cameraTargetZ = next.z;
+    this.applyCameraPose();
+    this.recomputeOverlays();
+  }
+
+  private handleWheel(event: WheelEvent): void {
+    if (!this.doc || this.referenceCameraDistance <= 0) return;
+    // The wheel zooms the viewport, never scrolls the page (WU-UX-01).
+    event.preventDefault();
+    const next = zoomCameraDistance(this.cameraDistance, event.deltaY, {
+      min: this.referenceCameraDistance * ZOOM_MIN_DISTANCE_FACTOR,
+      max: this.referenceCameraDistance * ZOOM_MAX_DISTANCE_FACTOR,
+    });
+    if (next === this.cameraDistance) return;
+    this.cameraDistance = next;
+    this.applyCameraPose();
+    this.recomputeOverlays();
+  }
+
+  private handlePointerUp(event: PointerEvent): void {
+    if (this.panState && event.pointerId === this.panState.pointerId) {
+      this.panState = undefined;
+      return;
+    }
     if (!this.state) return;
     const isRoomBoxCommit =
       this.state.stroke.status === 'stroking' && this.state.stroke.tool === 'room-box';
@@ -760,6 +844,28 @@ export class PainterViewport {
 
   private handleKeyDown(event: KeyboardEvent): void {
     if (!this.state) return;
+    const target = event.target as EditableTargetLike | null;
+    const chord = resolveEditorChord(event);
+    // Save resolves BEFORE the editable-target guard: Ctrl/Cmd+S works
+    // everywhere, including while typing in the map-name field (WU-UX-03).
+    if (chord === 'save') {
+      event.preventDefault();
+      this.callbacks.onSaveRequest?.();
+      return;
+    }
+    // Empty modifiers = check ONLY for an editable target: undo/redo/cancel
+    // stay native inside inputs (text undo, Escape-to-dismiss).
+    const inEditableTarget = shouldIgnoreToolShortcut(target, {});
+    if (chord !== null) {
+      if (inEditableTarget) return;
+      event.preventDefault();
+      if (chord === 'undo') this.undo();
+      else if (chord === 'redo') this.redo();
+      else this.cancelStroke();
+      return;
+    }
+    // Bare-letter tool shortcuts: suppressed while typing or chording (WU-UX-02).
+    if (shouldIgnoreToolShortcut(target, event)) return;
     const tool = resolveToolShortcut(event.key);
     if (tool) this.setTool(tool);
   }
@@ -841,19 +947,49 @@ export class PainterViewport {
     if (this.state) this.callbacks.onStateChange?.(this.state);
   }
 
+  /** Frames the whole map from its center at the reference distance, RESETTING any wheel-zoom/drag-pan offsets (WU-UX-01) -- called once per `loadMap`. */
   private frameCamera(mapWidth: number, mapHeight: number): void {
-    const distance = computeOverviewCameraDistance(
+    this.referenceCameraDistance = computeOverviewCameraDistance(
       mapWidth,
       mapHeight,
       OVERVIEW_DISTANCE_FACTOR,
       OVERVIEW_MAX_DISTANCE,
     );
-    const centerX = (mapWidth * TILE_WORLD_SIZE) / 2;
-    const centerZ = (mapHeight * TILE_WORLD_SIZE) / 2;
-    const pose = computeOverviewCameraPose(centerX, centerZ, OVERVIEW_TILT_DEG, distance);
+    this.cameraDistance = this.referenceCameraDistance;
+    this.cameraTargetX = (mapWidth * TILE_WORLD_SIZE) / 2;
+    this.cameraTargetZ = (mapHeight * TILE_WORLD_SIZE) / 2;
+    this.applyCameraPose();
+  }
+
+  /** Recomputes `this.cameraPose` from the current target/distance state through the SAME `computeOverviewCameraPose` path as initial framing, and syncs the live `THREE.Camera` -- the single write point for the camera (WU-UX-01). */
+  private applyCameraPose(): void {
+    const pose = computeOverviewCameraPose(
+      this.cameraTargetX,
+      this.cameraTargetZ,
+      OVERVIEW_TILT_DEG,
+      this.cameraDistance,
+    );
     this.cameraPose = pose;
     this.camera.position.set(pose.position.x, pose.position.y, pose.position.z);
     this.camera.lookAt(pose.lookAt.x, pose.lookAt.y, pose.lookAt.z);
+  }
+
+  /**
+   * Re-fires EVERY projected HTML overlay through the current camera pose --
+   * the single shared recompute path for map load, floor changes, resize,
+   * and every wheel-zoom/drag-pan camera change (WU-UX-01), so no overlay
+   * can drift out of sync with the canvas.
+   */
+  private recomputeOverlays(): void {
+    this.recomputeRampGlyphs();
+    this.recomputeRoomOverlay();
+    this.recomputeStairOverlay();
+    this.recomputeSpawnOverlay();
+    this.recomputePropOverlay();
+    this.recomputeNpcOverlay();
+    this.recomputeTriggerOverlay();
+    this.recomputeLightOverlay();
+    this.recomputeHoverOverlay();
   }
 
   /**
@@ -1083,6 +1219,39 @@ export class PainterViewport {
     this.callbacks.onLightOverlayChange?.(items);
   }
 
+  /** Adopts `point` as the hovered tile if it changed (both-`undefined` counts as unchanged) and re-fires the hover overlay (WU-UX-04). */
+  private updateHoverTile(point: TilePoint | undefined): void {
+    if (this.hoverTile?.x === point?.x && this.hoverTile?.y === point?.y) return;
+    this.hoverTile = point;
+    this.recomputeHoverOverlay();
+  }
+
+  /** Projects the hovered tile (if any) through the current camera pose and pushes it to `onHoverChange` (WU-UX-04) -- part of `recomputeOverlays`, so the highlight follows zoom/pan/resize. */
+  private recomputeHoverOverlay(): void {
+    const onHoverChange = this.callbacks.onHoverChange;
+    if (!onHoverChange) return;
+    if (!this.hoverTile || !this.cameraPose) {
+      onHoverChange(null);
+      return;
+    }
+    const projected = projectToScreenFraction(
+      { x: this.hoverTile.x + 0.5, y: 0, z: this.hoverTile.y + 0.5 },
+      this.cameraPose,
+      OVERVIEW_FOV_DEG,
+      this.camera.aspect,
+    );
+    onHoverChange(
+      projected
+        ? {
+            x: this.hoverTile.x,
+            y: this.hoverTile.y,
+            xFrac: projected.xFrac,
+            yFrac: projected.yFrac,
+          }
+        : null,
+    );
+  }
+
   private startRenderLoop(): void {
     if (this.animationHandle !== undefined) return;
     const renderFrame = () => {
@@ -1098,14 +1267,7 @@ export class PainterViewport {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
-    this.recomputeRampGlyphs();
-    this.recomputeRoomOverlay();
-    this.recomputeStairOverlay();
-    this.recomputeSpawnOverlay();
-    this.recomputePropOverlay();
-    this.recomputeNpcOverlay();
-    this.recomputeTriggerOverlay();
-    this.recomputeLightOverlay();
+    this.recomputeOverlays();
   }
 
   dispose(): void {
@@ -1115,6 +1277,8 @@ export class PainterViewport {
     window.removeEventListener('pointerup', this.onPointerUp);
     this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
     this.renderer.domElement.removeEventListener('pointermove', this.onPointerMove);
+    this.renderer.domElement.removeEventListener('pointerleave', this.onPointerLeave);
+    this.renderer.domElement.removeEventListener('wheel', this.onWheel);
     this.tilemap?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

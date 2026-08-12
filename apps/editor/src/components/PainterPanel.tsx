@@ -12,15 +12,16 @@ import {
   objectPreviewUrl,
 } from '../catalog-client.js';
 import {
-  clearCommunityShareQueue,
   type CommunitySettings,
   type CommunityShareEnqueue,
-  communityShareTileCount,
+  clearCommunityShareQueue,
   communityShareQueueLicenseCounts,
   communityShareQueueTileTotal,
-  formatCommunityShareMapId,
+  communityShareTileCount,
   describeCommunityShareStatus,
   formatCommunityShareAt,
+  formatCommunityShareMapId,
+  licenseTagFromSlots,
   loadCommunitySettings,
   loadCommunityShareQueue,
   maybeEnqueueCommunityShare,
@@ -30,16 +31,8 @@ import {
   replaceCommunityShareQueue,
   saveCommunitySettings,
   serializeCommunityShareQueue,
-  licenseTagFromSlots,
   usesOnlyImportedSlotSources,
 } from '../community-settings.js';
-import {
-  canSavePainterDocument,
-  defaultWorldSeedValue,
-  parseWorldValue,
-  type WorldValueKind,
-  worldValueKind,
-} from '../event-form-helpers.js';
 import {
   attachedLights,
   lightAttachTargets,
@@ -55,12 +48,25 @@ import {
   triggerPlacementFromDocument,
   triggersOnFloor,
 } from '../entity-lists.js';
+import {
+  canSavePainterDocument,
+  defaultWorldSeedValue,
+  parseWorldValue,
+  type WorldValueKind,
+  worldValueKind,
+} from '../event-form-helpers.js';
 import { formatTemplate } from '../format-template.js';
 import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
+import {
+  INSPECTOR_TAB_IDS,
+  type InspectorTabId,
+  inspectorTabForTool,
+} from '../inspector-routing.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, normalizeMapName, seedDemoTiles } from '../map-compose.js';
 import { isEventReferenced, type PainterState, validateEventsDraft } from '../painter-store.js';
 import type {
+  HoverOverlayItem,
   LightOverlayItem,
   NpcOverlayItem,
   PropOverlayItem,
@@ -74,11 +80,6 @@ import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
 import { applyDungeonStampToMapDocument } from '../procgen/apply-stamp.js';
 import { stampSimpleDungeon } from '../procgen/dungeon-stamp.js';
 import {
-  INSPECTOR_TAB_IDS,
-  inspectorTabForTool,
-  type InspectorTabId,
-} from '../inspector-routing.js';
-import {
   assignmentFromPaletteClick,
   PROCGEN_PALETTE_ROLES,
   type ProcgenPaletteRole,
@@ -89,8 +90,8 @@ import {
   DEFAULT_PROCGEN_PRESET,
   getProcgenPreset,
   PROCGEN_PRESETS,
-  stampRoomLightOptionsFromPreset,
   type ProcgenPresetId,
+  stampRoomLightOptionsFromPreset,
 } from '../procgen/presets.js';
 import {
   clampFurnitureDensity,
@@ -263,6 +264,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [npcOverlay, setNpcOverlay] = useState<readonly NpcOverlayItem[]>([]);
   const [triggerOverlay, setTriggerOverlay] = useState<readonly TriggerOverlayItem[]>([]);
   const [lightOverlay, setLightOverlay] = useState<readonly LightOverlayItem[]>([]);
+  /** Hovered tile highlight + status readout (WU-UX-04); null off-map. */
+  const [hoverOverlay, setHoverOverlay] = useState<HoverOverlayItem | null>(null);
+  /** Live Save handler for the viewport's Ctrl/Cmd+S chord (WU-UX-03) -- a ref because the viewport (and its callbacks object) mounts once while handleSave re-binds with settings. */
+  const saveRequestRef = useRef<() => void>(() => {});
   const [characterSprites, setCharacterSprites] = useState<readonly AssetRow[]>([]);
   const glbInputRef = useRef<HTMLInputElement | null>(null);
   // Coordinate placement (complements canvas clicks on large maps).
@@ -281,9 +286,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [newEventKey, setNewEventKey] = useState('');
   const [newWorldSeedKey, setNewWorldSeedKey] = useState('');
   const [newWorldSeedKind, setNewWorldSeedKind] = useState<WorldValueKind>('boolean');
-  const [inspectorTab, setInspectorTab] = useState<InspectorTabId>(
-    'paint',
-  );
+  const [inspectorTab, setInspectorTab] = useState<InspectorTabId>('paint');
   const [community, setCommunity] = useState<CommunitySettings>(() => loadCommunitySettings());
   const [communityQueue, setCommunityQueue] = useState<readonly CommunityShareEnqueue[]>(() =>
     loadCommunityShareQueue(),
@@ -300,9 +303,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
   /** 0 = auto (furniture-class semantics); else explicit mid-layer furniture tile id. */
   const [procgenFurnitureTileId, setProcgenFurnitureTileId] = useState(0);
   /** Sparse furniture density 0–1 (mid layer); 0 disables scatter. */
-  const [procgenFurnitureDensity, setProcgenFurnitureDensity] = useState(
-    DEFAULT_FURNITURE_DENSITY,
-  );
+  const [procgenFurnitureDensity, setProcgenFurnitureDensity] = useState(DEFAULT_FURNITURE_DENSITY);
   /** Palette dock: click assigns brush fill, wall override, or door override. */
   const [paletteRole, setPaletteRole] = useState<ProcgenPaletteRole>('brush');
 
@@ -386,6 +387,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
       onNpcOverlayChange: setNpcOverlay,
       onTriggerOverlayChange: setTriggerOverlay,
       onLightOverlayChange: setLightOverlay,
+      onHoverChange: setHoverOverlay,
+      onSaveRequest: () => saveRequestRef.current(),
     });
     viewportRef.current = viewport;
     return () => {
@@ -506,6 +509,13 @@ export function PainterPanel({ t }: PainterPanelProps) {
     }
   }, [t, community]);
 
+  // Keep the viewport's Ctrl/Cmd+S chord pointing at the CURRENT Save handler.
+  useEffect(() => {
+    saveRequestRef.current = () => {
+      void handleSave();
+    };
+  }, [handleSave]);
+
   const handleGenerateDungeon = useCallback(async () => {
     const viewport = viewportRef.current;
     const doc = viewport?.currentDocument();
@@ -535,9 +545,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
         semantics: state.semantics,
         ...(procgenWallTileId > 0 ? { wallTileOverride: procgenWallTileId } : {}),
         ...(procgenDoorTileId > 0 ? { doorTileOverride: procgenDoorTileId } : {}),
-        ...(procgenFurnitureTileId > 0
-          ? { furnitureTileOverride: procgenFurnitureTileId }
-          : {}),
+        ...(procgenFurnitureTileId > 0 ? { furnitureTileOverride: procgenFurnitureTileId } : {}),
       });
       const seed = procgenSeed >>> 0;
       const preset = getProcgenPreset(procgenPreset);
@@ -790,10 +798,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     index: painterState.activeFloor,
                   })}
                   onChange={(event) =>
-                    viewportRef.current?.setFloorLabel(
-                      painterState.activeFloor,
-                      event.target.value,
-                    )
+                    viewportRef.current?.setFloorLabel(painterState.activeFloor, event.target.value)
                   }
                 />
               </label>
@@ -1089,6 +1094,30 @@ export function PainterPanel({ t }: PainterPanelProps) {
               </div>
             )}
 
+            {painterState && hoverOverlay && (
+              <div
+                className="painter-hover-overlay"
+                style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+              >
+                <span
+                  className="painter-hover-marker"
+                  role="img"
+                  style={{
+                    position: 'absolute',
+                    left: `${hoverOverlay.xFrac * 100}%`,
+                    top: `${hoverOverlay.yFrac * 100}%`,
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                  aria-label={formatTemplate(t('painter.status.hover'), {
+                    x: hoverOverlay.x,
+                    y: hoverOverlay.y,
+                  })}
+                >
+                  ▣
+                </span>
+              </div>
+            )}
+
             {(!mapReady || !painterState) && (
               <div className="ide-welcome" style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
                 <div className="ide-welcome-card">
@@ -1142,7 +1171,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
 
           {mapReady && painterState && paletteSlots.length > 0 && (
             <section className="ide-palette-dock" aria-label={t('painter.paletteDock')}>
-              <div className="ide-palette-roles" role="radiogroup" aria-label={t('painter.palette.role')}>
+              <div
+                className="ide-palette-roles"
+                role="radiogroup"
+                aria-label={t('painter.palette.role')}
+              >
                 <span className="ide-palette-roles-label">{t('painter.palette.role')}</span>
                 {PROCGEN_PALETTE_ROLES.map((role) => (
                   <button
@@ -1194,9 +1227,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                     }
                     const status = statusForPaletteAssignment(assignment);
                     if (status) {
-                      setStatusMessage(
-                        formatTemplate(t(status.messageKey), { id: status.id }),
-                      );
+                      setStatusMessage(formatTemplate(t(status.messageKey), { id: status.id }));
                     }
                   }}
                   tileAriaLabel={(tileId) =>
@@ -1516,15 +1547,16 @@ export function PainterPanel({ t }: PainterPanelProps) {
                             }}
                           />
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => setProcgenSeed(randomProcgenSeed())}
-                        >
+                        <button type="button" onClick={() => setProcgenSeed(randomProcgenSeed())}>
                           {t('painter.procgen.randomizeSeed')}
                         </button>
                       </div>
                       {procgenSeedHistory.length > 0 && (
-                        <div className="ide-row ide-seed-history" role="group" aria-label={t('painter.procgen.seedHistory')}>
+                        <div
+                          className="ide-row ide-seed-history"
+                          role="group"
+                          aria-label={t('painter.procgen.seedHistory')}
+                        >
                           <span className="ide-hint">{t('painter.procgen.seedHistory')}:</span>
                           {procgenSeedHistory.map((s) => (
                             <button
@@ -1722,7 +1754,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       </p>
                       {communityQueue.length === 0 ? (
                         <div className="ide-empty" role="status">
-                          <p className="ide-empty-title">{t('painter.community.queueEmptyTitle')}</p>
+                          <p className="ide-empty-title">
+                            {t('painter.community.queueEmptyTitle')}
+                          </p>
                           <p className="ide-hint">{t('painter.community.queueEmptyBody')}</p>
                         </div>
                       ) : (
@@ -1752,9 +1786,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                           }),
                                         ),
                                       () =>
-                                        setStatusMessage(
-                                          t('painter.community.queueCopyFailed'),
-                                        ),
+                                        setStatusMessage(t('painter.community.queueCopyFailed')),
                                     );
                                   }}
                                 >
@@ -2383,9 +2415,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                 type="button"
                                 onClick={() => {
                                   const brush = npcPlacementFromDocument(npc);
-                                  viewportRef.current?.setActiveNpcSpriteObject(
-                                    brush.spriteObject,
-                                  );
+                                  viewportRef.current?.setActiveNpcSpriteObject(brush.spriteObject);
                                   viewportRef.current?.setActiveNpcCharacterIndex(
                                     brush.characterIndex,
                                   );
@@ -2770,10 +2800,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           <p className="ide-hint">{t('painter.lights.attached.emptyBody')}</p>
                         </div>
                       ) : (
-                        <ul
-                          className="ide-list"
-                          aria-label={t('painter.lights.attached')}
-                        >
+                        <ul className="ide-list" aria-label={t('painter.lights.attached')}>
                           {docAttachedLights.map((light) => (
                             <li key={light.id}>
                               <button
@@ -2823,6 +2850,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
           <span>
             {t(`painter.tool.${painterState.tool}`)} · L{painterState.activeLayer} · F
             {painterState.activeFloor}
+            {hoverOverlay &&
+              ` · ${formatTemplate(t('painter.status.hover'), {
+                x: hoverOverlay.x,
+                y: hoverOverlay.y,
+              })}`}
           </span>
         ) : (
           <span>{t('painter.status.ready')}</span>
