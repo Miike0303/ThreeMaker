@@ -770,10 +770,18 @@ export function PainterPanel({ t }: PainterPanelProps) {
               )}
           {mapReady && (
             <>
-              <button type="button" onClick={() => viewportRef.current?.undo()}>
+              <button
+                type="button"
+                disabled={!activeFloorState?.commandStack.undoStack.length}
+                onClick={() => viewportRef.current?.undo()}
+              >
                 {t('painter.undo')}
               </button>
-              <button type="button" onClick={() => viewportRef.current?.redo()}>
+              <button
+                type="button"
+                disabled={!activeFloorState?.commandStack.redoStack.length}
+                onClick={() => viewportRef.current?.redo()}
+              >
                 {t('painter.redo')}
               </button>
             </>
@@ -1371,10 +1379,18 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         >
                           {t('painter.room.new')}
                         </button>
-                        <button type="button" onClick={() => viewportRef.current?.undoRoom()}>
+                        <button
+                          type="button"
+                          disabled={!activeFloorState?.roomCommandStack.undoStack.length}
+                          onClick={() => viewportRef.current?.undoRoom()}
+                        >
                           {t('painter.room.undo')}
                         </button>
-                        <button type="button" onClick={() => viewportRef.current?.redoRoom()}>
+                        <button
+                          type="button"
+                          disabled={!activeFloorState?.roomCommandStack.redoStack.length}
+                          onClick={() => viewportRef.current?.redoRoom()}
+                        >
                           {t('painter.room.redo')}
                         </button>
                       </div>
@@ -2724,10 +2740,18 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       <h3 className="ide-section-title">{t('painter.lights')}</h3>
                       <p className="ide-hint">{t('painter.lights.hint')}</p>
                       <div className="ide-row">
-                        <button type="button" onClick={() => viewportRef.current?.undoLight()}>
+                        <button
+                          type="button"
+                          disabled={!activeFloorState?.lightCommandStack.undoStack.length}
+                          onClick={() => viewportRef.current?.undoLight()}
+                        >
                           {t('painter.lights.undo')}
                         </button>
-                        <button type="button" onClick={() => viewportRef.current?.redoLight()}>
+                        <button
+                          type="button"
+                          disabled={!activeFloorState?.lightCommandStack.redoStack.length}
+                          onClick={() => viewportRef.current?.redoLight()}
+                        >
                           {t('painter.lights.redo')}
                         </button>
                       </div>
