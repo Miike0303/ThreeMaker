@@ -20,9 +20,9 @@ use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 
 /// Matches `packages/assets/src/catalog.ts`'s `SCHEMA_SQL` table shapes
-/// exactly (see module doc). Used only by this module's own tests to build a
-/// fixture database identical in shape to a real bulk-run catalog.
-#[cfg(test)]
+/// exactly (see module doc). Shared with `import_catalog` for the native
+/// writer path — keep in sync with the Node writer.
+#[allow(dead_code)]
 pub(crate) const SCHEMA_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS games (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,6 +101,7 @@ pub const PAGE_SIZE: u32 = 100;
 pub const EXPECTED_SCHEMA_VERSION: i64 = 1;
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GameRow {
     pub id: i64,
     pub root_path: String,
@@ -110,6 +111,7 @@ pub struct GameRow {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct AssetFilter {
     pub game_id: Option<i64>,
     #[serde(rename = "type")]
@@ -117,6 +119,7 @@ pub struct AssetFilter {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AssetRow {
     pub id: i64,
     pub game_id: i64,
@@ -128,6 +131,7 @@ pub struct AssetRow {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AssetPage {
     pub rows: Vec<AssetRow>,
     pub total: i64,
@@ -136,6 +140,7 @@ pub struct AssetPage {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TilesetSheetRow {
     pub slot: String,
     pub asset_id: i64,
@@ -144,6 +149,7 @@ pub struct TilesetSheetRow {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TilesetRow {
     pub id: i64,
     pub game_id: i64,
@@ -155,9 +161,8 @@ pub struct TilesetRow {
 
 /// Summary row for a game-scoped tileset picker — matches the dev middleware's
 /// `DevTilesetSummaryRow` / TS `TilesetSummaryRow` (no sheets, no flags).
-/// Field names are snake_case on the wire, same as the other catalog IPC
-/// structs (`TilesetRow`, `GameRow`, …).
 #[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct TilesetSummaryRow {
     pub id: i64,
     pub game_id: i64,
@@ -234,9 +239,8 @@ pub fn verify_schema_version(conn: &Connection) -> Result<(), CatalogError> {
 }
 
 pub fn list_games(conn: &Connection) -> Result<Vec<GameRow>, CatalogError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, root_path, title, engine, scanned_at FROM games ORDER BY root_path",
-    )?;
+    let mut stmt = conn
+        .prepare("SELECT id, root_path, title, engine, scanned_at FROM games ORDER BY root_path")?;
     let rows = stmt
         .query_map([], |row| {
             Ok(GameRow {
@@ -500,15 +504,25 @@ mod tests {
     fn list_assets_filters_by_game_and_type() {
         let conn = fixture_connection();
 
-        let by_type = list_assets(&conn, &AssetFilter { game_id: None, type_: Some("tileset".into()) }, 0)
-            .expect("list_assets by type");
+        let by_type = list_assets(
+            &conn,
+            &AssetFilter {
+                game_id: None,
+                type_: Some("tileset".into()),
+            },
+            0,
+        )
+        .expect("list_assets by type");
         assert_eq!(by_type.total, 3);
         assert_eq!(by_type.rows.len(), 3);
         assert!(by_type.rows.iter().all(|row| row.type_ == "tileset"));
 
         let by_game_and_type = list_assets(
             &conn,
-            &AssetFilter { game_id: Some(1), type_: Some("bgm".into()) },
+            &AssetFilter {
+                game_id: Some(1),
+                type_: Some("bgm".into()),
+            },
             0,
         )
         .expect("list_assets by game+type");
@@ -536,7 +550,9 @@ mod tests {
     #[test]
     fn get_tileset_returns_sheets_joined_with_assets() {
         let conn = fixture_connection();
-        let tileset = get_tileset(&conn, 1).expect("get_tileset").expect("tileset exists");
+        let tileset = get_tileset(&conn, 1)
+            .expect("get_tileset")
+            .expect("tileset exists");
         assert_eq!(tileset.name.as_deref(), Some("Outside"));
         assert_eq!(tileset.sheets.len(), 2);
         assert_eq!(tileset.sheets[0].slot, "A2");
@@ -614,5 +630,93 @@ mod tests {
             }
             other => panic!("expected SchemaVersionMismatch, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn game_row_serializes_camel_case_keys() {
+        let row = GameRow {
+            id: 1,
+            root_path: "/games/foo".into(),
+            title: Some("foo".into()),
+            engine: "mz".into(),
+            scanned_at: "2026-01-01T00:00:00Z".into(),
+        };
+        let json: serde_json::Value = serde_json::to_value(row).expect("serialize");
+        assert_eq!(json["rootPath"], "/games/foo");
+        assert_eq!(json["scannedAt"], "2026-01-01T00:00:00Z");
+        assert!(json.get("root_path").is_none());
+    }
+
+    #[test]
+    fn asset_row_serializes_camel_case_keys() {
+        let row = AssetRow {
+            id: 1,
+            game_id: 2,
+            rel_path: "img/a.png".into(),
+            type_: "tileset".into(),
+            sha256: "abc".into(),
+            was_encrypted: true,
+        };
+        let json: serde_json::Value = serde_json::to_value(row).expect("serialize");
+        assert_eq!(json["gameId"], 2);
+        assert_eq!(json["relPath"], "img/a.png");
+        assert_eq!(json["type"], "tileset");
+        assert_eq!(json["wasEncrypted"], true);
+    }
+
+    #[test]
+    fn asset_page_serializes_camel_case_keys() {
+        let page = AssetPage {
+            rows: vec![],
+            total: 0,
+            page: 0,
+            page_size: PAGE_SIZE,
+        };
+        let json: serde_json::Value = serde_json::to_value(page).expect("serialize");
+        assert_eq!(json["pageSize"], PAGE_SIZE);
+        assert!(json.get("page_size").is_none());
+    }
+
+    #[test]
+    fn tileset_rows_serialize_camel_case_keys() {
+        let summary = TilesetSummaryRow {
+            id: 1,
+            game_id: 2,
+            rpgm_id: Some(3),
+            name: Some("Outside".into()),
+        };
+        let summary_json: serde_json::Value = serde_json::to_value(summary).expect("serialize");
+        assert_eq!(summary_json["gameId"], 2);
+        assert_eq!(summary_json["rpgmId"], 3);
+
+        let sheet = TilesetSheetRow {
+            slot: "A2".into(),
+            asset_id: 4,
+            sha256: "sha".into(),
+            rel_path: "img/a.png".into(),
+        };
+        let sheet_json: serde_json::Value = serde_json::to_value(&sheet).expect("serialize");
+        assert_eq!(sheet_json["assetId"], 4);
+        assert_eq!(sheet_json["relPath"], "img/a.png");
+
+        let tileset = TilesetRow {
+            id: 1,
+            game_id: 2,
+            rpgm_id: Some(3),
+            name: Some("Outside".into()),
+            flags: None,
+            sheets: vec![sheet],
+        };
+        let tileset_json: serde_json::Value = serde_json::to_value(tileset).expect("serialize");
+        assert_eq!(tileset_json["gameId"], 2);
+        assert!(tileset_json["sheets"].is_array());
+    }
+
+    #[test]
+    fn asset_filter_deserializes_camel_case_game_id() {
+        let filter: AssetFilter =
+            serde_json::from_str(r#"{"gameId":1,"type":"tileset"}"#).expect("deserialize");
+        assert_eq!(filter.game_id, Some(1));
+        assert_eq!(filter.type_.as_deref(), Some("tileset"));
     }
 }
