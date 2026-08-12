@@ -2,11 +2,10 @@ import type { ScanErrorRow } from './catalog.js';
 
 /**
  * Aggregates per-run failure counts by `scan_errors.code`, counting only
- * errors with `id` greater than `baselineId`. `scan_errors` accumulates
- * across every `catalog` invocation against the same store (see
- * `Catalog.getMaxScanErrorId`), so counting every row unconditionally would
- * report a cumulative, ever-growing total instead of this run's actual
- * failures.
+ * errors with `id` greater than `baselineId`. Capture `baselineId` via
+ * `Catalog.getMaxScanErrorId()` before the run starts; per-game and
+ * discovery-time rows are cleared at the start of each ingest/import pass,
+ * so counting rows above the baseline reports this run's failures only.
  *
  * Kept in its own module (not inline in `cli.ts`) so it can be unit-tested
  * directly without importing `cli.ts`, which runs `main()` as a top-level

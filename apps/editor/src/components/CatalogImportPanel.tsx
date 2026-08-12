@@ -78,8 +78,10 @@ export function CatalogImportPanel({ t, onImportComplete }: CatalogImportPanelPr
   return (
     <div className="catalog-import">
       <div className="catalog-import-form">
-        <label htmlFor="catalog-import-path">{t('catalog.import.pathLabel')}</label>
         <div className="catalog-import-row">
+          <label className="sr-only" htmlFor="catalog-import-path">
+            {t('catalog.import.pathLabel')}
+          </label>
           <input
             id="catalog-import-path"
             type="text"

@@ -322,6 +322,30 @@ export class Catalog {
       .run(input.gameId, input.relPath, input.code, input.message);
   }
 
+  /**
+   * Deletes matching `scan_errors` rows before a fresh ingest pass. Omit
+   * `gameId` to clear discovery-time rows (`game_id IS NULL`). Pass
+   * `codes` to limit deletion to specific failure kinds (e.g. tileset
+   * ingest soft failures).
+   */
+  clearScanErrors(options: { gameId?: number | null; codes?: readonly string[] } = {}): void {
+    const clauses: string[] = [];
+    const params: (string | number | null)[] = [];
+    if (options.gameId === null) {
+      clauses.push('game_id IS NULL');
+    } else if (options.gameId !== undefined) {
+      clauses.push('game_id = ?');
+      params.push(options.gameId);
+    }
+    if (options.codes !== undefined && options.codes.length > 0) {
+      const placeholders = options.codes.map(() => '?').join(', ');
+      clauses.push(`code IN (${placeholders})`);
+      params.push(...options.codes);
+    }
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    this.db.prepare(`DELETE FROM scan_errors ${where}`).run(...params);
+  }
+
   listGames(): GameRow[] {
     const rows = this.db
       .prepare<[], GameRowRaw>(
@@ -369,11 +393,12 @@ export class Catalog {
 
   /**
    * The current maximum `scan_errors.id`, or 0 if the table is empty.
-   * `scan_errors` accumulates across every `catalog` invocation against the
-   * same store (it is never cleared) -- callers that want a summary scoped
-   * to just the CURRENT run (e.g. the CLI's `failuresByCode`) should capture
-   * this before the run starts and only count rows with `id` greater than
-   * this baseline afterward.
+   * Callers that want a summary scoped to just the CURRENT run (e.g. the
+   * CLI's `failuresByCode`) should capture this before the run starts and
+   * only count rows with `id` greater than this baseline afterward.
+   * Per-game and discovery-time rows are cleared at the start of each
+   * ingest/import pass, so error counts reflect the latest snapshot rather
+   * than accumulating across re-imports.
    */
   getMaxScanErrorId(): number {
     const row = this.db
@@ -710,6 +735,7 @@ export function ingestGame(
     encryptionKey: game.encryptionKey ? bytesToHex(game.encryptionKey) : null,
     scannedAt: new Date().toISOString(),
   });
+  catalog.clearScanErrors({ gameId });
 
   const assetRoot = assetRootForGame(game);
   let filesSeen = 0;

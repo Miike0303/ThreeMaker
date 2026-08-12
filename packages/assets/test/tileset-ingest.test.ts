@@ -76,6 +76,8 @@ describe('ingestTilesetsForGame', () => {
     const result = ingestTilesetsForGame(catalog, game);
 
     expect(result).toEqual({ tilesetsProcessed: 1, sheetsLinked: 1, sheetsSkipped: 1 });
+    expect(catalog.listScanErrors({ gameId: game.id })).toHaveLength(1);
+    expect(catalog.listScanErrors({ gameId: game.id })[0]?.code).toBe('sheet-not-found');
     const tilesets = catalog.listTilesetsForGame(game.id);
     expect(tilesets).toHaveLength(1);
     const full = catalog.getTileset(tilesets[0]?.id ?? -1);
@@ -178,7 +180,7 @@ describe('ingestTilesetsForGame', () => {
     ]);
   });
 
-  it('is idempotent: running twice does not duplicate tilesets or sheets', () => {
+  it('is idempotent: running twice does not duplicate tilesets, sheets, or scan_errors', () => {
     const game = makeGameRow('mz');
     seedCatalogedAsset(game.id, 'img/tilesets/Outside_A2.png');
     seedCatalogedAsset(game.id, 'img/tilesets/Outside_B.png');
@@ -191,5 +193,6 @@ describe('ingestTilesetsForGame', () => {
     expect(catalog.listTilesetsForGame(game.id)).toHaveLength(1);
     const tileset = catalog.getTileset(catalog.listTilesetsForGame(game.id)[0]?.id ?? -1);
     expect(tileset?.sheets).toHaveLength(2);
+    expect(catalog.listScanErrors({ gameId: game.id })).toHaveLength(0);
   });
 });

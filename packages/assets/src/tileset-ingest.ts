@@ -51,12 +51,28 @@ function resolveSheetAsset(
  * multi-game run.
  */
 export function ingestTilesetsForGame(catalog: Catalog, game: GameRow): TilesetIngestResult {
+  catalog.clearScanErrors({
+    gameId: game.id,
+    codes: ['sheet-not-found', 'tileset-ingest-failed'],
+  });
   const tilesetsPath = join(assetRootForGame(game), 'data', 'Tilesets.json');
   if (!existsSync(tilesetsPath)) {
     return { tilesetsProcessed: 0, sheetsLinked: 0, sheetsSkipped: 0 };
   }
 
-  const json = JSON.parse(stripBom(readFileSync(tilesetsPath, 'utf8')));
+  let json: unknown;
+  try {
+    json = JSON.parse(stripBom(readFileSync(tilesetsPath, 'utf8')));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    catalog.insertScanError({
+      gameId: game.id,
+      relPath: 'data/Tilesets.json',
+      code: 'tileset-ingest-failed',
+      message: `failed to parse Tilesets.json: ${message}`,
+    });
+    return { tilesetsProcessed: 0, sheetsLinked: 0, sheetsSkipped: 0 };
+  }
   const tilesets = parseTilesets(json);
 
   let sheetsLinked = 0;
@@ -74,6 +90,13 @@ export function ingestTilesetsForGame(catalog: Catalog, game: GameRow): TilesetI
       const asset = resolveSheetAsset(catalog, game.id, sheetName);
       if (!asset) {
         sheetsSkipped++;
+        const relPath = `img/tilesets/${sheetName}`;
+        catalog.insertScanError({
+          gameId: game.id,
+          relPath,
+          code: 'sheet-not-found',
+          message: `tileset sheet '${sheetName}' was named in Tilesets.json but no matching asset was cataloged`,
+        });
         continue;
       }
       catalog.upsertTilesetSheet({ tilesetId, slot, assetId: asset.id });

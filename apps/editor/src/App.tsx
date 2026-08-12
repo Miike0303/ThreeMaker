@@ -44,7 +44,7 @@ export function App({ i18n, localeStorageKey }: AppProps) {
   const statusKind = footerStatusKind(workspace, selectedAsset !== null);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell app-shell-${workspace}`}>
       <header className="app-header">
         <div className="app-header-brand">
           <span className="app-header-mark" aria-hidden />
@@ -106,13 +106,14 @@ export function App({ i18n, localeStorageKey }: AppProps) {
         )}
       </div>
 
-      <footer className="app-footer">
-        {statusKind === 'asset-path' && selectedAsset
-          ? selectedAsset.relPath
-          : statusKind === 'map'
-            ? t('app.status.map')
+      {/* Map uses PainterPanel .ide-status; footer is Assets-only chrome. */}
+      {workspace !== 'map' && (
+        <footer className="app-footer">
+          {statusKind === 'asset-path' && selectedAsset
+            ? selectedAsset.relPath
             : t('app.status.assets')}
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

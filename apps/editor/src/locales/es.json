@@ -36,6 +36,7 @@
     "catalog.allTypes": "Todos los tipos",
     "catalog.resultRange": "{start}–{end} de {count} recursos",
     "catalog.noResults": "Ningún recurso coincide con este filtro.",
+    "catalog.preview.empty": "Seleccioná un recurso para previsualizarlo acá.",
     "catalog.prevPage": "Anterior",
     "catalog.nextPage": "Siguiente",
     "viewer.loading": "Cargando mapa…",

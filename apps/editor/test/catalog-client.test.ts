@@ -3,6 +3,7 @@ import {
   buildDevAssetsUrl,
   buildDevGamesUrl,
   buildDevObjectUrl,
+  buildObjectFileUrl,
   ImportClientError,
   importPath,
   KNOWN_ASSET_TYPES,
@@ -27,6 +28,20 @@ describe('buildDevAssetsUrl', () => {
 describe('buildDevObjectUrl', () => {
   it('builds a kind-qualified object URL', () => {
     expect(buildDevObjectUrl('abc123', 'png')).toBe('/api/dev-catalog/object/abc123?kind=png');
+  });
+});
+
+describe('buildObjectFileUrl', () => {
+  it('builds a content-addressed object path under the store directory', () => {
+    expect(buildObjectFileUrl('/home/user/.threemaker/asset-store', 'abcdef0123456789')).toBe(
+      '/home/user/.threemaker/asset-store/objects/ab/abcdef0123456789',
+    );
+  });
+
+  it('normalizes Windows-style store paths', () => {
+    expect(buildObjectFileUrl('C:\\store', 'abcdef0123456789')).toBe(
+      'C:/store/objects/ab/abcdef0123456789',
+    );
   });
 });
 

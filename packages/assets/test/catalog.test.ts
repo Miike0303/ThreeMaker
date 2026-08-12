@@ -161,44 +161,44 @@ describe('catalog', () => {
     expect(parallaxAssets[0]?.relPath).toBe('img/parallaxes/Clouds.png');
   });
 
-      it('uses System.json gameTitle for games.title when present', () => {
-        const gameRoot = join(workDir, 'Folder Name');
-        writeAsset(gameRoot, 'img', 'tilesets/Overworld.png', TINY_PNG);
+  it('uses System.json gameTitle for games.title when present', () => {
+    const gameRoot = join(workDir, 'Folder Name');
+    writeAsset(gameRoot, 'img', 'tilesets/Overworld.png', TINY_PNG);
 
-        const record = makeGame({
-          rootPath: gameRoot,
-          systemTitle: 'Display Title',
-          imageAssets: ['tilesets/Overworld.png'],
-        });
-        ingestGame(catalog, record, { storeDir });
+    const record = makeGame({
+      rootPath: gameRoot,
+      systemTitle: 'Display Title',
+      imageAssets: ['tilesets/Overworld.png'],
+    });
+    ingestGame(catalog, record, { storeDir });
 
-        expect(catalog.listGames()[0]?.title).toBe('Display Title');
-      });
+    expect(catalog.listGames()[0]?.title).toBe('Display Title');
+  });
 
-      it('falls back to folder basename when systemTitle is missing or empty', () => {
-        const gameRoot = join(workDir, 'Folder Name');
-        writeAsset(gameRoot, 'img', 'tilesets/Overworld.png', TINY_PNG);
+  it('falls back to folder basename when systemTitle is missing or empty', () => {
+    const gameRoot = join(workDir, 'Folder Name');
+    writeAsset(gameRoot, 'img', 'tilesets/Overworld.png', TINY_PNG);
 
-        const missing = makeGame({
-          rootPath: gameRoot,
-          imageAssets: ['tilesets/Overworld.png'],
-        });
-        ingestGame(catalog, missing, { storeDir });
-        expect(catalog.listGames()[0]?.title).toBe('Folder Name');
+    const missing = makeGame({
+      rootPath: gameRoot,
+      imageAssets: ['tilesets/Overworld.png'],
+    });
+    ingestGame(catalog, missing, { storeDir });
+    expect(catalog.listGames()[0]?.title).toBe('Folder Name');
 
-        const empty = makeGame({
-          rootPath: join(workDir, 'Whitespace Title'),
-          systemTitle: '   ',
-          imageAssets: ['tilesets/Overworld.png'],
-        });
-        writeAsset(empty.rootPath, 'img', 'tilesets/Overworld.png', TINY_PNG);
-        ingestGame(catalog, empty, { storeDir });
-        expect(catalog.listGames().find((g) => g.rootPath === empty.rootPath)?.title).toBe(
-          'Whitespace Title',
-        );
-      });
+    const empty = makeGame({
+      rootPath: join(workDir, 'Whitespace Title'),
+      systemTitle: '   ',
+      imageAssets: ['tilesets/Overworld.png'],
+    });
+    writeAsset(empty.rootPath, 'img', 'tilesets/Overworld.png', TINY_PNG);
+    ingestGame(catalog, empty, { storeDir });
+    expect(catalog.listGames().find((g) => g.rootPath === empty.rootPath)?.title).toBe(
+      'Whitespace Title',
+    );
+  });
 
-      it('re-ingesting the same game updates rows instead of duplicating them', () => {
+  it('re-ingesting the same game updates rows instead of duplicating them', () => {
     const gameRoot = join(workDir, 'Game');
     writeAsset(gameRoot, 'img', 'tilesets/Overworld.png', TINY_PNG);
     const record = makeGame({ rootPath: gameRoot, imageAssets: ['tilesets/Overworld.png'] });
@@ -247,6 +247,48 @@ describe('catalog', () => {
     const errors = catalog.listScanErrors({ gameId: result.gameId });
     expect(errors).toHaveLength(2);
     expect(errors.every((e) => e.code === 'bad-key')).toBe(true);
+  });
+
+  it('double bad ingest does not double scan_errors rows', () => {
+    const gameRoot = join(workDir, 'Game');
+    writeAsset(gameRoot, 'img', 'tilesets/Overworld.png_', TINY_PNG);
+    const record = makeGame({
+      rootPath: gameRoot,
+      hasEncryptedImages: true,
+      encryptionKey: null,
+      imageAssets: ['tilesets/Overworld.png_'],
+    });
+
+    const first = ingestGame(catalog, record, { storeDir });
+    const second = ingestGame(catalog, record, { storeDir });
+
+    expect(first.filesFailed).toBe(1);
+    expect(second.filesFailed).toBe(1);
+    expect(catalog.listScanErrors({ gameId: first.gameId })).toHaveLength(1);
+  });
+
+  it('fixed asset re-ingest clears prior scan_errors for that game', () => {
+    const gameRoot = join(workDir, 'Game');
+    writeAsset(gameRoot, 'img', 'tilesets/Overworld.png_', TINY_PNG);
+    const badRecord = makeGame({
+      rootPath: gameRoot,
+      hasEncryptedImages: true,
+      encryptionKey: null,
+      imageAssets: ['tilesets/Overworld.png_'],
+    });
+    const first = ingestGame(catalog, badRecord, { storeDir });
+    expect(catalog.listScanErrors({ gameId: first.gameId })).toHaveLength(1);
+
+    writeAsset(gameRoot, 'img', 'tilesets/Overworld.png', TINY_PNG);
+    const fixedRecord = makeGame({
+      rootPath: gameRoot,
+      imageAssets: ['tilesets/Overworld.png'],
+    });
+    const second = ingestGame(catalog, fixedRecord, { storeDir });
+
+    expect(second.filesFailed).toBe(0);
+    expect(catalog.listAssets({ gameId: second.gameId })).toHaveLength(1);
+    expect(catalog.listScanErrors({ gameId: second.gameId })).toHaveLength(0);
   });
 
   it('passes through a plain .png asset untouched even when the game is flagged hasEncryptedImages (per-file decision, not per-game flag)', () => {

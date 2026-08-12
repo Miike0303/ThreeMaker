@@ -122,9 +122,28 @@ export function buildDevObjectUrl(sha256: string, kind: string): string {
   return `${DEV_API_BASE}/object/${sha256}?${params.toString()}`;
 }
 
-/** Pure: the dev-fallback games-list URL (no query params, listed for symmetry with the other builders). */
+/** Pure: builds the dev-fallback games-list URL (no query params, listed for symmetry with the other builders). */
 export function buildDevGamesUrl(): string {
   return `${DEV_API_BASE}/games`;
+}
+
+/** Pure: builds the on-disk object path under a catalog asset store. */
+export function buildObjectFileUrl(storeDir: string, sha256: string): string {
+  const normalizedStore = storeDir.replace(/\\/g, '/');
+  return `${normalizedStore}/objects/${sha256.slice(0, 2)}/${sha256}`;
+}
+
+let cachedAssetStoreDir: string | null = null;
+
+/** Resolves and caches the catalog asset-store directory in the Tauri host. */
+export async function getAssetStoreDir(): Promise<string> {
+  if (!isTauriAvailable()) {
+    throw new CatalogClientError('QueryFailed', 'getAssetStoreDir requires the Tauri host');
+  }
+  if (cachedAssetStoreDir === null) {
+    cachedAssetStoreDir = await invokeTauri<string>('catalog_asset_store_dir');
+  }
+  return cachedAssetStoreDir;
 }
 
 async function assertOk(response: Response): Promise<Response> {
@@ -260,10 +279,18 @@ export async function importPath(path: string, maxDepth?: number): Promise<Impor
  * the dev fallback it hits the same-origin `/api/dev-catalog/object/:sha256`
  * endpoint.
  */
+export async function objectPreviewUrlFromStoreDir(
+  storeDir: string,
+  sha256: string,
+  kind = 'png',
+): Promise<string> {
+  if (!isTauriAvailable()) return buildDevObjectUrl(sha256, kind);
+  const { convertFileSrc } = await import('@tauri-apps/api/core');
+  return convertFileSrc(buildObjectFileUrl(storeDir, sha256));
+}
+
 export async function objectPreviewUrl(sha256: string, kind: string): Promise<string> {
   if (!isTauriAvailable()) return buildDevObjectUrl(sha256, kind);
-  const storeDir = await invokeTauri<string>('catalog_asset_store_dir');
-  const { convertFileSrc } = await import('@tauri-apps/api/core');
-  const objectPath = `${storeDir}/objects/${sha256.slice(0, 2)}/${sha256}`;
-  return convertFileSrc(objectPath);
+  const storeDir = await getAssetStoreDir();
+  return objectPreviewUrlFromStoreDir(storeDir, sha256, kind);
 }

@@ -356,6 +356,7 @@ function runCatalog(rootDir: string, maxDepth: number | undefined, storeDir: str
 
   try {
     const scanErrorBaselineId = catalog.getMaxScanErrorId();
+    catalog.clearScanErrors({ gameId: null });
     const scanResult = scanGames(rootDir, maxDepth === undefined ? {} : { maxDepth });
 
     for (const error of scanResult.errors) {

@@ -176,6 +176,7 @@ pub fn import_catalog(
     store_dir: &Path,
 ) -> Result<ImportCatalogSummary, CatalogWriteError> {
     let conn = open_catalog_for_write(store_dir)?;
+    clear_null_scan_errors(&conn)?;
     let scan_error_baseline = max_scan_error_id(&conn)?;
 
     for error in &scan_result.errors {
@@ -246,6 +247,7 @@ fn ingest_game_in_tx(
         game.encryption_key.as_deref(),
         &scanned_at,
     )?;
+    clear_scan_errors_for_game(conn, game_id)?;
 
     let asset_root = asset_root_for_game(game);
     let key_bytes = game
@@ -506,6 +508,7 @@ pub fn ingest_tilesets_for_game(
     game: &ScannedGame,
     game_id: i64,
 ) -> Result<TilesetIngestResult, CatalogWriteError> {
+    clear_tileset_scan_errors_for_game(conn, game_id)?;
     let tilesets_path = asset_root_for_game(game).join("data").join("Tilesets.json");
     if !tilesets_path.exists() {
         return Ok(TilesetIngestResult {
@@ -820,6 +823,30 @@ fn upsert_tileset_sheet(
     Ok(())
 }
 
+fn clear_null_scan_errors(conn: &Connection) -> Result<(), CatalogWriteError> {
+    conn.execute("DELETE FROM scan_errors WHERE game_id IS NULL", [])
+        .map_err(|err| CatalogWriteError::QueryFailed(err.to_string()))?;
+    Ok(())
+}
+
+fn clear_scan_errors_for_game(conn: &Connection, game_id: i64) -> Result<(), CatalogWriteError> {
+    conn.execute("DELETE FROM scan_errors WHERE game_id = ?1", [game_id])
+        .map_err(|err| CatalogWriteError::QueryFailed(err.to_string()))?;
+    Ok(())
+}
+
+fn clear_tileset_scan_errors_for_game(
+    conn: &Connection,
+    game_id: i64,
+) -> Result<(), CatalogWriteError> {
+    conn.execute(
+"DELETE FROM scan_errors WHERE game_id = ?1 AND code IN ('sheet-not-found', 'tileset-ingest-failed')",
+[game_id],
+    )
+    .map_err(|err| CatalogWriteError::QueryFailed(err.to_string()))?;
+    Ok(())
+}
+
 fn insert_scan_error(
     conn: &Connection,
     game_id: Option<i64>,
@@ -1122,6 +1149,75 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM assets", [], |row| row.get(0))
             .expect("assets");
         assert_eq!(asset_count, 1);
+    }
+
+    #[test]
+    fn reimport_keeps_scan_error_counts_stable_for_asset_and_tileset_failures() {
+        let work = TempDir::new().expect("tempdir");
+        let game_root = work.path().join("Game");
+        write_system_json(&game_root.join("data"), VALID_SYSTEM_JSON);
+        fs::create_dir_all(game_root.join("img/tilesets")).expect("img dir");
+        fs::write(game_root.join("img/tilesets/Bad.png_"), b"not-encrypted").expect("bad asset");
+        fs::write(game_root.join("img/tilesets/Outside_A2.png"), tiny_png()).expect("a2 png");
+        fs::write(game_root.join("data/Tilesets.json"), make_tilesets_json()).expect("tilesets");
+
+        let first = import_path(work.path(), Some(12), work.path()).expect("first import");
+        let conn = open_catalog_for_write(work.path()).expect("open");
+        let first_errors: i64 = conn
+            .query_row("SELECT COUNT(*) FROM scan_errors", [], |row| row.get(0))
+            .expect("count errors");
+        assert!(
+            first_errors > 0,
+            "expected scan errors from bad asset and missing sheet"
+        );
+
+        let second = import_path(work.path(), Some(12), work.path()).expect("second import");
+        let second_errors: i64 = conn
+            .query_row("SELECT COUNT(*) FROM scan_errors", [], |row| row.get(0))
+            .expect("count errors");
+        assert_eq!(
+            first_errors, second_errors,
+            "reimport must not accumulate duplicate scan_errors rows"
+        );
+        assert_eq!(first.games_imported, 1);
+        assert_eq!(second.games_imported, 1);
+    }
+
+    #[test]
+    fn fixed_asset_reingest_clears_prior_scan_error() {
+        let work = TempDir::new().expect("tempdir");
+        let game_root = work.path().join("Game");
+        write_system_json(&game_root.join("data"), VALID_SYSTEM_JSON);
+        fs::create_dir_all(game_root.join("img/tilesets")).expect("img dir");
+        let bad_path = game_root.join("img/tilesets/Bad.png_");
+        fs::write(&bad_path, b"not-encrypted").expect("bad asset");
+
+        let scan = scan_games(work.path(), 12).expect("scan");
+        let conn = open_catalog_for_write(work.path()).expect("open");
+        let first = ingest_game(&conn, &scan.games[0], work.path()).expect("first ingest");
+        assert_eq!(first.files_failed, 1);
+        let errors_after_bad: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM scan_errors WHERE game_id = ?1",
+                [first.game_id],
+                |row| row.get(0),
+            )
+            .expect("count");
+        assert_eq!(errors_after_bad, 1);
+
+        fs::remove_file(&bad_path).expect("remove bad asset");
+        fs::write(game_root.join("img/tilesets/Good.png"), tiny_png()).expect("good asset");
+        let scan2 = scan_games(work.path(), 12).expect("rescan");
+        let second = ingest_game(&conn, &scan2.games[0], work.path()).expect("second ingest");
+        assert_eq!(second.files_failed, 0);
+        let errors_after_fix: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM scan_errors WHERE game_id = ?1",
+                [second.game_id],
+                |row| row.get(0),
+            )
+            .expect("count");
+        assert_eq!(errors_after_fix, 0);
     }
 
     #[test]

@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   type AssetRow,
+  buildDevObjectUrl,
   CatalogClientError,
   type GameRow,
+  getAssetStoreDir,
+  isTauriAvailable,
   KNOWN_ASSET_TYPES,
   listAssets,
   listGames,
   objectPreviewUrl,
+  objectPreviewUrlFromStoreDir,
 } from '../catalog-client.js';
 import { formatTemplate } from '../format-template.js';
 import { computePageRange } from '../pagination.js';
@@ -23,6 +27,55 @@ const AUDIO_ASSET_TYPES = new Set<string>(['bgm', 'bgs', 'me', 'se']);
 
 function isImagePreviewAsset(asset: AssetRow): boolean {
   return !AUDIO_ASSET_TYPES.has(asset.type);
+}
+
+function CatalogAssetThumb({
+  asset,
+  storeDir,
+}: {
+  readonly asset: AssetRow;
+  readonly storeDir: string | null;
+}) {
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    if (!isImagePreviewAsset(asset)) {
+      setThumbUrl(null);
+      return;
+    }
+    let cancelled = false;
+    const resolve = isTauriAvailable()
+      ? storeDir
+        ? objectPreviewUrlFromStoreDir(storeDir, asset.sha256)
+        : Promise.resolve(null)
+      : Promise.resolve(buildDevObjectUrl(asset.sha256, 'png'));
+    resolve
+      .then((url) => {
+        if (!cancelled) setThumbUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setHidden(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [asset, storeDir]);
+
+  if (!thumbUrl || hidden) return null;
+
+  return (
+    <img
+      src={thumbUrl}
+      alt=""
+      aria-hidden
+      loading="lazy"
+      width={32}
+      height={32}
+      className="catalog-asset-thumb"
+      onError={() => setHidden(true)}
+    />
+  );
 }
 
 /**
@@ -44,6 +97,22 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
   const [pageSize, setPageSize] = useState(100);
   const [selectedAsset, setSelectedAsset] = useState<AssetRow | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [storeDir, setStoreDir] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isTauriAvailable()) return;
+    let cancelled = false;
+    getAssetStoreDir()
+      .then((dir) => {
+        if (!cancelled) setStoreDir(dir);
+      })
+      .catch((err) => {
+        console.error('Failed to resolve catalog asset store directory:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,7 +274,10 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
                   className={selectedAsset?.id === asset.id ? 'catalog-asset-selected' : undefined}
                   onClick={() => setSelectedAsset(asset)}
                 >
-                  {gameLabel ? `${asset.relPath} (${gameLabel})` : asset.relPath}
+                  <CatalogAssetThumb asset={asset} storeDir={storeDir} />
+                  <span className="catalog-asset-label">
+                    {gameLabel ? `${asset.relPath} (${gameLabel})` : asset.relPath}
+                  </span>
                 </button>
               </li>
             );
@@ -213,11 +285,13 @@ export function CatalogBrowser({ t, onSelectAsset }: CatalogBrowserProps) {
         </ul>
 
         <div className="catalog-preview-pane">
-          {previewUrl && selectedAsset && (
+          {previewUrl && selectedAsset ? (
             <div className="catalog-preview">
               <p className="catalog-preview-path">{selectedAsset.relPath}</p>
               <img src={previewUrl} alt={selectedAsset.relPath} className="catalog-preview-image" />
             </div>
+          ) : (
+            <p className="catalog-preview-empty">{t('catalog.preview.empty')}</p>
           )}
         </div>
       </div>

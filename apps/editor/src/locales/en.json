@@ -36,6 +36,7 @@
     "catalog.allTypes": "All types",
     "catalog.resultRange": "{start}–{end} of {count} assets",
     "catalog.noResults": "No assets match this filter.",
+    "catalog.preview.empty": "Select an asset to preview it here.",
     "catalog.prevPage": "Previous",
     "catalog.nextPage": "Next",
     "viewer.loading": "Loading map…",
