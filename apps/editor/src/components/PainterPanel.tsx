@@ -66,9 +66,9 @@ import {
 import { formatTemplate } from '../format-template.js';
 import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
 import {
+  initialInspectorRoutingState,
+  inspectorRoutingReducer,
   INSPECTOR_TAB_IDS,
-  type InspectorTabId,
-  inspectorTabForTool,
 } from '../inspector-routing.js';
 import { loadMapDocument, saveMapDocument } from '../map-client.js';
 import { composeMapFromTilesets, normalizeMapName, seedDemoTiles } from '../map-compose.js';
@@ -343,7 +343,15 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [newEventKey, setNewEventKey] = useState('');
   const [newWorldSeedKey, setNewWorldSeedKey] = useState('');
   const [newWorldSeedKind, setNewWorldSeedKind] = useState<WorldValueKind>('boolean');
-  const [inspectorTab, setInspectorTab] = useState<InspectorTabId>('paint');
+  const [inspectorRouting, dispatchInspectorRouting] = useReducer(
+    inspectorRoutingReducer,
+    initialInspectorRoutingState,
+  );
+  const inspectorTab = inspectorRouting.tab;
+  const routeExplicitToolSelection = useCallback((tool: ToolId) => {
+    dispatchInspectorRouting({ type: 'explicit-tool', tool });
+    viewportRef.current?.setTool(tool);
+  }, []);
   const [community, setCommunity] = useState<CommunitySettings>(() => loadCommunitySettings());
   const [communityQueue, setCommunityQueue] = useState<readonly CommunityShareEnqueue[]>(() =>
     loadCommunityShareQueue(),
@@ -662,7 +670,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       setMapNameDraft(stamped.name);
       setMapReady(true);
       // Surface rooms list + highlight main chamber (matches spawn placement).
-      setInspectorTab('map');
+      dispatchInspectorRouting({ type: 'manual-tab', tab: 'map' });
       viewport.selectFloor(targetFloorIndex);
       const stampedFloorId = stamped.floors[targetFloorIndex]?.id;
       const mainRoomId = pickMainRoomId(roomsOnFloor(stamped.rooms, stampedFloorId));
@@ -714,11 +722,13 @@ export function PainterPanel({ t }: PainterPanelProps) {
     [painterState],
   );
 
-  // Route inspector to the pane that matches the active tool (Unity-style).
+  // Hydration and other incidental state emissions may route only until the user picks a tab.
+  // Viewport keyboard shortcuts currently have no source callback, so they intentionally follow
+  // this incidental path rather than overwriting a manual inspector choice.
   const activeTool = painterState?.tool;
   useEffect(() => {
     if (activeTool === undefined) return;
-    setInspectorTab(inspectorTabForTool(activeTool));
+    dispatchInspectorRouting({ type: 'tool-state-changed', tool: activeTool });
   }, [activeTool]);
 
   const handleLoad = useCallback(async () => {
@@ -948,9 +958,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
                         onClick={() => {
                           if (tool.id === 'eraser') {
                             viewportRef.current?.setFillTileId(0);
-                            viewportRef.current?.setTool('brush');
+                            routeExplicitToolSelection('brush');
                           } else {
-                            viewportRef.current?.setTool(tool.id);
+                            routeExplicitToolSelection(tool.id);
                           }
                         }}
                       >
@@ -1369,7 +1379,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                 role="tab"
                 aria-selected={inspectorTab === tab}
                 className={`ide-inspector-tab${inspectorTab === tab ? ' ide-inspector-tab-active' : ''}`}
-                onClick={() => setInspectorTab(tab)}
+                onClick={() => dispatchInspectorRouting({ type: 'manual-tab', tab })}
               >
                 {t(`painter.inspector.${tab}`)}
               </button>
@@ -1396,7 +1406,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           type="button"
                           onClick={() => {
                             viewportRef.current?.setActiveRoomId(undefined);
-                            viewportRef.current?.setTool('room-box');
+                            routeExplicitToolSelection('room-box');
                           }}
                         >
                           {t('painter.room.new')}
@@ -1428,7 +1438,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                 type="button"
                                 onClick={() => {
                                   viewportRef.current?.setActiveRoomId(room.id);
-                                  viewportRef.current?.setTool('room-box');
+                                  routeExplicitToolSelection('room-box');
                                 }}
                               >
                                 {room.name ??
@@ -2297,7 +2307,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                 type="button"
                                 onClick={() => {
                                   viewportRef.current?.setActivePropObject(objectSha);
-                                  viewportRef.current?.setTool('prop');
+                                  routeExplicitToolSelection('prop');
                                   reportStatus({
                                     message: formatTemplate(t('painter.props.selectedToast'), {
                                       sha: shortSha(objectSha),
@@ -2374,7 +2384,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                 onClick={() => {
                                   const brush = propPlacementFromDocument(prop);
                                   viewportRef.current?.setActivePropObject(brush.object);
-                                  viewportRef.current?.setTool('prop');
+                                  routeExplicitToolSelection('prop');
                                   reportStatus({
                                     message: formatTemplate(t('painter.props.reuseToast'), {
                                       id: prop.id,
@@ -2563,7 +2573,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   );
                                   viewportRef.current?.setActiveNpcFacing(brush.facing);
                                   viewportRef.current?.setActiveNpcEventKey(brush.eventKey);
-                                  viewportRef.current?.setTool('npc');
+                                  routeExplicitToolSelection('npc');
                                   reportStatus({
                                     message: formatTemplate(t('painter.npcs.reuseToast'), {
                                       id: npc.id,
@@ -2715,7 +2725,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   const brush = triggerPlacementFromDocument(trigger);
                                   viewportRef.current?.setActiveTriggerOn(brush.on);
                                   viewportRef.current?.setActiveTriggerEventKey(brush.eventKey);
-                                  viewportRef.current?.setTool('trigger');
+                                  routeExplicitToolSelection('trigger');
                                   reportStatus({
                                     message: formatTemplate(t('painter.triggers.reuseToast'), {
                                       id: trigger.id,
@@ -2884,7 +2894,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   viewportRef.current?.setActiveLightIntensity(brush.intensity);
                                   viewportRef.current?.setActiveLightRange(brush.range);
                                   viewportRef.current?.setActiveLightHeight(brush.height);
-                                  viewportRef.current?.setTool('light');
+                                  routeExplicitToolSelection('light');
                                   reportStatus({
                                     message: formatTemplate(t('painter.lights.reuseToast'), {
                                       id: light.id,
