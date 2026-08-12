@@ -883,6 +883,24 @@ label {
   background: var(--tm-bg-0);
 }
 
+.new-map-fields,
+.new-map-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.new-map-dimensions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ide-field-error {
+  color: var(--tm-danger, #ff7b72);
+  font-size: 12px;
+}
+
 /* Events — dual pane (RPG Maker event list + command stack) */
 .events-workbench {
   display: flex;
