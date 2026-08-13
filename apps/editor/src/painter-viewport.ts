@@ -201,6 +201,7 @@ export class PainterViewport {
   private readonly groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly callbacks: PainterViewportCallbacks;
   private readonly onResize = () => this.handleResize();
+  private readonly resizeObserver: ResizeObserver;
   private readonly onPointerDown = (event: PointerEvent) => this.handlePointerDown(event);
   private readonly onPointerMove = (event: PointerEvent) => this.handlePointerMove(event);
   private readonly onPointerUp = (event: PointerEvent) => this.handlePointerUp(event);
@@ -248,10 +249,12 @@ export class PainterViewport {
       500,
     );
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
+    this.renderer.setSize(container.clientWidth, container.clientHeight, false);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.renderer.domElement);
 
+    this.resizeObserver = new ResizeObserver(() => this.handleResize());
+    this.resizeObserver.observe(container);
     window.addEventListener('resize', this.onResize);
     window.addEventListener('keydown', this.onKeyDown);
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
@@ -1349,15 +1352,18 @@ export class PainterViewport {
 
   private handleResize(): void {
     const width = this.container.clientWidth;
-    const height = Math.max(this.container.clientHeight, 1);
+    const height = this.container.clientHeight;
+    // display:none (Assets workspace) reports 0×0 — keep the last real size.
+    if (width < 1 || height < 1) return;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
+    this.renderer.setSize(width, height, false);
     this.recomputeOverlays();
   }
 
   dispose(): void {
     if (this.animationHandle !== undefined) cancelAnimationFrame(this.animationHandle);
+    this.resizeObserver.disconnect();
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('pointerup', this.onPointerUp);

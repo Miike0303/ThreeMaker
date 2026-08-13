@@ -1293,8 +1293,12 @@ export function PainterPanel({ t }: PainterPanelProps) {
       <div className="ide-body">
         <aside className="ide-tool-rail" aria-label={t('painter.tools')}>
           {TOOL_GROUPS.map((group) => (
-            <fieldset key={group.id} className="ide-tool-group">
-              <legend className="ide-tool-group-label">{t(`painter.toolGroup.${group.id}`)}</legend>
+            <fieldset
+              key={group.id}
+              className="ide-tool-group"
+              aria-label={t(`painter.toolGroup.${group.id}`)}
+            >
+              <div className="ide-tool-group-label">{t(`painter.toolGroup.${group.id}`)}</div>
               {group.tools.map((tool) => {
                 const active =
                   mapReady &&

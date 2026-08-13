@@ -473,14 +473,13 @@ label {
   display: flex;
   align-items: center;
   gap: var(--tm-space-3);
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  overflow: visible;
   padding: 6px 12px;
   background: var(--tm-bg-1);
   border-bottom: 1px solid var(--tm-border);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02);
-  scrollbar-width: thin;
 }
 
 /* Menubar labels stay horizontal — global label is column for forms. */
@@ -523,7 +522,7 @@ label {
   display: flex;
   align-items: center;
   gap: var(--tm-space-2);
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   flex: none;
 }
 
@@ -558,6 +557,8 @@ label {
 /* Vertical tool rail (RPG Maker / Aseprite style) */
 .ide-tool-rail {
   width: var(--tm-rail-w);
+  max-width: var(--tm-rail-w);
+  min-width: 0;
   flex: none;
   display: flex;
   flex-direction: column;
@@ -565,12 +566,16 @@ label {
   padding: 8px 5px;
   background: linear-gradient(180deg, var(--tm-bg-1) 0%, var(--tm-bg-0) 100%);
   border-right: 1px solid var(--tm-border);
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: thin;
 }
 
 .ide-tool-group {
+  min-width: 0;
   min-inline-size: 0;
+  max-width: 100%;
+  width: 100%;
   margin-inline: 0;
   padding: 0;
   border: 0;
@@ -580,15 +585,20 @@ label {
 }
 
 .ide-tool-group-label {
+  display: block;
   margin: 0 0 2px;
-  padding: 0 2px;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--tm-text-faint);
-  float: none;
+  padding: 0;
   width: 100%;
+  max-width: 100%;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  text-transform: none;
+  text-align: center;
+  color: var(--tm-text-faint);
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .ide-tool-group + .ide-tool-group {
@@ -658,8 +668,11 @@ label {
 .ide-viewport-stage {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   position: relative;
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background:
     radial-gradient(ellipse at 50% 40%, rgba(108, 140, 255, 0.05), transparent 55%), #08080c;
 }
@@ -667,7 +680,19 @@ label {
 .painter-viewport-canvas {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.painter-viewport-canvas canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .ide-palette-roles {
@@ -711,22 +736,16 @@ label {
   color: var(--tm-text);
 }
 
-/* Hint is noise in the dock — keep for a11y/screen readers only. */
 .ide-palette-role-hint {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  flex: 1 1 100%;
+  margin: 0;
+  overflow: visible;
+  white-space: normal;
 }
 
 .ide-palette-dock {
   flex: none;
-  max-height: 132px;
+  max-height: 220px;
   overflow-x: auto;
   overflow-y: hidden;
   display: flex;
@@ -765,23 +784,21 @@ label {
 .ide-inspector-tabs {
   flex: none;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   border-bottom: 1px solid var(--tm-border);
   background: var(--tm-bg-1);
-  scrollbar-width: thin;
 }
 
 .ide-inspector-tab {
   flex: 0 0 auto;
-  min-width: max-content;
+  white-space: nowrap;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  padding: 7px 10px;
+  padding: 7px 8px;
   min-height: 32px;
   font-size: 11px;
   font-weight: 500;
@@ -908,16 +925,22 @@ label {
 
 .ide-status {
   flex: none;
-  height: 26px;
+  min-height: 26px;
+  height: auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--tm-space-4);
-  padding: 0 12px;
+  gap: 4px var(--tm-space-4);
+  padding: 2px 12px;
   background: var(--tm-bg-1);
   border-top: 1px solid var(--tm-border);
   font-size: 11px;
   color: var(--tm-text-dim);
   font-variant-numeric: tabular-nums;
+}
+
+.ide-status > span {
+  white-space: nowrap;
 }
 
 .ide-status-ok {
@@ -1065,10 +1088,12 @@ label {
 /* Welcome / empty project */
 .ide-welcome {
   flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 32px;
+  overflow-y: auto;
   background:
     radial-gradient(ellipse at 28% 12%, rgba(108, 140, 255, 0.12), transparent 42%),
     radial-gradient(ellipse at 80% 90%, rgba(124, 108, 240, 0.08), transparent 45%), var(--tm-bg-0);
