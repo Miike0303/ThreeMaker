@@ -444,6 +444,16 @@
     "catalog.import.hint": "Import RPG Maker MV/MZ game folders into your local library.",
     "catalog.empty.title": "No games yet",
     "catalog.empty.body": "Import an RPG Maker folder to populate tilesets, characters, and audio.",
-    "catalog.pageOf": "Page {page} of {pages}"
+    "catalog.pageOf": "Page {page} of {pages}",
+    "catalog.import.browse": "Browse…",
+    "catalog.import.browseTitle": "Choose RPG Maker games folder",
+    "catalog.import.browseFailed": "Could not open the folder picker.",
+    "catalog.import.importingShort": "Importing…",
+    "catalog.import.browserTitle": "Import needs the desktop app",
+    "catalog.import.step1": "Open the Three Maker desktop editor (not the browser preview).",
+    "catalog.import.step2": "Go to Assets and choose your RPG Maker games folder.",
+    "catalog.import.step3": "Import fills the library with tilesets, characters, and audio.",
+    "painter.createSuccess": "Map “{name}” ready ({width}×{height}). Paint with B or open the palette below.",
+    "painter.creatingMap": "Creating map…"
   }
 }

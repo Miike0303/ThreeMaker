@@ -3,9 +3,11 @@
   "identifier": "default",
   "description": "Capability for the editor's main window",
   "windows": ["main"],
-  "permissions": [
+"permissions": [
     "core:default",
     "core:webview:allow-create-webview-window",
+    "dialog:default",
+    "dialog:allow-open",
     {
       "identifier": "fs:allow-read-file",
       "allow": [{ "path": "$HOME/.threemaker/asset-store/**" }]
