@@ -13,6 +13,7 @@ import type {
 import { useState } from 'react';
 import {
   buildInkDialoguePickerModel,
+  buildTransferMapPickerModel,
   dialogueLinesFromTextarea,
   dialogueLinesToTextarea,
   EVENT_COMMAND_KINDS,
@@ -44,6 +45,7 @@ export interface CommandListProps extends CommandMutators {
   readonly commands: readonly EventCommand[];
   readonly inkStoryIds?: readonly string[];
   readonly inkInventories?: Readonly<Record<string, InkKnotInventory | undefined>>;
+  readonly savedMapFiles?: readonly string[];
 }
 
 export function CommandList({
@@ -52,6 +54,7 @@ export function CommandList({
   commands,
   inkStoryIds = [],
   inkInventories = {},
+  savedMapFiles = [],
   onUpdate,
   onRemove,
   onMove,
@@ -72,6 +75,7 @@ export function CommandList({
                 total={commands.length}
                 inkStoryIds={inkStoryIds}
                 inkInventories={inkInventories}
+                savedMapFiles={savedMapFiles}
                 onUpdate={onUpdate}
                 onRemove={onRemove}
                 onMove={onMove}
@@ -94,6 +98,7 @@ interface CommandFormProps extends CommandMutators {
   readonly total: number;
   readonly inkStoryIds: readonly string[];
   readonly inkInventories: Readonly<Record<string, InkKnotInventory | undefined>>;
+  readonly savedMapFiles: readonly string[];
 }
 
 function CommandForm({
@@ -104,6 +109,7 @@ function CommandForm({
   total,
   inkStoryIds,
   inkInventories,
+  savedMapFiles,
   onUpdate,
   onRemove,
   onMove,
@@ -141,6 +147,7 @@ function CommandForm({
         command={command}
         inkStoryIds={inkStoryIds}
         inkInventories={inkInventories}
+        savedMapFiles={savedMapFiles}
         onUpdate={onUpdate}
       />
       {command.type === 'conditional' && (
@@ -153,6 +160,7 @@ function CommandForm({
               commands={command.then}
               inkStoryIds={inkStoryIds}
               inkInventories={inkInventories}
+              savedMapFiles={savedMapFiles}
               onUpdate={onUpdate}
               onRemove={onRemove}
               onMove={onMove}
@@ -167,6 +175,7 @@ function CommandForm({
               commands={command.else ?? []}
               inkStoryIds={inkStoryIds}
               inkInventories={inkInventories}
+              savedMapFiles={savedMapFiles}
               onUpdate={onUpdate}
               onRemove={onRemove}
               onMove={onMove}
@@ -185,6 +194,7 @@ interface CommandFieldsProps {
   readonly command: EventCommand;
   readonly inkStoryIds: readonly string[];
   readonly inkInventories: Readonly<Record<string, InkKnotInventory | undefined>>;
+  readonly savedMapFiles: readonly string[];
   readonly onUpdate: (path: CommandPath, patch: Readonly<Record<string, unknown>>) => void;
 }
 
@@ -194,6 +204,7 @@ function CommandFields({
   command,
   inkStoryIds,
   inkInventories,
+  savedMapFiles,
   onUpdate,
 }: CommandFieldsProps) {
   switch (command.type) {
@@ -466,16 +477,35 @@ function CommandFields({
           />
         </div>
       );
-    case 'transferMap':
+    case 'transferMap': {
+      const picker = buildTransferMapPickerModel(savedMapFiles, command.mapFile);
+      const idBase = `mapfile-${pathKey(path).replace(/[^A-Za-z0-9_-]/g, '-')}`;
+      const mapWarning =
+        picker.mapFileStatus === 'ready'
+          ? undefined
+          : t(`painter.events.mapWarning.${picker.mapFileStatus}`);
       return (
         <div className="painter-events-fields">
           <label>
             {t('painter.events.field.mapFile')}
             <input
               type="text"
+              list={`${idBase}-maps`}
               value={command.mapFile}
+              aria-invalid={mapWarning !== undefined}
+              aria-describedby={mapWarning ? `${idBase}-map-warning` : undefined}
               onChange={(e) => onUpdate(path, { mapFile: e.target.value })}
             />
+            <datalist id={`${idBase}-maps`}>
+              {picker.mapFileOptions.map((file) => (
+                <option key={file} value={file} />
+              ))}
+            </datalist>
+            {mapWarning && (
+              <span id={`${idBase}-map-warning`} className="painter-events-soft-warning">
+                {mapWarning}
+              </span>
+            )}
           </label>
           <label>
             {t('painter.events.field.x')}
@@ -502,6 +532,7 @@ function CommandFields({
           />
         </div>
       );
+    }
     case 'giveItem':
       return (
         <div className="painter-events-fields">

@@ -18,11 +18,12 @@ import { InkGraph } from './InkGraph.js';
 export interface InkPanelProps {
   readonly t: (key: string) => string;
   readonly painterState: PainterState | null;
+  readonly mapName: string;
   readonly onStatus: (report: StatusReport) => void;
   readonly onStorySaved?: (storyId: string) => void;
 }
 
-export function InkPanel({ t, painterState, onStatus, onStorySaved }: InkPanelProps) {
+export function InkPanel({ t, painterState, mapName, onStatus, onStorySaved }: InkPanelProps) {
   const referencedIds = useMemo(
     () => (painterState ? listInkStoryIdsFromEvents(painterState.events) : []),
     [painterState],
@@ -56,7 +57,7 @@ export function InkPanel({ t, painterState, onStatus, onStorySaved }: InkPanelPr
     }
     let cancelled = false;
     setLoading(true);
-    void loadInkSidecar(selectedStoryId)
+    void loadInkSidecar(selectedStoryId, mapName)
       .then((text) => {
         if (cancelled) return;
         setSource(text ?? `=== start ===\n`);
@@ -74,7 +75,7 @@ export function InkPanel({ t, painterState, onStatus, onStorySaved }: InkPanelPr
     return () => {
       cancelled = true;
     };
-  }, [selectedStoryId, onStatus, t]);
+  }, [selectedStoryId, mapName, onStatus, t]);
 
   const compile = useMemo(() => tryCompileInkSource(source), [source]);
 
@@ -85,7 +86,7 @@ export function InkPanel({ t, painterState, onStatus, onStorySaved }: InkPanelPr
       return;
     }
     try {
-      await saveInkSidecar(selectedStoryId, source);
+      await saveInkSidecar(selectedStoryId, source, mapName);
       setDirty(false);
       onStorySaved?.(selectedStoryId);
       onStatus({ message: t('painter.ink.saveSuccess'), severity: 'success' });
@@ -93,7 +94,7 @@ export function InkPanel({ t, painterState, onStatus, onStorySaved }: InkPanelPr
       console.error('Failed to save ink sidecar:', err);
       onStatus({ message: t('painter.ink.saveFailed'), severity: 'error' });
     }
-  }, [selectedStoryId, compile.ok, source, onStatus, onStorySaved, t]);
+  }, [selectedStoryId, compile.ok, source, mapName, onStatus, onStorySaved, t]);
 
   if (!painterState) return null;
 

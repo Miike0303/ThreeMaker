@@ -8,7 +8,25 @@ import {
   isValidSha256,
   SchemaVersionMismatchError,
 } from './dev-server/catalog-api.js';
-import { loadInkFile, loadMapFile, saveInkFile, saveMapFile } from './dev-server/map-api.js';
+import {
+  deleteFile,
+  listDirectoryNames,
+  loadInkFile,
+  loadMapFile,
+  renameFile,
+  saveInkFile,
+  saveMapFile,
+} from './dev-server/map-api.js';
+import {
+  assertMapName,
+  InvalidMapNameError,
+  LEGACY_MAP_NAME,
+  listMapNamesFromEntries,
+  MAP_FILE_SUFFIX,
+  mapDocumentFileName,
+  planDeleteMapFiles,
+  planRenameMapFiles,
+} from './src/map-identity.js';
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(APP_DIR, '..', '..');
@@ -28,14 +46,10 @@ const DEV_CATALOG_DB_PATH =
     'catalog.db',
   );
 const DEV_ASSET_STORE_DIR = resolve(dirname(DEV_CATALOG_DB_PATH));
-// Single working map file (Slice 3: "Tauri fs wiring"), kept at the same
-// shared path the real Tauri host uses (`BaseDirectory.Home` +
-// `.threemaker/maps/current.tmmap.json`, see `map-client.ts`) so a map
-// saved under plain `vite dev` and one saved from the real Tauri webview
-// interoperate through the same file. `saveMapFile` creates this directory
-// on first save (see `dev-server/map-api.ts`).
+// Named maps live under `~/.threemaker/maps/{name}.tmmap.json`, the same
+// Home-relative directory the Tauri host uses (`map-client.ts`). Legacy
+// `current.tmmap.json` is adopted as the map named `current`.
 const DEV_HOME_DIR = process.env.USERPROFILE ?? process.env.HOME ?? '.';
-const DEV_MAP_FILE_PATH = resolve(DEV_HOME_DIR, '.threemaker', 'maps', 'current.tmmap.json');
 const DEV_MAPS_DIR = resolve(DEV_HOME_DIR, '.threemaker', 'maps');
 const SAFE_STORY_ID = /^[A-Za-z0-9_-]+$/;
 
@@ -177,11 +191,41 @@ function devCatalogApiPlugin(): Plugin {
 }
 
 /**
- * Dev-only fallback for map persistence (Slice 4: "map format save"). A
- * single working `.tmmap.json` file, kept in the never-committed asset-store
- * directory. Real Tauri host save/load is NOT wired this slice -- see
- * `map-client.ts`'s doc comment.
+ * Dev-only fallback for map persistence. Named `.tmmap.json` files under
+ * `~/.threemaker/maps`, matching the Tauri host (`map-client.ts`). Legacy
+ * `current.tmmap.json` is the default when no `name` query is given.
  */
+function collectBody(
+  req: {
+    setEncoding: (enc: string) => void;
+    on: (ev: string, cb: (chunk: string) => void) => void;
+  },
+  done: (body: string) => void,
+): void {
+  let body = '';
+  req.setEncoding('utf8');
+  req.on('data', (chunk: string) => {
+    body += chunk;
+  });
+  req.on('end', () => {
+    done(body);
+  });
+}
+
+function namedMapFilePath(rawName: string | null): string | null {
+  try {
+    const name = assertMapName(rawName && rawName.length > 0 ? rawName : LEGACY_MAP_NAME);
+    return resolve(DEV_MAPS_DIR, mapDocumentFileName(name));
+  } catch (error) {
+    if (error instanceof InvalidMapNameError) return null;
+    throw error;
+  }
+}
+
+function homeAbsolute(relative: string): string {
+  return resolve(DEV_HOME_DIR, relative);
+}
+
 function devMapApiPlugin(): Plugin {
   return {
     name: 'threemaker-dev-map-api',
@@ -191,7 +235,13 @@ function devMapApiPlugin(): Plugin {
         const segments = url.pathname.split('/').filter(Boolean);
 
         if (segments.length === 1 && segments[0] === 'load' && req.method === 'GET') {
-          const json = loadMapFile(DEV_MAP_FILE_PATH);
+          const mapPath = namedMapFilePath(url.searchParams.get('name'));
+          if (mapPath === null) {
+            res.statusCode = 400;
+            res.end('invalid name');
+            return;
+          }
+          const json = loadMapFile(mapPath);
           if (json === null) {
             res.statusCode = 404;
             res.end();
@@ -203,20 +253,68 @@ function devMapApiPlugin(): Plugin {
         }
 
         if (segments.length === 1 && segments[0] === 'save' && req.method === 'POST') {
-          let body = '';
-          req.setEncoding('utf8');
-          req.on('data', (chunk: string) => {
-            body += chunk;
-          });
-          req.on('end', () => {
-            saveMapFile(DEV_MAP_FILE_PATH, body);
+          const mapPath = namedMapFilePath(url.searchParams.get('name'));
+          if (mapPath === null) {
+            res.statusCode = 400;
+            res.end('invalid name');
+            return;
+          }
+          collectBody(req, (body) => {
+            saveMapFile(mapPath, body);
             res.statusCode = 204;
             res.end();
           });
           return;
         }
 
-        // Ink sidecars next to the working map (L4 WU-02): GET/POST /ink?storyId=
+        if (segments.length === 1 && segments[0] === 'list' && req.method === 'GET') {
+          const names = listMapNamesFromEntries(listDirectoryNames(DEV_MAPS_DIR));
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify(names));
+          return;
+        }
+
+        if (segments.length === 1 && segments[0] === 'rename' && req.method === 'POST') {
+          collectBody(req, (body) => {
+            try {
+              const parsed = JSON.parse(body) as { from?: unknown; to?: unknown };
+              const from = typeof parsed.from === 'string' ? parsed.from : '';
+              const to = typeof parsed.to === 'string' ? parsed.to : '';
+              const entries = listDirectoryNames(DEV_MAPS_DIR);
+              const moves = planRenameMapFiles(from, to, entries);
+              for (const move of moves) {
+                renameFile(homeAbsolute(move.from), homeAbsolute(move.to));
+              }
+              res.statusCode = 204;
+              res.end();
+            } catch (error) {
+              res.statusCode = 400;
+              res.end(error instanceof Error ? error.message : 'invalid json');
+            }
+          });
+          return;
+        }
+
+        if (segments.length === 1 && segments[0] === 'delete' && req.method === 'POST') {
+          collectBody(req, (body) => {
+            try {
+              const parsed = JSON.parse(body) as { name?: unknown };
+              const name = typeof parsed.name === 'string' ? parsed.name : '';
+              const paths = planDeleteMapFiles(name, listDirectoryNames(DEV_MAPS_DIR));
+              for (const relative of paths) {
+                deleteFile(homeAbsolute(relative));
+              }
+              res.statusCode = 204;
+              res.end();
+            } catch (error) {
+              res.statusCode = 400;
+              res.end(error instanceof Error ? error.message : 'invalid json');
+            }
+          });
+          return;
+        }
+
+        // Ink sidecars next to the named map: GET/POST /ink?storyId=&name=
         if (segments.length === 1 && segments[0] === 'ink' && req.method === 'GET') {
           const storyId = url.searchParams.get('storyId') ?? '';
           if (!SAFE_STORY_ID.test(storyId)) {
@@ -224,7 +322,13 @@ function devMapApiPlugin(): Plugin {
             res.end('invalid storyId');
             return;
           }
-          const inkPath = resolve(DEV_MAPS_DIR, `current.${storyId}.ink`);
+          const mapPath = namedMapFilePath(url.searchParams.get('name'));
+          if (mapPath === null) {
+            res.statusCode = 400;
+            res.end('invalid name');
+            return;
+          }
+          const inkPath = `${mapPath.slice(0, -MAP_FILE_SUFFIX.length)}.${storyId}.ink`;
           const text = loadInkFile(inkPath);
           if (text === null) {
             res.statusCode = 404;
@@ -237,22 +341,28 @@ function devMapApiPlugin(): Plugin {
         }
 
         if (segments.length === 1 && segments[0] === 'ink' && req.method === 'POST') {
-          let body = '';
-          req.setEncoding('utf8');
-          req.on('data', (chunk: string) => {
-            body += chunk;
-          });
-          req.on('end', () => {
+          collectBody(req, (body) => {
             try {
-              const parsed = JSON.parse(body) as { storyId?: unknown; source?: unknown };
+              const parsed = JSON.parse(body) as {
+                storyId?: unknown;
+                source?: unknown;
+                name?: unknown;
+              };
               const storyId = typeof parsed.storyId === 'string' ? parsed.storyId : '';
               const source = typeof parsed.source === 'string' ? parsed.source : null;
+              const rawName = typeof parsed.name === 'string' ? parsed.name : null;
               if (!SAFE_STORY_ID.test(storyId) || source === null) {
                 res.statusCode = 400;
                 res.end('invalid body');
                 return;
               }
-              const inkPath = resolve(DEV_MAPS_DIR, `current.${storyId}.ink`);
+              const mapPath = namedMapFilePath(rawName);
+              if (mapPath === null) {
+                res.statusCode = 400;
+                res.end('invalid name');
+                return;
+              }
+              const inkPath = `${mapPath.slice(0, -MAP_FILE_SUFFIX.length)}.${storyId}.ink`;
               saveInkFile(inkPath, source);
               res.statusCode = 204;
               res.end();

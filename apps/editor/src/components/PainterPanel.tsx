@@ -77,8 +77,17 @@ import {
   initialInspectorRoutingState,
   inspectorRoutingReducer,
 } from '../inspector-routing.js';
-import { loadMapDocument, saveMapDocument } from '../map-client.js';
+import {
+  deleteSavedMap,
+  LEGACY_MAP_NAME,
+  listSavedMaps,
+  loadMapDocument,
+  MapClientError,
+  renameSavedMap,
+  saveMapDocument,
+} from '../map-client.js';
 import { composeMapFromTilesets, normalizeMapName, seedDemoTiles } from '../map-compose.js';
+import { mapDocumentFileName } from '../map-identity.js';
 import {
   DEFAULT_MAP_HEIGHT,
   DEFAULT_MAP_NAME,
@@ -90,7 +99,6 @@ import {
 import { painterDocumentSlicesChanged } from '../painter-dirty.js';
 import { statusLayerNameKey, statusToolKey } from '../painter-status.js';
 import { isEventReferenced, type PainterState, validateEventsDraft } from '../painter-store.js';
-import { openPlaytest, PlaytestClientError } from '../playtest-client.js';
 import type {
   HoverOverlayItem,
   LightOverlayItem,
@@ -103,6 +111,7 @@ import type {
   TriggerOverlayItem,
 } from '../painter-viewport.js';
 import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
+import { openPlaytest, PlaytestClientError } from '../playtest-client.js';
 import { applyDungeonStampToMapDocument } from '../procgen/apply-stamp.js';
 import { stampSimpleDungeon } from '../procgen/dungeon-stamp.js';
 import {
@@ -324,9 +333,15 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [newMapWidth, setNewMapWidth] = useState(String(DEFAULT_MAP_WIDTH));
   const [newMapHeight, setNewMapHeight] = useState(String(DEFAULT_MAP_HEIGHT));
   const [creatingMap, setCreatingMap] = useState(false);
+  const [openMapName, setOpenMapName] = useState(LEGACY_MAP_NAME);
+  const [savedMapNames, setSavedMapNames] = useState<readonly string[]>([]);
   const newMapResult = useMemo(
-    () => validateNewMapDraft({ name: newMapName, width: newMapWidth, height: newMapHeight }),
-    [newMapName, newMapWidth, newMapHeight],
+    () =>
+      validateNewMapDraft(
+        { name: newMapName, width: newMapWidth, height: newMapHeight },
+        savedMapNames,
+      ),
+    [newMapName, newMapWidth, newMapHeight, savedMapNames],
   );
   /** Document display name draft (WU-UX-09); committed on blur via setMapName. */
   const [mapNameDraft, setMapNameDraft] = useState('');
@@ -342,6 +357,20 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const clearStatus = useCallback(() => {
     dispatchStatusFeedback({ type: 'clear' });
   }, []);
+  const refreshSavedMaps = useCallback(async () => {
+    try {
+      setSavedMapNames(await listSavedMaps());
+    } catch (err) {
+      console.error('Failed to list saved maps:', err);
+    }
+  }, []);
+  useEffect(() => {
+    void refreshSavedMaps();
+  }, [refreshSavedMaps]);
+  const savedMapFiles = useMemo(
+    () => savedMapNames.map((name) => mapDocumentFileName(name)),
+    [savedMapNames],
+  );
   const [rampGlyphs, setRampGlyphs] = useState<readonly RampGlyphOverlayItem[]>([]);
   const [roomOverlay, setRoomOverlay] = useState<readonly RoomOverlayItem[]>([]);
   const [stairOverlay, setStairOverlay] = useState<readonly StairOverlayItem[]>([]);
@@ -610,6 +639,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       if (firstSprite) viewportRef.current?.setActiveNpcSpriteObject(firstSprite);
       setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
       setMapNameDraft(doc.name);
+      setOpenMapName(name);
       setMapReady(true);
       // Fresh document = clean baseline for the unsaved-changes indicator.
       prevPainterStateRef.current = viewportRef.current?.painterState;
@@ -654,8 +684,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
     const doc = viewportRef.current?.currentDocument();
     if (!doc) return;
     try {
-      await saveMapDocument(doc);
+      await saveMapDocument(doc, openMapName);
       setDocDirty(false);
+      void refreshSavedMaps();
       // Community share is opt-out (default on); no network in v0 — enqueue only.
       const tileShas = Object.values(doc.tileset.slots)
         .map((slot) => slot?.object)
@@ -686,7 +717,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       console.error('Failed to save the map:', err);
       reportStatus({ message: t('painter.saveFailed'), severity: 'error' });
     }
-  }, [t, community, reportStatus]);
+  }, [t, community, reportStatus, openMapName, refreshSavedMaps]);
 
   // Keep the viewport's Ctrl/Cmd+S chord pointing at the CURRENT Save handler.
   useEffect(() => {
@@ -797,53 +828,54 @@ export function PainterPanel({ t }: PainterPanelProps) {
     procgenDoorTileId,
     procgenFurnitureTileId,
     procgenFurnitureDensity,
-        reportStatus,
-      ]);
+    reportStatus,
+  ]);
 
-      useEffect(() => {
-        if (!pendingGenerate || !mapReady || !painterState) return;
-        setPendingGenerate(false);
-        void handleGenerateDungeon();
-      }, [pendingGenerate, mapReady, painterState, handleGenerateDungeon]);
+  useEffect(() => {
+    if (!pendingGenerate || !mapReady || !painterState) return;
+    setPendingGenerate(false);
+    void handleGenerateDungeon();
+  }, [pendingGenerate, mapReady, painterState, handleGenerateDungeon]);
 
-      const handlePlaytest = useCallback(async () => {
-        if (!isTauriAvailable()) {
-          reportStatus({ message: t('painter.playtest.needDesktop'), severity: 'warning' });
-          return;
-        }
-        const liveState = viewportRef.current?.painterState;
-        if (liveState) {
-          const block = canSavePainterDocument(liveState);
-          if (block !== null) {
-            reportStatus({ message: block, severity: 'warning' });
-            return;
-          }
-        }
-        const doc = viewportRef.current?.currentDocument();
-        if (!doc) return;
-        try {
-          await saveMapDocument(doc);
-          setDocDirty(false);
-          await openPlaytest();
-          reportStatus({ message: t('painter.playtest.success'), severity: 'success' });
-        } catch (err) {
-          console.error('Failed to open playtest:', err);
-          if (err instanceof PlaytestClientError) {
-            const message =
-              err.code === 'NotFound'
-                ? t('painter.playtest.needDesktop')
-                : t('painter.playtest.failed');
-            reportStatus({
-              message,
-              severity: err.code === 'NotFound' ? 'warning' : 'error',
-            });
-            return;
-          }
-          reportStatus({ message: t('painter.playtest.failed'), severity: 'error' });
-        }
-      }, [t, reportStatus]);
+  const handlePlaytest = useCallback(async () => {
+    if (!isTauriAvailable()) {
+      reportStatus({ message: t('painter.playtest.needDesktop'), severity: 'warning' });
+      return;
+    }
+    const liveState = viewportRef.current?.painterState;
+    if (liveState) {
+      const block = canSavePainterDocument(liveState);
+      if (block !== null) {
+        reportStatus({ message: block, severity: 'warning' });
+        return;
+      }
+    }
+    const doc = viewportRef.current?.currentDocument();
+    if (!doc) return;
+    try {
+      await saveMapDocument(doc, openMapName);
+      setDocDirty(false);
+      void refreshSavedMaps();
+      await openPlaytest();
+      reportStatus({ message: t('painter.playtest.success'), severity: 'success' });
+    } catch (err) {
+      console.error('Failed to open playtest:', err);
+      if (err instanceof PlaytestClientError) {
+        const message =
+          err.code === 'NotFound'
+            ? t('painter.playtest.needDesktop')
+            : t('painter.playtest.failed');
+        reportStatus({
+          message,
+          severity: err.code === 'NotFound' ? 'warning' : 'error',
+        });
+        return;
+      }
+      reportStatus({ message: t('painter.playtest.failed'), severity: 'error' });
+    }
+  }, [t, reportStatus, openMapName, refreshSavedMaps]);
 
-      // Keep selected event key in sync with the live eventKeys list.
+  // Keep selected event key in sync with the live eventKeys list.
   useEffect(() => {
     if (!painterState) {
       setSelectedEventKey(undefined);
@@ -866,49 +898,51 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const inkStoryIdsKey = inkStoryIds.join('\u0000');
   const inkStoryIdsRef = useRef(inkStoryIds);
   inkStoryIdsRef.current = inkStoryIds;
-  const inkInventoriesRef = useRef(inkInventories);
-  inkInventoriesRef.current = inkInventories;
   const inkInventoryRequestRef = useRef<Record<string, number>>({});
-  const loadInkInventory = useCallback((id: string) => {
-    if (!isSafeStoryId(id) || !inkStoryIdsRef.current.includes(id)) return;
-    const request = (inkInventoryRequestRef.current[id] ?? 0) + 1;
-    inkInventoryRequestRef.current[id] = request;
-    setInkInventories((previous) => ({ ...previous, [id]: { status: 'loading' } }));
-    void loadInkSidecar(id)
-      .then((source) => {
-        if (
-          inkInventoryRequestRef.current[id] !== request ||
-          !inkStoryIdsRef.current.includes(id)
-        ) {
-          return;
-        }
-        setInkInventories((previous) => ({
-          ...previous,
-          [id]:
-            source === null
-              ? { status: 'missing' }
-              : { status: 'loaded', knots: listInkKnots(source) },
-        }));
-      })
-      .catch(() => {
-        if (inkInventoryRequestRef.current[id] === request && inkStoryIdsRef.current.includes(id)) {
-          setInkInventories((previous) => ({ ...previous, [id]: { status: 'error' } }));
-        }
-      });
-  }, []);
+  const loadInkInventory = useCallback(
+    (id: string) => {
+      if (!isSafeStoryId(id) || !inkStoryIdsRef.current.includes(id)) return;
+      const request = (inkInventoryRequestRef.current[id] ?? 0) + 1;
+      inkInventoryRequestRef.current[id] = request;
+      setInkInventories((previous) => ({ ...previous, [id]: { status: 'loading' } }));
+      void loadInkSidecar(id, openMapName)
+        .then((source) => {
+          if (
+            inkInventoryRequestRef.current[id] !== request ||
+            !inkStoryIdsRef.current.includes(id)
+          ) {
+            return;
+          }
+          setInkInventories((previous) => ({
+            ...previous,
+            [id]:
+              source === null
+                ? { status: 'missing' }
+                : { status: 'loaded', knots: listInkKnots(source) },
+          }));
+        })
+        .catch(() => {
+          if (
+            inkInventoryRequestRef.current[id] === request &&
+            inkStoryIdsRef.current.includes(id)
+          ) {
+            setInkInventories((previous) => ({ ...previous, [id]: { status: 'error' } }));
+          }
+        });
+    },
+    [openMapName],
+  );
   useEffect(() => {
     const ids = inkStoryIdsKey === '' ? [] : inkStoryIdsKey.split('\u0000').filter(isSafeStoryId);
-    const cached = inkInventoriesRef.current;
     setInkInventories((previous) => {
       const next: Record<string, InkKnotInventory> = {};
       for (const id of ids) next[id] = previous[id] ?? { status: 'loading' };
       return next;
     });
     for (const id of ids) {
-      if (cached[id]) continue;
       loadInkInventory(id);
     }
-    // The joined key bounds cache membership and prevents equivalent event emissions reloading.
+    // Reloads when the story set or the open map file changes (loadInkInventory identity).
   }, [inkStoryIdsKey, loadInkInventory]);
 
   // Hydration and other incidental state emissions may route only until the user picks a tab.
@@ -920,29 +954,83 @@ export function PainterPanel({ t }: PainterPanelProps) {
     dispatchInspectorRouting({ type: 'tool-state-changed', tool: activeTool });
   }, [activeTool]);
 
-  const handleLoad = useCallback(async () => {
-    try {
-      const doc = await loadMapDocument();
-      if (!doc) {
-        reportStatus({ message: t('painter.loadEmpty'), severity: 'info' });
+  const handleOpenMap = useCallback(
+    async (name: string, options?: { readonly confirmDirty?: boolean }) => {
+      if (
+        options?.confirmDirty &&
+        mapReady &&
+        docDirty &&
+        !window.confirm(formatTemplate(t('painter.maps.switchConfirm'), { name }))
+      ) {
         return;
       }
-      const { textures, sheetPixelSizes } = await loadSlotTextures(doc);
-      viewportRef.current?.loadMap(doc, textures, sheetPixelSizes, GROUND_TILE_ID);
-      const firstSprite = characterSprites[0]?.sha256;
-      if (firstSprite) viewportRef.current?.setActiveNpcSpriteObject(firstSprite);
-      setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
-      setMapNameDraft(doc.name);
-      setMapReady(true);
-      // Fresh document = clean baseline for the unsaved-changes indicator.
-      prevPainterStateRef.current = viewportRef.current?.painterState;
-      setDocDirty(false);
-      reportStatus({ message: t('painter.loadSuccess'), severity: 'success' });
-    } catch (err) {
-      console.error('Failed to load the map:', err);
-      reportStatus({ message: t('painter.loadFailed'), severity: 'error' });
-    }
-  }, [t, characterSprites, reportStatus]);
+      try {
+        const doc = await loadMapDocument(name);
+        if (!doc) {
+          reportStatus({ message: t('painter.loadEmpty'), severity: 'info' });
+          return;
+        }
+        const { textures, sheetPixelSizes } = await loadSlotTextures(doc);
+        viewportRef.current?.loadMap(doc, textures, sheetPixelSizes, GROUND_TILE_ID);
+        const firstSprite = characterSprites[0]?.sha256;
+        if (firstSprite) viewportRef.current?.setActiveNpcSpriteObject(firstSprite);
+        setPaletteSlots(await buildPaletteSlots(doc, sheetPixelSizes));
+        setMapNameDraft(doc.name);
+        setOpenMapName(name);
+        setMapReady(true);
+        prevPainterStateRef.current = viewportRef.current?.painterState;
+        setDocDirty(false);
+        reportStatus({ message: t('painter.loadSuccess'), severity: 'success' });
+      } catch (err) {
+        console.error('Failed to load the map:', err);
+        reportStatus({ message: t('painter.loadFailed'), severity: 'error' });
+      }
+    },
+    [t, characterSprites, reportStatus, mapReady, docDirty],
+  );
+
+  const handleLoad = useCallback(async () => {
+    await handleOpenMap(openMapName);
+  }, [handleOpenMap, openMapName]);
+
+  const handleRenameSavedMap = useCallback(
+    async (name: string) => {
+      const next = window.prompt(t('painter.maps.renamePrompt'), name);
+      if (next === null) return;
+      try {
+        await renameSavedMap(name, next);
+        if (openMapName === name) setOpenMapName(next.trim());
+        await refreshSavedMaps();
+        reportStatus({ message: t('painter.maps.renameSuccess'), severity: 'success' });
+      } catch (err) {
+        console.error('Failed to rename the map:', err);
+        reportStatus({
+          message: err instanceof MapClientError ? err.message : t('painter.maps.renameFailed'),
+          severity: 'error',
+        });
+      }
+    },
+    [t, openMapName, refreshSavedMaps, reportStatus],
+  );
+
+  const handleDeleteSavedMap = useCallback(
+    async (name: string) => {
+      if (!window.confirm(formatTemplate(t('painter.maps.deleteConfirm'), { name }))) return;
+      try {
+        await deleteSavedMap(name);
+        if (openMapName === name) {
+          setMapReady(false);
+          setOpenMapName(LEGACY_MAP_NAME);
+        }
+        await refreshSavedMaps();
+        reportStatus({ message: t('painter.maps.deleteSuccess'), severity: 'success' });
+      } catch (err) {
+        console.error('Failed to delete the map:', err);
+        reportStatus({ message: t('painter.maps.deleteFailed'), severity: 'error' });
+      }
+    },
+    [t, openMapName, refreshSavedMaps, reportStatus],
+  );
 
   const INSPECTOR_TABS = INSPECTOR_TAB_IDS;
 
@@ -984,7 +1072,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
         </label>
       </div>
       <p className={newMapResult.valid ? 'ide-hint' : 'ide-field-error'} role="status">
-        {t(newMapResult.valid ? 'painter.newMap.guidance' : 'painter.newMap.invalid')}
+        {newMapResult.valid
+          ? t('painter.newMap.guidance')
+          : newMapResult.nameCollision
+            ? formatTemplate(t('painter.newMap.nameTaken'), { name: newMapResult.nameCollision })
+            : t('painter.newMap.invalid')}
       </p>
     </div>
   );
@@ -1027,9 +1119,31 @@ export function PainterPanel({ t }: PainterPanelProps) {
             </button>
           )}
           {mapReady && (
-            <button type="button" onClick={handleLoad}>
-              {t('painter.load')}
-            </button>
+            <>
+              <button type="button" onClick={handleLoad}>
+                {t('painter.load')}
+              </button>
+              <label title={t('painter.maps.fileHint')}>
+                {t('painter.maps.file')}
+                <select
+                  value={openMapName}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    if (next === openMapName) return;
+                    void handleOpenMap(next, { confirmDirty: true });
+                  }}
+                >
+                  {!savedMapNames.includes(openMapName) && (
+                    <option value={openMapName}>{openMapName}</option>
+                  )}
+                  {savedMapNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
           )}
           {mapReady && (
             <>
@@ -1177,7 +1291,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       </div>
 
       <div className="ide-body">
-<aside className="ide-tool-rail" aria-label={t('painter.tools')}>
+        <aside className="ide-tool-rail" aria-label={t('painter.tools')}>
           {TOOL_GROUPS.map((group) => (
             <fieldset key={group.id} className="ide-tool-group">
               <legend className="ide-tool-group-label">{t(`painter.toolGroup.${group.id}`)}</legend>
@@ -1508,11 +1622,26 @@ export function PainterPanel({ t }: PainterPanelProps) {
                   <section className="ide-welcome-path">
                     <h3 className="ide-section-title">{t('painter.welcome.openMap')}</h3>
                     <p className="ide-hint">{t('painter.welcome.openMapHint')}</p>
-                    <div className="ide-row">
-                      <button type="button" onClick={handleLoad}>
-                        {t('painter.load')}
-                      </button>
-                    </div>
+                    {savedMapNames.length === 0 ? (
+                      <p className="ide-hint">{t('painter.maps.emptyList')}</p>
+                    ) : (
+                      <ul className="ide-list">
+                        {savedMapNames.map((name) => (
+                          <li key={name}>
+                            <span className="ide-welcome-map-name">{name}</span>
+                            <button type="button" onClick={() => void handleOpenMap(name)}>
+                              {t('painter.maps.open')}
+                            </button>
+                            <button type="button" onClick={() => void handleRenameSavedMap(name)}>
+                              {t('painter.maps.rename')}
+                            </button>
+                            <button type="button" onClick={() => void handleDeleteSavedMap(name)}>
+                              {t('painter.maps.delete')}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </section>
                   <section className="ide-welcome-path">
                     <h3 className="ide-section-title">{t('painter.welcome.newMap')}</h3>
@@ -1549,19 +1678,19 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           ? t('painter.welcome.chooseTilesets')
                           : t('painter.welcome.ready')}
                     </p>
-                        {games.length === 0 && (
-                          <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
-                        )}
-                        <label className="ide-check">
-                          <input
-                            type="checkbox"
-                            checked={generateAfterCreate}
-                            onChange={(event) => setGenerateAfterCreate(event.target.checked)}
-                          />
-                          {t('painter.procgen.generateAfterCreate')}
-                        </label>
-                        <div className="ide-row">
-<button
+                    {games.length === 0 && (
+                      <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
+                    )}
+                    <label className="ide-check">
+                      <input
+                        type="checkbox"
+                        checked={generateAfterCreate}
+                        onChange={(event) => setGenerateAfterCreate(event.target.checked)}
+                      />
+                      {t('painter.procgen.generateAfterCreate')}
+                    </label>
+                    <div className="ide-row">
+                      <button
                         type="button"
                         className="primary"
                         disabled={
@@ -1898,7 +2027,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           selectTilesetLabel={t('painter.selectTileset')}
                         />
                       </div>
-<button
+                      <button
                         type="button"
                         className="primary"
                         disabled={
@@ -2425,6 +2554,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           commands={painterState.events[selectedEventKey] ?? []}
                           inkStoryIds={inkStoryIds}
                           inkInventories={inkInventories}
+                          savedMapFiles={savedMapFiles}
                           onUpdate={(path, patch) =>
                             viewportRef.current?.updateCommand(selectedEventKey, path, patch)
                           }
@@ -2553,6 +2683,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                   <InkPanel
                     t={t}
                     painterState={painterState}
+                    mapName={openMapName}
                     onStatus={reportStatus}
                     onStorySaved={loadInkInventory}
                   />

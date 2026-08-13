@@ -1,3 +1,5 @@
+import { collidingSavedMapName, validateMapName } from './map-identity.js';
+
 export const DEFAULT_MAP_NAME = 'New Map';
 export const DEFAULT_MAP_WIDTH = 20;
 export const DEFAULT_MAP_HEIGHT = 15;
@@ -25,11 +27,13 @@ export type NewMapDraftResult =
         readonly width: boolean;
         readonly height: boolean;
       };
+      readonly nameCollision?: string;
     };
 
 export function normalizeNewMapName(input: string): string | null {
   const name = input.trim();
-  return name.length > 0 ? name : null;
+  if (name.length === 0 || validateMapName(name) !== null) return null;
+  return name;
 }
 
 export function normalizeMapDimension(input: string | number): number | null {
@@ -40,7 +44,10 @@ export function normalizeMapDimension(input: string | number): number | null {
   return value;
 }
 
-export function validateNewMapDraft(draft: NewMapDraft): NewMapDraftResult {
+export function validateNewMapDraft(
+  draft: NewMapDraft,
+  savedNames: readonly string[] = [],
+): NewMapDraftResult {
   const name = normalizeNewMapName(draft.name);
   const width = normalizeMapDimension(draft.width);
   const height = normalizeMapDimension(draft.height);
@@ -48,6 +55,14 @@ export function validateNewMapDraft(draft: NewMapDraft): NewMapDraftResult {
     return {
       valid: false,
       errors: { name: name === null, width: width === null, height: height === null },
+    };
+  }
+  const nameCollision = collidingSavedMapName(name, savedNames);
+  if (nameCollision !== undefined) {
+    return {
+      valid: false,
+      errors: { name: true, width: false, height: false },
+      nameCollision,
     };
   }
   return { valid: true, value: { name, width, height } };

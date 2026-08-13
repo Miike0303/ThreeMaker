@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildInkDialoguePickerModel,
+  buildTransferMapPickerModel,
   canSavePainterDocument,
   defaultWorldSeedValue,
   dialogueLinesFromTextarea,
@@ -133,6 +134,25 @@ describe('event-form-helpers: Ink dialogue picker model', () => {
     expect(buildInkDialoguePickerModel(['broken'], inventories, 'broken', '').storyStatus).toBe(
       'sidecar-error',
     );
+  });
+});
+
+describe('event-form-helpers: transferMap picker model', () => {
+  it('preserves custom values and reports known/unknown/empty status', () => {
+    expect(
+      buildTransferMapPickerModel(['current.tmmap.json', 'town.tmmap.json'], 'town.tmmap.json'),
+    ).toEqual({
+      mapFileOptions: ['current.tmmap.json', 'town.tmmap.json'],
+      mapFileStatus: 'ready',
+    });
+    expect(buildTransferMapPickerModel(['town.tmmap.json'], 'dungeon.tmmap.json')).toMatchObject({
+      mapFileOptions: ['town.tmmap.json', 'dungeon.tmmap.json'],
+      mapFileStatus: 'unknown-map',
+    });
+    expect(buildTransferMapPickerModel(['town.tmmap.json'], '')).toMatchObject({
+      mapFileOptions: ['town.tmmap.json'],
+      mapFileStatus: 'empty',
+    });
   });
 });
 

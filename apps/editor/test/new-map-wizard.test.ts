@@ -22,6 +22,9 @@ describe('new map wizard', () => {
   it('normalizes map names without accepting blank text', () => {
     expect(normalizeNewMapName('  Forest Path  ')).toBe('Forest Path');
     expect(normalizeNewMapName('   ')).toBeNull();
+    expect(normalizeNewMapName('../evil')).toBeNull();
+    expect(normalizeNewMapName('CON')).toBeNull();
+    expect(normalizeNewMapName('foo/bar')).toBeNull();
   });
 
   it('normalizes only finite integer dimensions inside the bounds', () => {
@@ -46,6 +49,18 @@ describe('new map wizard', () => {
     expect(validateNewMapDraft({ name: '', width: 'oops', height: '7' })).toEqual({
       valid: false,
       errors: { name: true, width: true, height: true },
+    });
+  });
+
+  it('rejects creating TOWN while town is already saved, before any write', () => {
+    expect(validateNewMapDraft({ name: 'TOWN', width: 20, height: 15 }, ['town'])).toEqual({
+      valid: false,
+      errors: { name: true, width: false, height: false },
+      nameCollision: 'town',
+    });
+    expect(validateNewMapDraft({ name: 'Castle', width: 20, height: 15 }, ['town'])).toEqual({
+      valid: true,
+      value: { name: 'Castle', width: 20, height: 15 },
     });
   });
 });

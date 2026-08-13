@@ -2,7 +2,7 @@
  * Ink sidecar authoring seams for the editor (L4 WU-02).
  *
  * Path convention matches desktop `authored-map.ts` design D7:
- * `.threemaker/maps/current.tmmap.json` → `.threemaker/maps/current.<storyId>.ink`
+ * `.threemaker/maps/{mapName}.tmmap.json` → `.threemaker/maps/{mapName}.{storyId}.ink`
  *
  * Persistence reuses the same Tauri / dev-HTTP backends as `map-client.ts`.
  */
@@ -19,7 +19,8 @@ import {
   setInkNodePosition,
 } from '@threemaker/narrative';
 import { isTauriAvailable } from './catalog-client.js';
-import { MAP_DIR_RELATIVE, MAP_FILE_RELATIVE, MapClientError } from './map-client.js';
+import { MAP_DIR_RELATIVE, MapClientError, mapFileRelativePath } from './map-client.js';
+import { LEGACY_MAP_NAME } from './map-identity.js';
 
 const DEV_MAP_API_BASE = '/api/dev-map';
 const MAP_FILE_SUFFIX = '.tmmap.json';
@@ -90,15 +91,21 @@ export function tryCompileInkSource(source: string): TryCompileInkResult {
   }
 }
 
-/** Loads one sidecar for the working map, or `null` if missing. */
-export async function loadInkSidecar(storyId: string): Promise<string | null> {
-  const relative = inkSidecarRelativePath(MAP_FILE_RELATIVE, storyId);
+/** Loads one sidecar next to the named map, or `null` if missing. */
+export async function loadInkSidecar(
+  storyId: string,
+  mapName: string = LEGACY_MAP_NAME,
+): Promise<string | null> {
+  const relative = inkSidecarRelativePath(mapFileRelativePath(mapName), storyId);
   if (isTauriAvailable()) {
     const fileExists = await exists(relative, { baseDir: BaseDirectory.Home });
     if (!fileExists) return null;
     return readTextFile(relative, { baseDir: BaseDirectory.Home });
   }
-  const response = await fetch(`${DEV_MAP_API_BASE}/ink?storyId=${encodeURIComponent(storyId)}`);
+  const nameQuery = mapName === LEGACY_MAP_NAME ? '' : `&name=${encodeURIComponent(mapName)}`;
+  const response = await fetch(
+    `${DEV_MAP_API_BASE}/ink?storyId=${encodeURIComponent(storyId)}${nameQuery}`,
+  );
   if (response.status === 404) return null;
   if (!response.ok) {
     throw new MapClientError(`Failed to load ink sidecar: HTTP ${response.status}`);
@@ -106,9 +113,13 @@ export async function loadInkSidecar(storyId: string): Promise<string | null> {
   return response.text();
 }
 
-/** Saves one sidecar for the working map (creates maps dir if needed). */
-export async function saveInkSidecar(storyId: string, source: string): Promise<void> {
-  const relative = inkSidecarRelativePath(MAP_FILE_RELATIVE, storyId);
+/** Saves one sidecar next to the named map (creates maps dir if needed). */
+export async function saveInkSidecar(
+  storyId: string,
+  source: string,
+  mapName: string = LEGACY_MAP_NAME,
+): Promise<void> {
+  const relative = inkSidecarRelativePath(mapFileRelativePath(mapName), storyId);
   if (isTauriAvailable()) {
     await mkdir(MAP_DIR_RELATIVE, { baseDir: BaseDirectory.Home, recursive: true });
     await writeTextFile(relative, source, { baseDir: BaseDirectory.Home });
@@ -117,7 +128,11 @@ export async function saveInkSidecar(storyId: string, source: string): Promise<v
   const response = await fetch(`${DEV_MAP_API_BASE}/ink`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ storyId, source }),
+    body: JSON.stringify({
+      storyId,
+      source,
+      ...(mapName === LEGACY_MAP_NAME ? {} : { name: mapName }),
+    }),
   });
   if (!response.ok) {
     throw new MapClientError(`Failed to save ink sidecar: HTTP ${response.status}`);

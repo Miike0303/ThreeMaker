@@ -58,6 +58,29 @@ export function buildInkDialoguePickerModel(
   };
 }
 
+export type TransferMapPickerStatus = 'ready' | 'unknown-map' | 'empty';
+
+export interface TransferMapPickerModel {
+  readonly mapFileOptions: readonly string[];
+  readonly mapFileStatus: TransferMapPickerStatus;
+}
+
+/**
+ * Pure presentation model for `transferMap.mapFile` — same datalist + soft
+ * warning pattern as the Ink knot picker. Custom/dangling values stay editable.
+ */
+export function buildTransferMapPickerModel(
+  knownMapFiles: readonly string[],
+  mapFile: string,
+): TransferMapPickerModel {
+  const mapFileOptions = [...new Set([...knownMapFiles, ...(mapFile ? [mapFile] : [])])];
+  let mapFileStatus: TransferMapPickerStatus;
+  if (mapFile === '') mapFileStatus = 'empty';
+  else if (knownMapFiles.includes(mapFile)) mapFileStatus = 'ready';
+  else mapFileStatus = 'unknown-map';
+  return { mapFileOptions, mapFileStatus };
+}
+
 /** Discriminator for WorldValue / WorldSeedValue type selectors in forms. */
 export type WorldValueKind = 'boolean' | 'number' | 'string';
 

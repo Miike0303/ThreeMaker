@@ -1126,6 +1126,13 @@ label {
   margin-top: 2px;
 }
 
+.ide-welcome-map-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--tm-mono);
+  font-size: 12px;
+}
+
 .ide-welcome-prerequisite {
   padding: 8px 10px;
   border-left: 3px solid var(--tm-accent);
