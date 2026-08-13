@@ -90,6 +90,7 @@ import {
 import { painterDocumentSlicesChanged } from '../painter-dirty.js';
 import { statusLayerNameKey, statusToolKey } from '../painter-status.js';
 import { isEventReferenced, type PainterState, validateEventsDraft } from '../painter-store.js';
+import { openPlaytest, PlaytestClientError } from '../playtest-client.js';
 import type {
   HoverOverlayItem,
   LightOverlayItem,
@@ -317,6 +318,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   }, []);
 
   const [mapReady, setMapReady] = useState(false);
+  const [generateAfterCreate, setGenerateAfterCreate] = useState(true);
+  const [pendingGenerate, setPendingGenerate] = useState(false);
   const [newMapName, setNewMapName] = useState(DEFAULT_MAP_NAME);
   const [newMapWidth, setNewMapWidth] = useState(String(DEFAULT_MAP_WIDTH));
   const [newMapHeight, setNewMapHeight] = useState(String(DEFAULT_MAP_HEIGHT));
@@ -615,6 +618,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
         message: formatTemplate(t('painter.createSuccess'), { name, width, height }),
         severity: 'success',
       });
+      if (generateAfterCreate) {
+        setPendingGenerate(true);
+      }
       // Land on paint tools so the canvas is immediately usable.
       dispatchInspectorRouting({ type: 'manual-tab', tab: 'paint' });
     } catch (err) {
@@ -631,9 +637,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
     mapReady,
     t,
     characterSprites,
+    generateAfterCreate,
     clearStatus,
     reportStatus,
-    dispatchInspectorRouting,
   ]);
 
   const handleSave = useCallback(async () => {
@@ -791,10 +797,53 @@ export function PainterPanel({ t }: PainterPanelProps) {
     procgenDoorTileId,
     procgenFurnitureTileId,
     procgenFurnitureDensity,
-    reportStatus,
-  ]);
+        reportStatus,
+      ]);
 
-  // Keep selected event key in sync with the live eventKeys list.
+      useEffect(() => {
+        if (!pendingGenerate || !mapReady || !painterState) return;
+        setPendingGenerate(false);
+        void handleGenerateDungeon();
+      }, [pendingGenerate, mapReady, painterState, handleGenerateDungeon]);
+
+      const handlePlaytest = useCallback(async () => {
+        if (!isTauriAvailable()) {
+          reportStatus({ message: t('painter.playtest.needDesktop'), severity: 'warning' });
+          return;
+        }
+        const liveState = viewportRef.current?.painterState;
+        if (liveState) {
+          const block = canSavePainterDocument(liveState);
+          if (block !== null) {
+            reportStatus({ message: block, severity: 'warning' });
+            return;
+          }
+        }
+        const doc = viewportRef.current?.currentDocument();
+        if (!doc) return;
+        try {
+          await saveMapDocument(doc);
+          setDocDirty(false);
+          await openPlaytest();
+          reportStatus({ message: t('painter.playtest.success'), severity: 'success' });
+        } catch (err) {
+          console.error('Failed to open playtest:', err);
+          if (err instanceof PlaytestClientError) {
+            const message =
+              err.code === 'NotFound'
+                ? t('painter.playtest.needDesktop')
+                : t('painter.playtest.failed');
+            reportStatus({
+              message,
+              severity: err.code === 'NotFound' ? 'warning' : 'error',
+            });
+            return;
+          }
+          reportStatus({ message: t('painter.playtest.failed'), severity: 'error' });
+        }
+      }, [t, reportStatus]);
+
+      // Keep selected event key in sync with the live eventKeys list.
   useEffect(() => {
     if (!painterState) {
       setSelectedEventKey(undefined);
@@ -984,6 +1033,18 @@ export function PainterPanel({ t }: PainterPanelProps) {
           )}
           {mapReady && (
             <>
+              <button
+                type="button"
+                onClick={() => {
+                  dispatchInspectorRouting({ type: 'manual-tab', tab: 'procgen' });
+                  void handleGenerateDungeon();
+                }}
+              >
+                {t('painter.generate')}
+              </button>
+              <button type="button" onClick={() => void handlePlaytest()}>
+                {t('painter.playtest')}
+              </button>
               <button
                 type="button"
                 disabled={!activeFloorState?.commandStack.undoStack.length}
@@ -1488,10 +1549,18 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           ? t('painter.welcome.chooseTilesets')
                           : t('painter.welcome.ready')}
                     </p>
-                    {games.length === 0 && (
-                      <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
-                    )}
-                    <div className="ide-row">
+                        {games.length === 0 && (
+                          <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
+                        )}
+                        <label className="ide-check">
+                          <input
+                            type="checkbox"
+                            checked={generateAfterCreate}
+                            onChange={(event) => setGenerateAfterCreate(event.target.checked)}
+                          />
+                          {t('painter.procgen.generateAfterCreate')}
+                        </label>
+                        <div className="ide-row">
 <button
                         type="button"
                         className="primary"
