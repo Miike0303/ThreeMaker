@@ -40,7 +40,8 @@ function createServer(): McpServer {
   server.registerTool(
     'list_maps',
     {
-      description: 'List maps currently loaded in the MCP project session.',
+      description:
+        "List maps currently loaded in the MCP project session, including each map's dirty (unsaved) flag.",
       inputSchema: z.object({}),
     },
     async () => textResult(session.listMaps()),
@@ -49,7 +50,8 @@ function createServer(): McpServer {
   server.registerTool(
     'create_map',
     {
-      description: 'Create a blank map document in the current MCP session.',
+      description:
+        'Create a blank map document in the current MCP session. Marks the map dirty; call save_project to write it.',
       inputSchema: z.object({
         relativePath: z
           .string()
@@ -119,6 +121,48 @@ function createServer(): McpServer {
     async ({ relativePath, eventKey, commands }) => {
       try {
         return textResult(session.addEvent(relativePath, eventKey, commands));
+      } catch (error) {
+        return textResult({ error: error instanceof Error ? error.message : String(error) }, true);
+      }
+    },
+  );
+
+  server.registerTool(
+    'edit_dialogue',
+    {
+      description:
+        'Write Ink source for a story attached to a loaded map. Persists to the <map>.<storyId>.ink sidecar beside the map.',
+      inputSchema: z.object({
+        relativePath: z
+          .string()
+          .min(1)
+          .describe('Map path relative to the project root, e.g. demo/forest.tmmap.json'),
+        storyId: z
+          .string()
+          .min(1)
+          .describe('Path-safe story id (letters, digits, "_" and "-" only)'),
+        text: z.string().describe('Full Ink source to write to the sidecar'),
+      }),
+    },
+    async ({ relativePath, storyId, text }) => {
+      try {
+        return textResult(session.editDialogue(relativePath, storyId, text));
+      } catch (error) {
+        return textResult({ error: error instanceof Error ? error.message : String(error) }, true);
+      }
+    },
+  );
+
+  server.registerTool(
+    'save_project',
+    {
+      description:
+        'Write every dirty map document to its .tmmap.json under the opened project root. Does not autosave; call explicitly.',
+      inputSchema: z.object({}),
+    },
+    async () => {
+      try {
+        return textResult(session.saveProject());
       } catch (error) {
         return textResult({ error: error instanceof Error ? error.message : String(error) }, true);
       }
