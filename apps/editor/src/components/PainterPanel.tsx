@@ -286,7 +286,7 @@ function resolveFloorLabel(
   const index = floors.findIndex((floor) => floor.id === id);
   if (index === -1) return id;
   const floor = floors[index];
-  return floor?.label ?? formatTemplate(t('painter.floorOption'), { index });
+  return floor?.label ?? formatTemplate(t('painter.floorOption'), { index: index + 1 });
 }
 
 /**
