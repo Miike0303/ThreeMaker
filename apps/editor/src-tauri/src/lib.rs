@@ -6,6 +6,7 @@
 mod catalog_ipc;
 mod import_catalog;
 mod import_scan;
+mod open_playtest;
 #[cfg(test)]
 mod real_game_test;
 
@@ -17,6 +18,7 @@ use catalog_ipc::{
     TilesetSummaryRow,
 };
 use import_catalog::{import_path, ImportError, ImportSummary};
+use open_playtest::open_playtest;
 use rusqlite::Connection;
 
 /// Holds the (optional) read-only catalog connection. `None` when the
@@ -143,8 +145,9 @@ fn catalog_import_path(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(CatalogState(Mutex::new(open_state_connection())))
         .invoke_handler(tauri::generate_handler![
             catalog_list_games,
@@ -153,7 +156,8 @@ pub fn run() {
             catalog_list_tilesets_for_game,
             catalog_reload,
             catalog_asset_store_dir,
-            catalog_import_path
+            catalog_import_path,
+            open_playtest
         ])
         .run(tauri::generate_context!())
         .expect("error while running the ThreeMaker editor shell");

@@ -444,6 +444,16 @@
     "catalog.import.hint": "Importá carpetas de juegos RPG Maker MV/MZ a tu biblioteca local.",
     "catalog.empty.title": "Todavía no hay juegos",
     "catalog.empty.body": "Importá una carpeta RPG Maker para cargar tilesets, personajes y audio.",
-    "catalog.pageOf": "Página {page} de {pages}"
+    "catalog.pageOf": "Página {page} de {pages}",
+    "catalog.import.browse": "Elegir…",
+    "catalog.import.browseTitle": "Elegí la carpeta de juegos RPG Maker",
+    "catalog.import.browseFailed": "No se pudo abrir el selector de carpetas.",
+    "catalog.import.importingShort": "Importando…",
+    "catalog.import.browserTitle": "La importación necesita la app de escritorio",
+    "catalog.import.step1": "Abrí el editor de escritorio de Three Maker (no la vista del navegador).",
+    "catalog.import.step2": "Andá a Recursos y elegí la carpeta de juegos RPG Maker.",
+    "catalog.import.step3": "La importación llena la biblioteca con tilesets, personajes y audio.",
+    "painter.createSuccess": "Mapa “{name}” listo ({width}×{height}). Pintá con B o usá la paleta abajo.",
+    "painter.creatingMap": "Creando mapa…"
   }
 }

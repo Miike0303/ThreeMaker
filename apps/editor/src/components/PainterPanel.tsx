@@ -320,6 +320,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [newMapName, setNewMapName] = useState(DEFAULT_MAP_NAME);
   const [newMapWidth, setNewMapWidth] = useState(String(DEFAULT_MAP_WIDTH));
   const [newMapHeight, setNewMapHeight] = useState(String(DEFAULT_MAP_HEIGHT));
+  const [creatingMap, setCreatingMap] = useState(false);
   const newMapResult = useMemo(
     () => validateNewMapDraft({ name: newMapName, width: newMapWidth, height: newMapHeight }),
     [newMapName, newMapWidth, newMapHeight],
@@ -561,12 +562,20 @@ export function PainterPanel({ t }: PainterPanelProps) {
   );
 
   const handleCreateMap = useCallback(async () => {
-    if (tilesetAId === undefined || tilesetBId === undefined || !newMapResult.valid) return;
+    if (
+      creatingMap ||
+      tilesetAId === undefined ||
+      tilesetBId === undefined ||
+      !newMapResult.valid
+    ) {
+      return;
+    }
     const { name, width, height } = newMapResult.value;
     if (mapReady && !window.confirm(formatTemplate(t('painter.newMap.replaceConfirm'), { name }))) {
       return;
     }
     clearStatus();
+    setCreatingMap(true);
     try {
       const [tilesetA, tilesetB] = await Promise.all([
         getTileset(tilesetAId),
@@ -602,11 +611,20 @@ export function PainterPanel({ t }: PainterPanelProps) {
       // Fresh document = clean baseline for the unsaved-changes indicator.
       prevPainterStateRef.current = viewportRef.current?.painterState;
       setDocDirty(false);
+      reportStatus({
+        message: formatTemplate(t('painter.createSuccess'), { name, width, height }),
+        severity: 'success',
+      });
+      // Land on paint tools so the canvas is immediately usable.
+      dispatchInspectorRouting({ type: 'manual-tab', tab: 'paint' });
     } catch (err) {
       console.error('Failed to create the painter map:', err);
       reportStatus({ message: t('painter.createFailed'), severity: 'error' });
+    } finally {
+      setCreatingMap(false);
     }
   }, [
+    creatingMap,
     tilesetAId,
     tilesetBId,
     newMapResult,
@@ -615,6 +633,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     characterSprites,
     clearStatus,
     reportStatus,
+    dispatchInspectorRouting,
   ]);
 
   const handleSave = useCallback(async () => {
@@ -1473,17 +1492,18 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
                     )}
                     <div className="ide-row">
-                      <button
+<button
                         type="button"
                         className="primary"
                         disabled={
+                          creatingMap ||
                           tilesetAId === undefined ||
                           tilesetBId === undefined ||
                           !newMapResult.valid
                         }
-                        onClick={handleCreateMap}
+                        onClick={() => void handleCreateMap()}
                       >
-                        {t('painter.createMap')}
+                        {creatingMap ? t('painter.creatingMap') : t('painter.createMap')}
                       </button>
                     </div>
                   </section>
@@ -1809,16 +1829,18 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           selectTilesetLabel={t('painter.selectTileset')}
                         />
                       </div>
-                      <button
+<button
                         type="button"
+                        className="primary"
                         disabled={
+                          creatingMap ||
                           tilesetAId === undefined ||
                           tilesetBId === undefined ||
                           !newMapResult.valid
                         }
-                        onClick={handleCreateMap}
+                        onClick={() => void handleCreateMap()}
                       >
-                        {t('painter.createMap')}
+                        {creatingMap ? t('painter.creatingMap') : t('painter.createMap')}
                       </button>
                     </section>
                   </>

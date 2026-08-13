@@ -661,8 +661,7 @@ label {
   position: relative;
   display: flex;
   background:
-    radial-gradient(ellipse at 50% 40%, rgba(108, 140, 255, 0.05), transparent 55%),
-    #08080c;
+    radial-gradient(ellipse at 50% 40%, rgba(108, 140, 255, 0.05), transparent 55%), #08080c;
 }
 
 .painter-viewport-canvas {
@@ -1446,6 +1445,42 @@ label {
 
 .catalog-import-status-warning {
   color: var(--tm-warning, var(--tm-text-dim));
+}
+
+.catalog-import-browser {
+  gap: var(--tm-space-3);
+}
+
+.catalog-import-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--tm-text-dim);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.catalog-import-steps li {
+  margin: 0 0 4px;
+}
+
+.catalog-import-cmd {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--tm-radius);
+  border: 1px solid var(--tm-border-strong);
+  background: var(--tm-bg-0);
+  font-size: 12px;
+}
+
+.catalog-import-cmd code {
+  font-family: var(--tm-mono);
+  color: var(--tm-accent);
+  font-size: 12px;
+}
+
+.catalog-import-browse {
+  flex: none;
+  white-space: nowrap;
 }
 
 .catalog-browser {
