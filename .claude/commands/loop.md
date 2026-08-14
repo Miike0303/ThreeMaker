@@ -18,8 +18,8 @@ CONTEXT:
 TASK:
 
 0. **Preconditions.** Stop and report, changing nothing, if the tree is dirty, if
-   the gates are already red on `HEAD`, or if `planes/GOAL.md` has text under
-   `## STOP`.
+   the gates are already red on `HEAD`, or if `planes/GOAL.md` contains a
+   `## STOP` heading at all — its presence is the signal, not its contents.
 1. Read `planes/LOOP.md` and `planes/GOAL.md` first. Do not proceed from memory.
    Honour the `## Rechazados` table — never re-propose something listed there.
 2. **Phase 0** — write ONE concrete research question for the chosen type. Create
