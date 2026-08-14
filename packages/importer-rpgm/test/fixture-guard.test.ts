@@ -1,4 +1,5 @@
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ROSELIAM_FIXTURE_DIR, requireFixture, skipWithoutFixture } from './fixture-path.js';
 
@@ -19,32 +20,37 @@ describe('requireFixture', () => {
 
 describe('skipWithoutFixture', () => {
   const missingDir = join(ROSELIAM_FIXTURE_DIR, '..', 'does-not-exist');
-  const alwaysPresentDir = join(ROSELIAM_FIXTURE_DIR, '..');
+  /**
+   * This test file's own directory. `fixtures/` is NOT a valid stand-in for
+   * "a directory that exists": `.gitignore` ignores the whole folder, so a
+   * fresh clone has no `fixtures/` at all and asserting on it passes locally
+   * while failing on a runner. Pick something that ships with the repo.
+   */
+  const presentDir = dirname(fileURLToPath(import.meta.url));
 
-  it('returns false when the directory exists', () => {
-    expect(skipWithoutFixture(alwaysPresentDir)).toBe(false);
+  /** Restores `CI` to whatever the surrounding environment had — these cases must not depend on it. */
+  function withCi(value: string | undefined, run: () => void): void {
+    const previous = process.env.CI;
+    if (value === undefined) delete process.env.CI;
+    else process.env.CI = value;
+    try {
+      run();
+    } finally {
+      if (previous === undefined) delete process.env.CI;
+      else process.env.CI = previous;
+    }
+  }
+
+  it('does not skip a directory that exists, in CI or out of it', () => {
+    withCi('true', () => expect(skipWithoutFixture(presentDir)).toBe(false));
+    withCi(undefined, () => expect(skipWithoutFixture(presentDir)).toBe(false));
   });
 
   it('does not skip when CI is unset even for an absent path', () => {
-    const previous = process.env.CI;
-    delete process.env.CI;
-    try {
-      expect(skipWithoutFixture(missingDir)).toBe(false);
-    } finally {
-      if (previous === undefined) delete process.env.CI;
-      else process.env.CI = previous;
-    }
+    withCi(undefined, () => expect(skipWithoutFixture(missingDir)).toBe(false));
   });
 
   it('skips in CI when the directory is absent', () => {
-    const previous = process.env.CI;
-    process.env.CI = 'true';
-    try {
-      expect(skipWithoutFixture(missingDir)).toBe(true);
-      expect(skipWithoutFixture(alwaysPresentDir)).toBe(false);
-    } finally {
-      if (previous === undefined) delete process.env.CI;
-      else process.env.CI = previous;
-    }
+    withCi('true', () => expect(skipWithoutFixture(missingDir)).toBe(true));
   });
 });
