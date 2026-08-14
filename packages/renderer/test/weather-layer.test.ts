@@ -9,7 +9,7 @@ import {
   createWeatherLayer,
   WEATHER_LOOK_PRESETS,
   type WeatherLayer,
-} from '../src/weather-layer.js';
+} from '../src/runtime/weather-layer.js';
 
 function makeScene(): THREE.Scene {
   return new THREE.Scene();

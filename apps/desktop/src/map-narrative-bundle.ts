@@ -23,12 +23,12 @@ import type { Direction, NpcDefinition, RoutineStop } from '@threemaker/gameplay
 import { NpcRegistry, routinePositionAt, TriggerIndex } from '@threemaker/gameplay';
 import type { MapEventScripts } from '@threemaker/map-format';
 import { bindStoryToWorld, compileInk, InkDialogueProvider } from '@threemaker/narrative';
+import { groundYAt } from '@threemaker/renderer';
 import type * as THREE from 'three/webgpu';
 import type { AuthoredMapNarrative } from './authored-map.js';
 import { CharacterSprite, DEFAULT_SHEET_COLUMNS, DEFAULT_SHEET_ROWS } from './character-sprite.js';
 import { buildPlaceholderCharacterTexture } from './character-sprite-placeholder.js';
 import type { FloorGameplay } from './floor-runtime.js';
-import { groundYAt } from './ground-y.js';
 import type { NarrativeRoot } from './narrative-root.js';
 
 /** One NPC that actually moved (or re-faced) during {@link MapNarrativeBundle.applyRoutines}. */

@@ -8,7 +8,7 @@ import {
   formatClockMinutes,
   resyncClockFromWorldValue,
   tickSessionClock,
-} from '../src/session-clock.js';
+} from '../src/runtime/session-clock.js';
 
 describe('formatClockMinutes', () => {
   it('formats whole minutes as zero-padded HH:MM', () => {

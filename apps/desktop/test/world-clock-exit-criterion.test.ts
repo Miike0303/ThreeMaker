@@ -22,6 +22,14 @@ import { WorldClock } from '@threemaker/core';
 import type { Direction } from '@threemaker/gameplay';
 import { ElevationField } from '@threemaker/gameplay';
 import {
+  baseSceneLightSetup,
+  CLOCK_MINUTES_KEY,
+  dayNightAmbientFactor,
+  mapHasAuthoredLights,
+  resyncClockFromWorldValue,
+  tickSessionClock,
+} from '@threemaker/renderer';
+import {
   gameSaveDocumentFromSnapshot,
   parseGameSaveDocument,
   serializeGameSaveDocument,
@@ -38,16 +46,6 @@ import type { MapNarrativeBundle } from '../src/map-narrative-bundle.js';
 import { buildMapNarrativeBundle } from '../src/map-narrative-bundle.js';
 import type { NarrativeRoot } from '../src/narrative-root.js';
 import { createNarrativeRoot } from '../src/narrative-root.js';
-import {
-  CLOCK_MINUTES_KEY,
-  resyncClockFromWorldValue,
-  tickSessionClock,
-} from '../src/session-clock.js';
-import {
-  baseSceneLightSetup,
-  dayNightAmbientFactor,
-  mapHasAuthoredLights,
-} from '../src/sheet-tile-lighting.js';
 import { buildMap } from './fixtures.js';
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), 'world-clock');

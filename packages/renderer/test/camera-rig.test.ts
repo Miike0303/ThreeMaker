@@ -7,8 +7,8 @@ import {
   MAX_TILT_DEG,
   MIN_TILT_DEG,
   TOP_DOWN_TILT_DEG,
-} from '../src/camera-rig.js';
-import { clampRange } from '../src/clamp.js';
+} from '../src/runtime/camera-rig.js';
+import { clampRange } from '../src/runtime/clamp.js';
 
 const BASE_PARAMS = { tiltDeg: 40, distance: 10, fovDeg: 45 };
 const TARGET = { x: 3, y: 0, z: 5, facing: 'down' as const };

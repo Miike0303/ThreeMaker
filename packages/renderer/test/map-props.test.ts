@@ -11,10 +11,9 @@ import { ElevationField } from '@threemaker/gameplay';
 import type { PropDocument } from '@threemaker/map-format';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
-import { tileCenterToWorld } from '../src/character-sprite.js';
-import { createHopStats, recordHopCompleted } from '../src/hop-stats.js';
-import type { MapPropsBundleDeps, ParseGltfResult } from '../src/map-props.js';
-import { buildMapProps, parseGltfBytes } from '../src/map-props.js';
+import type { MapPropsBundleDeps, ParseGltfResult } from '../src/runtime/map-props.js';
+import { buildMapProps, parseGltfBytes } from '../src/runtime/map-props.js';
+import { tileCenterToWorld } from '../src/runtime/tile-world.js';
 import { buildMap } from './fixtures.js';
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), 'props');
@@ -332,39 +331,6 @@ describe('buildMapProps — disposal', () => {
         }
       });
     }
-  });
-
-  it('records hop-stats prop instance and asset counts on hop dispose', async () => {
-    const parseGltf = vi.fn(async (bytes: Uint8Array) => {
-      // Distinct canned scene per call so asset count tracks parse calls.
-      void bytes;
-      return cannedMeshScene();
-    });
-    // Force two assets by two shas; three instances.
-    const { bundle } = await build(
-      [
-        prop({ id: 'a', object: PROP_SHA_A }),
-        prop({ id: 'b', object: PROP_SHA_A }),
-        prop({ id: 'c', object: PROP_SHA_B }),
-      ],
-      {
-        parseGltf: vi.fn(async () => cannedMeshScene()),
-        resolveObjectBinary: vi.fn(async () => new Uint8Array([1])),
-      },
-    );
-    if (!bundle) throw new Error('expected props bundle');
-    expect(bundle.count).toBe(3);
-    expect(bundle.assetCount).toBe(2);
-
-    const stats = recordHopCompleted(createHopStats(), {
-      outgoingNarrativeSprites: 0,
-      outgoingFloorTextureKeys: 0,
-      outgoingPropInstances: bundle.count,
-      outgoingPropAssets: bundle.assetCount,
-    });
-    expect(stats.lastOutgoingPropInstances).toBe(3);
-    expect(stats.lastOutgoingPropAssets).toBe(2);
-    void parseGltf;
   });
 });
 

@@ -7,8 +7,8 @@
  * {@link buildSheetLightingOptions} into every floor's `StreamingTilemapScene`
  * options. Scene lights follow {@link baseSceneLightSetup}.
  */
-import type { SheetLightingOptions } from '@threemaker/renderer';
 import type * as THREE from 'three/webgpu';
+import type { SheetLightingOptions } from '../scene/sheet-materials.js';
 
 /** True when the map authors at least one light (opt-in for lit tile materials). */
 export function mapHasAuthoredLights(lights: { readonly length: number }): boolean {

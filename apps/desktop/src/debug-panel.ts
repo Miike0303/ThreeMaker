@@ -1,5 +1,5 @@
+import { formatClockMinutes } from '@threemaker/renderer';
 import type { I18n } from './i18n.js';
-import { formatClockMinutes } from './session-clock.js';
 
 /** One frame of the debug overlay's "live values" section (see main.ts's `window.__threemaker_debug`). */
 export interface DebugSnapshot {

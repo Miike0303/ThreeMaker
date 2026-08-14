@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampFocusDistance, DEFAULT_HD2D_KNOBS, resolveKnobs } from '../src/hd2d-knobs.js';
+import { clampFocusDistance, DEFAULT_HD2D_KNOBS, resolveKnobs } from '../src/runtime/hd2d-knobs.js';
 
 describe('resolveKnobs', () => {
   it('returns the default knobs when called with no overrides', () => {

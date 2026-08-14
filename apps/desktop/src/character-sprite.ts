@@ -1,6 +1,9 @@
 import type { Direction } from '@threemaker/gameplay';
+import { tileCenterToWorld } from '@threemaker/renderer';
 import * as THREE from 'three/webgpu';
 import type { WalkFrameColumn } from './walk-animation.js';
+
+export { tileCenterToWorld };
 
 // RPG Maker MV/MZ standard character-sheet row order: down, left, right, up.
 // Exported so `character-sprite-placeholder.ts` can paint one distinct color
@@ -22,11 +25,6 @@ export const FRAME_ROWS = 4; // facing directions per character block
 export const DEFAULT_SHEET_COLUMNS = 4;
 /** Character blocks down a standard 8-character MV/MZ sheet -- `CharacterSpriteOptions.sheetRows`'s default, see `DEFAULT_SHEET_COLUMNS`. */
 export const DEFAULT_SHEET_ROWS = 2;
-
-/** World-space center of a tile coordinate. The single source of the tile-origin convention: change it here and every consumer (sprite, camera) stays in lockstep. */
-export function tileCenterToWorld(tileCoord: number, tileWorldSize = 1): number {
-  return (tileCoord + 0.5) * tileWorldSize;
-}
 
 export interface CharacterSpriteOptions {
   /** The character sheet texture (already pixel-art configured: NearestFilter, no mipmaps). */

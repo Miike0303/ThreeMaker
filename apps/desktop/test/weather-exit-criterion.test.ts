@@ -22,6 +22,21 @@ import { WorldClock } from '@threemaker/core';
 import type { Direction } from '@threemaker/gameplay';
 import { ElevationField } from '@threemaker/gameplay';
 import {
+  applyFogUniforms,
+  baseSceneLightSetup,
+  composeAmbientIntensity,
+  createFogUniforms,
+  createWeatherLayer,
+  DEFAULT_HD2D_KNOBS,
+  dayNightAmbientFactor,
+  mapHasAuthoredLights,
+  parseWeatherMode,
+  WEATHER_KEY,
+  WEATHER_LOOK_PRESETS,
+  type WeatherLayer,
+  weatherDimFactor,
+} from '@threemaker/renderer';
+import {
   gameSaveDocumentFromSnapshot,
   parseGameSaveDocument,
   serializeGameSaveDocument,
@@ -33,28 +48,10 @@ import type { AuthoredMapResult } from '../src/authored-map.js';
 import { loadAuthoredMap } from '../src/authored-map.js';
 import { applyGameSaveSessionStores } from '../src/game-save-apply.js';
 import { captureGameSaveSnapshot } from '../src/game-save-capture.js';
-import { DEFAULT_HD2D_KNOBS } from '../src/hd2d-knobs.js';
-import { applyFogUniforms, createFogUniforms } from '../src/hd2d-pipeline.js';
 import type { MapNarrativeBundle } from '../src/map-narrative-bundle.js';
 import { buildMapNarrativeBundle } from '../src/map-narrative-bundle.js';
 import type { NarrativeRoot } from '../src/narrative-root.js';
 import { createNarrativeRoot } from '../src/narrative-root.js';
-import {
-  composeAmbientIntensity,
-  parseWeatherMode,
-  WEATHER_KEY,
-  weatherDimFactor,
-} from '../src/session-weather.js';
-import {
-  baseSceneLightSetup,
-  dayNightAmbientFactor,
-  mapHasAuthoredLights,
-} from '../src/sheet-tile-lighting.js';
-import {
-  createWeatherLayer,
-  WEATHER_LOOK_PRESETS,
-  type WeatherLayer,
-} from '../src/weather-layer.js';
 import { buildMap } from './fixtures.js';
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), 'weather');

@@ -4,8 +4,8 @@
  * uniform trio and apply helper, same values the pipeline uses.
  */
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_HD2D_KNOBS } from '../src/hd2d-knobs.js';
-import { applyFogUniforms, createFogUniforms } from '../src/hd2d-pipeline.js';
+import { DEFAULT_HD2D_KNOBS } from '../src/runtime/hd2d-knobs.js';
+import { applyFogUniforms, createFogUniforms } from '../src/runtime/hd2d-pipeline.js';
 
 describe('createFogUniforms', () => {
   it('initializes color/near/far from knob defaults (byte-identical start)', () => {

@@ -265,9 +265,18 @@ importers:
 
   packages/renderer:
     dependencies:
+      '@threemaker/core':
+        specifier: workspace:*
+        version: link:../core
+      '@threemaker/gameplay':
+        specifier: workspace:*
+        version: link:../gameplay
       '@threemaker/importer-rpgm':
         specifier: workspace:*
         version: link:../importer-rpgm
+      '@threemaker/map-format':
+        specifier: workspace:*
+        version: link:../map-format
       three:
         specifier: 0.184.0
         version: 0.184.0

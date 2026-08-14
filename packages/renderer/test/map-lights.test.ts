@@ -1,16 +1,15 @@
 /**
  * Per-map authored lights runtime (C6 WU-03): budget gate, placement, attach,
- * spot aim-down, disposal, hop-stats counter.
+ * spot aim-down, disposal.
  */
 import { ElevationField } from '@threemaker/gameplay';
 import type { LightDocument } from '@threemaker/map-format';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
-import { tileCenterToWorld } from '../src/character-sprite.js';
-import { createHopStats, recordHopCompleted } from '../src/hop-stats.js';
-import { LIGHT_BUDGET } from '../src/light-budget.js';
-import type { MapLightsBundleDeps, NpcLightAnchor } from '../src/map-lights.js';
-import { assertLightBudget, buildMapLights } from '../src/map-lights.js';
+import { LIGHT_BUDGET } from '../src/runtime/light-budget.js';
+import type { MapLightsBundleDeps, NpcLightAnchor } from '../src/runtime/map-lights.js';
+import { assertLightBudget, buildMapLights } from '../src/runtime/map-lights.js';
+import { tileCenterToWorld } from '../src/runtime/tile-world.js';
 import { buildMap } from './fixtures.js';
 
 function floorAt(height: number, baseElevation: number, floorId = 'floor-0') {
@@ -224,7 +223,7 @@ describe('buildMapLights — attached', () => {
 });
 
 describe('buildMapLights — disposal', () => {
-  it('removes the group, is idempotent, and records hop-stats lights count', () => {
+  it('removes the group and is idempotent', () => {
     const scene = new THREE.Scene();
     const sentinel = new THREE.Object3D();
     scene.add(sentinel);
@@ -243,12 +242,5 @@ describe('buildMapLights — disposal', () => {
     expect(scene.children).toEqual([sentinel]);
     bundle.dispose();
     expect(scene.children).toEqual([sentinel]);
-
-    const stats = recordHopCompleted(createHopStats(), {
-      outgoingNarrativeSprites: 0,
-      outgoingFloorTextureKeys: 0,
-      outgoingLights: bundle.count,
-    });
-    expect(stats.lastOutgoingLights).toBe(2);
   });
 });

@@ -14,11 +14,11 @@
 
 import type { LightDocument } from '@threemaker/map-format';
 import * as THREE from 'three/webgpu';
-import { tileCenterToWorld } from './character-sprite.js';
-import type { FloorGameplay } from './floor-runtime.js';
+import type { FloorElevationSource } from './floor-elevation-source.js';
 import { groundYAt } from './ground-y.js';
 import type { LightBudget } from './light-budget.js';
 import { LIGHT_BUDGET } from './light-budget.js';
+import { tileCenterToWorld } from './tile-world.js';
 
 /** World position of an NPC used to place attached lights once at build time. */
 export interface NpcLightAnchor {
@@ -36,7 +36,7 @@ export interface MapLightsBundleDeps {
     remove(object: THREE.Object3D): void;
   };
   /** Session floors keyed by array index; each carries `floorId` for placed-light elevation. */
-  readonly floors: readonly Pick<FloorGameplay, 'floorId' | 'elevation' | 'baseElevation'>[];
+  readonly floors: readonly FloorElevationSource[];
   readonly tileWorldSize: number;
   readonly heightUnit: number;
   /**

@@ -31,23 +31,50 @@ import {
 } from '@threemaker/input';
 import type { LightDocument, PropDocument, RoomDocument } from '@threemaker/map-format';
 import { computeRoomIdGrid } from '@threemaker/map-format';
-import type { FloorVisibilityPolicy, SheetPixelSizes } from '@threemaker/renderer';
+import type {
+  CameraMode,
+  FloorVisibilityPolicy,
+  MapLightsBundle,
+  MapPropsBundle,
+  SheetPixelSizes,
+  WeatherMode,
+} from '@threemaker/renderer';
 import {
+  baseSceneLightSetup,
   buildChunks,
+  buildMapLights,
+  buildMapProps,
+  buildSheetLightingOptions,
   ChunkStreamer,
+  CLOCK_MINUTES_KEY,
+  clampRange,
+  clampTiltDeg,
+  composeAmbientIntensity,
+  computeCameraPose,
+  createHd2dPipeline,
+  createWeatherLayer,
+  cycleCameraMode,
   DEFAULT_CHUNK_SIZE,
+  DEFAULT_HD2D_KNOBS,
+  dayNightAmbientFactor,
   generateSyntheticMap,
+  groundYAt,
+  LIGHT_BUDGET,
   loadSheetTexture,
+  mapHasAuthoredLights,
   OcclusionFloorPolicy,
+  parseWeatherMode,
+  resyncClockFromWorldValue,
   StreamingTilemapScene,
   TILE_SIZE_PX,
+  tickSessionClock,
+  WEATHER_KEY,
+  weatherDimFactor,
 } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
 import type { AuthoredMapNarrative, AuthoredMapResult, GameDefsCatalog } from './authored-map.js';
 import { EMPTY_GAME_DEFS_CATALOG, loadAuthoredMap } from './authored-map.js';
-import type { CameraMode } from './camera-rig.js';
-import { clampTiltDeg, computeCameraPose, cycleCameraMode } from './camera-rig.js';
 import {
   CharacterSprite,
   DEFAULT_SHEET_COLUMNS,
@@ -55,7 +82,6 @@ import {
   tileCenterToWorld,
 } from './character-sprite.js';
 import { buildPlaceholderCharacterTexture } from './character-sprite-placeholder.js';
-import { clampRange } from './clamp.js';
 import type { DebugSnapshot } from './debug-panel.js';
 import { createDebugPanel } from './debug-panel.js';
 import { createDialogueOverlay, nextHighlightedIndex } from './dialogue-ui.js';
@@ -81,9 +107,6 @@ import { canLoadGameProgress, canSaveGameProgress } from './game-save-gate.js';
 import { loadGameSaveSnapshot, persistGameSaveSnapshot } from './game-save-store.js';
 import type { GameplayKeyAction } from './gameplay-input.js';
 import { resolveGameplayAction, resolveGameplayKeyAction } from './gameplay-input.js';
-import { groundYAt } from './ground-y.js';
-import { DEFAULT_HD2D_KNOBS } from './hd2d-knobs.js';
-import { createHd2dPipeline } from './hd2d-pipeline.js';
 import { createHopStats, recordHopCompleted } from './hop-stats.js';
 import type { Locale } from './i18n.js';
 import { createI18n } from './i18n.js';
@@ -92,7 +115,6 @@ import {
   loadInputBindingTable,
   saveInputBindingTable,
 } from './input-bindings-store.js';
-import { LIGHT_BUDGET } from './light-budget.js';
 import {
   MAP_DIR_RELATIVE,
   MAP_FILE_RELATIVE,
@@ -106,13 +128,9 @@ import {
   planNextManifestCycle,
   resolveHopArrival,
 } from './map-hop.js';
-import type { MapLightsBundle } from './map-lights.js';
-import { buildMapLights } from './map-lights.js';
 import type { MapNarrativeBundle, RoutineMove } from './map-narrative-bundle.js';
 import { applyRoutinesIfIdle, buildMapNarrativeBundle } from './map-narrative-bundle.js';
 import { isAuthoredResultPlayable } from './map-playability.js';
-import type { MapPropsBundle } from './map-props.js';
-import { buildMapProps } from './map-props.js';
 import { createNarrativeRoot } from './narrative-root.js';
 import { withNoclip } from './noclip.js';
 import { pointerTargetFromDialogueHit } from './pointer-host.js';
@@ -127,27 +145,12 @@ import {
   driveRoomFade,
   resolveFadedRoomId,
 } from './room-state.js';
-import { CLOCK_MINUTES_KEY, resyncClockFromWorldValue, tickSessionClock } from './session-clock.js';
-import {
-  composeAmbientIntensity,
-  parseWeatherMode,
-  WEATHER_KEY,
-  type WeatherMode,
-  weatherDimFactor,
-} from './session-weather.js';
-import {
-  baseSceneLightSetup,
-  buildSheetLightingOptions,
-  dayNightAmbientFactor,
-  mapHasAuthoredLights,
-} from './sheet-tile-lighting.js';
 import type { FloorSpawn } from './spawn.js';
 import { resolveInitialSpawn } from './spawn.js';
 import { isTauriAvailable } from './tauri-env.js';
 import { resolveViewKeyAction } from './view-input.js';
 import { WalkAnimation } from './walk-animation.js';
 import { createMostRecentHeldDirection } from './walk-input.js';
-import { createWeatherLayer } from './weather-layer.js';
 import {
   homeMapsPathToWebRelative,
   webReadTextFile,

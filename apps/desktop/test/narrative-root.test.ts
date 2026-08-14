@@ -14,11 +14,10 @@
 
 import { WorldClock } from '@threemaker/core';
 import { Inventory, StatBlock } from '@threemaker/gameplay';
+import { CLOCK_MINUTES_KEY, WEATHER_KEY } from '@threemaker/renderer';
 import { describe, expect, it, vi } from 'vitest';
 import type { DialogueOverlay } from '../src/dialogue-ui.js';
 import { createNarrativeRoot } from '../src/narrative-root.js';
-import { CLOCK_MINUTES_KEY } from '../src/session-clock.js';
-import { WEATHER_KEY } from '../src/session-weather.js';
 
 /** A DOM-free stand-in: the root never reads the overlay, it only owns it. */
 function fakeOverlay(): DialogueOverlay {

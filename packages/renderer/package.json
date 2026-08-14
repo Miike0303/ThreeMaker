@@ -13,7 +13,10 @@
     "typecheck": "tsc -b --pretty"
   },
   "dependencies": {
+    "@threemaker/core": "workspace:*",
+    "@threemaker/gameplay": "workspace:*",
     "@threemaker/importer-rpgm": "workspace:*",
+    "@threemaker/map-format": "workspace:*",
     "three": "0.184.0"
   },
   "devDependencies": {

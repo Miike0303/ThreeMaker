@@ -14,9 +14,9 @@ import type { PropDocument } from '@threemaker/map-format';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as THREE from 'three/webgpu';
-import { tileCenterToWorld } from './character-sprite.js';
-import type { FloorGameplay } from './floor-runtime.js';
+import type { FloorElevationSource } from './floor-elevation-source.js';
 import { groundYAt } from './ground-y.js';
+import { tileCenterToWorld } from './tile-world.js';
 
 /** Result of parsing one glTF / glb blob into a scene graph + clips. */
 export interface ParseGltfResult {
@@ -35,7 +35,7 @@ export interface MapPropsBundleDeps {
     remove(object: THREE.Object3D): void;
   };
   /** Session floors keyed by array index; each carries `floorId` for id→elevation lookup. */
-  readonly floors: readonly Pick<FloorGameplay, 'floorId' | 'elevation' | 'baseElevation'>[];
+  readonly floors: readonly FloorElevationSource[];
   readonly tileWorldSize: number;
   readonly heightUnit: number;
   /** Content-addressed glb bytes from the asset store (`objects/{aa}/{sha}`). */

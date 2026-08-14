@@ -1,6 +1,6 @@
 import { ElevationField } from '@threemaker/gameplay';
 import { describe, expect, it } from 'vitest';
-import { groundYAt } from '../src/ground-y.js';
+import { groundYAt } from '../src/runtime/ground-y.js';
 import { buildMap } from './fixtures.js';
 
 const HEIGHT_UNIT = 1;

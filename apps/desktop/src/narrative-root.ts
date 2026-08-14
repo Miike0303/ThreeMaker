@@ -23,9 +23,8 @@
 
 import { type WorldClock, WorldState, type WorldValue } from '@threemaker/core';
 import { Inventory, StatBlock } from '@threemaker/gameplay';
+import { CLOCK_MINUTES_KEY, WEATHER_KEY } from '@threemaker/renderer';
 import type { DialogueOverlay } from './dialogue-ui.js';
-import { CLOCK_MINUTES_KEY } from './session-clock.js';
-import { WEATHER_KEY } from './session-weather.js';
 
 export interface NarrativeRootDeps {
   /**

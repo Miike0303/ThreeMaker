@@ -32,9 +32,14 @@ import {
   serializeMapDocument,
 } from '@threemaker/map-format';
 import {
+  assertLightBudget,
+  baseSceneLightSetup,
   buildChunkGroup,
   buildChunks,
+  buildMapLights,
+  buildSheetLightingOptions,
   createSheetMaterials,
+  mapHasAuthoredLights,
   type SheetPixelSizes,
 } from '@threemaker/renderer';
 import * as THREE from 'three/webgpu';
@@ -42,12 +47,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { loadAuthoredMap } from '../src/authored-map.js';
 import { tileCenterToWorld } from '../src/character-sprite.js';
 import { buildFloorGameplay } from '../src/floor-runtime.js';
-import { assertLightBudget, buildMapLights } from '../src/map-lights.js';
-import {
-  baseSceneLightSetup,
-  buildSheetLightingOptions,
-  mapHasAuthoredLights,
-} from '../src/sheet-tile-lighting.js';
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), 'lighting');
 const LIGHTMAP_PNG = readFileSync(join(FIXTURE_DIR, 'floor-lightmap.png'));

@@ -8,7 +8,7 @@ import {
   buildSheetLightingOptions,
   dayNightAmbientFactor,
   mapHasAuthoredLights,
-} from '../src/sheet-tile-lighting.js';
+} from '../src/runtime/sheet-tile-lighting.js';
 
 describe('mapHasAuthoredLights', () => {
   it('is true only when the lights array is non-empty', () => {

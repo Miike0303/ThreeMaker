@@ -1,4 +1,4 @@
-import type { CameraMode } from './camera-rig.js';
+import type { CameraMode } from '@threemaker/renderer';
 
 /**
  * Per-floor room-id lookup (design "Player-current-room runtime"): given the

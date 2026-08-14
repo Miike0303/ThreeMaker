@@ -26,13 +26,18 @@ import {
   type PropDocument,
   serializeMapDocument,
 } from '@threemaker/map-format';
-import { buildChunks, computeTileUv, type SheetPixelSizes } from '@threemaker/renderer';
+import {
+  buildChunks,
+  buildMapProps,
+  computeTileUv,
+  parseGltfBytes,
+  type SheetPixelSizes,
+} from '@threemaker/renderer';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
 import { loadAuthoredMap } from '../src/authored-map.js';
 import { tileCenterToWorld } from '../src/character-sprite.js';
 import { buildFloorGameplay } from '../src/floor-runtime.js';
-import { buildMapProps, parseGltfBytes } from '../src/map-props.js';
 import { buildMap, buildTileset } from './fixtures.js';
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), 'props');
