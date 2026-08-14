@@ -61,6 +61,11 @@ export function resolveToolShortcut(key: string): ToolId | undefined {
   return TOOL_SHORTCUTS[key.toLowerCase()];
 }
 
+/** True when `key` is the HD-2D look preview toggle (`h`). Not a tool shortcut. */
+export function isPostProcessingShortcut(key: string): boolean {
+  return key.toLowerCase() === 'h';
+}
+
 /** Structural stand-in for a keydown `event.target` element, so the guard stays pure/unit-testable with no DOM dependency. */
 export interface EditableTargetLike {
   readonly tagName?: string;

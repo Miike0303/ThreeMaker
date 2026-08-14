@@ -113,6 +113,8 @@
     "painter.view.zoomOut": "Alejar",
     "painter.view.zoomIn": "Acercar",
     "painter.view.reset": "Encuadrar el mapa completo",
+    "painter.view.hd2d": "Aspecto HD-2D",
+    "painter.view.hd2d.hint": "Vista previa de bloom, niebla y profundidad de campo (H). Desactivado por defecto para pintar con nitidez.",
     "painter.createMap": "Crear mapa",
     "painter.newMap.name": "Nombre del mapa",
     "painter.newMap.width": "Ancho",

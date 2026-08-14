@@ -113,6 +113,8 @@
     "painter.view.zoomOut": "Zoom out",
     "painter.view.zoomIn": "Zoom in",
     "painter.view.reset": "Reset view (frame whole map)",
+    "painter.view.hd2d": "HD-2D look",
+    "painter.view.hd2d.hint": "Preview bloom, fog, and depth of field (H). Off by default so painting stays crisp.",
     "painter.createMap": "Create map",
     "painter.newMap.name": "Map name",
     "painter.newMap.width": "Width",

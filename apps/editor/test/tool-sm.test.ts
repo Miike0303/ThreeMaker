@@ -3,6 +3,7 @@ import {
   beginStroke,
   continueStroke,
   endStroke,
+  isPostProcessingShortcut,
   resolveEditorChord,
   resolveToolShortcut,
   shouldIgnoreToolShortcut,
@@ -24,6 +25,20 @@ describe('resolveToolShortcut', () => {
   it('returns undefined for a non-shortcut key', () => {
     expect(resolveToolShortcut('x')).toBeUndefined();
     expect(resolveToolShortcut('Enter')).toBeUndefined();
+    expect(resolveToolShortcut('h')).toBeUndefined();
+  });
+});
+
+describe('isPostProcessingShortcut', () => {
+  it('matches H case-insensitively', () => {
+    expect(isPostProcessingShortcut('h')).toBe(true);
+    expect(isPostProcessingShortcut('H')).toBe(true);
+  });
+
+  it('rejects tool keys and unrelated keys', () => {
+    expect(isPostProcessingShortcut('b')).toBe(false);
+    expect(isPostProcessingShortcut('p')).toBe(false);
+    expect(isPostProcessingShortcut('Enter')).toBe(false);
   });
 });
 

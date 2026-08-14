@@ -7,10 +7,11 @@ import type {
   TileDiff,
   WorldSeedValue,
 } from '@threemaker/map-format';
-import type { ChunkBuildData, SheetPixelSizes } from '@threemaker/renderer';
+import type { ChunkBuildData, Hd2dPipeline, SheetPixelSizes } from '@threemaker/renderer';
 import {
   buildChunks,
   chunkKey,
+  createHd2dPipeline,
   DEFAULT_CHUNK_SIZE,
   loadSheetTexture,
   StreamingTilemapScene,
@@ -35,7 +36,12 @@ import { computeRoomOverlayRects, roomRectCorners } from './room-overlay.js';
 import { computeSpawnOverlayPoint } from './spawn-overlay.js';
 import { computeStairOverlayPoints } from './stair-overlay.js';
 import type { EditableTargetLike, TilePoint, ToolId } from './tool-sm.js';
-import { resolveEditorChord, resolveToolShortcut, shouldIgnoreToolShortcut } from './tool-sm.js';
+import {
+  isPostProcessingShortcut,
+  resolveEditorChord,
+  resolveToolShortcut,
+  shouldIgnoreToolShortcut,
+} from './tool-sm.js';
 import { computeTriggerOverlayPoints } from './trigger-overlay.js';
 import type { OverviewCameraPose } from './viewer-camera.js';
 import {
@@ -188,6 +194,8 @@ export interface PainterViewportCallbacks {
   readonly onSaveRequest?: () => void;
   /** Fired after every camera pose change (load framing, wheel/button zoom, drag-pan, reset) with the zoom readout as a percent of the framing distance (WU-VIEW-02). */
   readonly onCameraChange?: (zoomPercent: number) => void;
+  /** Fired when the HD-2D look preview is toggled (button or `h`), so the surrounding UI can keep one source of truth. */
+  readonly onPostProcessingChange?: (enabled: boolean) => void;
 }
 
 /**
@@ -242,6 +250,20 @@ export class PainterViewport {
   private panState: { pointerId: number; lastX: number; lastY: number } | undefined;
   /** The tile currently under the pointer while not stroking (WU-UX-04); `undefined` off-map/off-canvas. */
   private hoverTile: TilePoint | undefined;
+  /**
+   * HD-2D preview pipeline. Created lazily on first enable and disposed on
+   * disable — not constructed in the constructor and left disabled.
+   *
+   * `createHd2dPipeline` assigns `scene.fogNode`, and that fog is deliberately
+   * NOT covered by `setEnabled(false)` (see the interface docs in
+   * `packages/renderer/src/runtime/hd2d-pipeline.ts:60-75`). A pipeline that
+   * merely sits disabled would still dim distant tiles, which is exactly the
+   * silent visual change the default-off toggle exists to avoid. `dispose()`
+   * clears `scene.fogNode`, so create-on/dispose-off is what actually returns
+   * the painter to its current look. The shader rebuild cost is fine: this is
+   * a human-pressed toggle, not a per-frame decision.
+   */
+  private hd2d: Hd2dPipeline | undefined;
 
   constructor(container: HTMLElement, callbacks: PainterViewportCallbacks = {}) {
     this.container = container;
@@ -304,6 +326,26 @@ export class PainterViewport {
 
   get painterState(): PainterState | undefined {
     return this.state;
+  }
+
+  get postProcessingEnabled(): boolean {
+    return this.hd2d !== undefined;
+  }
+
+  /**
+   * Flips the HD-2D look preview: creates the pipeline on enable, disposes it
+   * on disable. Returns the new enabled state.
+   */
+  togglePostProcessing(): boolean {
+    if (this.hd2d) {
+      this.hd2d.dispose();
+      this.hd2d = undefined;
+    } else {
+      this.hd2d = createHd2dPipeline(this.renderer, this.scene, this.camera);
+    }
+    const enabled = this.hd2d !== undefined;
+    this.callbacks.onPostProcessingChange?.(enabled);
+    return enabled;
   }
 
   /** Mounts `doc`, building every chunk of its ACTIVE (floor 0, ground) floor with data live up front (a bounded authoring map, not a streamed world). Every floor is loaded into the painter store (spec: floor switcher), but only the active floor's chunks are ever built (spec: "editor viewport shows active floor only"). */
@@ -986,6 +1028,12 @@ export class PainterViewport {
     }
     // Bare-letter tool shortcuts: suppressed while typing or chording (WU-UX-02).
     if (shouldIgnoreToolShortcut(target, event)) return;
+    // `h` is a view toggle, not a tool — kept out of TOOL_SHORTCUTS.
+    if (isPostProcessingShortcut(event.key)) {
+      if (event.repeat) return;
+      this.togglePostProcessing();
+      return;
+    }
     const tool = resolveToolShortcut(event.key);
     if (tool) this.setTool(tool);
   }
@@ -1381,7 +1429,10 @@ export class PainterViewport {
     if (this.animationHandle !== undefined || this.disposed) return;
     const renderFrame = () => {
       if (this.disposed) return;
-      if (this.ready) this.renderer.render(this.scene, this.camera);
+      if (this.ready) {
+        if (this.hd2d) this.hd2d.render();
+        else this.renderer.render(this.scene, this.camera);
+      }
       this.animationHandle = requestAnimationFrame(renderFrame);
     };
     renderFrame();
@@ -1414,6 +1465,8 @@ export class PainterViewport {
     this.renderer.domElement.removeEventListener('pointerleave', this.onPointerLeave);
     this.renderer.domElement.removeEventListener('contextmenu', this.onContextMenu);
     this.renderer.domElement.removeEventListener('wheel', this.onWheel);
+    this.hd2d?.dispose();
+    this.hd2d = undefined;
     this.tilemap?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

@@ -372,6 +372,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [hoverOverlay, setHoverOverlay] = useState<HoverOverlayItem | null>(null);
   /** Zoom readout (% of the map's framing distance) for the viewport control cluster (WU-VIEW-02). */
   const [zoomPercent, setZoomPercent] = useState(100);
+  /** HD-2D look preview; mirrors PainterViewport.postProcessingEnabled via onPostProcessingChange. */
+  const [postProcessingEnabled, setPostProcessingEnabled] = useState(false);
   /** Unsaved-changes indicator (WU-UX-13): derived from emitted painter-state slice refs. */
   const [docDirty, setDocDirty] = useState(false);
   /** Last emitted painter state — the dirty checker's baseline (reset on fresh load/create). */
@@ -542,6 +544,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       onHoverChange: setHoverOverlay,
       onSaveRequest: () => saveRequestRef.current(),
       onCameraChange: setZoomPercent,
+      onPostProcessingChange: setPostProcessingEnabled,
     });
     viewportRef.current = viewport;
     return () => {
@@ -1147,6 +1150,15 @@ export function PainterPanel({ t }: PainterPanelProps) {
               </button>
               <button type="button" onClick={() => void handlePlaytest()}>
                 {t('painter.playtest')}
+              </button>
+              <button
+                type="button"
+                className={postProcessingEnabled ? 'primary' : 'ide-btn-quiet'}
+                aria-pressed={postProcessingEnabled}
+                title={t('painter.view.hd2d.hint')}
+                onClick={() => viewportRef.current?.togglePostProcessing()}
+              >
+                {t('painter.view.hd2d')}
               </button>
               <button
                 type="button"
@@ -3472,6 +3484,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                 x: hoverOverlay.x,
                 y: hoverOverlay.y,
               })}`}
+            {postProcessingEnabled && ` · ${t('painter.view.hd2d')}`}
           </span>
         ) : (
           <span>{t('painter.status.ready')}</span>

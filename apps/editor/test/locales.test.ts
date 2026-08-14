@@ -173,6 +173,8 @@ const NEW_KEYS = [
   'painter.status.eventsInvalid',
   'painter.status.ready',
   'painter.status.hover',
+  'painter.view.hd2d',
+  'painter.view.hd2d.hint',
   'painter.tool.stair-link',
   'painter.tool.spawn-point',
   'painter.tool.prop',
