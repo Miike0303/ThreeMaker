@@ -15,7 +15,7 @@ import {
   loadSheetTexture,
   StreamingTilemapScene,
 } from '@threemaker/renderer';
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
 import { objectPreviewUrl } from './catalog-client.js';
 import { computeDirtyChunkKeys } from './dirty-region.js';
 import { computeLightOverlayPoints } from './light-overlay.js';
@@ -79,6 +79,15 @@ const OVERVIEW_FOV_DEG = 45;
 /** Wheel-zoom bounds relative to the map's framing distance (`computeOverviewCameraDistance`), WU-UX-01. */
 const ZOOM_MIN_DISTANCE_FACTOR = 0.2;
 const ZOOM_MAX_DISTANCE_FACTOR = 2.5;
+
+/** Dev toggle: `?webgl=1` forces WebGPURenderer onto its WebGL2 backend. */
+function shouldForceWebGL(search: string): boolean {
+  try {
+    return new URLSearchParams(search.startsWith('?') ? search : `?${search}`).get('webgl') === '1';
+  } catch {
+    return false;
+  }
+}
 
 /** One ramp cell's display-only direction glyph, already projected to a screen-space fraction (see `viewer-camera.ts`'s `projectToScreenFraction`) for the surrounding UI to position a DOM label with, no camera object needed. */
 export interface RampGlyphOverlayItem {
@@ -195,7 +204,7 @@ export interface PainterViewportCallbacks {
 export class PainterViewport {
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
-  private readonly renderer: THREE.WebGLRenderer;
+  private readonly renderer: THREE.WebGPURenderer;
   private readonly container: HTMLElement;
   private readonly raycaster = new THREE.Raycaster();
   private readonly groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -214,6 +223,8 @@ export class PainterViewport {
 
   private tilemap: StreamingTilemapScene | undefined;
   private animationHandle: number | undefined;
+  private ready = false;
+  private disposed = false;
   private doc: MapDocument | undefined;
   private sheetPixelSizes: SheetPixelSizes = {};
   private textures: Partial<Record<TileSheetId, THREE.Texture>> = {};
@@ -248,7 +259,11 @@ export class PainterViewport {
       0.1,
       500,
     );
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    const forceWebGL = shouldForceWebGL(typeof location !== 'undefined' ? location.search : '');
+    this.renderer = new THREE.WebGPURenderer({
+      antialias: true,
+      ...(forceWebGL ? { forceWebGL: true } : {}),
+    });
     this.renderer.setSize(container.clientWidth, container.clientHeight, false);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.renderer.domElement);
@@ -264,6 +279,27 @@ export class PainterViewport {
     // passive: false so wheel-zoom can preventDefault the page scroll (WU-UX-01).
     this.renderer.domElement.addEventListener('wheel', this.onWheel, { passive: false });
     window.addEventListener('pointerup', this.onPointerUp);
+
+    void this.renderer.init().then(
+      () => {
+        if (!this.disposed) this.ready = true;
+      },
+      (error: unknown) => {
+        console.error('PainterViewport: WebGPURenderer.init() failed', error);
+      },
+    );
+
+    // DEV-only headless-check seam, same idea as desktop's
+    // `window.__threemaker_debug`. Draw calls are the only honest "is it
+    // actually rendering" signal: the canvas is alpha-composited, so a dead
+    // render still screenshots as the page behind it.
+    if (import.meta.env.DEV && typeof window !== 'undefined') {
+      window.__threemaker_painter_debug = () => ({
+        ready: this.ready,
+        drawCalls: this.renderer.info.render.drawCalls,
+        triangles: this.renderer.info.render.triangles,
+      });
+    }
   }
 
   get painterState(): PainterState | undefined {
@@ -1342,9 +1378,10 @@ export class PainterViewport {
   }
 
   private startRenderLoop(): void {
-    if (this.animationHandle !== undefined) return;
+    if (this.animationHandle !== undefined || this.disposed) return;
     const renderFrame = () => {
-      this.renderer.render(this.scene, this.camera);
+      if (this.disposed) return;
+      if (this.ready) this.renderer.render(this.scene, this.camera);
       this.animationHandle = requestAnimationFrame(renderFrame);
     };
     renderFrame();
@@ -1362,7 +1399,12 @@ export class PainterViewport {
   }
 
   dispose(): void {
-    if (this.animationHandle !== undefined) cancelAnimationFrame(this.animationHandle);
+    this.disposed = true;
+    this.ready = false;
+    if (this.animationHandle !== undefined) {
+      cancelAnimationFrame(this.animationHandle);
+      this.animationHandle = undefined;
+    }
     this.resizeObserver.disconnect();
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);

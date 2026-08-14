@@ -12,7 +12,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "dev": "pnpm --filter desktop tauri dev",
-    "tauri": "pnpm --filter desktop tauri"
+    "tauri": "pnpm --filter desktop tauri",
+    "smoke:painter": "node apps/editor/test/painter-canvas.smoke.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.3",
