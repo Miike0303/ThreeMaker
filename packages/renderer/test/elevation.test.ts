@@ -10,7 +10,7 @@ import {
   tileKey,
 } from '../src/geometry/elevation.js';
 import type { TileBuildData } from '../src/geometry/types.js';
-import { MZ_PROJECT1_FIXTURE_DIR, requireFixture } from './fixture-path.js';
+import { MZ_PROJECT1_FIXTURE_DIR, requireFixture, skipWithoutFixture } from './fixture-path.js';
 
 async function readMz001Map() {
   const contents = await readFile(join(MZ_PROJECT1_FIXTURE_DIR, 'data', 'Map001.json'), 'utf8');
@@ -62,32 +62,35 @@ describe('computeCliffEdges', () => {
     for (const edge of edges) expect(edge.neighborHeight).toBe(0);
   });
 
-  it('reproduces the real mz-project1 fixture hill: the peak has cliffs only where the terrace is lower', async () => {
-    requireFixture(MZ_PROJECT1_FIXTURE_DIR);
-    const map = await readMz001Map();
-    const grid = computeHeightGrid(map);
+  it.skipIf(skipWithoutFixture(MZ_PROJECT1_FIXTURE_DIR))(
+    'reproduces the real mz-project1 fixture hill: the peak has cliffs only where the terrace is lower',
+    async () => {
+      requireFixture(MZ_PROJECT1_FIXTURE_DIR);
+      const map = await readMz001Map();
+      const grid = computeHeightGrid(map);
 
-    // Peak tile (11,4), height 3: its north (11,3) and west (10,4) neighbors
-    // are the height-2 terrace (lower, so those edges get cliffs); its south
-    // (11,5) and east (12,4) neighbors are the other peak cells (same height,
-    // no cliff).
-    const peakEdges = computeCliffEdges(grid, map.width, map.height, 11, 4);
-    expect(new Set(peakEdges.map((e) => e.edge))).toEqual(new Set(['north', 'west']));
-    for (const edge of peakEdges) expect(edge.neighborHeight).toBe(2);
+      // Peak tile (11,4), height 3: its north (11,3) and west (10,4) neighbors
+      // are the height-2 terrace (lower, so those edges get cliffs); its south
+      // (11,5) and east (12,4) neighbors are the other peak cells (same height,
+      // no cliff).
+      const peakEdges = computeCliffEdges(grid, map.width, map.height, 11, 4);
+      expect(new Set(peakEdges.map((e) => e.edge))).toEqual(new Set(['north', 'west']));
+      for (const edge of peakEdges) expect(edge.neighborHeight).toBe(2);
 
-    // Ring corner tile (9,2), height 1: north and west neighbors are
-    // untouched ground (height 0); south and east are the ring itself
-    // (also height 1, same level).
-    const ringEdges = computeCliffEdges(grid, map.width, map.height, 9, 2);
-    expect(new Set(ringEdges.map((e) => e.edge))).toEqual(new Set(['north', 'west']));
-    for (const edge of ringEdges) expect(edge.neighborHeight).toBe(0);
+      // Ring corner tile (9,2), height 1: north and west neighbors are
+      // untouched ground (height 0); south and east are the ring itself
+      // (also height 1, same level).
+      const ringEdges = computeCliffEdges(grid, map.width, map.height, 9, 2);
+      expect(new Set(ringEdges.map((e) => e.edge))).toEqual(new Set(['north', 'west']));
+      for (const edge of ringEdges) expect(edge.neighborHeight).toBe(0);
 
-    // Inside-terrace tile (10,4), height 2: its north/south terrace
-    // neighbors are also height 2 and its east neighbor is the (higher)
-    // peak, so only the west edge -- toward the height-1 ring -- is a cliff.
-    const terraceEdges = computeCliffEdges(grid, map.width, map.height, 10, 4);
-    expect(terraceEdges).toEqual([{ edge: 'west', neighborHeight: 1 }]);
-  });
+      // Inside-terrace tile (10,4), height 2: its north/south terrace
+      // neighbors are also height 2 and its east neighbor is the (higher)
+      // peak, so only the west edge -- toward the height-1 ring -- is a cliff.
+      const terraceEdges = computeCliffEdges(grid, map.width, map.height, 10, 4);
+      expect(terraceEdges).toEqual([{ edge: 'west', neighborHeight: 1 }]);
+    },
+  );
 });
 
 describe('computeOpenEdges', () => {

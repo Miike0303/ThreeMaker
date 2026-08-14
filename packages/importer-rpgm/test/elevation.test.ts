@@ -15,7 +15,7 @@ import {
 } from '../src/elevation.js';
 import { parseMap } from '../src/parse-map.js';
 import type { RpgmMap } from '../src/types.js';
-import { MZ_PROJECT1_FIXTURE_DIR, requireFixture } from './fixture-path.js';
+import { MZ_PROJECT1_FIXTURE_DIR, requireFixture, skipWithoutFixture } from './fixture-path.js';
 
 async function readJson(fileName: string): Promise<unknown> {
   const contents = await readFile(join(MZ_PROJECT1_FIXTURE_DIR, 'data', fileName), 'utf8');
@@ -68,29 +68,32 @@ describe('computeHeightGrid', () => {
     expect(Array.from(grid)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 0, 0]);
   });
 
-  it('reproduces the real mz-project1 fixture painted hill (ring=1, inside=2, peak=3)', async () => {
-    requireFixture(MZ_PROJECT1_FIXTURE_DIR);
-    const map = parseMap(await readJson('Map001.json'), 1);
+  it.skipIf(skipWithoutFixture(MZ_PROJECT1_FIXTURE_DIR))(
+    'reproduces the real mz-project1 fixture painted hill (ring=1, inside=2, peak=3)',
+    async () => {
+      requireFixture(MZ_PROJECT1_FIXTURE_DIR);
+      const map = parseMap(await readJson('Map001.json'), 1);
 
-    const grid = computeHeightGrid(map);
-    const at = (x: number, y: number) => grid[y * map.width + x];
+      const grid = computeHeightGrid(map);
+      const at = (x: number, y: number) => grid[y * map.width + x];
 
-    // Outside the painted hill: ground level.
-    expect(at(0, 0)).toBe(0);
-    expect(at(8, 4)).toBe(0);
+      // Outside the painted hill: ground level.
+      expect(at(0, 0)).toBe(0);
+      expect(at(8, 4)).toBe(0);
 
-    // Ring (region 1): the border of the hill, rows 2-7 cols 9-14.
-    expect(at(9, 2)).toBe(1);
-    expect(at(14, 7)).toBe(1);
+      // Ring (region 1): the border of the hill, rows 2-7 cols 9-14.
+      expect(at(9, 2)).toBe(1);
+      expect(at(14, 7)).toBe(1);
 
-    // Inside the ring (region 2).
-    expect(at(10, 3)).toBe(2);
-    expect(at(13, 6)).toBe(2);
+      // Inside the ring (region 2).
+      expect(at(10, 3)).toBe(2);
+      expect(at(13, 6)).toBe(2);
 
-    // Peak (region 3): rows 4-5, cols 11-12.
-    expect(at(11, 4)).toBe(3);
-    expect(at(12, 5)).toBe(3);
-  });
+      // Peak (region 3): rows 4-5, cols 11-12.
+      expect(at(11, 4)).toBe(3);
+      expect(at(12, 5)).toBe(3);
+    },
+  );
 });
 
 describe('computeRampGrid', () => {

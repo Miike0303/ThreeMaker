@@ -11,7 +11,7 @@ import { StreamingTilemapScene } from '../src/scene/streaming-tilemap-scene.js';
 import { ChunkStreamer } from '../src/streaming/chunk-streamer.js';
 import type { FloorVisibilityPolicy } from '../src/streaming/floor-visibility.js';
 import { OcclusionFloorPolicy, WindowedFloorPolicy } from '../src/streaming/floor-visibility.js';
-import { ROSELIAM_FIXTURE_DIR, requireFixture } from './fixture-path.js';
+import { ROSELIAM_FIXTURE_DIR, requireFixture, skipWithoutFixture } from './fixture-path.js';
 
 describe('WindowedFloorPolicy', () => {
   const policy = new WindowedFloorPolicy();
@@ -87,107 +87,110 @@ const SHEET_SIZES: SheetPixelSizes = {
   B: { width: 768, height: 768 },
 };
 
-describe('floor-rendering-window streaming-budget guard', () => {
-  let tileset: RpgmTileset;
+describe.skipIf(skipWithoutFixture(ROSELIAM_FIXTURE_DIR))(
+  'floor-rendering-window streaming-budget guard',
+  () => {
+    let tileset: RpgmTileset;
 
-  beforeAll(async () => {
-    requireFixture(ROSELIAM_FIXTURE_DIR);
-    const contents = await readFile(join(ROSELIAM_FIXTURE_DIR, 'Tilesets.json'), 'utf8');
-    const tilesets = parseTilesets(JSON.parse(contents));
-    const found = tilesets.find((entry) => entry.id === 4);
-    if (!found) throw new Error('Roseliam Dungeon tileset (id 4) missing from fixture.');
-    tileset = found;
-  });
-
-  /** Builds one floor's { tilemap, streamer } pair, mirroring main.ts's per-floor wiring. */
-  function buildFloorRender(seed: number) {
-    const map = generateSyntheticMap({ width: 128, height: 128, seed });
-    const chunks = buildChunks(map, tileset, SHEET_SIZES);
-    const tilemap = new StreamingTilemapScene(chunks, { B: new THREE.Texture() });
-    const streamer = new ChunkStreamer({
-      chunkSize: DEFAULT_CHUNK_SIZE,
-      mapWidth: map.width,
-      mapHeight: map.height,
-      buildRadius: 2,
-      disposeRadius: 3,
+    beforeAll(async () => {
+      requireFixture(ROSELIAM_FIXTURE_DIR);
+      const contents = await readFile(join(ROSELIAM_FIXTURE_DIR, 'Tilesets.json'), 'utf8');
+      const tilesets = parseTilesets(JSON.parse(contents));
+      const found = tilesets.find((entry) => entry.id === 4);
+      if (!found) throw new Error('Roseliam Dungeon tileset (id 4) missing from fixture.');
+      tileset = found;
     });
-    return { tilemap, streamer };
-  }
 
-  it('total live chunks across the visible window never exceeds window(2) x single-floor streamer bound', () => {
-    const policy = new WindowedFloorPolicy();
-    const floorCount = 2;
-    const floors = [buildFloorRender(1), buildFloorRender(2)];
-    const singleFloorBound = (2 * 3 + 1) ** 2; // (2*disposeRadius+1)**2, disposeRadius=3
+    /** Builds one floor's { tilemap, streamer } pair, mirroring main.ts's per-floor wiring. */
+    function buildFloorRender(seed: number) {
+      const map = generateSyntheticMap({ width: 128, height: 128, seed });
+      const chunks = buildChunks(map, tileset, SHEET_SIZES);
+      const tilemap = new StreamingTilemapScene(chunks, { B: new THREE.Texture() });
+      const streamer = new ChunkStreamer({
+        chunkSize: DEFAULT_CHUNK_SIZE,
+        mapWidth: map.width,
+        mapHeight: map.height,
+        buildRadius: 2,
+        disposeRadius: 3,
+      });
+      return { tilemap, streamer };
+    }
 
-    function applyWindow(currentFloor: number, focusX: number, focusY: number): void {
-      const visible = new Set(policy.visibleFloors(currentFloor, floorCount));
-      for (let i = 0; i < floors.length; i++) {
-        const floor = floors[i];
-        if (!floor) continue;
-        if (visible.has(i)) floor.tilemap.applyDiff(floor.streamer.update(focusX, focusY));
+    it('total live chunks across the visible window never exceeds window(2) x single-floor streamer bound', () => {
+      const policy = new WindowedFloorPolicy();
+      const floorCount = 2;
+      const floors = [buildFloorRender(1), buildFloorRender(2)];
+      const singleFloorBound = (2 * 3 + 1) ** 2; // (2*disposeRadius+1)**2, disposeRadius=3
+
+      function applyWindow(currentFloor: number, focusX: number, focusY: number): void {
+        const visible = new Set(policy.visibleFloors(currentFloor, floorCount));
+        for (let i = 0; i < floors.length; i++) {
+          const floor = floors[i];
+          if (!floor) continue;
+          if (visible.has(i)) floor.tilemap.applyDiff(floor.streamer.update(focusX, focusY));
+        }
       }
-    }
 
-    function totalLiveChunks(): number {
-      return floors.reduce((sum, floor) => sum + (floor?.tilemap.liveChunkCount ?? 0), 0);
-    }
-
-    // currentFloor = 0: window = [0] only -- floor 1 must stay untouched/empty.
-    applyWindow(0, 64, 64);
-    expect(totalLiveChunks()).toBeLessThanOrEqual(singleFloorBound);
-    expect(floors[1]?.tilemap.liveChunkCount).toBe(0);
-
-    // currentFloor = 1: window = [0, 1] -- both floors may now be live, but the
-    // total is still bounded by exactly 2 single-floor budgets, never more
-    // (this is the "window(2) x streamer bound" guard).
-    applyWindow(1, 64, 64);
-    expect(totalLiveChunks()).toBeLessThanOrEqual(2 * singleFloorBound);
-
-    for (const floor of floors) floor?.tilemap.dispose();
-  });
-
-  it('total live chunks across a 3-floor OcclusionFloorPolicy window never exceeds window(3) x single-floor streamer bound', () => {
-    const policy = new OcclusionFloorPolicy();
-    const floorCount = 3;
-    const floors = [buildFloorRender(1), buildFloorRender(2), buildFloorRender(3)];
-    // Same synthetic formula as the WindowedFloorPolicy guard above, scaled to
-    // the 3-floor occlusion window: bound = window size (3) x single-floor bound.
-    const singleFloorBound = (2 * 3 + 1) ** 2; // (2*disposeRadius+1)**2, disposeRadius=3
-    const windowBound = 3 * singleFloorBound; // 147
-
-    function applyWindow(currentFloor: number, focusX: number, focusY: number): void {
-      const visible = new Set(policy.visibleFloors(currentFloor, floorCount));
-      for (let i = 0; i < floors.length; i++) {
-        const floor = floors[i];
-        if (!floor) continue;
-        if (visible.has(i)) floor.tilemap.applyDiff(floor.streamer.update(focusX, focusY));
+      function totalLiveChunks(): number {
+        return floors.reduce((sum, floor) => sum + (floor?.tilemap.liveChunkCount ?? 0), 0);
       }
-    }
 
-    function totalLiveChunks(): number {
-      return floors.reduce((sum, floor) => sum + (floor?.tilemap.liveChunkCount ?? 0), 0);
-    }
+      // currentFloor = 0: window = [0] only -- floor 1 must stay untouched/empty.
+      applyWindow(0, 64, 64);
+      expect(totalLiveChunks()).toBeLessThanOrEqual(singleFloorBound);
+      expect(floors[1]?.tilemap.liveChunkCount).toBe(0);
 
-    // currentFloor = 1 (middle floor): window = [0, 1, 2] -- all three floors
-    // may be live, but the total must never exceed the 3-floor window bound.
-    applyWindow(1, 64, 64);
-    expect(totalLiveChunks()).toBeLessThanOrEqual(windowBound);
+      // currentFloor = 1: window = [0, 1] -- both floors may now be live, but the
+      // total is still bounded by exactly 2 single-floor budgets, never more
+      // (this is the "window(2) x streamer bound" guard).
+      applyWindow(1, 64, 64);
+      expect(totalLiveChunks()).toBeLessThanOrEqual(2 * singleFloorBound);
 
-    for (const floor of floors) floor?.tilemap.dispose();
-  });
+      for (const floor of floors) floor?.tilemap.dispose();
+    });
 
-  it('traversal pinning: pinnedFloor = max(from, to) keeps both floors of an adjacent stair link inside [max-1, max, max+1]', () => {
-    const policy = new OcclusionFloorPolicy();
-    const floorCount = 4;
-    const fromFloor = 1;
-    const toFloor = 2;
-    const pinnedFloor = Math.max(fromFloor, toFloor); // 2, per main.ts's applyFloorWindow(..., pinnedFloor)
+    it('total live chunks across a 3-floor OcclusionFloorPolicy window never exceeds window(3) x single-floor streamer bound', () => {
+      const policy = new OcclusionFloorPolicy();
+      const floorCount = 3;
+      const floors = [buildFloorRender(1), buildFloorRender(2), buildFloorRender(3)];
+      // Same synthetic formula as the WindowedFloorPolicy guard above, scaled to
+      // the 3-floor occlusion window: bound = window size (3) x single-floor bound.
+      const singleFloorBound = (2 * 3 + 1) ** 2; // (2*disposeRadius+1)**2, disposeRadius=3
+      const windowBound = 3 * singleFloorBound; // 147
 
-    const visible = new Set(policy.visibleFloors(pinnedFloor, floorCount));
-    expect(visible.has(fromFloor)).toBe(true);
-    expect(visible.has(toFloor)).toBe(true);
-    // Window is exactly [pinnedFloor-1, pinnedFloor, pinnedFloor+1], never wider.
-    expect(policy.visibleFloors(pinnedFloor, floorCount)).toEqual([1, 2, 3]);
-  });
-});
+      function applyWindow(currentFloor: number, focusX: number, focusY: number): void {
+        const visible = new Set(policy.visibleFloors(currentFloor, floorCount));
+        for (let i = 0; i < floors.length; i++) {
+          const floor = floors[i];
+          if (!floor) continue;
+          if (visible.has(i)) floor.tilemap.applyDiff(floor.streamer.update(focusX, focusY));
+        }
+      }
+
+      function totalLiveChunks(): number {
+        return floors.reduce((sum, floor) => sum + (floor?.tilemap.liveChunkCount ?? 0), 0);
+      }
+
+      // currentFloor = 1 (middle floor): window = [0, 1, 2] -- all three floors
+      // may be live, but the total must never exceed the 3-floor window bound.
+      applyWindow(1, 64, 64);
+      expect(totalLiveChunks()).toBeLessThanOrEqual(windowBound);
+
+      for (const floor of floors) floor?.tilemap.dispose();
+    });
+
+    it('traversal pinning: pinnedFloor = max(from, to) keeps both floors of an adjacent stair link inside [max-1, max, max+1]', () => {
+      const policy = new OcclusionFloorPolicy();
+      const floorCount = 4;
+      const fromFloor = 1;
+      const toFloor = 2;
+      const pinnedFloor = Math.max(fromFloor, toFloor); // 2, per main.ts's applyFloorWindow(..., pinnedFloor)
+
+      const visible = new Set(policy.visibleFloors(pinnedFloor, floorCount));
+      expect(visible.has(fromFloor)).toBe(true);
+      expect(visible.has(toFloor)).toBe(true);
+      // Window is exactly [pinnedFloor-1, pinnedFloor, pinnedFloor+1], never wider.
+      expect(policy.visibleFloors(pinnedFloor, floorCount)).toEqual([1, 2, 3]);
+    });
+  },
+);

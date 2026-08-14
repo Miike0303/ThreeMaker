@@ -26,3 +26,14 @@ export function requireFixture(dir: string): void {
     );
   }
 }
+
+/**
+ * True when a fixture-backed suite must be skipped rather than run: only in CI,
+ * and only because these fixtures are copyrighted RPG Maker projects that are
+ * git-ignored and can never be present on a runner. Locally a missing fixture
+ * must still fail loudly through `requireFixture` -- a developer who has not
+ * set one up needs the actionable error, not a silent pass.
+ */
+export function skipWithoutFixture(dir: string): boolean {
+  return Boolean(process.env.CI) && !existsSync(dir);
+}
