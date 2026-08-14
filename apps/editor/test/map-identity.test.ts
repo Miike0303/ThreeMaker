@@ -11,6 +11,7 @@ import {
   InvalidMapNameError,
   isInkSidecarForMap,
   LEGACY_MAP_NAME,
+  listInkStoryIdsFromEntries,
   listMapNamesFromEntries,
   MAP_DIR_RELATIVE,
   MAP_FILE_SUFFIX,
@@ -110,6 +111,27 @@ describe('list / sidecar / rename / delete plans', () => {
     expect(isInkSidecarForMap('town.welcome.ink', 'current')).toBe(false);
     expect(isInkSidecarForMap('current.tmmap.json', 'current')).toBe(false);
     expect(isInkSidecarForMap('current.has.dot.ink', 'current')).toBe(false);
+  });
+
+  it('lists only path-safe story ids for the named map, ignoring other files', () => {
+    expect(listInkStoryIdsFromEntries(entries, 'current')).toEqual(['elder', 'guard']);
+    expect(listInkStoryIdsFromEntries(entries, 'town')).toEqual(['welcome']);
+  });
+
+  it('drops sidecar names that would escape the maps directory', () => {
+    const malicious = [
+      'current.elder.ink',
+      'current../evil.ink',
+      'current..\\evil.ink',
+      'current.foo/bar.ink',
+      'current.foo\\bar.ink',
+      '../current.sneak.ink',
+      'current.../../passwd.ink',
+      'current.has.dot.ink',
+      'current. has space.ink',
+      'town.welcome.ink',
+    ];
+    expect(listInkStoryIdsFromEntries(malicious, 'current')).toEqual(['elder']);
   });
 
   it('renames a map and moves its .ink sidecars with it', () => {

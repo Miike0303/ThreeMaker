@@ -5,7 +5,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  buildInkStoryOpenModel,
   isSafeStoryId,
+  listInkSidecars,
   listInkStoryIdsFromEvents,
   loadInkSidecar,
   saveInkSidecar,
@@ -31,13 +33,37 @@ export function InkPanel({ t, painterState, mapName, onStatus, onStorySaved }: I
 
   const [manualStoryId, setManualStoryId] = useState('');
   const [extraIds, setExtraIds] = useState<readonly string[]>([]);
+  const [diskStoryIds, setDiskStoryIds] = useState<readonly string[]>([]);
   const storyIds = useMemo(() => {
-    const merged = [...referencedIds];
-    for (const id of extraIds) {
+    const merged: string[] = [];
+    for (const id of [...diskStoryIds, ...referencedIds, ...extraIds]) {
       if (!merged.includes(id)) merged.push(id);
     }
     return merged;
-  }, [referencedIds, extraIds]);
+  }, [diskStoryIds, referencedIds, extraIds]);
+  const openModel = useMemo(
+    () => buildInkStoryOpenModel([...diskStoryIds, ...referencedIds], manualStoryId),
+    [diskStoryIds, referencedIds, manualStoryId],
+  );
+
+  const refreshDiskStories = useCallback(() => {
+    let cancelled = false;
+    void listInkSidecars(mapName)
+      .then((ids) => {
+        if (!cancelled) setDiskStoryIds(ids);
+      })
+      .catch((err) => {
+        console.error('Failed to list ink sidecars:', err);
+        if (!cancelled) {
+          onStatus({ message: t('painter.ink.loadFailed'), severity: 'error' });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mapName, onStatus, t]);
+
+  useEffect(() => refreshDiskStories(), [refreshDiskStories]);
 
   const [selectedStoryId, setSelectedStoryId] = useState<string | undefined>(undefined);
   const [source, setSource] = useState('');
@@ -89,43 +115,85 @@ export function InkPanel({ t, painterState, mapName, onStatus, onStorySaved }: I
       await saveInkSidecar(selectedStoryId, source, mapName);
       setDirty(false);
       onStorySaved?.(selectedStoryId);
+      refreshDiskStories();
       onStatus({ message: t('painter.ink.saveSuccess'), severity: 'success' });
     } catch (err) {
       console.error('Failed to save ink sidecar:', err);
       onStatus({ message: t('painter.ink.saveFailed'), severity: 'error' });
     }
-  }, [selectedStoryId, compile.ok, source, mapName, onStatus, onStorySaved, t]);
+  }, [selectedStoryId, compile.ok, source, mapName, onStatus, onStorySaved, t, refreshDiskStories]);
 
   if (!painterState) return null;
 
-  const openStory = () => {
-    const id = manualStoryId.trim();
+  const openStoryId = (id: string) => {
     if (!isSafeStoryId(id)) {
       onStatus({ message: t('painter.ink.invalidStoryId'), severity: 'warning' });
       return;
     }
-    if (!extraIds.includes(id) && !referencedIds.includes(id)) {
+    if (!extraIds.includes(id) && !referencedIds.includes(id) && !diskStoryIds.includes(id)) {
       setExtraIds([...extraIds, id]);
     }
     setSelectedStoryId(id);
-    setManualStoryId('');
   };
+
+  const openStory = () => {
+    const id = manualStoryId.trim();
+    openStoryId(id);
+    if (isSafeStoryId(id)) setManualStoryId('');
+  };
+
+  const typedWarning =
+    openModel.status === 'unsafe-story-id'
+      ? t('painter.ink.invalidStoryId')
+      : openModel.status === 'unknown-story'
+        ? t('painter.ink.unknownStory')
+        : undefined;
 
   return (
     <section className="ink-workbench" aria-label={t('painter.ink')}>
       <h3 className="ide-section-title">{t('painter.ink')}</h3>
       <p className="ide-hint">{t('painter.ink.help')}</p>
+      <div className="ide-welcome-path">
+        <h4 className="ide-section-title">{t('painter.ink.existing')}</h4>
+        {diskStoryIds.length === 0 ? (
+          <p className="ide-hint">{t('painter.ink.existingEmpty')}</p>
+        ) : (
+          <ul className="ide-list" aria-label={t('painter.ink.existing')}>
+            {diskStoryIds.map((id) => (
+              <li key={id} className={id === selectedStoryId ? 'ide-list-active' : undefined}>
+                <span className="ide-welcome-map-name">{id}</span>
+                <button type="button" onClick={() => openStoryId(id)}>
+                  {t('painter.ink.open')}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <div className="painter-events-add-event">
         <input
           type="text"
+          list="ink-existing-stories"
           value={manualStoryId}
           placeholder={t('painter.ink.storyPlaceholder')}
+          aria-invalid={typedWarning !== undefined}
+          aria-describedby={typedWarning ? 'ink-story-open-warning' : undefined}
           onChange={(e) => setManualStoryId(e.target.value)}
         />
+        <datalist id="ink-existing-stories">
+          {openModel.storyOptions.map((id) => (
+            <option key={id} value={id} />
+          ))}
+        </datalist>
         <button type="button" className="primary" onClick={openStory}>
           {t('painter.ink.open')}
         </button>
       </div>
+      {typedWarning && (
+        <p id="ink-story-open-warning" className="painter-events-soft-warning">
+          {typedWarning}
+        </p>
+      )}
       {storyIds.length === 0 ? (
         <p className="ide-hint">{t('painter.ink.none')}</p>
       ) : (

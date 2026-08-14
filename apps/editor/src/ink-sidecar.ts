@@ -7,7 +7,14 @@
  * Persistence reuses the same Tauri / dev-HTTP backends as `map-client.ts`.
  */
 
-import { BaseDirectory, exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import {
+  BaseDirectory,
+  exists,
+  mkdir,
+  readDir,
+  readTextFile,
+  writeTextFile,
+} from '@tauri-apps/plugin-fs';
 import type { EventCommand } from '@threemaker/core';
 import {
   buildInkGraphModel,
@@ -20,7 +27,12 @@ import {
 } from '@threemaker/narrative';
 import { isTauriAvailable } from './catalog-client.js';
 import { MAP_DIR_RELATIVE, MapClientError, mapFileRelativePath } from './map-client.js';
-import { LEGACY_MAP_NAME } from './map-identity.js';
+import {
+  assertMapName,
+  InvalidMapNameError,
+  LEGACY_MAP_NAME,
+  listInkStoryIdsFromEntries,
+} from './map-identity.js';
 
 const DEV_MAP_API_BASE = '/api/dev-map';
 const MAP_FILE_SUFFIX = '.tmmap.json';
@@ -45,6 +57,68 @@ export function inkSidecarRelativePath(mapRelativePath: string, storyId: string)
     ? mapRelativePath.slice(0, -MAP_FILE_SUFFIX.length)
     : mapRelativePath;
   return `${base}.${storyId}.ink`;
+}
+
+export type InkStoryOpenStatus = 'empty' | 'ready' | 'unknown-story' | 'unsafe-story-id';
+
+export interface InkStoryOpenModel {
+  readonly storyOptions: readonly string[];
+  readonly status: InkStoryOpenStatus;
+}
+
+/** Datalist + soft-warning model for typing a story id (same shape as the Events knot picker). */
+export function buildInkStoryOpenModel(
+  knownStoryIds: readonly string[],
+  typedId: string,
+): InkStoryOpenModel {
+  const trimmed = typedId.trim();
+  let status: InkStoryOpenStatus;
+  if (trimmed === '') status = 'empty';
+  else if (!isSafeStoryId(trimmed)) status = 'unsafe-story-id';
+  else if (!knownStoryIds.includes(trimmed)) status = 'unknown-story';
+  else status = 'ready';
+  return { storyOptions: [...knownStoryIds], status };
+}
+
+function usableMapName(mapName: string): string {
+  try {
+    return assertMapName(mapName);
+  } catch (error) {
+    if (error instanceof InvalidMapNameError) {
+      throw new MapClientError(error.message);
+    }
+    throw error;
+  }
+}
+
+/** Story ids whose `.ink` sidecars already exist next to the named map. */
+export async function listInkSidecars(
+  mapName: string = LEGACY_MAP_NAME,
+): Promise<readonly string[]> {
+  const name = usableMapName(mapName);
+  if (isTauriAvailable()) {
+    const dirExists = await exists(MAP_DIR_RELATIVE, { baseDir: BaseDirectory.Home });
+    if (!dirExists) return [];
+    const entries = await readDir(MAP_DIR_RELATIVE, { baseDir: BaseDirectory.Home });
+    return listInkStoryIdsFromEntries(
+      entries.map((entry) => entry.name),
+      name,
+    );
+  }
+  const nameQuery = name === LEGACY_MAP_NAME ? '' : `?name=${encodeURIComponent(name)}`;
+  const response = await fetch(`${DEV_MAP_API_BASE}/ink-list${nameQuery}`);
+  if (response.status === 404) return [];
+  if (!response.ok) {
+    throw new MapClientError(`Failed to list ink sidecars: HTTP ${response.status}`);
+  }
+  const json: unknown = await response.json();
+  if (!Array.isArray(json) || json.some((entry) => typeof entry !== 'string')) {
+    throw new MapClientError('Failed to list ink sidecars: unexpected response');
+  }
+  return listInkStoryIdsFromEntries(
+    json.map((entry) => (entry.endsWith('.ink') ? entry : `${name}.${entry}.ink`)),
+    name,
+  );
 }
 
 /** Unique ink `storyId`s referenced by `showDialogue` commands (nested branches included). */

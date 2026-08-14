@@ -64,6 +64,7 @@ import {
   type WorldValueKind,
   worldValueKind,
 } from '../event-form-helpers.js';
+import { formatSpawnSummary, resolveFloorLabel } from '../floor-label.js';
 import { formatTemplate } from '../format-template.js';
 import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
 import {
@@ -285,18 +286,6 @@ async function buildPaletteSlots(
     });
   }
   return slots;
-}
-
-/** Resolves a floor id to its display label (`label` if authored, otherwise `painter.floorOption` formatted with its stack index) -- shared by the stair-link list and the spawn indicator, since both reference floors by stable id rather than index. Falls back to the raw id for a dangling reference (should not happen in practice; `composeDocumentFromPainterFloors` drops those on save). */
-function resolveFloorLabel(
-  floors: PainterState['floors'],
-  id: string,
-  t: (key: string) => string,
-): string {
-  const index = floors.findIndex((floor) => floor.id === id);
-  if (index === -1) return id;
-  const floor = floors[index];
-  return floor?.label ?? formatTemplate(t('painter.floorOption'), { index: index + 1 });
 }
 
 /**
@@ -1945,15 +1934,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       {painterState.spawn ? (
                         <div className="ide-row">
                           <span>
-                            {formatTemplate(t('painter.spawn.summary'), {
-                              floor: resolveFloorLabel(
-                                painterState.floors,
-                                painterState.spawn.floor,
-                                t,
-                              ),
-                              x: painterState.spawn.x,
-                              y: painterState.spawn.y,
-                            })}
+                            {formatSpawnSummary(t, painterState.floors, painterState.spawn)}
                           </span>
                           <button type="button" onClick={() => viewportRef.current?.clearSpawn()}>
                             {t('painter.spawn.clear')}

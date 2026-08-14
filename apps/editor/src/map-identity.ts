@@ -135,10 +135,26 @@ export function listMapNamesFromEntries(entries: readonly string[]): string[] {
 }
 
 export function isInkSidecarForMap(fileName: string, mapName: string): boolean {
+  return inkStoryIdFromSidecarFileName(fileName, mapName) !== null;
+}
+
+/** Story id encoded in `<mapName>.<storyId>.ink`, or `null` when unsafe / not a sidecar. */
+export function inkStoryIdFromSidecarFileName(fileName: string, mapName: string): string | null {
+  if (fileName.includes('/') || fileName.includes('\\')) return null;
   const prefix = `${assertMapName(mapName)}.`;
-  if (!fileName.startsWith(prefix) || !fileName.endsWith(INK_FILE_SUFFIX)) return false;
+  if (!fileName.startsWith(prefix) || !fileName.endsWith(INK_FILE_SUFFIX)) return null;
   const storyId = fileName.slice(prefix.length, -INK_FILE_SUFFIX.length);
-  return SAFE_STORY_ID.test(storyId);
+  return SAFE_STORY_ID.test(storyId) ? storyId : null;
+}
+
+/** Sorted unique path-safe story ids for `mapName` found among directory entry names. */
+export function listInkStoryIdsFromEntries(entries: readonly string[], mapName: string): string[] {
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    const storyId = inkStoryIdFromSidecarFileName(entry, mapName);
+    if (storyId !== null) ids.add(storyId);
+  }
+  return [...ids].sort((a, b) => a.localeCompare(b));
 }
 
 export interface MapFileMove {

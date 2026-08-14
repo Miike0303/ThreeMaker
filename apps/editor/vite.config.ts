@@ -21,6 +21,7 @@ import {
   assertMapName,
   InvalidMapNameError,
   LEGACY_MAP_NAME,
+  listInkStoryIdsFromEntries,
   listMapNamesFromEntries,
   MAP_FILE_SUFFIX,
   mapDocumentFileName,
@@ -311,6 +312,21 @@ function devMapApiPlugin(): Plugin {
               res.end(error instanceof Error ? error.message : 'invalid json');
             }
           });
+          return;
+        }
+
+        if (segments.length === 1 && segments[0] === 'ink-list' && req.method === 'GET') {
+          const rawName = url.searchParams.get('name');
+          const mapPath = namedMapFilePath(rawName);
+          if (mapPath === null) {
+            res.statusCode = 400;
+            res.end('invalid name');
+            return;
+          }
+          const name = assertMapName(rawName && rawName.length > 0 ? rawName : LEGACY_MAP_NAME);
+          const ids = listInkStoryIdsFromEntries(listDirectoryNames(DEV_MAPS_DIR), name);
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify(ids));
           return;
         }
 
