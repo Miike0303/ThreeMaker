@@ -9,7 +9,7 @@ export type SaveWorldValue = boolean | number | string;
 export type SaveFacing = 'up' | 'down' | 'left' | 'right';
 
 /**
- * Session progress the desktop runtime can read/write today (C4 v2).
+ * Session progress the desktop runtime can read/write today (v3).
  *
  * - `mapFile` — path relative to `.threemaker/maps` (manifest entry file, or
  *   `current.tmmap.json` in single-file mode). Stable across index reshuffles.
@@ -20,6 +20,7 @@ export type SaveFacing = 'up' | 'down' | 'left' | 'right';
  *   store.
  * - `inventory` — positive item counts only (zeros dropped at capture).
  * - `stats` — finite stat values keyed by session def ids.
+ * - `stories` — ink `story.state.ToJson()` strings keyed by `storyId`.
  */
 export type GameSaveSnapshot = {
   readonly mapFile: string;
@@ -30,4 +31,5 @@ export type GameSaveSnapshot = {
   readonly world: Readonly<Record<string, SaveWorldValue>>;
   readonly inventory: Readonly<Record<string, number>>;
   readonly stats: Readonly<Record<string, number>>;
+  readonly stories: Readonly<Record<string, string>>;
 };

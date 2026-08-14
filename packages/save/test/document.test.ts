@@ -5,7 +5,12 @@ import {
   parseGameSaveDocument,
   serializeGameSaveDocument,
 } from '../src/document.js';
-import { clearSaveMigrations, migrateV1ToV2, registerSaveMigration } from '../src/migrate.js';
+import {
+  clearSaveMigrations,
+  migrateV1ToV2,
+  migrateV2ToV3,
+  registerSaveMigration,
+} from '../src/migrate.js';
 import { gameSaveDocumentFromSnapshot, snapshotFromGameSaveDocument } from '../src/snapshot.js';
 import type { GameSaveSnapshot } from '../src/types.js';
 
@@ -22,20 +27,26 @@ const sampleSnapshot: GameSaveSnapshot = {
   },
   inventory: { potion: 2, key: 1 },
   stats: { hp: 42, mp: 10 },
+  stories: { elder: '{"inkSaveVersion":8}' },
 };
 
-// Restore production migration after any clear (registry wipe includes built-ins).
+function registerProductMigrations(): void {
+  registerSaveMigration(1, migrateV1ToV2);
+  registerSaveMigration(2, migrateV2ToV3);
+}
+
+// Restore production migrations after any clear (registry wipe includes built-ins).
 beforeEach(() => {
   clearSaveMigrations();
-  registerSaveMigration(1, migrateV1ToV2);
+  registerProductMigrations();
 });
 afterEach(() => {
   clearSaveMigrations();
-  registerSaveMigration(1, migrateV1ToV2);
+  registerProductMigrations();
 });
 
 describe('serializeGameSaveDocument / parseGameSaveDocument', () => {
-  it('round-trips a valid v2 document', () => {
+  it('round-trips a valid v3 document', () => {
     const doc = gameSaveDocumentFromSnapshot(sampleSnapshot);
     const text = serializeGameSaveDocument(doc);
     const parsed = parseGameSaveDocument(JSON.parse(text));
@@ -43,7 +54,7 @@ describe('serializeGameSaveDocument / parseGameSaveDocument', () => {
     if (!parsed.ok) return;
     expect(parsed.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(parsed.document.magic).toBe(GAME_SAVE_MAGIC);
-    expect(parsed.document.version).toBe(2);
+    expect(parsed.document.version).toBe(3);
     expect(snapshotFromGameSaveDocument(parsed.document)).toEqual(sampleSnapshot);
   });
 
@@ -115,19 +126,21 @@ describe('serializeGameSaveDocument / parseGameSaveDocument', () => {
     ).toBe(false);
   });
 
-  it('accepts empty world/inventory/stats and integer player coords', () => {
+  it('accepts empty world/inventory/stats/stories and integer player coords', () => {
     const parsed = parseGameSaveDocument({
       magic: GAME_SAVE_MAGIC,
-      version: 2,
+      version: 3,
       player: { mapFile: 'current.tmmap.json', x: 0, y: 0, floor: 0, facing: 'up' },
       world: {},
       inventory: {},
       stats: {},
+      stories: {},
     });
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.document.inventory).toEqual({});
     expect(parsed.document.stats).toEqual({});
+    expect(parsed.document.stories).toEqual({});
   });
 
   it('rejects bad inventory shapes with a precise reason', () => {
@@ -181,7 +194,7 @@ describe('serializeGameSaveDocument / parseGameSaveDocument', () => {
     if (!str.ok) expect(str.reason).toMatch(/stats/i);
     const missing = parseGameSaveDocument({
       magic: GAME_SAVE_MAGIC,
-      version: 2,
+      version: 3,
       player: samplePlayer(),
       world: {},
       inventory: {},
@@ -190,7 +203,36 @@ describe('serializeGameSaveDocument / parseGameSaveDocument', () => {
     if (!missing.ok) expect(missing.reason).toMatch(/stats/i);
   });
 
-  it('migrates a C3-era v1 document to v2 with empty inventory/stats', () => {
+  it('rejects bad stories shapes with a precise reason', () => {
+    const base = {
+      magic: GAME_SAVE_MAGIC,
+      version: 3,
+      player: samplePlayer(),
+      world: {},
+      inventory: {},
+      stats: {},
+    };
+    expect(parseGameSaveDocument({ ...base, stories: null }).ok).toBe(false);
+    expect(parseGameSaveDocument({ ...base, stories: [] }).ok).toBe(false);
+    const empty = parseGameSaveDocument({ ...base, stories: { elder: '' } });
+    expect(empty.ok).toBe(false);
+    if (!empty.ok) expect(empty.reason).toMatch(/stories/i);
+    const num = parseGameSaveDocument({ ...base, stories: { elder: 1 } });
+    expect(num.ok).toBe(false);
+    if (!num.ok) expect(num.reason).toMatch(/stories/i);
+    const missing = parseGameSaveDocument({
+      magic: GAME_SAVE_MAGIC,
+      version: 3,
+      player: samplePlayer(),
+      world: {},
+      inventory: {},
+      stats: {},
+    });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.reason).toMatch(/stories/i);
+  });
+
+  it('migrates a C3-era v1 document to v3 with empty inventory/stats/stories', () => {
     const parsed = parseGameSaveDocument({
       magic: GAME_SAVE_MAGIC,
       version: 1,
@@ -199,11 +241,30 @@ describe('serializeGameSaveDocument / parseGameSaveDocument', () => {
     });
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.version).toBe(2);
-    expect(parsed.document.version).toBe(2);
+    expect(parsed.version).toBe(3);
+    expect(parsed.document.version).toBe(3);
     expect(parsed.document.world).toEqual({ met_elder: true });
     expect(parsed.document.inventory).toEqual({});
     expect(parsed.document.stats).toEqual({});
+    expect(parsed.document.stories).toEqual({});
+  });
+
+  it('migrates a C4-era v2 document to v3 with empty stories', () => {
+    const parsed = parseGameSaveDocument({
+      magic: GAME_SAVE_MAGIC,
+      version: 2,
+      player: samplePlayer(),
+      world: { met_elder: true },
+      inventory: { potion: 1 },
+      stats: { hp: 10 },
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.version).toBe(3);
+    expect(parsed.document.version).toBe(3);
+    expect(parsed.document.inventory).toEqual({ potion: 1 });
+    expect(parsed.document.stats).toEqual({ hp: 10 });
+    expect(parsed.document.stories).toEqual({});
   });
 });
 
@@ -214,25 +275,30 @@ describe('snapshot bridge (pure runtime ↔ document)', () => {
     expect(doc.player.mapFile).toBe('demo/map-a.tmmap.json');
     expect(doc.inventory).toEqual(sampleSnapshot.inventory);
     expect(doc.stats).toEqual(sampleSnapshot.stats);
+    expect(doc.stories).toEqual(sampleSnapshot.stories);
     expect(snapshotFromGameSaveDocument(doc)).toEqual(sampleSnapshot);
   });
 
-  it('copies world/inventory/stats entries (no shared mutable reference)', () => {
+  it('copies world/inventory/stats/stories entries (no shared mutable reference)', () => {
     const world = { flag: true as const };
     const inventory = { potion: 1 };
     const stats = { hp: 5 };
+    const stories = { elder: '{"inkSaveVersion":8}' };
     const doc = gameSaveDocumentFromSnapshot({
       ...sampleSnapshot,
       world,
       inventory,
       stats,
+      stories,
     });
     world.flag = false;
     inventory.potion = 99;
     stats.hp = 0;
+    stories.elder = 'mutated';
     expect(doc.world.flag).toBe(true);
     expect(doc.inventory.potion).toBe(1);
     expect(doc.stats.hp).toBe(5);
+    expect(doc.stories.elder).toBe('{"inkSaveVersion":8}');
   });
 });
 

@@ -313,6 +313,7 @@ describe('exit criterion: clock → lighting + NPC morning vs night (C7)', () =>
       world: nightRoot.world.snapshot(),
       inventory: nightRoot.inventory.snapshot(),
       stats: nightRoot.stats.snapshot(),
+      stories: new Map(),
     });
     expect(snapshot).toBeDefined();
     if (!snapshot) throw new Error('capture must succeed for night state');

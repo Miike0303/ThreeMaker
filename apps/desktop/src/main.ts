@@ -98,6 +98,7 @@ import type { GameManifest } from './game-manifest.js';
 import { parseGameManifest } from './game-manifest.js';
 import {
   applyGameSaveSessionStores,
+  applyGameSaveStoryStates,
   resolveMapFileInCatalog,
   sameMapLoadNarrativeArrival,
   validateSavePlacement,
@@ -2525,6 +2526,7 @@ async function renderFixtureMap(
       world: narrativeRoot.world.snapshot(),
       inventory: narrativeRoot.inventory.snapshot(),
       stats: narrativeRoot.stats.snapshot(),
+      stories: bundle?.stories ?? new Map(),
     });
     if (!snapshot) {
       narrativeRoot.overlay().showError(i18n.t('save.failed'));
@@ -2607,6 +2609,7 @@ async function renderFixtureMap(
       // Arrival = save tile (not boot session.spawn) so underfoot enter triggers
       // stay deduped until the player leaves and re-enters.
       await buildNarrativeBundle(activeNarrative, sameMapLoadNarrativeArrival(snap));
+      applyGameSaveStoryStates(bundle?.stories ?? new Map(), snap.stories);
       await buildPropsBundle(activeProps);
       buildLightsBundle(activeLights, activeNarrative);
       // Interpreter is idle during load (existing gates). Bundle build already
@@ -2665,6 +2668,11 @@ async function renderFixtureMap(
       facing: snap.facing,
       floorIndex: snap.floor,
     });
+    // Stories live in the rebuilt per-map bundle; restore only if the hop
+    // actually landed on the saved map (a refused hop leaves the old bundle).
+    if (activeMapFile === catalog.mapFile) {
+      applyGameSaveStoryStates(bundle?.stories ?? new Map(), snap.stories);
+    }
     // Post-hop: interpreter idle; re-apply restored minutes (idempotent with
     // build-time application that already used the re-synced clock).
     applyRoutinesForClock();

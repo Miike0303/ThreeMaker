@@ -24,12 +24,13 @@ export function gameSaveDocumentFromSnapshot(snapshot: GameSaveSnapshot): GameSa
     world: copyRecord(snapshot.world),
     inventory: copyRecord(snapshot.inventory),
     stats: copyRecord(snapshot.stats),
+    stories: copyRecord(snapshot.stories),
   };
 }
 
 /**
  * Pure: validated document → runtime progress the host can apply
- * (teleport player, hop map, rehydrate WorldState / inventory / stats).
+ * (teleport player, hop map, rehydrate WorldState / inventory / stats / stories).
  */
 export function snapshotFromGameSaveDocument(document: GameSaveDocument): GameSaveSnapshot {
   return {
@@ -41,6 +42,7 @@ export function snapshotFromGameSaveDocument(document: GameSaveDocument): GameSa
     world: copyRecord(document.world),
     inventory: copyRecord(document.inventory),
     stats: copyRecord(document.stats),
+    stories: copyRecord(document.stories),
   };
 }
 

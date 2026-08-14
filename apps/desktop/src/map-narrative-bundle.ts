@@ -22,7 +22,12 @@ import { EventInterpreter, PlainTextDialogueProvider } from '@threemaker/core';
 import type { Direction, NpcDefinition, RoutineStop } from '@threemaker/gameplay';
 import { NpcRegistry, routinePositionAt, TriggerIndex } from '@threemaker/gameplay';
 import type { MapEventScripts } from '@threemaker/map-format';
-import { bindStoryToWorld, compileInk, InkDialogueProvider } from '@threemaker/narrative';
+import {
+  bindStoryToWorld,
+  compileInk,
+  InkDialogueProvider,
+  type InkStoryRegistry,
+} from '@threemaker/narrative';
 import { groundYAt } from '@threemaker/renderer';
 import type * as THREE from 'three/webgpu';
 import type { AuthoredMapNarrative } from './authored-map.js';
@@ -150,6 +155,11 @@ export interface MapNarrativeBundle {
    * needs sprite-by-id lookup; they face these at the camera and dispose them.
    */
   readonly sprites: readonly CharacterSprite[];
+  /**
+   * Compiled ink stories keyed by storyId. Same Map the dialogue provider
+   * holds — save/load captures and restores ink state through this registry.
+   */
+  readonly stories: InkStoryRegistry;
   /**
    * Place every routined NPC at `routinePositionAt(base, routine, minutes)`.
    * When the resolved stop differs from the live registry pose: `moveNpc`,
@@ -385,6 +395,7 @@ export async function buildMapNarrativeBundle(
     triggerIndex,
     events: narrative.events,
     sprites,
+    stories,
     applyRoutines,
 
     dispose() {

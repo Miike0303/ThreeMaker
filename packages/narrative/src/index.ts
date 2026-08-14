@@ -16,6 +16,8 @@ export {
   parseInkNodeLayouts,
   setInkNodePosition,
 } from './ink-source-structure.js';
+export type { RestoreInkStoryStatesResult } from './ink-story-state.js';
+export { captureInkStoryStates, restoreInkStoryStates } from './ink-story-state.js';
 export type {
   BindStoryToWorldOptions,
   StoryItemStore,

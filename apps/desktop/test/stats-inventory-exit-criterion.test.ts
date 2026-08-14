@@ -252,6 +252,7 @@ describe('exit criterion: chest → inventory → ink → stat behavior → save
       world: root.world.snapshot(),
       inventory: root.inventory.snapshot(),
       stats: root.stats.snapshot(),
+      stories: new Map(),
     });
     expect(snapshot).toBeDefined();
     if (!snapshot) throw new Error('capture must succeed for mid-progress state');
@@ -261,7 +262,7 @@ describe('exit criterion: chest → inventory → ink → stat behavior → save
     const parsed = parseGameSaveDocument(JSON.parse(text) as unknown);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) throw new Error(`parse failed: ${parsed.reason}`);
-    expect(parsed.document.version).toBe(2);
+    expect(parsed.document.version).toBe(3);
 
     const restoredSnap = snapshotFromGameSaveDocument(parsed.document);
 

@@ -5,8 +5,9 @@
  * magic + integer version, validate before use, unknown/malformed payloads
  * fail closed without throwing. I/O stays in the host.
  *
- * v1 was player + world only. v2 adds inventory + stats (C4); older files
- * migrate via {@link migrateV1ToV2} registered in `migrate.ts`.
+ * v1 was player + world only. v2 adds inventory + stats (C4). v3 adds
+ * ink story state keyed by storyId. Older files migrate via
+ * {@link migrateV1ToV2} / {@link migrateV2ToV3} registered in `migrate.ts`.
  */
 
 import { CURRENT_GAME_SAVE_VERSION, GAME_SAVE_MAGIC } from './constants.js';
@@ -43,8 +44,30 @@ export type GameSaveDocumentV2 = {
   readonly stats: Readonly<Record<string, number>>;
 };
 
+/**
+ * On-disk / wire shape at version 3: ink story state beside inventory/stats.
+ *
+ * `stories` values are opaque inkjs `story.state.ToJson()` strings keyed by
+ * `storyId`. Every value must be a non-empty string — empty or non-string
+ * values mean a corrupt save, not a story with no state (that is an omitted
+ * key, or `{}` after v2 migration). Fail closed: malformed stories abort
+ * parse rather than silently dropping a cursor the player expected to resume.
+ */
+export type GameSaveDocumentV3 = {
+  readonly magic: typeof GAME_SAVE_MAGIC;
+  readonly version: 3;
+  readonly player: GameSavePlayerV1;
+  readonly world: Readonly<Record<string, SaveWorldValue>>;
+  /** Positive item counts only (zeros invalid at parse; dropped at capture). */
+  readonly inventory: Readonly<Record<string, number>>;
+  /** Finite stat values keyed by session def ids. */
+  readonly stats: Readonly<Record<string, number>>;
+  /** Ink `story.state.ToJson()` strings keyed by storyId (non-empty). */
+  readonly stories: Readonly<Record<string, string>>;
+};
+
 /** Alias for the current schema generation. */
-export type GameSaveDocument = GameSaveDocumentV2;
+export type GameSaveDocument = GameSaveDocumentV3;
 
 export type GameSaveParseOk = {
   readonly ok: true;
@@ -133,6 +156,24 @@ function parseStats(raw: unknown): Record<string, number> | undefined {
 }
 
 /**
+ * Ink `story.state.ToJson()` strings keyed by storyId. Every value must be a
+ * non-empty string — empty or non-string values mean a corrupt save, not a
+ * story with no state (that is an omitted key, or `{}` after v2 migration).
+ * Fail closed: malformed stories abort parse rather than silently dropping
+ * a cursor the player expected to resume.
+ */
+function parseStories(raw: unknown): Record<string, string> | undefined {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!isNonEmptyString(key)) return undefined;
+    if (!isNonEmptyString(value)) return undefined;
+    out[key] = value;
+  }
+  return out;
+}
+
+/**
  * Validate a decoded JSON value as a game-save document.
  * Never throws — invalid input yields `{ ok: false }`.
  *
@@ -172,6 +213,10 @@ export function parseGameSaveDocument(raw: unknown): GameSaveParseResult {
   if (stats === undefined) {
     return { ok: false, reason: 'invalid stats' };
   }
+  const stories = parseStories(migrated.raw.stories);
+  if (stories === undefined) {
+    return { ok: false, reason: 'invalid stories' };
+  }
 
   return {
     ok: true,
@@ -183,6 +228,7 @@ export function parseGameSaveDocument(raw: unknown): GameSaveParseResult {
       world,
       inventory,
       stats,
+      stories,
     },
   };
 }

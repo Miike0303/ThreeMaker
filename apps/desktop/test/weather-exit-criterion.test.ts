@@ -294,6 +294,7 @@ describe('exit criterion: weather state drives Ink + visuals (C8)', () => {
       world: rainRoot.world.snapshot(),
       inventory: rainRoot.inventory.snapshot(),
       stats: rainRoot.stats.snapshot(),
+      stories: new Map(),
     });
     expect(snapshot).toBeDefined();
     if (!snapshot) throw new Error('capture must succeed for rain state');

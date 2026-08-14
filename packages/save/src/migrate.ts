@@ -3,9 +3,9 @@
  * Same pattern as `map-format/migrate.ts`: `v(n) -> v(n+1)` steps until
  * {@link CURRENT_GAME_SAVE_VERSION}. Unknown/newer versions fail closed.
  *
- * Production registers the real v1→v2 product migration at module load.
- * Tests may clear the registry; callers that clear MUST re-register
- * built-ins afterward (see `migrate.test.ts`).
+ * Production registers the real v1→v2 and v2→v3 product migrations at
+ * module load. Tests may clear the registry; callers that clear MUST
+ * re-register built-ins afterward (see `migrate.test.ts`).
  */
 
 import { CURRENT_GAME_SAVE_VERSION, GAME_SAVE_MAGIC } from './constants.js';
@@ -98,6 +98,22 @@ export function migrateV1ToV2(doc: Record<string, unknown>): Record<string, unkn
 }
 
 registerSaveMigration(1, migrateV1ToV2);
+
+/**
+ * Product migration: C4 v2 → v3.
+ *
+ * Lossless for player/world/inventory/stats. Adds empty `stories` so older
+ * saves load with no ink cursor (stories resume from a fresh compile).
+ */
+export function migrateV2ToV3(doc: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...doc,
+    version: 3,
+    stories: {},
+  };
+}
+
+registerSaveMigration(2, migrateV2ToV3);
 
 /**
  * **TEST FIXTURE ONLY** — not a product schema.

@@ -20,8 +20,9 @@ function extractSpeaker(tags: readonly string[]): string | undefined {
 /**
  * A {@link DialogueProvider} over `{ kind: 'ink' }` sources, backed by
  * pre-compiled inkjs {@link Story} instances. v1 scope: single-file stories
- * only, no tag vocabulary beyond `# speaker: Name`, no save/restore of story
- * state across sessions — re-opening the same `storyId` without a `knot`
+ * only, no tag vocabulary beyond `# speaker: Name`. Story cursor and
+ * variables persist across sessions via `captureInkStoryStates` /
+ * `restoreInkStoryStates`. Re-opening the same `storyId` without a `knot`
  * continues wherever that Story last left off (ink's own statefulness), not
  * a fresh restart.
  */

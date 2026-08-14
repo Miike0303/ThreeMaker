@@ -7,6 +7,11 @@
  * together so a bad stats/inventory payload never half-mutates.
  */
 
+import {
+  type InkStoryRegistry,
+  type RestoreInkStoryStatesResult,
+  restoreInkStoryStates,
+} from '@threemaker/narrative';
 import type { GameSaveSnapshot, SaveWorldValue } from '@threemaker/save';
 
 export type MapFileCatalog = {
@@ -190,4 +195,21 @@ export function applyGameSaveSessionStores(
   stores.stats.replaceAll(snap.stats);
   stores.world.replaceAll(snap.world);
   return { ok: true };
+}
+
+/**
+ * Restore ink story cursors/variables into the live per-map registry.
+ * Must run AFTER the narrative bundle is rebuilt (load disposes and
+ * recompiles stories). Skipped ids are logged once — silence would hide
+ * real content drift.
+ */
+export function applyGameSaveStoryStates(
+  stories: InkStoryRegistry,
+  saved: Readonly<Record<string, string>>,
+): RestoreInkStoryStatesResult {
+  const result = restoreInkStoryStates(stories, saved);
+  if (result.skipped.length > 0) {
+    console.warn(`game-save: skipped restoring ink story state for: ${result.skipped.join(', ')}`);
+  }
+  return result;
 }

@@ -56,6 +56,7 @@ const sample = {
   world: { met_elder: true, gold: 5 },
   inventory: { potion: 2 },
   stats: { hp: 20 },
+  stories: { elder: '{"inkSaveVersion":8}' },
 };
 
 describe('game-save-store', () => {
@@ -96,7 +97,7 @@ describe('game-save-store', () => {
     );
   });
 
-  it('loads a C3-era v1 save file into a v2 snapshot with empty inventory/stats', async () => {
+  it('loads a C3-era v1 save file into a v3 snapshot with empty inventory/stats/stories', async () => {
     const v1Text = JSON.stringify({
       magic: 'threemaker.game-save',
       version: 1,
@@ -122,6 +123,7 @@ describe('game-save-store', () => {
         world: { met_elder: true },
         inventory: {},
         stats: {},
+        stories: {},
       },
     });
   });

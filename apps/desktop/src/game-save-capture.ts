@@ -1,8 +1,10 @@
 /**
  * Pure capture of runtime progress into a {@link GameSaveSnapshot} (C3/C4).
  * Host supplies already-read fields; this only copies and normalizes.
+ * Ink story JSON comes from {@link captureInkStoryStates} over the live registry.
  */
 
+import { captureInkStoryStates, type InkStoryRegistry } from '@threemaker/narrative';
 import type { GameSaveSnapshot, SaveFacing, SaveWorldValue } from '@threemaker/save';
 
 export type GameSaveCaptureInput = {
@@ -15,6 +17,8 @@ export type GameSaveCaptureInput = {
   readonly world: Readonly<Record<string, SaveWorldValue>>;
   readonly inventory: Readonly<Record<string, number>>;
   readonly stats: Readonly<Record<string, number>>;
+  /** Live compiled stories; captured via `captureInkStoryStates`. */
+  readonly stories: InkStoryRegistry;
 };
 
 const FACINGS: ReadonlySet<string> = new Set(['up', 'down', 'left', 'right']);
@@ -72,5 +76,6 @@ export function captureGameSaveSnapshot(input: GameSaveCaptureInput): GameSaveSn
     world: { ...input.world },
     inventory,
     stats,
+    stories: captureInkStoryStates(input.stories),
   };
 }

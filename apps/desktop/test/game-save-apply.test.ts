@@ -1,8 +1,10 @@
 import { Inventory, StatBlock, TriggerIndex } from '@threemaker/gameplay';
+import { captureInkStoryStates, compileInk } from '@threemaker/narrative';
 import type { GameSaveSnapshot, SaveWorldValue } from '@threemaker/save';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyGameSaveSessionStores,
+  applyGameSaveStoryStates,
   resolveMapFileInCatalog,
   sameMapLoadNarrativeArrival,
   validateSavePlacement,
@@ -17,6 +19,7 @@ const snap = (partial: Partial<GameSaveSnapshot> = {}): GameSaveSnapshot => ({
   world: {},
   inventory: {},
   stats: {},
+  stories: {},
   ...partial,
 });
 
@@ -221,5 +224,42 @@ describe('sameMapLoadNarrativeArrival (TriggerIndex enter dedupe)', () => {
     expect(index.enter(saveTile.floor, saveTile.x, saveTile.y)).toEqual([]);
     expect(index.enter(saveTile.floor, saveTile.x + 1, saveTile.y)).toEqual([]);
     expect(index.enter(saveTile.floor, saveTile.x, saveTile.y)).toEqual(['stepped']);
+  });
+});
+
+describe('applyGameSaveStoryStates', () => {
+  const source = `VAR token = 0
+Alpha.
+~ token = 1
+Beta.
+Gamma.
+-> END
+`;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('restores a mid-story cursor so the next line matches after reload', () => {
+    const live = compileInk(source);
+    live.Continue();
+    live.Continue();
+    const saved = captureInkStoryStates(new Map([['elder', live]]));
+
+    const reloaded = compileInk(source);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const result = applyGameSaveStoryStates(new Map([['elder', reloaded]]), saved);
+
+    expect(result).toEqual({ restored: ['elder'], skipped: [] });
+    expect(warn).not.toHaveBeenCalled();
+    expect(reloaded.Continue()?.trim()).toBe('Gamma.');
+  });
+
+  it('warns once with skipped ids when a saved story is missing from the registry', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const result = applyGameSaveStoryStates(new Map(), { retired: '{"inkSaveVersion":8}' });
+    expect(result.skipped).toEqual(['retired']);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('retired'));
   });
 });

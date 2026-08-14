@@ -9,6 +9,7 @@ import {
   migrateSaveDocumentToCurrent,
   migrateTestFixtureV0ToV1,
   migrateV1ToV2,
+  migrateV2ToV3,
   registerSaveMigration,
 } from '../src/migrate.js';
 
@@ -46,19 +47,39 @@ function makeV1Doc(overrides: Record<string, unknown> = {}): Record<string, unkn
   };
 }
 
+function makeV2Doc(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    magic: GAME_SAVE_MAGIC,
+    version: 2,
+    player: {
+      mapFile: 'current.tmmap.json',
+      x: 1,
+      y: 2,
+      floor: 0,
+      facing: 'up',
+    },
+    world: { flag: true },
+    inventory: { potion: 1 },
+    stats: { hp: 10 },
+    ...overrides,
+  };
+}
+
 describe('save migration registry', () => {
   beforeEach(() => {
     clearSaveMigrations();
-    // Production product step (restored after clear) + test-only v0 fixture.
+    // Production product steps (restored after clear) + test-only v0 fixture.
     registerSaveMigration(1, migrateV1ToV2);
+    registerSaveMigration(2, migrateV2ToV3);
     registerSaveMigration(0, migrateTestFixtureV0ToV1);
   });
 
   afterEach(() => {
-    // clearSaveMigrations wipes built-ins — restore production v1→v2 so later
+    // clearSaveMigrations wipes built-ins — restore production steps so later
     // files that import the package keep a working registry.
     clearSaveMigrations();
     registerSaveMigration(1, migrateV1ToV2);
+    registerSaveMigration(2, migrateV2ToV3);
   });
 
   it('migrates a test-fixture v0 document through v1→v2 to CURRENT', () => {
@@ -76,6 +97,7 @@ describe('save migration registry', () => {
     expect(result.raw.world).toEqual({ met_elder: true, gold: 9 });
     expect(result.raw.inventory).toEqual({});
     expect(result.raw.stats).toEqual({});
+    expect(result.raw.stories).toEqual({});
   });
 
   it('parseGameSaveDocument accepts v0 fixture after the full migration chain', () => {
@@ -83,38 +105,63 @@ describe('save migration registry', () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.version).toBe(CURRENT_GAME_SAVE_VERSION);
-    expect(parsed.document.version).toBe(2);
+    expect(parsed.document.version).toBe(3);
     expect(parsed.document.player.x).toBe(3);
     expect(parsed.document.world.met_elder).toBe(true);
     expect(parsed.document.inventory).toEqual({});
     expect(parsed.document.stats).toEqual({});
+    expect(parsed.document.stories).toEqual({});
   });
 
-  it('migrates a product v1 document to v2 by adding empty inventory/stats', () => {
+  it('migrates a product v1 document through v2 to v3 with empty stores', () => {
     const result = migrateSaveDocumentToCurrent(makeV1Doc());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.raw.version).toBe(2);
+    expect(result.raw.version).toBe(3);
     expect(result.raw.player).toEqual(makeV1Doc().player);
     expect(result.raw.world).toEqual({ flag: true });
     expect(result.raw.inventory).toEqual({});
     expect(result.raw.stats).toEqual({});
+    expect(result.raw.stories).toEqual({});
   });
 
-  it('parseGameSaveDocument accepts a product v1 payload and returns v2', () => {
+  it('parseGameSaveDocument accepts a product v1 payload and returns v3', () => {
     const parsed = parseGameSaveDocument(makeV1Doc({ world: { met_elder: true } }));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.version).toBe(2);
+    expect(parsed.version).toBe(3);
     expect(parsed.document.inventory).toEqual({});
     expect(parsed.document.stats).toEqual({});
+    expect(parsed.document.stories).toEqual({});
     expect(parsed.document.world.met_elder).toBe(true);
   });
 
-  it('leaves a current v2 document unchanged when no steps are needed', () => {
-    const v2 = {
+  it('migrates a product v2 document to v3 by adding empty stories', () => {
+    const result = migrateSaveDocumentToCurrent(makeV2Doc());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.raw.version).toBe(3);
+    expect(result.raw.player).toEqual(makeV2Doc().player);
+    expect(result.raw.inventory).toEqual({ potion: 1 });
+    expect(result.raw.stats).toEqual({ hp: 10 });
+    expect(result.raw.stories).toEqual({});
+  });
+
+  it('parseGameSaveDocument accepts a product v2 payload and returns v3 with empty stories', () => {
+    const parsed = parseGameSaveDocument(makeV2Doc({ world: { met_elder: true } }));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.version).toBe(3);
+    expect(parsed.document.inventory).toEqual({ potion: 1 });
+    expect(parsed.document.stats).toEqual({ hp: 10 });
+    expect(parsed.document.stories).toEqual({});
+    expect(parsed.document.world.met_elder).toBe(true);
+  });
+
+  it('leaves a current v3 document unchanged when no steps are needed', () => {
+    const v3 = {
       magic: GAME_SAVE_MAGIC,
-      version: 2,
+      version: 3,
       player: {
         mapFile: 'current.tmmap.json',
         x: 1,
@@ -125,14 +172,16 @@ describe('save migration registry', () => {
       world: {},
       inventory: { potion: 1 },
       stats: { hp: 10 },
+      stories: { elder: '{"inkSaveVersion":8}' },
     };
-    const result = migrateSaveDocumentToCurrent(v2);
+    const result = migrateSaveDocumentToCurrent(v3);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.raw.version).toBe(2);
-    expect(result.raw.player).toEqual(v2.player);
+    expect(result.raw.version).toBe(3);
+    expect(result.raw.player).toEqual(v3.player);
     expect(result.raw.inventory).toEqual({ potion: 1 });
     expect(result.raw.stats).toEqual({ hp: 10 });
+    expect(result.raw.stories).toEqual({ elder: '{"inkSaveVersion":8}' });
   });
 
   it('rejects versions newer than CURRENT without throwing', () => {
@@ -161,6 +210,18 @@ describe('save migration registry', () => {
     expect(next.stats).toEqual({});
     expect(next.player).toEqual(v1.player);
     expect(next.world).toEqual({ a: 1 });
+    expect(next.magic).toBe(GAME_SAVE_MAGIC);
+  });
+
+  it('migrateV2ToV3 stamps version 3 and empty stories without touching player/world/inventory/stats', () => {
+    const v2 = makeV2Doc({ world: { a: 1 } });
+    const next = migrateV2ToV3(v2);
+    expect(next.version).toBe(3);
+    expect(next.stories).toEqual({});
+    expect(next.player).toEqual(v2.player);
+    expect(next.world).toEqual({ a: 1 });
+    expect(next.inventory).toEqual({ potion: 1 });
+    expect(next.stats).toEqual({ hp: 10 });
     expect(next.magic).toBe(GAME_SAVE_MAGIC);
   });
 });
