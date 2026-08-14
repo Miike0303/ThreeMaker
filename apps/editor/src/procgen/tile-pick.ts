@@ -182,9 +182,7 @@ export function resolveDungeonTileIds(input: {
       : undefined;
   const doorFromSemantics = firstClassedTileId(semantics, 'door', groundTileId);
   const doorFromSemanticsOk =
-    doorFromSemantics !== undefined &&
-    doorFromSemantics !== wallTileId &&
-    doorFromSemantics > 0
+    doorFromSemantics !== undefined && doorFromSemantics !== wallTileId && doorFromSemantics > 0
       ? doorFromSemantics
       : undefined;
   const doorTileId = doorOverride ?? doorFromMidOk ?? doorFromSemanticsOk;

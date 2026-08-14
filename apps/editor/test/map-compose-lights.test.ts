@@ -104,10 +104,7 @@ describe('composeDocumentFromPainterFloors: lights + floor lightMap (C6)', () =>
 
   it('does not invent lightMap on floors that never had one', () => {
     const blank = createBlankMapDocument(BLANK_OPTIONS);
-    const composed = composeDocumentFromPainterFloors(
-      blank,
-      painterFloorsFromDocument(blank),
-    );
+    const composed = composeDocumentFromPainterFloors(blank, painterFloorsFromDocument(blank));
     const reparsed = parseMapDocument(JSON.parse(serializeMapDocument(composed)));
     expect(reparsed.floors[0]?.lightMap).toBeUndefined();
     expect(Object.hasOwn(JSON.parse(serializeMapDocument(composed)).floors[0], 'lightMap')).toBe(

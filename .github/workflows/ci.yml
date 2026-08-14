@@ -1,0 +1,57 @@
+# The three gates every work unit is supposed to pass (planes/LOOP_NEXT.md):
+# tests, project-wide typecheck, and lint. Before this workflow existed the only
+# CI was release.yml -- tag-triggered, running `pnpm test` alone -- so a red lint
+# or a type error could sit on master unnoticed. It did.
+#
+# Deliberately one Linux job with no OS matrix: release.yml already builds on
+# Windows/macOS/Linux, and these three gates are platform-independent.
+#
+# ponytail: does NOT gate `cargo test` in apps/editor/src-tauri. Those
+# #[cfg(test)] blocks are real and currently run nowhere, but gating them needs
+# the Rust toolchain plus Tauri's Linux system dependencies (see release.yml) on
+# every push. Add a separate rust job when that cost is worth paying.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+# A new push to the same branch makes the in-flight run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: test + typecheck + lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        # Version: reads packageManager from package.json (repo pins pnpm@10.x).
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+
+      # Runs even when tests fail: one push should report every broken gate,
+      # not just the first one.
+      - name: Typecheck
+        if: '!cancelled()'
+        run: pnpm typecheck
+
+      - name: Lint
+        if: '!cancelled()'
+        run: pnpm lint

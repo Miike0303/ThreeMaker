@@ -354,9 +354,7 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
   let furnitureCount = 0;
   if (furnitureTileId > 0 && furnitureTileId !== doorTileId && furnitureTileId !== groundTileId) {
     const density =
-      furnitureDensity === undefined
-        ? 0.06
-        : Math.min(1, Math.max(0, furnitureDensity));
+      furnitureDensity === undefined ? 0.06 : Math.min(1, Math.max(0, furnitureDensity));
     const furnRand = mulberry32(furnitureScatterSeed(seed));
     furnitureCount = scatterFurnitureInRooms(
       rooms,

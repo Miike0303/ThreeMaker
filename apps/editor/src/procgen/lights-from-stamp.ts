@@ -70,9 +70,7 @@ export function mergeStampRoomLights(
   floorId: string,
   stampLights: readonly LightDocument[],
 ): readonly LightDocument[] {
-  const kept = existing.filter(
-    (light) => light.attach !== undefined || light.floor !== floorId,
-  );
+  const kept = existing.filter((light) => light.attach !== undefined || light.floor !== floorId);
   return [...kept, ...stampLights];
 }
 
@@ -110,8 +108,6 @@ export function ensurePlayerTorch(
   options: PlayerTorchOptions = {},
 ): readonly LightDocument[] {
   const torch = playerTorchLight(options);
-  const kept = existing.filter(
-    (light) => light.attach !== 'player' && light.id !== torch.id,
-  );
+  const kept = existing.filter((light) => light.attach !== 'player' && light.id !== torch.id);
   return [...kept, torch];
 }

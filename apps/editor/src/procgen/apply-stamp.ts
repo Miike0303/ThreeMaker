@@ -4,7 +4,7 @@
  */
 import type { MapDocument } from '@threemaker/map-format';
 import { assignSemanticClass } from '../semantic-store.js';
-import { pickMainRoomSpawn, type DungeonStampResult } from './dungeon-stamp.js';
+import { type DungeonStampResult, pickMainRoomSpawn } from './dungeon-stamp.js';
 import {
   ensurePlayerTorch,
   lightsFromDungeonRooms,
@@ -174,20 +174,10 @@ export function applyDungeonStampToMapDocument(
       if (adjacentFloor) {
         const entry = pickMainRoomSpawn(stamp.rooms, doc.width, doc.height);
         const exit = roomLandingTile(next.rooms, adjacentFloor.id, doc.width, doc.height);
-        const link = stampStairLinkBetween(
-          targetFloor.id,
-          entry,
-          adjacentFloor.id,
-          exit,
-        );
+        const link = stampStairLinkBetween(targetFloor.id, entry, adjacentFloor.id, exit);
         next = {
           ...next,
-          stairLinks: mergeStampStairLinks(
-            next.stairLinks,
-            targetFloor.id,
-            adjacentFloor.id,
-            link,
-          ),
+          stairLinks: mergeStampStairLinks(next.stairLinks, targetFloor.id, adjacentFloor.id, link),
         };
       }
     }

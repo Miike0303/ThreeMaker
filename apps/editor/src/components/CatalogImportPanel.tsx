@@ -150,7 +150,9 @@ export function CatalogImportPanel({ t, onImportComplete }: CatalogImportPanelPr
             disabled={importDisabled}
             onClick={() => void runImport(pathInput)}
           >
-            {panelState === 'importing' ? t('catalog.import.importingShort') : t('catalog.import.button')}
+            {panelState === 'importing'
+              ? t('catalog.import.importingShort')
+              : t('catalog.import.button')}
           </button>
         </div>
       </div>

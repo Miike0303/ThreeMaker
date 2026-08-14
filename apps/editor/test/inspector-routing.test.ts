@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  INSPECTOR_TAB_IDS,
   initialInspectorRoutingState,
   inspectorRoutingReducer,
   inspectorTabForTool,
-  INSPECTOR_TAB_IDS,
 } from '../src/inspector-routing.js';
 import type { ToolId } from '../src/tool-sm.js';
 
@@ -28,17 +28,19 @@ describe('inspectorRoutingReducer', () => {
       tab: 'events',
     });
 
-    expect(
-      inspectorRoutingReducer(manual, { type: 'tool-state-changed', tool: 'prop' }),
-    ).toEqual({ tab: 'events', manual: true });
+    expect(inspectorRoutingReducer(manual, { type: 'tool-state-changed', tool: 'prop' })).toEqual({
+      tab: 'events',
+      manual: true,
+    });
   });
 
   it('replaces a manual tab for an explicit tool selection', () => {
     const manual = { tab: 'ink', manual: true } as const;
 
-    expect(
-      inspectorRoutingReducer(manual, { type: 'explicit-tool', tool: 'room-box' }),
-    ).toEqual({ tab: 'map', manual: false });
+    expect(inspectorRoutingReducer(manual, { type: 'explicit-tool', tool: 'room-box' })).toEqual({
+      tab: 'map',
+      manual: false,
+    });
   });
 
   it('follows incidental tool changes when no manual choice is active', () => {

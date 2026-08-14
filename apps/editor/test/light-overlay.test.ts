@@ -2,9 +2,7 @@ import type { LightDocument } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import { computeLightOverlayPoints } from '../src/light-overlay.js';
 
-function placed(
-  overrides: Partial<LightDocument> & Pick<LightDocument, 'id'>,
-): LightDocument {
+function placed(overrides: Partial<LightDocument> & Pick<LightDocument, 'id'>): LightDocument {
   return {
     kind: 'point',
     color: '#ffaa00',

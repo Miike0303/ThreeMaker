@@ -429,9 +429,9 @@ describe('applyDungeonStampToMapDocument', () => {
       groundTileId: 2816,
       wallTileId: 4352,
     });
-    expect(() =>
-      applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 }),
-    ).toThrow(/target floor/i);
+    expect(() => applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 })).toThrow(
+      /target floor/i,
+    );
   });
 
   it('places a stair to the adjacent floor when multi-floor and requested', () => {

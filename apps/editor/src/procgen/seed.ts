@@ -58,6 +58,6 @@ export function pushProcgenSeedHistory(
 ): readonly number[] {
   const s = seed >>> 0;
   const cap = Math.max(1, Math.floor(max));
-  const rest = history.filter((h) => (h >>> 0) !== s).map((h) => h >>> 0);
+  const rest = history.filter((h) => h >>> 0 !== s).map((h) => h >>> 0);
   return [s, ...rest].slice(0, cap);
 }

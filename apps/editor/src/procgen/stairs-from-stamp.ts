@@ -76,11 +76,7 @@ export function stampStairLinkBetween(
   };
 }
 
-function linksConnectFloors(
-  link: StairLinkDocument,
-  floorA: string,
-  floorB: string,
-): boolean {
+function linksConnectFloors(link: StairLinkDocument, floorA: string, floorB: string): boolean {
   return (
     (link.fromFloor === floorA && link.toFloor === floorB) ||
     (link.fromFloor === floorB && link.toFloor === floorA)

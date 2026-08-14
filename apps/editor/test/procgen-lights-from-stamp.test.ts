@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import type { LightDocument } from '@threemaker/map-format';
+import { describe, expect, it } from 'vitest';
 import {
   dungeonRoomCenter,
   ensurePlayerTorch,

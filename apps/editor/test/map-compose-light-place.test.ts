@@ -373,10 +373,7 @@ describe('composeDocumentFromPainterFloors: placed lights (WU-LIGHT-01)', () => 
         },
       ],
     };
-    const composed = composeDocumentFromPainterFloors(
-      doc,
-      painterFloorsFromDocument(doc),
-    );
+    const composed = composeDocumentFromPainterFloors(doc, painterFloorsFromDocument(doc));
     const reparsed = parseMapDocument(JSON.parse(serializeMapDocument(composed)));
     expect(reparsed.lights.map((l) => l.id).sort()).toEqual(['ok', 'placed']);
   });

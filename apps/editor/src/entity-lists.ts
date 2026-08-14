@@ -42,9 +42,7 @@ export function pruneStairLinksForFloors(
   links: readonly StairLinkDocument[],
   floorIds: ReadonlySet<string>,
 ): readonly StairLinkDocument[] {
-  const next = links.filter(
-    (link) => floorIds.has(link.fromFloor) && floorIds.has(link.toFloor),
-  );
+  const next = links.filter((link) => floorIds.has(link.fromFloor) && floorIds.has(link.toFloor));
   return next.length === links.length ? links : next;
 }
 
@@ -57,7 +55,8 @@ export function pruneLightsForFloors(
   floorIds: ReadonlySet<string>,
 ): readonly LightDocument[] {
   const next = lights.filter(
-    (light) => light.attach !== undefined || (light.floor !== undefined && floorIds.has(light.floor)),
+    (light) =>
+      light.attach !== undefined || (light.floor !== undefined && floorIds.has(light.floor)),
   );
   return next.length === lights.length ? lights : next;
 }
@@ -277,10 +276,7 @@ export function pruneLightsForNpcs(
 ): readonly LightDocument[] {
   const npcIds = new Set(npcs.map((npc) => npc.id));
   const next = lights.filter(
-    (light) =>
-      light.attach === undefined ||
-      light.attach === 'player' ||
-      npcIds.has(light.attach),
+    (light) => light.attach === undefined || light.attach === 'player' || npcIds.has(light.attach),
   );
   return next.length === lights.length ? lights : next;
 }

@@ -56,12 +56,7 @@ describe('roomLandingTile', () => {
 
 describe('stampStairLinkBetween', () => {
   it('builds a bidirectional two-waypoint link with stable default id', () => {
-    const link = stampStairLinkBetween(
-      'floor-1',
-      { x: 3, y: 4 },
-      'floor-0',
-      { x: 5, y: 6 },
-    );
+    const link = stampStairLinkBetween('floor-1', { x: 3, y: 4 }, 'floor-0', { x: 5, y: 6 });
     expect(link).toEqual({
       id: 'stamp-stair-floor-1-floor-0',
       fromFloor: 'floor-1',
@@ -103,9 +98,13 @@ describe('countStampStairLinks (WU-PROC-19)', () => {
         { x: 1, y: 1, floor: 'floor-1' },
       ],
     };
-    expect(countStampStairLinks([stamp, authored, stampStairLinkBetween('a', { x: 0, y: 0 }, 'b', { x: 1, y: 1 })])).toBe(
-      2,
-    );
+    expect(
+      countStampStairLinks([
+        stamp,
+        authored,
+        stampStairLinkBetween('a', { x: 0, y: 0 }, 'b', { x: 1, y: 1 }),
+      ]),
+    ).toBe(2);
     expect(countStampStairLinks([])).toBe(0);
     expect(countStampStairLinks([authored])).toBe(0);
   });

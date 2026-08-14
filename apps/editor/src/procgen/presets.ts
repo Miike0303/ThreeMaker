@@ -71,9 +71,7 @@ export function getProcgenPreset(id: ProcgenPresetId): ProcgenPreset {
 }
 
 /** Map preset roomLight into stamp light options for apply. */
-export function stampRoomLightOptionsFromPreset(
-  preset: ProcgenPreset,
-): StampRoomLightOptions {
+export function stampRoomLightOptionsFromPreset(preset: ProcgenPreset): StampRoomLightOptions {
   return {
     color: preset.roomLight.color,
     intensity: preset.roomLight.intensity,

@@ -600,8 +600,7 @@ export function setFloorLabel(
   const floor = state.floors[index];
   if (!floor) return state;
 
-  const nextLabel =
-    label === undefined ? undefined : normalizeFloorLabel(label);
+  const nextLabel = label === undefined ? undefined : normalizeFloorLabel(label);
   if (floor.label === nextLabel) return state;
 
   const floors = state.floors.map((entry, i) => {
@@ -976,8 +975,7 @@ export function addRoom(state: PainterState, options: AddRoomOptions): PainterSt
   if (rects.length === 0) return state;
 
   // WU-UX-10: trim optional name; whitespace-only omits the key (schema-friendly).
-  const nextName =
-    options.name === undefined ? undefined : normalizeOptionalName(options.name);
+  const nextName = options.name === undefined ? undefined : normalizeOptionalName(options.name);
   const room: RoomDocument =
     nextName !== undefined
       ? { id: options.id, name: nextName, floor: floor.id, rects }
@@ -1496,9 +1494,7 @@ export function placeNpc(
   const floor = activeFloorState(state);
   const x = clampTileIndex(point.x, state.width);
   const y = clampTileIndex(point.y, state.height);
-  const occupied = state.npcs.some(
-    (npc) => npc.floor === floor.id && npc.x === x && npc.y === y,
-  );
+  const occupied = state.npcs.some((npc) => npc.floor === floor.id && npc.x === x && npc.y === y);
   if (occupied) return state;
 
   const id = nextNpcId(state.npcs);
@@ -1745,10 +1741,7 @@ export function nextLightId(lights: readonly LightDocument[]): string {
   return `light-${n}`;
 }
 
-export function setActiveLightKind(
-  state: PainterState,
-  kind: LightDocument['kind'],
-): PainterState {
+export function setActiveLightKind(state: PainterState, kind: LightDocument['kind']): PainterState {
   const idle = cancelStroke(state);
   if (kind !== 'point' && kind !== 'spot') return idle;
   return { ...idle, activeLightKind: kind };

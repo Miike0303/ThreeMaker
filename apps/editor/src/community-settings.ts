@@ -73,9 +73,7 @@ export type CommunityShareEnqueue = {
 };
 
 function isCommunityLicenseTag(value: unknown): value is CommunityLicenseTag {
-  return (
-    value === 'user-owned' || value === 'import-rpgm' || value === 'mixed'
-  );
+  return value === 'user-owned' || value === 'import-rpgm' || value === 'mixed';
 }
 
 /**
@@ -95,9 +93,7 @@ function normalizeShareEnqueue(value: unknown): CommunityShareEnqueue | null {
     return null;
   }
   const version =
-    typeof v.version === 'number' && Number.isFinite(v.version)
-      ? Math.trunc(v.version)
-      : 0;
+    typeof v.version === 'number' && Number.isFinite(v.version) ? Math.trunc(v.version) : 0;
   const licenseTag = isCommunityLicenseTag(v.licenseTag) ? v.licenseTag : 'user-owned';
   return {
     mapId: v.mapId,
@@ -144,7 +140,8 @@ export function pushCommunityShareQueue(
 
 /** Drop every offline share job (user "Clear queue" action). */
 export function clearCommunityShareQueue(
-  storage: Pick<Storage, 'setItem'> & Partial<Pick<Storage, 'removeItem'>> = globalThis.localStorage,
+  storage: Pick<Storage, 'setItem'> &
+    Partial<Pick<Storage, 'removeItem'>> = globalThis.localStorage,
 ): readonly CommunityShareEnqueue[] {
   if (typeof storage.removeItem === 'function') {
     storage.removeItem(QUEUE_STORAGE_KEY);
@@ -254,9 +251,7 @@ export function formatCommunityShareAt(at: string, locale?: string): string {
  * Count unique non-empty tile object shas on a share job (WU-COMM-10).
  * Duplicates and blank entries do not inflate the queue row badge.
  */
-export function communityShareTileCount(
-  tileObjectShas: readonly string[],
-): number {
+export function communityShareTileCount(tileObjectShas: readonly string[]): number {
   const seen = new Set<string>();
   for (const sha of tileObjectShas) {
     if (typeof sha === 'string' && sha.length > 0) seen.add(sha);
@@ -424,8 +419,7 @@ export function maybeEnqueueCommunityShare(
       ? Math.trunc(input.version)
       : 0;
   const licenseTag =
-    input.licenseTag ??
-    (input.usesOnlyImportedAssets ? 'import-rpgm' : 'user-owned');
+    input.licenseTag ?? (input.usesOnlyImportedAssets ? 'import-rpgm' : 'user-owned');
   return {
     mapId: input.mapId,
     mapName: input.mapName,

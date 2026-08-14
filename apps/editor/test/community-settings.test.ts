@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
-  clearCommunityShareQueue,
   COMMUNITY_SHARE_QUEUE_MAX,
-  DEFAULT_COMMUNITY_SETTINGS,
-  describeCommunityShareStatus,
-  communityShareTileCount,
+  type CommunityShareEnqueue,
+  clearCommunityShareQueue,
   communityShareQueueLicenseCounts,
   communityShareQueueTileTotal,
+  communityShareTileCount,
+  DEFAULT_COMMUNITY_SETTINGS,
+  describeCommunityShareStatus,
   formatCommunityShareAt,
   formatCommunityShareMapId,
+  licenseTagFromSlots,
   loadCommunitySettings,
   loadCommunityShareQueue,
   maybeEnqueueCommunityShare,
@@ -18,9 +20,7 @@ import {
   replaceCommunityShareQueue,
   saveCommunitySettings,
   serializeCommunityShareQueue,
-  licenseTagFromSlots,
   usesOnlyImportedSlotSources,
-  type CommunityShareEnqueue,
 } from '../src/community-settings.js';
 
 function memoryStorage(initial: Record<string, string> = {}) {
@@ -154,11 +154,7 @@ describe('formatCommunityShareMapId (WU-COMM-11)', () => {
 describe('communityShareQueueTileTotal (WU-COMM-12)', () => {
   it('returns 0 for empty queue and blank-only shas', () => {
     expect(communityShareQueueTileTotal([])).toBe(0);
-    expect(
-      communityShareQueueTileTotal([
-        { ...sampleJob('a'), tileObjectShas: ['', ''] },
-      ]),
-    ).toBe(0);
+    expect(communityShareQueueTileTotal([{ ...sampleJob('a'), tileObjectShas: ['', ''] }])).toBe(0);
   });
 
   it('unions unique non-empty shas across jobs (no per-job sum)', () => {
@@ -172,9 +168,7 @@ describe('communityShareQueueTileTotal (WU-COMM-12)', () => {
         { ...sampleJob('3'), tileObjectShas: [c, a] },
       ]),
     ).toBe(3);
-    expect(
-      communityShareQueueTileTotal([{ ...sampleJob('solo'), tileObjectShas: [a] }]),
-    ).toBe(1);
+    expect(communityShareQueueTileTotal([{ ...sampleJob('solo'), tileObjectShas: [a] }])).toBe(1);
   });
 });
 
@@ -198,9 +192,7 @@ describe('communityShareQueueLicenseCounts (WU-COMM-13)', () => {
 
   it('keeps a single-tag queue to one entry', () => {
     expect(
-      communityShareQueueLicenseCounts([
-        { ...sampleJob('1'), licenseTag: 'import-rpgm' },
-      ]),
+      communityShareQueueLicenseCounts([{ ...sampleJob('1'), licenseTag: 'import-rpgm' }]),
     ).toEqual([{ tag: 'import-rpgm', count: 1 }]);
   });
 });
@@ -240,9 +232,7 @@ describe('licenseTagFromSlots (WU-COMM-07)', () => {
   it('classifies empty, user-owned, import-rpgm, and mixed', () => {
     expect(licenseTagFromSlots({})).toBe('user-owned');
     expect(licenseTagFromSlots({ A: { object: SHA } })).toBe('user-owned');
-    expect(
-      licenseTagFromSlots({ A: { object: SHA, sourceGameId: 1 } }),
-    ).toBe('import-rpgm');
+    expect(licenseTagFromSlots({ A: { object: SHA, sourceGameId: 1 } })).toBe('import-rpgm');
     expect(
       licenseTagFromSlots({
         A: { object: SHA, sourceGameId: 1 },
@@ -313,10 +303,7 @@ describe('community share offline queue', () => {
     // newest first: c, b, a (one job per mapId)
     expect(loadCommunityShareQueue(storage).map((j) => j.mapId)).toEqual(['c', 'b', 'a']);
     const after = removeCommunityShareQueueJob('b', b.at, storage);
-    expect(after.map((j) => `${j.mapId}:${j.at}`)).toEqual([
-      `c:${c.at}`,
-      `a:${a.at}`,
-    ]);
+    expect(after.map((j) => `${j.mapId}:${j.at}`)).toEqual([`c:${c.at}`, `a:${a.at}`]);
     expect(removeCommunityShareQueueJob('missing', a.at, storage)).toEqual(after);
     expect(loadCommunityShareQueue(storage).map((j) => j.mapId)).toEqual(['c', 'a']);
   });
@@ -396,10 +383,9 @@ describe('community share offline queue', () => {
 describe('describeCommunityShareStatus', () => {
   it('reports off when shareOnSave is false', () => {
     expect(
-      describeCommunityShareStatus(
-        { shareOnSave: false, allowImportedAssets: false },
-        [sampleJob('a')],
-      ),
+      describeCommunityShareStatus({ shareOnSave: false, allowImportedAssets: false }, [
+        sampleJob('a'),
+      ]),
     ).toEqual({ kind: 'off', queueLength: 1, lastMapName: 'Map a' });
   });
 
@@ -412,10 +398,7 @@ describe('describeCommunityShareStatus', () => {
 
   it('reports queued with last map when on and queue non-empty', () => {
     expect(
-      describeCommunityShareStatus(DEFAULT_COMMUNITY_SETTINGS, [
-        sampleJob('z'),
-        sampleJob('y'),
-      ]),
+      describeCommunityShareStatus(DEFAULT_COMMUNITY_SETTINGS, [sampleJob('z'), sampleJob('y')]),
     ).toEqual({ kind: 'queued', queueLength: 2, lastMapName: 'Map z' });
   });
 });

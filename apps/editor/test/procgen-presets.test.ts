@@ -4,8 +4,8 @@ import {
   DEFAULT_PROCGEN_PRESET,
   getProcgenPreset,
   PROCGEN_PRESETS,
-  stampRoomLightOptionsFromPreset,
   type ProcgenPresetId,
+  stampRoomLightOptionsFromPreset,
 } from '../src/procgen/presets.js';
 
 const GROUND = 2816;
