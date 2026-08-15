@@ -101,14 +101,82 @@ export function dirtyRectToChunkKeys(rect: TileRect, chunkSize: number): Readonl
   return keys;
 }
 
-/** Full pipeline: touched cells -> +1-margin bounding rect -> north-through-stars expansion -> dirty chunk keys. */
+/**
+ * Union of each painted cell's +1-margin rect, rather than one bounding rect
+ * over the whole stroke. Star expansion is computed once per distinct column
+ * from that column's topmost painted cell — a per-cell walk would be
+ * O(cells × map height) and a flood fill would get slower than the old AABB.
+ *
+ * Most cells cannot dirty anything but their own chunk: a ±1 rect only
+ * crosses a boundary within 1 tile of one, and a flood fill's interior is
+ * that thin frame's complement. Those cells add their own key and skip
+ * per-cell rect/Set allocation. A column whose star expansion reaches above
+ * a cell's chunk still takes the full path.
+ */
 export function computeDirtyChunkKeys(
   cells: readonly TilePoint[],
   map: RpgmMap,
   tileset: RpgmTileset,
   chunkSize: number,
 ): ReadonlySet<string> {
-  const rect = computeDirtyTileRect(cells, map.width, map.height);
-  const expanded = expandDirtyRectNorthThroughStars(rect, map, tileset);
-  return dirtyRectToChunkKeys(expanded, chunkSize);
+  const keys = new Set<string>();
+  if (cells.length === 0) return keys;
+
+  const minYByColumn = new Map<number, number>();
+  const maxYByColumn = new Map<number, number>();
+  for (const cell of cells) {
+    const prevMin = minYByColumn.get(cell.x);
+    if (prevMin === undefined || cell.y < prevMin) minYByColumn.set(cell.x, cell.y);
+    const prevMax = maxYByColumn.get(cell.x);
+    if (prevMax === undefined || cell.y > prevMax) maxYByColumn.set(cell.x, cell.y);
+  }
+
+  const expandedYStartByColumn = new Map<number, number>();
+  for (const [x, minY] of minYByColumn) {
+    const rect = computeDirtyTileRect([{ x, y: minY }], map.width, map.height);
+    expandedYStartByColumn.set(x, expandDirtyRectNorthThroughStars(rect, map, tileset).yStart);
+  }
+
+  const needsFullColumn = new Set<number>();
+  for (const cell of cells) {
+    const { x, y } = cell;
+    const chunkX = Math.floor(x / chunkSize);
+    const chunkY = Math.floor(y / chunkSize);
+    const chunkTopY = chunkY * chunkSize;
+    const expandedYStart = expandedYStartByColumn.get(x) ?? Math.max(0, y - 1);
+
+    if (
+      Math.floor((x - 1) / chunkSize) === chunkX &&
+      Math.floor((x + 1) / chunkSize) === chunkX &&
+      Math.floor((y + 1) / chunkSize) === chunkY &&
+      expandedYStart >= chunkTopY
+    ) {
+      keys.add(`${chunkX},${chunkY}`);
+      continue;
+    }
+
+    needsFullColumn.add(x);
+  }
+
+  // Union of each remaining cell's stretched rect in a column is one rect
+  // (same x±1, y from the column's expanded yStart to the lowest cell + 1).
+  for (const x of needsFullColumn) {
+    const minY = minYByColumn.get(x);
+    const maxY = maxYByColumn.get(x);
+    if (minY === undefined || maxY === undefined) continue;
+    const rect = computeDirtyTileRect(
+      [
+        { x, y: minY },
+        { x, y: maxY },
+      ],
+      map.width,
+      map.height,
+    );
+    const expanded = {
+      ...rect,
+      yStart: expandedYStartByColumn.get(x) ?? rect.yStart,
+    };
+    for (const key of dirtyRectToChunkKeys(expanded, chunkSize)) keys.add(key);
+  }
+  return keys;
 }

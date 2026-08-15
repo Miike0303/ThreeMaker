@@ -166,4 +166,128 @@ describe('computeDirtyChunkKeys (full pipeline)', () => {
     // that margin here, but the north-expansion is exercised directly above.
     expect(keys.size).toBeGreaterThan(0);
   });
+
+  it('a corner-to-corner stroke on a 64x64 map does not dirty interior chunk 1,1', () => {
+    const width = 64;
+    const height = 64;
+    const map = makeMap(width, height, new Array(width * height).fill(1));
+    const tileset = makeTileset();
+    const keys = computeDirtyChunkKeys(
+      [
+        { x: 0, y: 0 },
+        { x: 63, y: 63 },
+      ],
+      map,
+      tileset,
+      16,
+    );
+
+    expect(keys.has('1,1')).toBe(false);
+    expect(keys.size).toBeLessThanOrEqual(8);
+  });
+
+  it('a cell on a chunk boundary still dirties the adjacent chunk', () => {
+    const width = 64;
+    const height = 64;
+    const map = makeMap(width, height, new Array(width * height).fill(1));
+    const tileset = makeTileset();
+    const keys = computeDirtyChunkKeys([{ x: 16, y: 8 }], map, tileset, 16);
+
+    expect(keys.has('0,0')).toBe(true);
+    expect(keys.has('1,0')).toBe(true);
+  });
+
+  it('editing a base tile dirties star tiles stacked north of it in that column', () => {
+    const width = 32;
+    const height = 32;
+    const layer0 = new Array(width * height).fill(1);
+    // Contiguous star run in column 16 from the map top through row 15, so the
+    // ±1 margin of the base at (16, 17) stays in chunk Y=1 and only the star
+    // walk reaches chunk Y=0.
+    for (let y = 0; y <= 15; y++) layer0[y * width + 16] = 2;
+    const map = makeMap(width, height, layer0);
+    const tileset = makeTileset([2]);
+
+    const keys = computeDirtyChunkKeys([{ x: 16, y: 17 }], map, tileset, 16);
+
+    expect(keys.has('1,0')).toBe(true);
+  });
+
+  it('a full-map fill dirties every chunk', () => {
+    const width = 64;
+    const height = 64;
+    const map = makeMap(width, height, new Array(width * height).fill(1));
+    const tileset = makeTileset();
+    const cells: { x: number; y: number }[] = [];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        cells.push({ x, y });
+      }
+    }
+
+    const keys = computeDirtyChunkKeys(cells, map, tileset, 16);
+    const fullMapKeys = dirtyRectToChunkKeys(
+      { xStart: 0, yStart: 0, xEnd: width, yEnd: height },
+      16,
+    );
+
+    expect([...keys].sort()).toEqual([...fullMapKeys].sort());
+  });
+
+  it('interior fast path matches per-cell keys on a map with star tiles', () => {
+    const width = 64;
+    const height = 64;
+    const chunkSize = 16;
+    const layer0 = new Array(width * height).fill(1);
+    // Contiguous star run that crosses a chunk boundary in one column.
+    for (let y = 0; y <= 15; y++) layer0[y * width + 20] = 2;
+    const map = makeMap(width, height, layer0);
+    const tileset = makeTileset([2]);
+
+    const perCellUnion = (cells: readonly { x: number; y: number }[]) => {
+      const keys = new Set<string>();
+      const minYByColumn = new Map<number, number>();
+      for (const cell of cells) {
+        const prev = minYByColumn.get(cell.x);
+        if (prev === undefined || cell.y < prev) minYByColumn.set(cell.x, cell.y);
+      }
+      const expandedYStartByColumn = new Map<number, number>();
+      for (const [x, minY] of minYByColumn) {
+        const rect = computeDirtyTileRect([{ x, y: minY }], width, height);
+        expandedYStartByColumn.set(x, expandDirtyRectNorthThroughStars(rect, map, tileset).yStart);
+      }
+      for (const cell of cells) {
+        const rect = computeDirtyTileRect([cell], width, height);
+        const expanded = {
+          ...rect,
+          yStart: expandedYStartByColumn.get(cell.x) ?? rect.yStart,
+        };
+        for (const key of dirtyRectToChunkKeys(expanded, chunkSize)) keys.add(key);
+      }
+      return keys;
+    };
+
+    const fillCells: { x: number; y: number }[] = [];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        fillCells.push({ x, y });
+      }
+    }
+    const fillKeys = computeDirtyChunkKeys(fillCells, map, tileset, chunkSize);
+    const fullMapKeys = dirtyRectToChunkKeys(
+      { xStart: 0, yStart: 0, xEnd: width, yEnd: height },
+      chunkSize,
+    );
+    expect([...fillKeys].sort()).toEqual([...fullMapKeys].sort());
+    expect([...fillKeys].sort()).toEqual([...perCellUnion(fillCells)].sort());
+
+    const diagonal: { x: number; y: number }[] = [];
+    for (let i = 0; i < width; i++) diagonal.push({ x: i, y: i });
+    const diagonalKeys = computeDirtyChunkKeys(diagonal, map, tileset, chunkSize);
+    for (const cell of diagonal) {
+      const ownKey = `${Math.floor(cell.x / chunkSize)},${Math.floor(cell.y / chunkSize)}`;
+      expect(diagonalKeys.has(ownKey)).toBe(true);
+    }
+    expect([...diagonalKeys].sort()).toEqual([...perCellUnion(diagonal)].sort());
+  });
 });
