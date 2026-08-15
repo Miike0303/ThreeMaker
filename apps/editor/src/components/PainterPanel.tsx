@@ -66,7 +66,7 @@ import {
 } from '../event-form-helpers.js';
 import { formatSpawnSummary, resolveFloorLabel } from '../floor-label.js';
 import { formatTemplate } from '../format-template.js';
-import { GlbIngestError, type GlbIngestFs, ingestGlbBytes } from '../glb-ingest.js';
+import { GlbIngestError, type GlbIngestFs, ingestBytes, ingestGlbBytes } from '../glb-ingest.js';
 import {
   isSafeStoryId,
   listInkKnots,
@@ -121,7 +121,9 @@ import {
   buildPlaceholderTextures,
   PLACEHOLDER_GROUND_TILE_ID,
   type PlaceholderPaletteUrls,
+  placeholderSheetPngBytes,
   revokePlaceholderPaletteUrls,
+  stampPlaceholderSlotObjects,
 } from '../placeholder-tileset.js';
 import { openPlaytest, PlaytestClientError } from '../playtest-client.js';
 import { applyDungeonStampToMapDocument } from '../procgen/apply-stamp.js';
@@ -689,13 +691,28 @@ export function PainterPanel({ t }: PainterPanelProps) {
     clearStatus();
     setCreatingMap(true);
     try {
-      const doc = composePlaceholderMap({
+      let doc = composePlaceholderMap({
         id: crypto.randomUUID(),
         name,
         width,
         height,
       });
       const built = buildPlaceholderTextures(doc.tileset.tilePixelSize);
+      // Tauri: stamp deterministic A5/B PNGs into the asset store so save/reload
+      // can resolve floor textures. Browser dev has no plugin-fs store root —
+      // keep empty slots and session-only textures (same as pre-stamp compose).
+      if (isTauriAvailable()) {
+        const deps = await buildTauriGlbIngestDeps();
+        const tilePx = doc.tileset.tilePixelSize;
+        const [a5Ingest, bIngest] = await Promise.all([
+          ingestBytes(placeholderSheetPngBytes('A5', tilePx), deps),
+          ingestBytes(placeholderSheetPngBytes('B', tilePx), deps),
+        ]);
+        doc = stampPlaceholderSlotObjects(doc, {
+          A5: a5Ingest.sha256,
+          B: bIngest.sha256,
+        });
+      }
       revokePlaceholderPaletteUrls(placeholderPaletteUrlsRef.current);
       placeholderPaletteUrlsRef.current = built.paletteUrls;
       viewportRef.current?.loadMap(

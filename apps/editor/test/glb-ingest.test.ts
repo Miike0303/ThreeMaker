@@ -3,9 +3,11 @@ import {
   GlbIngestError,
   type GlbIngestFs,
   hashBytesSha256,
-  type IngestGlbDeps,
+  type IngestBytesDeps,
+  ingestBytes,
   ingestGlbBytes,
   objectPathForSha,
+  storeObjectBytes,
 } from '../src/glb-ingest.js';
 
 /** Minimal byte sequence starting with the binary glTF magic (not a full glb). */
@@ -14,6 +16,9 @@ const GLB_BYTES = new Uint8Array([
 ]);
 /** Precomputed SHA-256 of `GLB_BYTES` (Node crypto, fixed vector for this WU). */
 const GLB_SHA256 = 'd1169383004dc21493073903d918af69ad087b1778746e2db7dac83077f3cfc6';
+
+/** Arbitrary non-glb payload (starter PNG path uses the same store). */
+const PNGISH_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01]);
 
 function makeFakeFs(options: { existing?: ReadonlySet<string> } = {}): GlbIngestFs & {
   readonly calls: string[];
@@ -48,7 +53,7 @@ function makeFakeFs(options: { existing?: ReadonlySet<string> } = {}): GlbIngest
   };
 }
 
-function depsOf(fs: GlbIngestFs, overrides: Partial<IngestGlbDeps> = {}): IngestGlbDeps {
+function depsOf(fs: GlbIngestFs, overrides: Partial<IngestBytesDeps> = {}): IngestBytesDeps {
   return {
     storeRoot: '/store',
     fs,
@@ -69,6 +74,33 @@ describe('hashBytesSha256 / objectPathForSha', () => {
     expect(objectPathForSha('/store/', GLB_SHA256)).toBe(
       `/store/objects/${GLB_SHA256.slice(0, 2)}/${GLB_SHA256}`,
     );
+  });
+});
+
+describe('ingestBytes / storeObjectBytes', () => {
+  it('hashes arbitrary bytes, writes objects/{sha[0:2]}/{sha}, and dedupes on second call', async () => {
+    const fs = makeFakeFs();
+    const deps = depsOf(fs);
+    const sha = await hashBytesSha256(PNGISH_BYTES);
+    const finalPath = objectPathForSha('/store', sha);
+    const fanOutDir = `/store/objects/${sha.slice(0, 2)}`;
+    const tmpPath = `${finalPath}.tmp-fixed`;
+
+    const first = await ingestBytes(PNGISH_BYTES, deps);
+    expect(first).toEqual({ sha256: sha, created: true });
+    expect(sha).toMatch(/^[0-9a-f]{64}$/);
+    expect(fs.calls).toEqual([
+      `exists:${finalPath}`,
+      `mkdir:${fanOutDir}:recursive=true`,
+      `writeFile:${tmpPath}`,
+      `rename:${tmpPath}->${finalPath}`,
+    ]);
+    expect(fs.written.get(finalPath)).toEqual(PNGISH_BYTES);
+
+    fs.calls.length = 0;
+    const second = await storeObjectBytes(PNGISH_BYTES, deps);
+    expect(second).toEqual({ sha256: sha, created: false });
+    expect(fs.calls).toEqual([`exists:${finalPath}`]);
   });
 });
 
@@ -116,5 +148,11 @@ describe('ingestGlbBytes', () => {
     expect(result).toEqual({ sha256: GLB_SHA256, created: false });
     expect(fs.calls).toEqual([`exists:${finalPath}`]);
     expect(fs.written.size).toBe(0);
+  });
+
+  it('still rejects PNG-like bytes that ingestBytes would accept', async () => {
+    const fs = makeFakeFs();
+    await expect(ingestGlbBytes(PNGISH_BYTES, depsOf(fs))).rejects.toThrow(GlbIngestError);
+    expect(fs.calls).toEqual([]);
   });
 });

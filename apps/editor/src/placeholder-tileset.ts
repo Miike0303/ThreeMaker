@@ -2,12 +2,13 @@
  * In-memory starter tilesheets for painting without an RPG Maker catalog.
  * Builds plain A5 (ground) + B (decor) DataTextures only — no A2 autotile layout.
  *
- * Follow-up: maps composed here omit real catalog `object` shas on slots. Save
- * works as JSON, but desktop reload cannot resolve those textures until a later
- * slice persists starter sheets into the object store (or embeds them).
+ * Desktop create path stamps A5/B PNG bytes into the content-addressed asset
+ * store and patches `doc.tileset.slots.*.object` so save/reload can resolve
+ * textures. Browser-only sessions keep empty slots (session textures only).
  */
 
 import type { TileSheetId } from '@threemaker/importer-rpgm';
+import type { MapDocument, SlotSource } from '@threemaker/map-format';
 import { configurePixelArtTexture, type SheetPixelSizes, TILE_SIZE_PX } from '@threemaker/renderer';
 import * as THREE from 'three/webgpu';
 
@@ -68,27 +69,96 @@ function cellRgba(even: Rgba, odd: Rgba, col: number, row: number): Rgba {
   return (col + row) % 2 === 0 ? even : odd;
 }
 
-function buildSheetTexture(
-  cols: number,
-  rows: number,
-  even: Rgba,
-  odd: Rgba,
+export type PlaceholderSheetSlot = 'A5' | 'B';
+
+export interface PlaceholderSheetRgba {
+  readonly width: number;
+  readonly height: number;
+  readonly rgba: Uint8Array;
+}
+
+function sheetGrid(slot: PlaceholderSheetSlot): {
+  readonly cols: number;
+  readonly rows: number;
+  readonly even: Rgba;
+  readonly odd: Rgba;
+} {
+  if (slot === 'A5') {
+    return { cols: PLACEHOLDER_A5_COLS, rows: PLACEHOLDER_A5_ROWS, even: A5_EVEN, odd: A5_ODD };
+  }
+  return { cols: PLACEHOLDER_B_COLS, rows: PLACEHOLDER_B_ROWS, even: B_EVEN, odd: B_ODD };
+}
+
+/** Same checkerboard paint path as GPU textures, as raw RGBA (row-major, top-left origin). */
+export function buildPlaceholderSheetRgba(
+  slot: PlaceholderSheetSlot,
   tilePx: number = PLACEHOLDER_TILE_PIXEL_SIZE,
-): THREE.DataTexture {
-  const widthPx = cols * tilePx;
-  const heightPx = rows * tilePx;
-  const data = new Uint8Array(widthPx * heightPx * 4);
+): PlaceholderSheetRgba {
+  const { cols, rows, even, odd } = sheetGrid(slot);
+  const width = cols * tilePx;
+  const height = rows * tilePx;
+  const rgba = new Uint8Array(width * height * 4);
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      paintCell(data, widthPx, col, row, tilePx, cellRgba(even, odd, col, row));
+      paintCell(rgba, width, col, row, tilePx, cellRgba(even, odd, col, row));
     }
   }
-  const texture = new THREE.DataTexture(data, widthPx, heightPx);
+  return { width, height, rgba };
+}
+
+/** Deterministic PNG bytes for a starter A5/B sheet (object-store payload). */
+export function placeholderSheetPngBytes(
+  slot: PlaceholderSheetSlot,
+  tilePx: number = PLACEHOLDER_TILE_PIXEL_SIZE,
+): Uint8Array {
+  const sheet = buildPlaceholderSheetRgba(slot, tilePx);
+  return encodeRgbaPng(sheet.width, sheet.height, sheet.rgba);
+}
+
+function buildSheetTexture(
+  slot: PlaceholderSheetSlot,
+  tilePx: number = PLACEHOLDER_TILE_PIXEL_SIZE,
+): THREE.DataTexture {
+  const { width, height, rgba } = buildPlaceholderSheetRgba(slot, tilePx);
+  const texture = new THREE.DataTexture(rgba, width, height);
   // Match TextureLoader defaults (row 0 = top), opposite of DataTexture's raw default.
   texture.flipY = true;
   texture.needsUpdate = true;
   configurePixelArtTexture(texture);
   return texture;
+}
+
+export interface PlaceholderSlotObjectShas {
+  readonly A5: string;
+  readonly B: string;
+}
+
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+/**
+ * Patches starter A5/B slots with content-addressed object shas. Compose stays
+ * pure (empty slots); the create site stamps after ingest.
+ */
+export function stampPlaceholderSlotObjects(
+  doc: MapDocument,
+  shas: PlaceholderSlotObjectShas,
+): MapDocument {
+  if (!SHA256_HEX.test(shas.A5) || !SHA256_HEX.test(shas.B)) {
+    throw new Error('stampPlaceholderSlotObjects: A5/B object shas must be 64 lowercase hex chars');
+  }
+  const a5: SlotSource = { ...(doc.tileset.slots.A5 ?? {}), object: shas.A5 };
+  const b: SlotSource = { ...(doc.tileset.slots.B ?? {}), object: shas.B };
+  return {
+    ...doc,
+    tileset: {
+      ...doc.tileset,
+      slots: {
+        ...doc.tileset.slots,
+        A5: a5,
+        B: b,
+      },
+    },
+  };
 }
 
 /** CRC-32 (ISO 3309 / PNG) over `bytes`. */
@@ -240,14 +310,8 @@ export function revokePlaceholderPaletteUrls(
 export function buildPlaceholderTextures(
   tilePixelSize: number = PLACEHOLDER_TILE_PIXEL_SIZE,
 ): PlaceholderTextures {
-  const a5 = buildSheetTexture(
-    PLACEHOLDER_A5_COLS,
-    PLACEHOLDER_A5_ROWS,
-    A5_EVEN,
-    A5_ODD,
-    tilePixelSize,
-  );
-  const b = buildSheetTexture(PLACEHOLDER_B_COLS, PLACEHOLDER_B_ROWS, B_EVEN, B_ODD, tilePixelSize);
+  const a5 = buildSheetTexture('A5', tilePixelSize);
+  const b = buildSheetTexture('B', tilePixelSize);
   const sheetPixelSizes: SheetPixelSizes = {
     A5: { width: PLACEHOLDER_A5_COLS * tilePixelSize, height: PLACEHOLDER_A5_ROWS * tilePixelSize },
     B: { width: PLACEHOLDER_B_COLS * tilePixelSize, height: PLACEHOLDER_B_ROWS * tilePixelSize },

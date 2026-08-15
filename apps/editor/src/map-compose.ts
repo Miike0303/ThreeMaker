@@ -391,10 +391,11 @@ export interface ComposePlaceholderMapOptions {
 }
 
 /**
- * Session-only starter map using code-generated A5/B sheets (no catalog object
- * sha). Flags stay all-zero (= fully passable). Save/reload without object sha
- * will not resolve textures in desktop yet — pair with `buildPlaceholderTextures`
- * for the live painter session only.
+ * Starter map using code-generated A5/B sheets. Compose stays pure: slots are
+ * empty (`object` unset). The desktop create path stamps real asset-store shas
+ * via `stampPlaceholderSlotObjects` after PNG ingest; browser sessions keep
+ * empty slots and pair with `buildPlaceholderTextures` for the live session.
+ * Flags stay all-zero (= fully passable).
  */
 export function composePlaceholderMap(options: ComposePlaceholderMapOptions): MapDocument {
   const { id, name, width, height } = options;

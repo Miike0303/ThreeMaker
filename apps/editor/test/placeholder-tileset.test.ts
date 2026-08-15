@@ -15,7 +15,9 @@ import {
   PLACEHOLDER_DECOR_TILE_ID,
   PLACEHOLDER_GROUND_TILE_ID,
   PLACEHOLDER_TILE_PIXEL_SIZE,
+  placeholderSheetPngBytes,
   revokePlaceholderPaletteUrls,
+  stampPlaceholderSlotObjects,
 } from '../src/placeholder-tileset.js';
 
 describe('buildPlaceholderTextures', () => {
@@ -113,9 +115,33 @@ describe('composePlaceholderMap', () => {
     expect(ground?.every((id) => id === PLACEHOLDER_GROUND_TILE_ID)).toBe(true);
     expect(doc.tileset.flags).toHaveLength(8192);
     expect(doc.tileset.flags.every((f) => f === 0)).toBe(true);
+    // Compose stays pure: empty slots until the create site stamps shas.
     expect(doc.tileset.slots.A5).toEqual({});
     expect(doc.tileset.slots.B).toEqual({});
     expect(doc.tileset.slots.A5?.object).toBeUndefined();
+    expect(doc.tileset.slots.B?.object).toBeUndefined();
+  });
+
+  it('stampPlaceholderSlotObjects sets A5/B.object to 64-hex shas', () => {
+    const doc = composePlaceholderMap({
+      id: 'starter-stamp',
+      name: 'Starter',
+      width: 2,
+      height: 2,
+    });
+    const a5 = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const b = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const stamped = stampPlaceholderSlotObjects(doc, { A5: a5, B: b });
+    expect(stamped.tileset.slots.A5?.object).toBe(a5);
+    expect(stamped.tileset.slots.B?.object).toBe(b);
+    expect(doc.tileset.slots.A5?.object).toBeUndefined();
+  });
+
+  it('placeholderSheetPngBytes emits a PNG signature for A5 and B', () => {
+    for (const slot of ['A5', 'B'] as const) {
+      const png = placeholderSheetPngBytes(slot);
+      expect(Array.from(png.subarray(0, 8))).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    }
   });
 
   it('toRenderableMap does not throw on a placeholder document', () => {

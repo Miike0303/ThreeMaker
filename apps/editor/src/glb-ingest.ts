@@ -1,8 +1,9 @@
 /**
- * Browser-side port of `packages/assets`'s `storeObject` for authored `.glb`
- * props (C5 WU-04 depth-props-hd). Pure over injectable fs deps so unit tests
- * never need Tauri; the panel wires `@tauri-apps/plugin-fs` + Home-relative
- * paths under `.threemaker/asset-store/objects/**` (see the matching
+ * Browser-side port of `packages/assets`'s `storeObject` for content-addressed
+ * authoring artifacts (`.glb` props, starter tilesheet PNGs, …). Pure over
+ * injectable fs deps so unit tests never need Tauri; the panel wires
+ * `@tauri-apps/plugin-fs` + Home-relative paths under
+ * `.threemaker/asset-store/objects/**` (see the matching
  * `fs:allow-write-file` / mkdir / rename / exists grants in
  * `src-tauri/capabilities/default.json` -- the narrowest write boundary for
  * content-addressed object ingestion, mirroring maps/** write for save).
@@ -33,7 +34,7 @@ export interface GlbIngestFs {
   readonly rename: (from: string, to: string) => Promise<void>;
 }
 
-export interface IngestGlbDeps {
+export interface IngestBytesDeps {
   /** Absolute or relative root of the asset store (the directory that contains `objects/`). */
   readonly storeRoot: string;
   readonly fs: GlbIngestFs;
@@ -41,11 +42,17 @@ export interface IngestGlbDeps {
   readonly randomSuffix?: () => string;
 }
 
-export interface IngestGlbResult {
+/** @deprecated Prefer `IngestBytesDeps` — kept as an alias for existing glb call sites. */
+export type IngestGlbDeps = IngestBytesDeps;
+
+export interface IngestBytesResult {
   readonly sha256: string;
   /** `false` when this content was already present (dedupe hit). */
   readonly created: boolean;
 }
+
+/** @deprecated Prefer `IngestBytesResult` — kept as an alias for existing glb call sites. */
+export type IngestGlbResult = IngestBytesResult;
 
 /** Content-addressed object path under `storeRoot`, matching Node `objectPath`. */
 export function objectPathForSha(storeRoot: string, sha256: string): string {
@@ -84,16 +91,14 @@ function assertGlbMagic(bytes: Uint8Array): void {
 }
 
 /**
- * Validates the glb container magic, content-addresses `bytes`, and stores
- * them under the asset-store object tree. Rejects non-glb input BEFORE any
- * write. Dedupe: if the object path already exists, returns without writing.
+ * Content-addresses `bytes` and stores them under the asset-store object tree
+ * with no format gate. Dedupe: if the object path already exists, returns
+ * without writing.
  */
-export async function ingestGlbBytes(
+export async function ingestBytes(
   bytes: Uint8Array,
-  deps: IngestGlbDeps,
-): Promise<IngestGlbResult> {
-  assertGlbMagic(bytes);
-
+  deps: IngestBytesDeps,
+): Promise<IngestBytesResult> {
   const sha256 = await hashBytesSha256(bytes);
   const path = objectPathForSha(deps.storeRoot, sha256);
 
@@ -113,4 +118,19 @@ export async function ingestGlbBytes(
   await deps.fs.rename(tmpPath, path);
 
   return { sha256, created: true };
+}
+
+/** Alias of `ingestBytes` matching the Node `storeObject` name. */
+export const storeObjectBytes = ingestBytes;
+
+/**
+ * Validates the glb container magic, then content-addresses and stores `bytes`
+ * under the asset-store object tree. Rejects non-glb input BEFORE any write.
+ */
+export async function ingestGlbBytes(
+  bytes: Uint8Array,
+  deps: IngestGlbDeps,
+): Promise<IngestGlbResult> {
+  assertGlbMagic(bytes);
+  return ingestBytes(bytes, deps);
 }
