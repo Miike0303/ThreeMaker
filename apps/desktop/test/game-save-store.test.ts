@@ -76,10 +76,20 @@ describe('game-save-store', () => {
 
   it('round-trips a snapshot through localStorage', async () => {
     const storage = memoryStorage();
-    await persistGameSaveSnapshot(sample, storage);
+    await expect(persistGameSaveSnapshot(sample, storage)).resolves.toBe(true);
     const loaded = await loadGameSaveSnapshot(storage);
     expect(loaded).toEqual({ ok: true, snapshot: sample });
     expect(storage.getItem(GAME_SAVE_STORAGE_KEY)).toContain('threemaker.game-save');
+  });
+
+  it('reports failure when storage setItem throws', async () => {
+    const storage: Storage = {
+      ...memoryStorage(),
+      setItem: () => {
+        throw new Error('quota exceeded');
+      },
+    };
+    await expect(persistGameSaveSnapshot(sample, storage)).resolves.toBe(false);
   });
 
   it('uses Tauri Home path when available', async () => {

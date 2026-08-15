@@ -2584,7 +2584,11 @@ async function renderFixtureMap(
       narrativeRoot.overlay().showError(i18n.t('save.failed'));
       return { ok: false, reason: 'could not capture runtime snapshot' };
     }
-    await persistGameSaveSnapshot(snapshot);
+    const wrote = await persistGameSaveSnapshot(snapshot);
+    if (!wrote) {
+      narrativeRoot.overlay().showError(i18n.t('save.failed'));
+      return { ok: false, reason: 'could not persist save to storage' };
+    }
     narrativeRoot.overlay().showLine(i18n.t('save.systemSpeaker'), i18n.t('save.saved'));
     return { ok: true };
   }

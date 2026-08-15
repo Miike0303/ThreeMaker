@@ -50,35 +50,38 @@ export async function readGameSaveText(
   }
 }
 
-/** Persist raw JSON text (best-effort). */
+/** Persist raw JSON text (best-effort). Returns whether the write succeeded. */
 export async function writeGameSaveText(
   text: string,
   storage: TextStore | null = typeof localStorage !== 'undefined' ? localStorage : null,
-): Promise<void> {
+): Promise<boolean> {
   if (isTauriAvailable()) {
     try {
       await mkdir(GAME_SAVES_DIR_RELATIVE, { baseDir: BaseDirectory.Home, recursive: true });
       await writeTextFile(GAME_SAVE_FILE_RELATIVE, text, { baseDir: BaseDirectory.Home });
+      return true;
     } catch {
       // Save persistence must never block play.
+      return false;
     }
-    return;
   }
-  if (!storage) return;
+  if (!storage) return false;
   try {
     storage.setItem(GAME_SAVE_STORAGE_KEY, text);
+    return true;
   } catch {
     // Best-effort only.
+    return false;
   }
 }
 
-/** Write a runtime snapshot as a versioned document. */
+/** Write a runtime snapshot as a versioned document. Returns whether the write succeeded. */
 export async function persistGameSaveSnapshot(
   snapshot: GameSaveSnapshot,
   storage?: TextStore | null,
-): Promise<void> {
+): Promise<boolean> {
   const doc = gameSaveDocumentFromSnapshot(snapshot);
-  await writeGameSaveText(serializeGameSaveDocument(doc), storage);
+  return writeGameSaveText(serializeGameSaveDocument(doc), storage);
 }
 
 export type LoadGameSaveResult =
