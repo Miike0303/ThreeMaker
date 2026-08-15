@@ -83,4 +83,12 @@ describe('map workspace chrome layout (WU-C)', () => {
     expect(block).not.toContain('word-break: break-all');
     expect(block).toContain('max-width: 100%');
   });
+
+  it('opens maps through handleOpenMap without an opt-in confirmDirty parameter', () => {
+    const start = painterSrc.indexOf('const handleOpenMap');
+    expect(start, 'missing handleOpenMap').toBeGreaterThanOrEqual(0);
+    const end = painterSrc.indexOf('const handleLoad', start);
+    expect(end, 'missing handleLoad after handleOpenMap').toBeGreaterThan(start);
+    expect(painterSrc.slice(start, end)).not.toContain('confirmDirty');
+  });
 });

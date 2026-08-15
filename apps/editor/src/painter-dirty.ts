@@ -29,3 +29,16 @@ export function painterDocumentSlicesChanged(prev: PainterState, next: PainterSt
     prev.semantics !== next.semantics
   );
 }
+
+/**
+ * True when opening a map must confirm first: there is a map open and it has
+ * unsaved changes. Pure so the rule is testable without rendering the panel --
+ * this repo has no testing-library, and asserting on component source text is
+ * brittle enough that it would pass again the moment someone reformats it.
+ */
+export function shouldConfirmMapSwitch(input: {
+  readonly mapReady: boolean;
+  readonly docDirty: boolean;
+}): boolean {
+  return input.mapReady && input.docDirty;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { painterDocumentSlicesChanged } from '../src/painter-dirty.js';
+import { painterDocumentSlicesChanged, shouldConfirmMapSwitch } from '../src/painter-dirty.js';
 import {
   addEvent,
   createPainterState,
@@ -57,5 +57,20 @@ describe('painterDocumentSlicesChanged (WU-UX-13)', () => {
       painterDocumentSlicesChanged(state, setSpawn(state, { floor: 'floor-0', x: 1, y: 1 })),
     ).toBe(true);
     expect(painterDocumentSlicesChanged(state, addEvent(state, 'intro'))).toBe(true);
+  });
+});
+
+describe('shouldConfirmMapSwitch', () => {
+  it('confirms when a map is open and dirty', () => {
+    expect(shouldConfirmMapSwitch({ mapReady: true, docDirty: true })).toBe(true);
+  });
+
+  it('does not confirm when the open map is clean', () => {
+    expect(shouldConfirmMapSwitch({ mapReady: true, docDirty: false })).toBe(false);
+  });
+
+  it('does not confirm when no map is open', () => {
+    expect(shouldConfirmMapSwitch({ mapReady: false, docDirty: true })).toBe(false);
+    expect(shouldConfirmMapSwitch({ mapReady: false, docDirty: false })).toBe(false);
   });
 });

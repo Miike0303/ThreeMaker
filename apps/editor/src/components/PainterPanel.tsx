@@ -97,7 +97,7 @@ import {
   MAP_DIMENSION_MIN,
   validateNewMapDraft,
 } from '../new-map-wizard.js';
-import { painterDocumentSlicesChanged } from '../painter-dirty.js';
+import { painterDocumentSlicesChanged, shouldConfirmMapSwitch } from '../painter-dirty.js';
 import { statusLayerNameKey, statusToolKey } from '../painter-status.js';
 import { isEventReferenced, type PainterState, validateEventsDraft } from '../painter-store.js';
 import type {
@@ -947,14 +947,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
   }, [activeTool]);
 
   const handleOpenMap = useCallback(
-    async (name: string, options?: { readonly confirmDirty?: boolean }) => {
-      if (
-        options?.confirmDirty &&
-        mapReady &&
-        docDirty &&
-        !window.confirm(formatTemplate(t('painter.maps.switchConfirm'), { name }))
-      ) {
-        return;
+    async (name: string) => {
+      if (shouldConfirmMapSwitch({ mapReady, docDirty })) {
+        if (!window.confirm(formatTemplate(t('painter.maps.switchConfirm'), { name }))) return;
       }
       try {
         const doc = await loadMapDocument(name);
@@ -1122,7 +1117,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                   onChange={(event) => {
                     const next = event.target.value;
                     if (next === openMapName) return;
-                    void handleOpenMap(next, { confirmDirty: true });
+                    void handleOpenMap(next);
                   }}
                 >
                   {!savedMapNames.includes(openMapName) && (
