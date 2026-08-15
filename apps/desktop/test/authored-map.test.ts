@@ -7,10 +7,12 @@
  * "Texture resolution's real OS fs is headed-only" -- unit-tested the same
  * way Slice 3's `map-file.test.ts` mocked `@tauri-apps/plugin-fs`).
  */
+import { CommandRegistry } from '@threemaker/core';
 import type { MapDocument } from '@threemaker/map-format';
 import { MAP_FORMAT_MAGIC } from '@threemaker/map-format';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
+import { type AudioPlayer, createAudioCommands } from '../src/audio.js';
 import type { AuthoredMapDeps } from '../src/authored-map.js';
 import { loadAuthoredMap } from '../src/authored-map.js';
 
@@ -20,12 +22,18 @@ function emptyLayer(): number[] {
   return new Array(SIZE * SIZE).fill(0);
 }
 
-function buildFloor(id: string, baseElevation: number) {
+function buildFloor(id: string, baseElevation: number): MapDocument['floors'][number] {
+  const tiles: [number[], number[], number[], number[]] = [
+    emptyLayer(),
+    emptyLayer(),
+    emptyLayer(),
+    emptyLayer(),
+  ];
   return {
     id,
     baseElevation,
     layers: {
-      tiles: [emptyLayer(), emptyLayer(), emptyLayer(), emptyLayer()],
+      tiles,
       shadows: emptyLayer(),
       regions: emptyLayer(),
     },
@@ -260,5 +268,61 @@ describe('loadAuthoredMap', () => {
     });
 
     await expect(loadAuthoredMap(deps)).rejects.toThrow(/lightMap object/);
+  });
+
+  /** Minimal v6 document whose events use a plugin-only `playSound` command. */
+  function playSoundMapDocText(): string {
+    const base = buildDoc({
+      version: 6,
+      props: [],
+      lights: [],
+      npcs: [],
+      triggers: [],
+      // Plugin command — not in the core EventCommand union until registered.
+      events: {
+        hit: [{ type: 'playSound', path: 'se/hit.ogg' }],
+      } as unknown as MapDocument['events'],
+      worldSeeds: {},
+    });
+    return JSON.stringify({
+      ...base,
+      tileset: { ...base.tileset, tilePixelSize: 48 },
+    });
+  }
+
+  function fakeAudioPlayer(): AudioPlayer {
+    return {
+      playSound: vi.fn(),
+      playBgm: vi.fn(),
+      stopBgm: vi.fn(),
+    } as unknown as AudioPlayer;
+  }
+
+  it('returns null when events use playSound without a plugins CommandRegistry', async () => {
+    const deps = buildDeps({
+      readMapDocumentText: vi.fn(async () => playSoundMapDocText()),
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await loadAuthoredMap(deps);
+
+    expect(result).toBeNull();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('loads playSound events when the same-style audio CommandRegistry is passed as plugins', async () => {
+    const plugins = new CommandRegistry();
+    for (const plugin of createAudioCommands(fakeAudioPlayer())) plugins.register(plugin);
+
+    const deps = buildDeps({
+      readMapDocumentText: vi.fn(async () => playSoundMapDocText()),
+      plugins,
+    });
+
+    const result = await loadAuthoredMap(deps);
+
+    expect(result).not.toBeNull();
+    expect(result?.narrative?.events.hit).toEqual([{ type: 'playSound', path: 'se/hit.ogg' }]);
   });
 });
