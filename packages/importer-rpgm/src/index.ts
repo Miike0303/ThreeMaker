@@ -4,6 +4,8 @@
 
 export type { ConvertRpgmMapOptions, RpgmPlayerStart } from './convert-rpgm-map.js';
 export { convertRpgmMap } from './convert-rpgm-map.js';
+export type { DocumentFloorToRpgmResult } from './document-floor.js';
+export { documentFloorToRpgm } from './document-floor.js';
 export type {
   EdgeDirection,
   EdgeProfile,

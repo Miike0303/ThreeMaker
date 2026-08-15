@@ -7,12 +7,12 @@
  * `toRenderableTileset`) but targets this app's `FloorSource`/
  * `StairLinkRuntime` shapes (`floor-runtime.ts`) instead of the painter's.
  *
- * Per floor: builds an `RpgmMap`/`RpgmTileset` pair `buildChunks` already
- * understands, derives ramp cells via `@threemaker/map-format`'s
- * `deriveRampCells` (the same tile-id-scan `apps/editor/src/ramp-glyph.ts`
- * uses), and derives a room-id grid via `computeRoomIdGrid` when that floor
- * has any authored rooms (omitted otherwise, mirroring `rampCells`' "no
- * ramp" omission convention -- see `FloorSource`'s own doc comment).
+ * Per floor: `documentFloorToRpgm` builds the `RpgmMap`/`RpgmTileset`/
+ * ramp-cell triple `buildChunks` already understands (shared with the
+ * editor painter), and this translator derives a room-id grid via
+ * `computeRoomIdGrid` when that floor has any authored rooms (omitted
+ * otherwise, mirroring `rampCells`' "no ramp" omission convention -- see
+ * `FloorSource`'s own doc comment).
  *
  * Stair-links and spawn reference floors by their stable string id
  * (`FloorDocument.id`); resolving that to a `floors` array index is this
@@ -22,7 +22,7 @@
  * that resolution happens.
  */
 
-import type { RpgmMap, RpgmTileset, TileSheetNames } from '@threemaker/importer-rpgm';
+import { documentFloorToRpgm } from '@threemaker/importer-rpgm';
 import type {
   FloorDocument,
   MapDocument,
@@ -32,21 +32,8 @@ import type {
   TriggerDocument,
   WorldSeedValue,
 } from '@threemaker/map-format';
-import { computeRoomIdGrid, deriveRampCells } from '@threemaker/map-format';
+import { computeRoomIdGrid } from '@threemaker/map-format';
 import type { FloorSource, StairLinkRuntime } from './floor-runtime.js';
-
-/** Every RPGM sheet slot mapped to an empty name -- `sheetNames` is unused by the renderer's build pipeline (only caller-provided `sheetPixelSizes` matters, see `toDocTileset`'s doc comment), so this is a harmless placeholder, same as editor's `map-compose.ts`'s own `EMPTY_SHEET_NAMES`. Duplicated locally rather than imported cross-app -- see `apps/desktop/test/fixtures.ts`'s doc comment for the same cross-package-boundary rationale. */
-const EMPTY_SHEET_NAMES: TileSheetNames = {
-  A1: '',
-  A2: '',
-  A3: '',
-  A4: '',
-  A5: '',
-  B: '',
-  C: '',
-  D: '',
-  E: '',
-};
 
 /**
  * Per-floor translator output: `FloorSource` minus the two fields this pure
@@ -95,33 +82,6 @@ export interface TranslatedMapDocument {
   readonly worldSeeds: Readonly<Record<string, WorldSeedValue>>;
 }
 
-/** Bridges one floor's `MapLayers` to the `RpgmMap` shape `buildChunks` expects -- mirrors editor's `map-compose.ts`'s `toRenderableMap`, generalized to take the floor directly instead of a floor index into a single document. */
-function toFloorMap(doc: MapDocument, floor: FloorDocument): RpgmMap {
-  return {
-    id: null,
-    displayName: doc.name,
-    width: doc.width,
-    height: doc.height,
-    tilesetId: 0,
-    scrollType: 0,
-    layers: {
-      tileLayers: floor.layers.tiles,
-      shadows: floor.layers.shadows,
-      regions: floor.layers.regions,
-    },
-  };
-}
-
-/** Bridges a document's merged tileset flags to the `RpgmTileset` shape `buildChunks` expects -- mirrors editor's `map-compose.ts`'s `toRenderableTileset`. Shared across every floor (a document has exactly one tileset), same as the DEV demo's `tileset` reference being passed identically to every floor source. */
-function toDocTileset(doc: MapDocument): RpgmTileset {
-  return {
-    id: 0,
-    name: doc.name,
-    sheetNames: EMPTY_SHEET_NAMES,
-    flags: doc.tileset.flags,
-  };
-}
-
 /** Resolves a `FloorDocument.id` reference to its position in `doc.floors` (array order = stacking order = `StairLinkRuntime`/spawn/NPC/trigger's numeric floor index). Throws on an unresolvable id -- `parseMapDocument`'s schema validation already guarantees every stair-link/spawn/npc/trigger floor reference exists in a valid document, so this only ever fires on a document that skipped validation. Failing loudly here still matters: for narrative entries a surviving id string becomes a floor-scoped registry key that can never match, so the entry would silently disappear instead of erroring. */
 function resolveFloorIndex(doc: MapDocument, floorId: string, context: string): number {
   const index = doc.floors.findIndex((floor) => floor.id === floorId);
@@ -148,19 +108,14 @@ function translateStairLink(doc: MapDocument, link: StairLinkDocument): StairLin
 
 /** Translates one `FloorDocument` into its `TranslatedFloorSource` (map, tileset, ramp cells, and -- only when this floor has any authored rooms -- a room-id grid). */
 function translateFloor(doc: MapDocument, floor: FloorDocument): TranslatedFloorSource {
-  const rampCells = deriveRampCells(
-    floor.layers.tiles,
-    doc.tileset.semantics,
-    doc.width,
-    doc.height,
-  );
+  const { map, tileset, rampCells } = documentFloorToRpgm(doc, floor);
   const hasRooms = doc.rooms.some((room) => room.floor === floor.id);
 
   return {
     floorId: floor.id,
     baseElevation: floor.baseElevation,
-    map: toFloorMap(doc, floor),
-    tileset: toDocTileset(doc),
+    map,
+    tileset,
     rampCells,
     ...(hasRooms
       ? { roomIdGrid: computeRoomIdGrid(doc.rooms, floor.id, doc.width, doc.height) }

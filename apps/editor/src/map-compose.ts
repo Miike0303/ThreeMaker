@@ -12,7 +12,7 @@
  * `@threemaker/map-format` for other, not-yet-floor-aware consumers).
  */
 
-import type { RpgmMap, RpgmTileset, TileSheetNames } from '@threemaker/importer-rpgm';
+import { documentFloorToRpgm, type RpgmMap, type RpgmTileset } from '@threemaker/importer-rpgm';
 import type {
   FloorDocument,
   LightDocument,
@@ -29,7 +29,9 @@ import type {
   TriggerDocument,
 } from '@threemaker/map-format';
 import { createBlankMapDocument } from '@threemaker/map-format';
+import { DEFAULT_CHUNK_SIZE, type SheetPixelSizes } from '@threemaker/renderer';
 import { pruneLightsForNpcs } from './entity-lists.js';
+import type { PainterState } from './painter-store.js';
 
 /**
  * RPGM tile-id range `[start, end)` per sheet slot -- duplicates
@@ -117,18 +119,6 @@ export function seedDemoTiles(
   return { ...doc, floors: [updatedFloor, ...doc.floors.slice(1)] };
 }
 
-const EMPTY_SHEET_NAMES: TileSheetNames = {
-  A1: '',
-  A2: '',
-  A3: '',
-  A4: '',
-  A5: '',
-  B: '',
-  C: '',
-  D: '',
-  E: '',
-};
-
 /**
  * Bridges ONE floor of a `MapDocument` (default: floor 0, the ground floor
  * -- keeps every pre-Slice-4 single-floor call site unchanged) to the
@@ -144,19 +134,7 @@ export function toRenderableMap(doc: MapDocument, floorIndex = 0): RpgmMap {
       `toRenderableMap: no floor at index ${floorIndex} (doc has ${doc.floors.length} floor(s)).`,
     );
   }
-  return {
-    id: null,
-    displayName: doc.name,
-    width: doc.width,
-    height: doc.height,
-    tilesetId: 0,
-    scrollType: 0,
-    layers: {
-      tileLayers: floor.layers.tiles,
-      shadows: floor.layers.shadows,
-      regions: floor.layers.regions,
-    },
-  };
+  return documentFloorToRpgm(doc, floor).map;
 }
 
 /** One floor's painter-facing init data, sourced from a document's own `FloorDocument` -- shape matches `painter-store.ts`'s `PainterFloorInit` (both modules live in this same app's `src/`, not separate packages). Deliberately NOT imported from `painter-store.ts` (would create an import-cycle risk between the two -- see the `CatalogTilesetSource` comment below for the same pattern); kept as a plain structural type here instead. Cross-reference: `painter-store.ts` also defines `PainterFloorState` (this shape plus `commandStack`) -- all three types are intentionally parallel, not accidentally divergent (see `PainterFloorState`'s own doc comment). */
@@ -299,14 +277,60 @@ export function composeDocumentFromPainterFloors(
   return composedSpawn === undefined ? base : { ...base, spawn: composedSpawn };
 }
 
+/**
+ * Composes `doc`'s floors and derives the ACTIVE floor's renderable
+ * `RpgmMap`/`RpgmTileset`/`rampCells` triple via `documentFloorToRpgm` --
+ * the shared derivation both `rebuildActiveFloorScene` (full rebuild) and
+ * `applyDiffLiveUpdate` (scoped live patch) need before calling
+ * `buildChunks`. Live store semantics win over the composed document
+ * (`composeDocumentFromPainterFloors` does not rebuild `tileset`).
+ */
+export function renderableSnapshot(doc: MapDocument, state: PainterState) {
+  const composed = composeDocumentFromPainterFloors(doc, state.floors, state.rooms);
+  const floor = composed.floors[state.activeFloor];
+  if (!floor) {
+    throw new Error(
+      `toRenderableMap: no floor at index ${state.activeFloor} (doc has ${composed.floors.length} floor(s)).`,
+    );
+  }
+  const { map, tileset, rampCells } = documentFloorToRpgm(composed, floor, state.semantics);
+  return { composed, map, tileset, rampCells };
+}
+
+/**
+ * The exact positional argument list the painter hands `buildChunks`. Extracted
+ * so a test can assert the painter still passes `rampCells`: the painter used to
+ * pass `undefined` there, which silently rendered every ramp-classed cell flat
+ * while playtest sloped it. A test that calls `buildChunks` itself cannot catch
+ * that regression -- only one that observes what the painter assembles can.
+ */
+export function painterChunkArgs(
+  doc: MapDocument,
+  state: PainterState,
+  sheetPixelSizes: SheetPixelSizes,
+  dirtyKeys: ReadonlySet<string> | undefined,
+): Parameters<typeof import('@threemaker/renderer').buildChunks> {
+  const { map, tileset, rampCells } = renderableSnapshot(doc, state);
+  return [
+    map,
+    tileset,
+    sheetPixelSizes,
+    DEFAULT_CHUNK_SIZE,
+    dirtyKeys,
+    rampCells,
+    doc.tileset.tilePixelSize,
+  ];
+}
+
 /** Bridges a `MapDocument`'s merged flags to the `RpgmTileset` shape `buildChunks` expects. `sheetNames` is unused by the renderer's build pipeline (only `computeTileUv`'s caller-provided `sheetPixelSizes` matters), so it's a harmless placeholder. */
 export function toRenderableTileset(doc: MapDocument): RpgmTileset {
-  return {
-    id: 0,
-    name: doc.name,
-    sheetNames: EMPTY_SHEET_NAMES,
-    flags: doc.tileset.flags,
-  };
+  const floor = doc.floors[0];
+  if (!floor) {
+    throw new Error(
+      `toRenderableTileset: no floor at index 0 (doc has ${doc.floors.length} floor(s)).`,
+    );
+  }
+  return documentFloorToRpgm(doc, floor).tileset;
 }
 
 /** Minimal structural shape of a fetched catalog tileset -- deliberately NOT importing `TilesetRow` from `catalog-client.ts` (would create an import cycle risk; this is a one-way consumer). */

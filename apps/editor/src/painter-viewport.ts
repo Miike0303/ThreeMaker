@@ -23,9 +23,9 @@ import { computeLightOverlayPoints } from './light-overlay.js';
 import {
   composeDocumentFromPainterFloors,
   normalizeMapName,
+  painterChunkArgs,
   painterFloorsFromDocument,
-  toRenderableMap,
-  toRenderableTileset,
+  renderableSnapshot,
 } from './map-compose.js';
 import { computeNpcOverlayPoints } from './npc-overlay.js';
 import type { PainterState } from './painter-store.js';
@@ -1039,20 +1039,6 @@ export class PainterViewport {
   }
 
   /**
-   * Composes `doc`'s floors and derives the ACTIVE floor's renderable
-   * `RpgmMap`/`RpgmTileset` pair (see `map-compose.ts`) -- the shared
-   * derivation both `rebuildActiveFloorScene` (full rebuild) and
-   * `applyDiffLiveUpdate` (scoped live patch) need before calling
-   * `buildChunks`.
-   */
-  private renderableSnapshot(doc: MapDocument, state: PainterState) {
-    const composed = composeDocumentFromPainterFloors(doc, state.floors, state.rooms);
-    const map = toRenderableMap(composed, state.activeFloor);
-    const tileset = toRenderableTileset(composed);
-    return { composed, map, tileset };
-  }
-
-  /**
    * Fully rebuilds the tilemap scene from the ACTIVE floor only (spec:
    * "editor viewport shows active floor only") -- used on initial load AND
    * every floor add/select/remove, since a floor switch is a full re-scope
@@ -1062,15 +1048,8 @@ export class PainterViewport {
    */
   private rebuildActiveFloorScene(): void {
     if (!this.doc || !this.state) return;
-    const { map, tileset } = this.renderableSnapshot(this.doc, this.state);
     const chunks = buildChunks(
-      map,
-      tileset,
-      this.sheetPixelSizes,
-      DEFAULT_CHUNK_SIZE,
-      undefined,
-      undefined,
-      this.doc.tileset.tilePixelSize,
+      ...painterChunkArgs(this.doc, this.state, this.sheetPixelSizes, undefined),
     );
 
     this.tilemap?.dispose();
@@ -1084,19 +1063,13 @@ export class PainterViewport {
   /** Scoped live update on the ACTIVE floor: dirty-region -> buildChunks(onlyChunks) -> patchChunks, plus explicit buildChunk for any dirty chunk not yet live (a from-scratch blank map starts with zero live chunks). */
   private applyDiffLiveUpdate(diff: TileDiff): void {
     if (!this.doc || !this.state || !this.tilemap) return;
-    const { map, tileset } = this.renderableSnapshot(this.doc, this.state);
+    const { map, tileset } = renderableSnapshot(this.doc, this.state);
 
     const dirtyKeys = computeDirtyChunkKeys(diff.cells, map, tileset, DEFAULT_CHUNK_SIZE);
     if (dirtyKeys.size === 0) return;
 
     const rebuilt = buildChunks(
-      map,
-      tileset,
-      this.sheetPixelSizes,
-      DEFAULT_CHUNK_SIZE,
-      dirtyKeys,
-      undefined,
-      this.doc.tileset.tilePixelSize,
+      ...painterChunkArgs(this.doc, this.state, this.sheetPixelSizes, dirtyKeys),
     );
     const rebuiltKeys = new Set(rebuilt.map((chunk) => chunkKey(chunk.chunkX, chunk.chunkY)));
     const cleared: ChunkBuildData[] = [];
