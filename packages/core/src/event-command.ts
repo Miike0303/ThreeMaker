@@ -1,3 +1,4 @@
+import type { CommandRegistry, PluginCommand } from './plugin.js';
 import type { WorldValue } from './world-state.js';
 
 /** Facing/movement direction shared with `@threemaker/gameplay`'s `Direction` (structurally identical; core depends on nothing). */
@@ -120,6 +121,21 @@ export type EventCommand =
   | GiveItemCommand
   | ModifyStatCommand;
 
+/**
+ * Every command type core itself handles. A {@link CommandPlugin} may not
+ * claim one of these — see {@link CommandRegistry.register}.
+ */
+export const BUILTIN_COMMAND_TYPES = [
+  'moveEntity',
+  'showDialogue',
+  'conditional',
+  'setWorldVar',
+  'teleport',
+  'transferMap',
+  'giveItem',
+  'modifyStat',
+] as const satisfies readonly EventCommand['type'][];
+
 /** Parsed shape of an event script file: `{ version: 1, events: Record<string, EventCommand[]> }`. */
 export type EventScript = Record<string, EventCommand[]>;
 
@@ -169,7 +185,11 @@ function parseDialogueSource(value: unknown, path: string): DialogueSource {
   fail(`${path} source has unknown "kind" ${JSON.stringify(kind)}.`);
 }
 
-function parseEventCommand(value: unknown, path: string): EventCommand {
+function parseEventCommand(
+  value: unknown,
+  path: string,
+  registry: CommandRegistry | undefined,
+): EventCommand {
   if (!isRecord(value)) {
     fail(`${path} must be an object.`);
   }
@@ -243,13 +263,13 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
       }
       if (!Array.isArray(then)) fail(`${label} requires an array "then".`);
       const parsedThen = then.map((command, index) =>
-        parseEventCommand(command, `${label}.then[${index}]`),
+        parseEventCommand(command, `${label}.then[${index}]`, registry),
       );
       let parsedElse: EventCommand[] | undefined;
       if (elseBranch !== undefined) {
         if (!Array.isArray(elseBranch)) fail(`${label} "else" must be an array when present.`);
         parsedElse = elseBranch.map((command, index) =>
-          parseEventCommand(command, `${label}.else[${index}]`),
+          parseEventCommand(command, `${label}.else[${index}]`, registry),
         );
       }
       return {
@@ -344,8 +364,29 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
       }
       return { type: 'modifyStat', statId, delta };
     }
-    default:
-      fail(`${path} has unknown command type ${JSON.stringify(type)}.`);
+    default: {
+      const plugin = registry?.get(type);
+      if (plugin === undefined) {
+        fail(`${path} has unknown command type ${JSON.stringify(type)}.`);
+      }
+      let parsed: PluginCommand;
+      try {
+        parsed = plugin.parse(value, `${path} (${type})`);
+      } catch (error) {
+        // Re-fail so a plugin's rejection reads exactly like a builtin one
+        // ("Invalid Event Script: ..."), whatever the plugin threw.
+        fail(error instanceof Error ? error.message : String(error));
+      }
+      if (parsed.type !== type) {
+        fail(
+          `${path} plugin ${JSON.stringify(type)} returned a command typed ${JSON.stringify(parsed.type)}.`,
+        );
+      }
+      // The `EventCommand` union stays closed so the builtin `switch` above
+      // keeps narrowing; plugin commands ride along and are routed by the
+      // interpreter's own `default` branch.
+      return parsed as unknown as EventCommand;
+    }
   }
 }
 
@@ -353,8 +394,12 @@ function parseEventCommand(value: unknown, path: string): EventCommand {
  * Parses an event script file: `{ version: 1, events: Record<string, EventCommand[]> }`.
  * Defensive over untrusted JSON, mirroring `@threemaker/importer-rpgm`'s `parseMap` —
  * every failure names the offending path (e.g. `events.intro[0]`) and field.
+ *
+ * Pass the same `registry` the {@link EventInterpreter} was built with to
+ * accept plugin-contributed command types; without it they are rejected as
+ * unknown.
  */
-export function parseEventScript(json: unknown): EventScript {
+export function parseEventScript(json: unknown, registry?: CommandRegistry): EventScript {
   if (!isRecord(json)) {
     fail(`expected an object, got ${typeof json}.`);
   }
@@ -374,7 +419,7 @@ export function parseEventScript(json: unknown): EventScript {
       fail(`${path} must be an array of commands.`);
     }
     result[eventId] = commands.map((command, index) =>
-      parseEventCommand(command, `${path}[${index}]`),
+      parseEventCommand(command, `${path}[${index}]`, registry),
     );
   }
   return result;

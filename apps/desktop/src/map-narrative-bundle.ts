@@ -17,7 +17,13 @@
  *   `disposeFloorTextures`; a second path over them would double-free.
  */
 
-import type { DialogueProvider, DialogueSource, DialogueStep, EventHost } from '@threemaker/core';
+import type {
+  CommandRegistry,
+  DialogueProvider,
+  DialogueSource,
+  DialogueStep,
+  EventHost,
+} from '@threemaker/core';
 import { EventInterpreter, PlainTextDialogueProvider } from '@threemaker/core';
 import type { Direction, NpcDefinition, RoutineStop } from '@threemaker/gameplay';
 import { NpcRegistry, routinePositionAt, TriggerIndex } from '@threemaker/gameplay';
@@ -118,6 +124,12 @@ export interface MapNarrativeBundleDeps {
   readonly root: NarrativeRoot;
   /** App-supplied movement/teleport effects for the interpreter. */
   readonly host: EventHost;
+  /**
+   * Plugin-contributed command handlers. Must be the same registry passed to
+   * `loadAuthoredMap`, which is what validated these commands out of the
+   * document in the first place.
+   */
+  readonly plugins?: CommandRegistry;
   /** Scene the NPC billboards are added to, and removed from on `dispose()`. */
   readonly scene: {
     add(object: THREE.Object3D): void;
@@ -257,6 +269,7 @@ export async function buildMapNarrativeBundle(
     provider: new MapDialogueProvider(stories),
     items: root.inventory,
     stats: root.stats,
+    ...(deps.plugins !== undefined ? { plugins: deps.plugins } : {}),
   });
 
   // Bridges the document's content-addressed sheet ref to `NpcDefinition`'s

@@ -11,6 +11,7 @@
  * error rather than silently truncated/misread.
  */
 
+import type { CommandRegistry } from '@threemaker/core';
 import type { FloorDocument, MapDocument, MapLayers } from './schema.js';
 import {
   CURRENT_MAP_FORMAT_VERSION,
@@ -210,7 +211,7 @@ function readVersion(raw: Record<string, unknown>): number {
  *    migration can exist for a version that doesn't exist yet)
  *  - an older version with no registered migration path to the current one
  */
-export function parseMapDocument(input: unknown): MapDocument {
+export function parseMapDocument(input: unknown, plugins?: CommandRegistry): MapDocument {
   if (typeof input !== 'object' || input === null) {
     throw new MapFormatError('malformed', 'Map document must be a non-null object.');
   }
@@ -243,5 +244,5 @@ export function parseMapDocument(input: unknown): MapDocument {
     version = readVersion(raw);
   }
 
-  return validateCurrentVersionShape(raw);
+  return validateCurrentVersionShape(raw, plugins);
 }

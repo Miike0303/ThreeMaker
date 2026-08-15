@@ -25,7 +25,7 @@
  * `migrate.ts`'s `migrateV2ToV3`.
  */
 
-import type { EventCommand } from '@threemaker/core';
+import type { CommandRegistry, EventCommand } from '@threemaker/core';
 import { parseEventScript } from '@threemaker/core';
 
 /** One of RPG Maker's 9 fixed tileset sheet slots. */
@@ -359,8 +359,15 @@ export class MapFormatError extends Error {
  * which is the entry point real callers use -- this function exists
  * separately so `migrate.ts` can validate the final, migrated shape without
  * a circular import back into itself).
+ *
+ * `plugins` is forwarded to core's `parseEventScript` so authored commands
+ * contributed by plugins validate here too; without it they are rejected as
+ * unknown command types.
  */
-export function validateCurrentVersionShape(input: unknown): MapDocument {
+export function validateCurrentVersionShape(
+  input: unknown,
+  plugins?: CommandRegistry,
+): MapDocument {
   if (typeof input !== 'object' || input === null) {
     throw new MapFormatError('malformed', 'Map document must be a non-null object.');
   }
@@ -404,7 +411,7 @@ export function validateCurrentVersionShape(input: unknown): MapDocument {
     raw.width as number,
     raw.height as number,
   );
-  const events = validateEvents(raw.events);
+  const events = validateEvents(raw.events, plugins);
   const worldSeeds = validateWorldSeeds(raw.worldSeeds);
   const props = validateProps(raw.props, floorIds, raw.width as number, raw.height as number);
   const npcIds = new Set(npcs.map((npc) => npc.id));
@@ -1005,10 +1012,10 @@ function validateTrigger(
  * exactly one error type for every rejection, with core's own path-naming
  * message text preserved verbatim.
  */
-function validateEvents(input: unknown): MapEventScripts {
+function validateEvents(input: unknown, plugins: CommandRegistry | undefined): MapEventScripts {
   const events = validateNarrativeRecord(input, 'events');
   try {
-    return parseEventScript({ version: 1, events });
+    return parseEventScript({ version: 1, events }, plugins);
   } catch (error) {
     throw new MapFormatError(
       'malformed',

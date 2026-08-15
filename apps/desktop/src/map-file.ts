@@ -10,7 +10,7 @@
  * the `isTauriAvailable()` gate (`tauri-env.ts`) are that slice's job. This
  * module is NOT wired into `main.ts` yet.
  */
-import { BaseDirectory, exists, readTextFile } from '@tauri-apps/plugin-fs';
+import { BaseDirectory, exists, readFile, readTextFile } from '@tauri-apps/plugin-fs';
 
 /** Directory + file for the shared working map, relative to `BaseDirectory.Home` -- kept in sync by hand with `apps/editor/src/map-client.ts`'s `MAP_FILE_RELATIVE`. */
 export const MAP_DIR_RELATIVE = '.threemaker/maps';
@@ -36,6 +36,23 @@ export async function readMapDocumentText(
   relativePath: string = MAP_FILE_RELATIVE,
 ): Promise<string | null> {
   return readHomeFileText(relativePath);
+}
+
+/**
+ * Reads a binary asset's bytes from under the same `.threemaker/maps` root
+ * the maps and `.ink` sidecars live in. Backs `audio.ts`'s `AudioSource`;
+ * the caller-supplied path is validated (manifest-relative, no `..`) by
+ * `parseAudioPath` before it ever reaches here.
+ *
+ * Returns a copy rather than the view's own buffer: `decodeAudioData`
+ * detaches the `ArrayBuffer` it is handed, which would corrupt any other view
+ * sharing that allocation.
+ */
+export async function readMapAssetBytes(relativePath: string): Promise<ArrayBuffer> {
+  const bytes = await readFile(`${MAP_DIR_RELATIVE}/${relativePath}`, {
+    baseDir: BaseDirectory.Home,
+  });
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 /** Returns the game manifest's raw JSON text, or `null` if no batch-converted game has been pointed at `.threemaker/maps` yet (single-file mode stays the fallback -- see `main.ts`). */

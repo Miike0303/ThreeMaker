@@ -17,7 +17,7 @@ export type {
   TeleportCommand,
   TransferMapCommand,
 } from './event-command.js';
-export { parseEventScript } from './event-command.js';
+export { BUILTIN_COMMAND_TYPES, parseEventScript } from './event-command.js';
 export type {
   EventHost,
   EventInterpreterEvents,
@@ -30,6 +30,8 @@ export type { GameLoopOptions } from './game-loop.js';
 export { GameLoop } from './game-loop.js';
 export { Node } from './node.js';
 export { PlainTextDialogueProvider } from './plain-text-dialogue-provider.js';
+export type { CommandContext, CommandPlugin, PluginCommand } from './plugin.js';
+export { CommandRegistry } from './plugin.js';
 export type { Listener, SignalSubscriber, Unsubscribe } from './signal-bus.js';
 export { SignalBus } from './signal-bus.js';
 export type { WorldClockOptions } from './world-clock.js';

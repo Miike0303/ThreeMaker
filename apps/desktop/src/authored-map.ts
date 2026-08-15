@@ -28,7 +28,7 @@
  */
 
 import { BaseDirectory, readFile } from '@tauri-apps/plugin-fs';
-import type { EventCommand, ShowDialogueCommand } from '@threemaker/core';
+import type { CommandRegistry, EventCommand, ShowDialogueCommand } from '@threemaker/core';
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import type {
   LightDocument,
@@ -123,6 +123,13 @@ interface ResolvedTexture {
  */
 export interface AuthoredMapDeps {
   readonly readMapDocumentText: () => Promise<string | null>;
+  /**
+   * Plugin-contributed command types accepted in this document's `events`.
+   * Must be the same registry the `EventInterpreter` is built with, or an
+   * authored plugin command validates here and then has no handler at play
+   * time. Omitted → only core's builtin commands are accepted.
+   */
+  readonly plugins?: CommandRegistry;
   /** Resolves one tileset slot's `object` sha256 to a decoded texture. Rejects on a missing/unreadable object -- `resolveTileset` (below) is what catches that and substitutes the W1 placeholder, not this function. */
   readonly resolveObjectTexture: (sha256: string) => Promise<ResolvedTexture>;
   /**
@@ -563,7 +570,7 @@ export async function loadAuthoredMap(
 
   let doc: MapDocument;
   try {
-    doc = parseMapDocument(JSON.parse(rawText));
+    doc = parseMapDocument(JSON.parse(rawText), deps.plugins);
   } catch (error) {
     console.error('authored-map: the shared map file failed to parse/validate.', error);
     return null;

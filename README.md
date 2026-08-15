@@ -4,7 +4,7 @@ An open-source 2.5D (HD-2D) narrative game engine built on [Three.js](https://th
 
 **Status: playable engine, authoring studio in progress.** The create → play loop closes today: you can paint a multi-floor map in the editor, place NPCs with branching Ink dialogue, save it, and walk/talk/collect/transfer/save in the desktop runtime. Distribution works for desktop (unsigned) and static web.
 
-Not yet: code signing, mobile, pathfinding, combat, audio playback.
+Not yet: code signing, mobile, pathfinding, combat.
 
 ## Goals
 
@@ -14,12 +14,45 @@ Not yet: code signing, mobile, pathfinding, combat, audio playback.
 - Import maps, tilesets, and character sprites from RPG Maker MV/MZ projects. Import-first: nothing is ever exported back to RPG Maker.
 - Usable without programming (visual editor) and fully extensible (plugins + MCP server).
 
+## Plugins
+
+Genre-specific verbs stay out of the engine. A plugin owns one authored command
+type end to end — how it parses out of a map's `events`, and what it does at
+runtime — and registers on a `CommandRegistry` shared by the parser and the
+interpreter:
+
+```ts
+import { CommandRegistry } from '@threemaker/core';
+
+const plugins = new CommandRegistry();
+plugins.register({
+  type: 'startBattle',
+  parse(value, path) {
+    if (typeof value.troopId !== 'string') throw new Error(`${path} needs a string "troopId".`);
+    return { type: 'startBattle', troopId: value.troopId };
+  },
+  run(command, ctx) {
+    openBattleScene(command.troopId as string, ctx.done);
+    return 'wait'; // or 'continue' to run the next command immediately
+  },
+});
+```
+
+Pass that same registry to `parseMapDocument(json, plugins)` and to the
+`EventInterpreter` — parsing with it and interpreting without it yields
+commands nothing can execute. A plugin may not claim a builtin command type
+(`BUILTIN_COMMAND_TYPES`); registration throws instead of silently shadowing.
+
+The runtime's own audio verbs (`playSound`, `playBgm`, `stopBgm`) are built
+this way rather than as builtins — see `apps/desktop/src/audio.ts`.
+
 ## Structure
 
 ```
 packages/
   core/            Headless: node tree, typed signal bus, game loop, event-command
-                   interpreter, world state, world clock (no DOM, no Three.js)
+                   interpreter, command-plugin registry, world state, world clock
+                   (no DOM, no Three.js)
   gameplay/        Grid movement, terrain passability, elevation, stairs, NPC
                    registry, triggers, inventory, stats
   narrative/       Ink compile + dialogue provider + world-state binding, and the

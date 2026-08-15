@@ -58,6 +58,24 @@ export async function webReadTextFile(
   return response.text();
 }
 
+/**
+ * Fetch a payload-relative binary (audio, today) as an `ArrayBuffer`. Mirrors
+ * {@link webReadTextFile}'s `game/` prefixing; non-OK responses throw, since a
+ * missing clip is a content bug the caller reports rather than silently mutes.
+ */
+export async function webReadBinaryFile(
+  relativePath: string,
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+): Promise<ArrayBuffer> {
+  const cleaned = relativePath.replaceAll('\\', '/').replace(/^\/+/, '');
+  const url = `${WEB_GAME_BASE}/${cleaned}`;
+  const response = await fetchImpl(url);
+  if (!response.ok) {
+    throw new Error(`webReadBinaryFile: ${url} failed with HTTP ${response.status}`);
+  }
+  return response.arrayBuffer();
+}
+
 /** Asset-store object path (same `{aa}/{sha}` layout as Tauri / the catalog). */
 export function webObjectUrl(sha256: string): string {
   return `${WEB_GAME_BASE}/asset-store/objects/${sha256.slice(0, 2)}/${sha256}`;

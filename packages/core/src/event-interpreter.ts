@@ -5,6 +5,7 @@ import type {
   EventCommand,
   ShowDialogueCommand,
 } from './event-command.js';
+import type { CommandRegistry, PluginCommand } from './plugin.js';
 import { SignalBus, type SignalSubscriber } from './signal-bus.js';
 import type { WorldState, WorldValue } from './world-state.js';
 
@@ -147,6 +148,7 @@ export class EventInterpreter {
   private readonly provider: DialogueProvider;
   private readonly items: ItemStore | undefined;
   private readonly stats: StatStore | undefined;
+  private readonly plugins: CommandRegistry | undefined;
 
   private _state: InterpreterState = 'idle';
   private readonly pendingQueue: (readonly EventCommand[])[] = [];
@@ -164,12 +166,19 @@ export class EventInterpreter {
     items?: ItemStore;
     /** Optional stats for `modifyStat` / stat-sourced conditionals. */
     stats?: StatStore;
+    /**
+     * Plugin-contributed command types. Must be the same registry passed to
+     * `parseEventScript`, or authored plugin commands parse and then fail to
+     * execute.
+     */
+    plugins?: CommandRegistry;
   }) {
     this.world = opts.world;
     this.host = opts.host;
     this.provider = opts.provider;
     this.items = opts.items;
     this.stats = opts.stats;
+    this.plugins = opts.plugins;
     this.signals = this.bus;
   }
 
@@ -408,6 +417,51 @@ export class EventInterpreter {
             return;
           }
           if (this.stepDialogue() === 'unblocked') continue;
+          return;
+        }
+
+        default: {
+          // `command` narrows to `never` here: the builtin union is closed.
+          // Plugin commands reach this point because `parseEventScript` was
+          // given a registry and let them through typed as `EventCommand`.
+          const pluginCommand = command as unknown as PluginCommand;
+          const plugin = this.plugins?.get(pluginCommand.type);
+          if (plugin === undefined) {
+            this.failScript(
+              new Error(
+                `EventInterpreter: no handler registered for command type ${JSON.stringify(pluginCommand.type)}.`,
+              ),
+            );
+            return;
+          }
+          // One latch covers every way third-party code can misbehave: a
+          // second `done()`, a `done()` the plugin was not granted, and a
+          // `done()` fired synchronously inside `run`. Whoever settles first
+          // owns the rest of the script; everyone after is ignored.
+          let settled = false;
+          const done = (): void => {
+            if (settled) return;
+            settled = true;
+            this.continueScript();
+          };
+          let outcome: 'continue' | 'wait';
+          try {
+            outcome = plugin.run(pluginCommand, {
+              world: this.world,
+              host: this.host,
+              items: this.items,
+              stats: this.stats,
+              done,
+            });
+          } catch (error) {
+            this.failScript(error);
+            return;
+          }
+          if (outcome === 'continue') {
+            if (settled) return;
+            settled = true;
+            continue;
+          }
           return;
         }
       }

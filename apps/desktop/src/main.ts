@@ -1,6 +1,6 @@
 import { BaseDirectory, readFile } from '@tauri-apps/plugin-fs';
 import type { EventHost } from '@threemaker/core';
-import { GameLoop, WorldClock } from '@threemaker/core';
+import { CommandRegistry, GameLoop, WorldClock } from '@threemaker/core';
 import type {
   Direction,
   StairTraversalFloor,
@@ -73,6 +73,7 @@ import {
 } from '@threemaker/renderer';
 import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
+import { AudioPlayer, createAudioCommands } from './audio.js';
 import type { AuthoredMapNarrative, AuthoredMapResult, GameDefsCatalog } from './authored-map.js';
 import { EMPTY_GAME_DEFS_CATALOG, loadAuthoredMap } from './authored-map.js';
 import {
@@ -120,6 +121,7 @@ import {
   MAP_DIR_RELATIVE,
   MAP_FILE_RELATIVE,
   readManifestText,
+  readMapAssetBytes,
   readMapDocumentText,
 } from './map-file.js';
 import {
@@ -154,6 +156,7 @@ import { WalkAnimation } from './walk-animation.js';
 import { createMostRecentHeldDirection } from './walk-input.js';
 import {
   homeMapsPathToWebRelative,
+  webReadBinaryFile,
   webReadTextFile,
   webResolveObjectBinary,
   webResolveObjectTexture,
@@ -426,6 +429,40 @@ async function readActiveMapText(homeRelativePath: string): Promise<string | nul
   return readMapDocumentText(homeRelativePath);
 }
 
+/** Audio bytes under the maps tree, honouring the active content source like `readActiveMapText`. */
+async function readActiveAudioBytes(relativePath: string): Promise<ArrayBuffer> {
+  if (activeGameSource === 'web') {
+    return webReadBinaryFile(relativePath);
+  }
+  return readMapAssetBytes(relativePath);
+}
+
+/**
+ * Runtime audio, and the command plugins that expose it to authored content.
+ * Built lazily: constructing an `AudioContext` at module scope would fire on
+ * import, before the boot code has decided whether this is a Tauri or web
+ * session. The same registry is handed to `loadAuthoredMap` (which validates
+ * authored `playSound`/`playBgm`/`stopBgm` out of the document) and to
+ * `buildMapNarrativeBundle` (which executes them) -- they must be the same
+ * instance or a command parses and then has no handler.
+ */
+let audioRuntime: { player: AudioPlayer; plugins: CommandRegistry } | null = null;
+
+function getAudioRuntime(): { player: AudioPlayer; plugins: CommandRegistry } {
+  if (audioRuntime === null) {
+    const player = new AudioPlayer({ source: { load: readActiveAudioBytes } });
+    const plugins = new CommandRegistry();
+    for (const plugin of createAudioCommands(player)) plugins.register(plugin);
+    audioRuntime = { player, plugins };
+  }
+  return audioRuntime;
+}
+
+/** The registry every map load and narrative bundle in this session shares. */
+function commandPlugins(): CommandRegistry {
+  return getAudioRuntime().plugins;
+}
+
 async function readActiveManifestText(): Promise<string | null> {
   if (activeGameSource === 'web') {
     return webReadTextFile('manifest.json');
@@ -506,6 +543,7 @@ function loadAuthoredMapAt(
     readSidecarText: readActiveMapText,
     resolveObjectTexture: resolveObjectTextureReal,
     gameDefsCatalog,
+    plugins: commandPlugins(),
   });
 }
 
@@ -1856,6 +1894,7 @@ async function renderFixtureMap(
       narrative,
       root: narrativeRoot,
       host,
+      plugins: commandPlugins(),
       scene,
       floors: session.floorRouter.floors,
       arrival,
@@ -1999,6 +2038,19 @@ async function renderFixtureMap(
         narrativeRoot.overlay().setHighlightedIndex(highlightedIndex);
         return;
     }
+  }
+
+  // Browsers keep an AudioContext suspended until a real user gesture, so the
+  // first authored `playBgm` on map load would be silently dropped. `once`
+  // per event kind: after any one of them the context stays resumed.
+  for (const gesture of ['keydown', 'pointerdown'] as const) {
+    window.addEventListener(
+      gesture,
+      () => {
+        void getAudioRuntime().player.unlock();
+      },
+      { once: true },
+    );
   }
 
   // Narrative keys (C2: pure resolveGameplayKeyAction; host applies).
@@ -3180,6 +3232,7 @@ async function main(): Promise<void> {
         readSidecarText: readActiveMapText,
         resolveObjectTexture: resolveObjectTextureReal,
         gameDefsCatalog,
+        plugins: commandPlugins(),
       });
       if (authored) {
         const primaryFloor = authored.floorSources[0];
