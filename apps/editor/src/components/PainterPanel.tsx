@@ -87,7 +87,12 @@ import {
   renameSavedMap,
   saveMapDocument,
 } from '../map-client.js';
-import { composeMapFromTilesets, normalizeMapName, seedDemoTiles } from '../map-compose.js';
+import {
+  composeMapFromTilesets,
+  composePlaceholderMap,
+  normalizeMapName,
+  seedDemoTiles,
+} from '../map-compose.js';
 import { mapDocumentFileName } from '../map-identity.js';
 import {
   DEFAULT_MAP_HEIGHT,
@@ -112,6 +117,12 @@ import type {
   TriggerOverlayItem,
 } from '../painter-viewport.js';
 import { loadSlotTextures, PainterViewport } from '../painter-viewport.js';
+import {
+  buildPlaceholderTextures,
+  PLACEHOLDER_GROUND_TILE_ID,
+  type PlaceholderPaletteUrls,
+  revokePlaceholderPaletteUrls,
+} from '../placeholder-tileset.js';
 import { openPlaytest, PlaytestClientError } from '../playtest-client.js';
 import { applyDungeonStampToMapDocument } from '../procgen/apply-stamp.js';
 import { stampSimpleDungeon } from '../procgen/dungeon-stamp.js';
@@ -382,6 +393,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const saveRequestRef = useRef<() => void>(() => {});
   const [characterSprites, setCharacterSprites] = useState<readonly AssetRow[]>([]);
   const glbInputRef = useRef<HTMLInputElement | null>(null);
+  /** Blob URLs for starter A5/B palette sheets — revoked on replace/unmount. */
+  const placeholderPaletteUrlsRef = useRef<PlaceholderPaletteUrls | null>(null);
   // Coordinate placement (complements canvas clicks on large maps).
   const [propPlaceX, setPropPlaceX] = useState(0);
   const [propPlaceY, setPropPlaceY] = useState(0);
@@ -609,6 +622,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
         reportStatus({ message: t('painter.createFailed'), severity: 'error' });
         return;
       }
+      revokePlaceholderPaletteUrls(placeholderPaletteUrlsRef.current);
+      placeholderPaletteUrlsRef.current = null;
       const doc = seedDemoTiles(
         composeMapFromTilesets({
           id: crypto.randomUUID(),
@@ -663,6 +678,79 @@ export function PainterPanel({ t }: PainterPanelProps) {
     clearStatus,
     reportStatus,
   ]);
+
+  /** Catalog-free starter map: code-generated A5/B sheets, no procgen (A2 ids). */
+  const handleCreatePlaceholderMap = useCallback(async () => {
+    if (creatingMap || !newMapResult.valid) return;
+    const { name, width, height } = newMapResult.value;
+    if (mapReady && !window.confirm(formatTemplate(t('painter.newMap.replaceConfirm'), { name }))) {
+      return;
+    }
+    clearStatus();
+    setCreatingMap(true);
+    try {
+      const doc = composePlaceholderMap({
+        id: crypto.randomUUID(),
+        name,
+        width,
+        height,
+      });
+      const built = buildPlaceholderTextures(doc.tileset.tilePixelSize);
+      revokePlaceholderPaletteUrls(placeholderPaletteUrlsRef.current);
+      placeholderPaletteUrlsRef.current = built.paletteUrls;
+      viewportRef.current?.loadMap(
+        doc,
+        built.textures,
+        built.sheetPixelSizes,
+        PLACEHOLDER_GROUND_TILE_ID,
+      );
+      const firstSprite = characterSprites[0]?.sha256;
+      if (firstSprite) viewportRef.current?.setActiveNpcSpriteObject(firstSprite);
+      const a5Size = built.sheetPixelSizes.A5;
+      const bSize = built.sheetPixelSizes.B;
+      if (!a5Size || !bSize) {
+        throw new Error('buildPlaceholderTextures: missing A5/B sheet pixel sizes');
+      }
+      setPaletteSlots([
+        {
+          slot: 'A5',
+          imageUrl: built.paletteUrls.A5,
+          pixelSize: a5Size,
+          tilePixelSize: doc.tileset.tilePixelSize,
+        },
+        {
+          slot: 'B',
+          imageUrl: built.paletteUrls.B,
+          pixelSize: bSize,
+          tilePixelSize: doc.tileset.tilePixelSize,
+        },
+      ]);
+      setMapNameDraft(doc.name);
+      setOpenMapName(name);
+      setMapReady(true);
+      prevPainterStateRef.current = viewportRef.current?.painterState;
+      setDocDirty(false);
+      reportStatus({
+        message: formatTemplate(t('painter.createSuccess'), { name, width, height }),
+        severity: 'success',
+      });
+      // Starter sheets are plain A5/B — dungeon stamp expects A2 ground ids.
+      setPendingGenerate(false);
+      dispatchInspectorRouting({ type: 'manual-tab', tab: 'paint' });
+    } catch (err) {
+      console.error('Failed to create the starter painter map:', err);
+      reportStatus({ message: t('painter.createFailed'), severity: 'error' });
+    } finally {
+      setCreatingMap(false);
+    }
+  }, [creatingMap, newMapResult, mapReady, t, characterSprites, clearStatus, reportStatus]);
+
+  useEffect(() => {
+    return () => {
+      revokePlaceholderPaletteUrls(placeholderPaletteUrlsRef.current);
+      placeholderPaletteUrlsRef.current = null;
+    };
+  }, []);
 
   const handleSave = useCallback(async () => {
     const liveState = viewportRef.current?.painterState;
@@ -957,6 +1045,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
           reportStatus({ message: t('painter.loadEmpty'), severity: 'info' });
           return;
         }
+        revokePlaceholderPaletteUrls(placeholderPaletteUrlsRef.current);
+        placeholderPaletteUrlsRef.current = null;
         const { textures, sheetPixelSizes } = await loadSlotTextures(doc);
         viewportRef.current?.loadMap(doc, textures, sheetPixelSizes, GROUND_TILE_ID);
         const firstSprite = characterSprites[0]?.sha256;
@@ -1645,65 +1735,85 @@ export function PainterPanel({ t }: PainterPanelProps) {
                   </section>
                   <section className="ide-welcome-path">
                     <h3 className="ide-section-title">{t('painter.welcome.newMap')}</h3>
-                    <p className="ide-hint">{t('painter.welcome.createMapHint')}</p>
-                    {newMapFields}
-                    <div className="ide-row">
-                      <GameTilesetPicker
-                        label={t('painter.gameA')}
-                        games={games}
-                        gameId={gameAId}
-                        onGameChange={handleGameAChange}
-                        tilesetId={tilesetAId}
-                        onTilesetChange={setTilesetAId}
-                        selectGameLabel={t('painter.selectGame')}
-                        selectTilesetLabel={t('painter.selectTileset')}
-                      />
-                    </div>
-                    <div className="ide-row">
-                      <GameTilesetPicker
-                        label={t('painter.gameB')}
-                        games={games}
-                        gameId={gameBId}
-                        onGameChange={handleGameBChange}
-                        tilesetId={tilesetBId}
-                        onTilesetChange={setTilesetBId}
-                        selectGameLabel={t('painter.selectGame')}
-                        selectTilesetLabel={t('painter.selectTileset')}
-                      />
-                    </div>
-                    <p className="ide-welcome-prerequisite" role="status">
-                      {games.length === 0
-                        ? t('painter.welcome.noCatalog')
-                        : tilesetAId === undefined || tilesetBId === undefined
-                          ? t('painter.welcome.chooseTilesets')
-                          : t('painter.welcome.ready')}
-                    </p>
-                    {games.length === 0 && (
-                      <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
+                    {games.length === 0 ? (
+                      <>
+                        <p className="ide-hint">{t('painter.welcome.starterHint')}</p>
+                        {newMapFields}
+                        <p className="ide-welcome-prerequisite" role="status">
+                          {t('painter.welcome.starterReady')}
+                        </p>
+                        <p className="ide-hint">{t('painter.welcome.assetsGuidance')}</p>
+                        <div className="ide-row">
+                          <button
+                            type="button"
+                            className="primary"
+                            disabled={creatingMap || !newMapResult.valid}
+                            onClick={() => void handleCreatePlaceholderMap()}
+                          >
+                            {creatingMap
+                              ? t('painter.creatingMap')
+                              : t('painter.welcome.createStarter')}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="ide-hint">{t('painter.welcome.createMapHint')}</p>
+                        {newMapFields}
+                        <div className="ide-row">
+                          <GameTilesetPicker
+                            label={t('painter.gameA')}
+                            games={games}
+                            gameId={gameAId}
+                            onGameChange={handleGameAChange}
+                            tilesetId={tilesetAId}
+                            onTilesetChange={setTilesetAId}
+                            selectGameLabel={t('painter.selectGame')}
+                            selectTilesetLabel={t('painter.selectTileset')}
+                          />
+                        </div>
+                        <div className="ide-row">
+                          <GameTilesetPicker
+                            label={t('painter.gameB')}
+                            games={games}
+                            gameId={gameBId}
+                            onGameChange={handleGameBChange}
+                            tilesetId={tilesetBId}
+                            onTilesetChange={setTilesetBId}
+                            selectGameLabel={t('painter.selectGame')}
+                            selectTilesetLabel={t('painter.selectTileset')}
+                          />
+                        </div>
+                        <p className="ide-welcome-prerequisite" role="status">
+                          {tilesetAId === undefined || tilesetBId === undefined
+                            ? t('painter.welcome.chooseTilesets')
+                            : t('painter.welcome.ready')}
+                        </p>
+                        <label className="ide-check">
+                          <input
+                            type="checkbox"
+                            checked={generateAfterCreate}
+                            onChange={(event) => setGenerateAfterCreate(event.target.checked)}
+                          />
+                          {t('painter.procgen.generateAfterCreate')}
+                        </label>
+                        <div className="ide-row">
+                          <button
+                            type="button"
+                            className="primary"
+                            disabled={
+                              creatingMap ||
+                              tilesetAId === undefined ||
+                              tilesetBId === undefined ||
+                              !newMapResult.valid
+                            }
+                            onClick={() => void handleCreateMap()}
+                          >
+                            {creatingMap ? t('painter.creatingMap') : t('painter.createMap')}
+                          </button>
+                        </div>
+                      </>
                     )}
-                    <label className="ide-check">
-                      <input
-                        type="checkbox"
-                        checked={generateAfterCreate}
-                        onChange={(event) => setGenerateAfterCreate(event.target.checked)}
-                      />
-                      {t('painter.procgen.generateAfterCreate')}
-                    </label>
-                    <div className="ide-row">
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={
-                          creatingMap ||
-                          tilesetAId === undefined ||
-                          tilesetBId === undefined ||
-                          !newMapResult.valid
-                        }
-                        onClick={() => void handleCreateMap()}
-                      >
-                        {creatingMap ? t('painter.creatingMap') : t('painter.createMap')}
-                      </button>
-                    </div>
                   </section>
                   {statusFeedback.message && <p className="ide-hint">{statusFeedback.message}</p>}
                 </div>

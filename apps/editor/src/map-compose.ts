@@ -32,6 +32,7 @@ import { createBlankMapDocument } from '@threemaker/map-format';
 import { DEFAULT_CHUNK_SIZE, type SheetPixelSizes } from '@threemaker/renderer';
 import { pruneLightsForNpcs } from './entity-lists.js';
 import type { PainterState } from './painter-store.js';
+import { PLACEHOLDER_DECOR_TILE_ID, PLACEHOLDER_GROUND_TILE_ID } from './placeholder-tileset.js';
 
 /**
  * RPGM tile-id range `[start, end)` per sheet slot -- duplicates
@@ -380,4 +381,35 @@ export function composeMapFromTilesets(options: ComposeMapFromTilesetsOptions): 
     slots: slots as SlotComposition,
     flags,
   });
+}
+
+export interface ComposePlaceholderMapOptions {
+  readonly id: string;
+  readonly name: string;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Session-only starter map using code-generated A5/B sheets (no catalog object
+ * sha). Flags stay all-zero (= fully passable). Save/reload without object sha
+ * will not resolve textures in desktop yet — pair with `buildPlaceholderTextures`
+ * for the live painter session only.
+ */
+export function composePlaceholderMap(options: ComposePlaceholderMapOptions): MapDocument {
+  const { id, name, width, height } = options;
+  const flags = new Array(FLAGS_LENGTH).fill(0);
+  const doc = createBlankMapDocument({
+    id,
+    name,
+    width,
+    height,
+    // Empty SlotSource (no `object`) marks the slot as composed for this session.
+    slots: {
+      A5: {},
+      B: {},
+    } as SlotComposition,
+    flags,
+  });
+  return seedDemoTiles(doc, PLACEHOLDER_GROUND_TILE_ID, PLACEHOLDER_DECOR_TILE_ID);
 }
