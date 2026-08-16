@@ -2812,14 +2812,19 @@ export function PainterPanel({ t }: PainterPanelProps) {
                   </div>
                 )}
 
-                {inspectorTab === 'ink' && (
-                  <InkPanel
-                    t={t}
-                    painterState={painterState}
-                    mapName={openMapName}
-                    onStatus={reportStatus}
-                    onStorySaved={loadInkInventory}
-                  />
+                {/* Keep InkPanel mounted while the map is open so unsaved
+                        source is not discarded when leaving the Ink tab (same
+                        keep-mounted idea as Map/Assets workspaces). */}
+                {mapReady && painterState && (
+                  <div hidden={inspectorTab !== 'ink'} aria-hidden={inspectorTab !== 'ink'}>
+                    <InkPanel
+                      t={t}
+                      painterState={painterState}
+                      mapName={openMapName}
+                      onStatus={reportStatus}
+                      onStorySaved={loadInkInventory}
+                    />
+                  </div>
                 )}
 
                 {inspectorTab === 'entities' && (

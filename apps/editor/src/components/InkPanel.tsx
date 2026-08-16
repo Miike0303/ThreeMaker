@@ -103,6 +103,12 @@ export function InkPanel({ t, painterState, mapName, onStatus, onStorySaved }: I
     };
   }, [selectedStoryId, mapName, onStatus, t]);
 
+  /** Block story/map switches that would discard the unsaved buffer. */
+  const confirmDiscardIfDirty = useCallback((): boolean => {
+    if (!dirty) return true;
+    return window.confirm(t('painter.ink.discardConfirm'));
+  }, [dirty, t]);
+
   const compile = useMemo(() => tryCompileInkSource(source), [source]);
 
   const handleSave = useCallback(async () => {
@@ -130,6 +136,8 @@ export function InkPanel({ t, painterState, mapName, onStatus, onStorySaved }: I
       onStatus({ message: t('painter.ink.invalidStoryId'), severity: 'warning' });
       return;
     }
+    if (id === selectedStoryId) return;
+    if (!confirmDiscardIfDirty()) return;
     if (!extraIds.includes(id) && !referencedIds.includes(id) && !diskStoryIds.includes(id)) {
       setExtraIds([...extraIds, id]);
     }
@@ -202,7 +210,12 @@ export function InkPanel({ t, painterState, mapName, onStatus, onStorySaved }: I
             {t('painter.ink.story')}
             <select
               value={selectedStoryId ?? ''}
-              onChange={(e) => setSelectedStoryId(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next === selectedStoryId) return;
+                if (!confirmDiscardIfDirty()) return;
+                setSelectedStoryId(next);
+              }}
             >
               {storyIds.map((id) => (
                 <option key={id} value={id}>
