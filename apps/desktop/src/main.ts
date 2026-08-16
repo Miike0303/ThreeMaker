@@ -330,17 +330,25 @@ async function loadUsedSheetTextures(
 
   const textures: Partial<Record<TileSheetId, THREE.Texture>> = {};
   const sheetPixelSizes: SheetPixelSizes = {};
-  await Promise.all(
+  // Explicit return values from map (side-effect-only map callbacks trip lint).
+  const loaded = await Promise.all(
     usedSheets.map(async ([sheet, name]) => {
       // loadSheetTexture applies the crisp no-mipmap default; createMapSession
       // re-configures these same textures with mipmaps/anisotropy later, so
       // the configuration here is a placeholder, not the final filtering.
       const texture = await loadSheetTexture(fixtureImageUrl(fixturesDir, name));
-      textures[sheet] = texture;
       const image = texture.image as { width: number; height: number };
-      sheetPixelSizes[sheet] = { width: image.width, height: image.height };
+      return {
+        sheet,
+        texture,
+        size: { width: image.width, height: image.height },
+      };
     }),
   );
+  for (const entry of loaded) {
+    textures[entry.sheet] = entry.texture;
+    sheetPixelSizes[entry.sheet] = entry.size;
+  }
 
   return { textures, sheetPixelSizes };
 }
@@ -1787,17 +1795,14 @@ async function renderFixtureMap(
           decision.reason === 'no-hop-path'
             ? 'no multi-map manifest hop path is active'
             : `hop or traversal in flight (${decision.reason})`;
-        console.error(
-          `transferMap to "${mapFile}" refused: ${detail}; staying on the current map.`,
-        );
-        done();
-        return;
+        // Throw so the interpreter emits script:failed + overlay (do not
+        // call done() — that finishes the script as a silent success).
+        throw new Error(`transferMap to "${mapFile}" refused: ${detail}`);
       }
       const hop = hopToManifestFile;
       if (!hop) {
         // decideTransferMapHost already required hopPathActive; defensive.
-        done();
-        return;
+        throw new Error(`transferMap to "${mapFile}" refused: no multi-map hop path`);
       }
       done();
       queueMicrotask(() => {
@@ -2407,9 +2412,9 @@ async function renderFixtureMap(
             : plan.reason === 'not-in-manifest'
               ? `is not in the game manifest`
               : `refused (${plan.reason})`;
-        console.error(
-          `transferMap / hop target "${mapFile}" ${detail}; staying on the current map.`,
-        );
+        const message = `transferMap / hop target "${mapFile}" ${detail}; staying on the current map.`;
+        console.error(message);
+        narrativeRoot.overlay().showError(message);
         return;
       }
       const targetIndex = plan.index;
@@ -2419,18 +2424,18 @@ async function renderFixtureMap(
       try {
         const nextResult = await manifestNav.loadEntry(targetFile);
         if (!nextResult) {
-          console.error(
-            `Failed to load manifest map "${targetFile}" -- staying on the current map.`,
-          );
+          const message = `Failed to load manifest map "${targetFile}" -- staying on the current map.`;
+          console.error(message);
+          narrativeRoot.overlay().showError(message);
           return;
         }
 
         // Same pre-flight as the boot scan: unplayable entries must never
         // reach session.dispose() (would leave an unrecoverable half-swap).
         if (!isAuthoredResultPlayable(nextResult)) {
-          console.error(
-            `Manifest map "${targetFile}" has no standable spawn tile; hop cancelled, staying on the current map.`,
-          );
+          const message = `Manifest map "${targetFile}" has no standable spawn tile; hop cancelled, staying on the current map.`;
+          console.error(message);
+          narrativeRoot.overlay().showError(message);
           // G-cycle advances past unplayable entries so the next press does
           // not retry forever; transferMap does not.
           if (opts?.advanceIndexOnUnplayable) {
@@ -2479,9 +2484,11 @@ async function renderFixtureMap(
         applyDayNightAmbient(narrativeRoot.clock.minutes);
         session = createMapSession(nextResult.floorSources, nextResult.stairLinks, sessionOpts);
         // transferMap may set facing; FloorSpawn has no facing field, so apply
-        // it on the mover after the session exists (same-map teleport pattern).
+        // it on the mover after the session exists. Use the *resolved* tile
+        // (post resolveInitialSpawn), not hopArrival.spawn — re-teleporting to
+        // the pre-relocate coords undoes wall-safe spawn adjustment.
         if (hopArrival?.facing !== undefined) {
-          session.mover.teleport(hopArrival.spawn.x, hopArrival.spawn.y, hopArrival.facing);
+          session.mover.teleport(session.mover.tile.x, session.mover.tile.y, hopArrival.facing);
         }
         try {
           await buildNarrativeBundle(nextResult.narrative);
