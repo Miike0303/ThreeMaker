@@ -95,7 +95,7 @@ describe('game-save-store', () => {
   it('uses Tauri Home path when available', async () => {
     tauriMocks.isTauriAvailable.mockReturnValue(true);
     fsMocks.exists.mockResolvedValueOnce(false);
-    await persistGameSaveSnapshot(sample, memoryStorage());
+    await expect(persistGameSaveSnapshot(sample, memoryStorage())).resolves.toBe(true);
     expect(fsMocks.mkdir).toHaveBeenCalledWith(
       '.threemaker/saves',
       expect.objectContaining({ baseDir: 'Home', recursive: true }),
@@ -105,6 +105,12 @@ describe('game-save-store', () => {
       expect.any(String),
       expect.objectContaining({ baseDir: 'Home' }),
     );
+  });
+
+  it('reports failure when Tauri writeTextFile rejects', async () => {
+    tauriMocks.isTauriAvailable.mockReturnValue(true);
+    fsMocks.writeTextFile.mockRejectedValueOnce(new Error('disk full'));
+    await expect(persistGameSaveSnapshot(sample, memoryStorage())).resolves.toBe(false);
   });
 
   it('loads a C3-era v1 save file into a v3 snapshot with empty inventory/stats/stories', async () => {
