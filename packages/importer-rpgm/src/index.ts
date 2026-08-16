@@ -29,13 +29,16 @@ export { parseMapInfos } from './parse-map-infos.js';
 export { parseTilesets } from './parse-tilesets.js';
 export type { TileFlags } from './tile-flags.js';
 export { decodeTileFlags } from './tile-flags.js';
-export type { TileSheetId } from './tile-id.js';
+export type { SheetIdRange, TileSheetId } from './tile-id.js';
 export {
   getAutotileKind,
   getAutotileShape,
   getLocalTileIndex,
   getTileSheet,
   isAutotile,
+  SHEET_BASE_ID,
+  SHEET_END_ID,
+  SHEET_ID_RANGES,
 } from './tile-id.js';
 export type {
   RpgmMap,

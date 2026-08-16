@@ -37,31 +37,11 @@
  * loaded image can never produce a tile id spilling into the next sheet's
  * range.
  */
-import type { TileSheetId } from '@threemaker/importer-rpgm';
+import { SHEET_BASE_ID, type TileSheetId } from '@threemaker/importer-rpgm';
 import type { AutotileSheetId, SheetPixelSize } from '@threemaker/renderer';
 import { computeAutotileQuarterOrigins, TILE_SIZE_PX } from '@threemaker/renderer';
 
 export type PlainSheetId = Exclude<TileSheetId, AutotileSheetId>;
-
-/**
- * Starting tile id of each sheet's range -- mirrors
- * `packages/importer-rpgm/src/tile-id.ts`'s private `SHEET_RANGES` table
- * (not exported from that package) and `apps/editor/src/map-compose.ts`'s
- * independently-duplicated `SLOT_ID_RANGES`. Kept as a third small,
- * self-contained copy here (rather than importing map-compose.ts's) so
- * this UI-only module stays decoupled from the map-composition module.
- */
-const SHEET_BASE_ID: Readonly<Record<TileSheetId, number>> = {
-  B: 0,
-  C: 256,
-  D: 512,
-  E: 768,
-  A5: 1536,
-  A1: 2048,
-  A2: 2816,
-  A3: 4352,
-  A4: 5888,
-};
 
 /** Highest valid local index + 1 for each plain sheet (id range size), so a taller-than-expected image never grows the grid past what that sheet can actually address. */
 const PLAIN_SHEET_MAX_LOCAL_INDEX: Readonly<Record<PlainSheetId, number>> = {

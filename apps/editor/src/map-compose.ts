@@ -10,7 +10,13 @@
  * floor-aware compose (multi-floor is the real model).
  */
 
-import { documentFloorToRpgm, type RpgmMap, type RpgmTileset } from '@threemaker/importer-rpgm';
+import {
+  documentFloorToRpgm,
+  type RpgmMap,
+  type RpgmTileset,
+  SHEET_BASE_ID,
+  SHEET_END_ID,
+} from '@threemaker/importer-rpgm';
 import type {
   FloorDocument,
   LightDocument,
@@ -32,22 +38,17 @@ import { pruneLightsForNpcs } from './entity-lists.js';
 import type { PainterState } from './painter-store.js';
 import { PLACEHOLDER_DECOR_TILE_ID, PLACEHOLDER_GROUND_TILE_ID } from './placeholder-tileset.js';
 
-/**
- * RPGM tile-id range `[start, end)` per sheet slot -- duplicates
- * `packages/importer-rpgm/src/tile-id.ts`'s private `SHEET_RANGES` table
- * (not exported from that package), since a slot's flags only ever cover
- * its own id range.
- */
+/** RPGM tile-id range `[start, end)` per sheet — single source in importer-rpgm. */
 const SLOT_ID_RANGES: Readonly<Record<TileSheetSlot, readonly [number, number]>> = {
-  B: [0, 256],
-  C: [256, 512],
-  D: [512, 768],
-  E: [768, 1024],
-  A5: [1536, 2048],
-  A1: [2048, 2816],
-  A2: [2816, 4352],
-  A3: [4352, 5888],
-  A4: [5888, 8192],
+  B: [SHEET_BASE_ID.B, SHEET_END_ID.B],
+  C: [SHEET_BASE_ID.C, SHEET_END_ID.C],
+  D: [SHEET_BASE_ID.D, SHEET_END_ID.D],
+  E: [SHEET_BASE_ID.E, SHEET_END_ID.E],
+  A5: [SHEET_BASE_ID.A5, SHEET_END_ID.A5],
+  A1: [SHEET_BASE_ID.A1, SHEET_END_ID.A1],
+  A2: [SHEET_BASE_ID.A2, SHEET_END_ID.A2],
+  A3: [SHEET_BASE_ID.A3, SHEET_END_ID.A3],
+  A4: [SHEET_BASE_ID.A4, SHEET_END_ID.A4],
 };
 
 const FLAGS_LENGTH = 8192;
