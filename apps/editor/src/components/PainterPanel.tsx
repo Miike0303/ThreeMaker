@@ -831,6 +831,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
       reportStatus({ message: t('painter.procgen.needMap'), severity: 'warning' });
       return;
     }
+    // Generate rewrites the active floor (tiles/rooms/spawn/lights). Confirm when
+    // a map is already open — same class of loss as new-map replace.
+    if (
+      mapReady &&
+      !window.confirm(formatTemplate(t('painter.procgen.replaceConfirm'), { name: doc.name }))
+    ) {
+      return;
+    }
     try {
       // Stamp the active floor so multi-floor maps can Generate upper levels.
       const targetFloorIndex = Math.min(
@@ -919,6 +927,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     }
   }, [
     t,
+    mapReady,
     procgenSeed,
     procgenPreset,
     procgenWallTileId,

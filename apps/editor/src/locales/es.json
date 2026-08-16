@@ -144,6 +144,7 @@
     "painter.procgen": "Procgen",
     "painter.procgen.hint": "Pincel = suelo. Pared/puerta: id, desde pincel o Auto. Misma seed + preset = mismo layout. Spawn en la sala mayor; conserva eventos/NPCs.",
     "painter.procgen.generate": "Generar",
+    "painter.procgen.replaceConfirm": "¿Generar un layout nuevo en “{name}”? Se reemplazarán tiles, salas, spawn y luces del piso activo.",
     "painter.procgen.generateAfterCreate": "Generar mazmorra al crear el mapa",
     "painter.procgen.preset": "Preset",
     "painter.procgen.preset.dungeon": "Mazmorra",

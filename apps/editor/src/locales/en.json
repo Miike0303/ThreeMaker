@@ -145,6 +145,7 @@
     "painter.procgen": "Procgen",
     "painter.procgen.hint": "Brush = ground. Wall/door: pick id, from brush, or Auto. Same seed + preset = same layout. Spawn moves to the largest room; keeps events/NPCs.",
     "painter.procgen.generate": "Generate",
+    "painter.procgen.replaceConfirm": "Generate a new layout on “{name}”? The active floor’s tiles, rooms, spawn, and lights will be replaced.",
     "painter.procgen.preset": "Preset",
     "painter.procgen.preset.dungeon": "Dungeon",
     "painter.procgen.preset.house": "House",

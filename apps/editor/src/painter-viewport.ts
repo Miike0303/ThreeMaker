@@ -1035,6 +1035,13 @@ export class PainterViewport {
       this.togglePostProcessing();
       return;
     }
+    // Eraser is brush + fill 0 (not a ToolId); rail advertises (E).
+    if (event.key.toLowerCase() === 'e') {
+      if (event.repeat) return;
+      this.setFillTileId(0);
+      this.setTool('brush');
+      return;
+    }
     const tool = resolveToolShortcut(event.key);
     if (tool) this.setTool(tool);
   }

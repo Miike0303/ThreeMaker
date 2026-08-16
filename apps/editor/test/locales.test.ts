@@ -83,6 +83,7 @@ const NEW_KEYS = [
   'painter.procgen',
   'painter.procgen.hint',
   'painter.procgen.generate',
+  'painter.procgen.replaceConfirm',
   'painter.procgen.preset',
   'painter.procgen.preset.dungeon',
   'painter.procgen.preset.house',
