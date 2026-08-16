@@ -75,6 +75,7 @@
 import type { EventCommand } from '@threemaker/core';
 import { parseEventScript } from '@threemaker/core';
 
+import { authoringPlugins } from './authoring-plugins.js';
 import type {
   CommandStackState,
   LightDocument,
@@ -2227,7 +2228,7 @@ export function validateEventsDraft(
   events: Readonly<Record<string, readonly EventCommand[]>>,
 ): string | null {
   try {
-    parseEventScript({ version: 1, events });
+    parseEventScript({ version: 1, events }, authoringPlugins());
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);

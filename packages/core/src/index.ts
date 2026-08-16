@@ -30,6 +30,13 @@ export type { GameLoopOptions } from './game-loop.js';
 export { GameLoop } from './game-loop.js';
 export { Node } from './node.js';
 export { PlainTextDialogueProvider } from './plain-text-dialogue-provider.js';
+export type { AudioCommandHandlers } from './audio-commands.js';
+export {
+  createAudioCommandPlugins,
+  parseAudioPath,
+  parseFadeMs,
+  parseVolume,
+} from './audio-commands.js';
 export type { CommandContext, CommandPlugin, PluginCommand } from './plugin.js';
 export { CommandRegistry } from './plugin.js';
 export type { Listener, SignalSubscriber, Unsubscribe } from './signal-bus.js';

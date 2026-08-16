@@ -10,62 +10,23 @@
  *
  * The player itself is a thin IO wrapper over `AudioContext` and is left
  * untested per this repo's convention (see `catalog-client.ts`'s note on the
- * pure/imperative split); the pure path and option validation below are unit
- * tested in `test/audio.test.ts`.
+ * pure/imperative split); pure path/option validation and the shared plugin
+ * factory live in `@threemaker/core` and are unit tested there and below.
  */
 
-import type { CommandPlugin } from '@threemaker/core';
+import {
+  type CommandPlugin,
+  createAudioCommandPlugins,
+  parseAudioPath,
+  parseFadeMs,
+  parseVolume,
+} from '@threemaker/core';
+
+export { parseAudioPath, parseFadeMs, parseVolume };
 
 /** Resolves a manifest-relative audio path to its raw encoded bytes. */
 export interface AudioSource {
   load(path: string): Promise<ArrayBuffer>;
-}
-
-/**
- * Validates an authored audio path with the same rules as core's
- * `transferMap` `mapFile`: manifest-relative, no `..` escape, no absolute
- * path. Authored content is untrusted input at this boundary — a map can be
- * shared, and a path that walks out of the asset directory would let it read
- * arbitrary host files.
- */
-export function parseAudioPath(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`${label} requires a non-empty string "path".`);
-  }
-  const normalized = value.replaceAll('\\', '/');
-  if (normalized.split('/').includes('..')) {
-    throw new Error(
-      `${label} "path" must not contain ".." segments, got ${JSON.stringify(value)}.`,
-    );
-  }
-  if (normalized.startsWith('/') || /^[a-zA-Z]:\//.test(normalized)) {
-    throw new Error(
-      `${label} "path" must be a manifest-relative path, not absolute, got ${JSON.stringify(value)}.`,
-    );
-  }
-  return normalized;
-}
-
-/** Validates an optional 0..1 gain. Out-of-range is a content bug, not something to silently clamp. */
-export function parseVolume(value: unknown, label: string): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
-    throw new Error(
-      `${label} "volume" must be a number between 0 and 1, got ${JSON.stringify(value)}.`,
-    );
-  }
-  return value;
-}
-
-/** Validates an optional fade duration in milliseconds. */
-export function parseFadeMs(value: unknown, label: string): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-    throw new Error(
-      `${label} "fadeMs" must be a non-negative number, got ${JSON.stringify(value)}.`,
-    );
-  }
-  return value;
 }
 
 const DEFAULT_VOLUME = 1;
@@ -231,67 +192,14 @@ export class AudioPlayer {
 }
 
 /**
- * The audio verbs as plugins: `playSound`, `playBgm`, `stopBgm`. All three
- * return `'continue'` — audio never blocks a script, so a sound effect mid
- * dialogue does not stall the scene waiting for the clip to finish.
- *
- * Register them on the same {@link CommandRegistry} handed to
+ * Desktop runtime wrapper: shared parse plugins from core, wired to a real
+ * {@link AudioPlayer}. Register on the same {@link CommandRegistry} handed to
  * `parseMapDocument` and to the `EventInterpreter`.
  */
 export function createAudioCommands(player: AudioPlayer): readonly CommandPlugin[] {
-  return [
-    {
-      type: 'playSound',
-      parse(value, path) {
-        return {
-          type: 'playSound',
-          path: parseAudioPath(value.path, path),
-          ...(parseVolume(value.volume, path) !== undefined ? { volume: value.volume } : {}),
-        };
-      },
-      run(command) {
-        player.playSound(command.path as string, (command.volume as number) ?? DEFAULT_VOLUME);
-        return 'continue';
-      },
-    },
-    {
-      type: 'playBgm',
-      parse(value, path) {
-        const volume = parseVolume(value.volume, path);
-        const fadeMs = parseFadeMs(value.fadeMs, path);
-        if (value.loop !== undefined && typeof value.loop !== 'boolean') {
-          throw new Error(`${path} "loop" must be a boolean when present.`);
-        }
-        return {
-          type: 'playBgm',
-          path: parseAudioPath(value.path, path),
-          ...(volume !== undefined ? { volume } : {}),
-          ...(fadeMs !== undefined ? { fadeMs } : {}),
-          ...(value.loop !== undefined ? { loop: value.loop } : {}),
-        };
-      },
-      run(command) {
-        // Built key-by-key: under `exactOptionalPropertyTypes` an explicit
-        // `undefined` is not the same as an absent key, and the player's
-        // defaults only apply to absent ones.
-        player.playBgm(command.path as string, {
-          ...(command.volume !== undefined ? { volume: command.volume as number } : {}),
-          ...(command.fadeMs !== undefined ? { fadeMs: command.fadeMs as number } : {}),
-          ...(command.loop !== undefined ? { loop: command.loop as boolean } : {}),
-        });
-        return 'continue';
-      },
-    },
-    {
-      type: 'stopBgm',
-      parse(value, path) {
-        const fadeMs = parseFadeMs(value.fadeMs, path);
-        return { type: 'stopBgm', ...(fadeMs !== undefined ? { fadeMs } : {}) };
-      },
-      run(command) {
-        player.stopBgm(command.fadeMs as number | undefined);
-        return 'continue';
-      },
-    },
-  ];
+  return createAudioCommandPlugins({
+    playSound: (path, volume) => player.playSound(path, volume),
+    playBgm: (path, opts) => player.playBgm(path, opts),
+    stopBgm: (fadeMs) => player.stopBgm(fadeMs),
+  });
 }

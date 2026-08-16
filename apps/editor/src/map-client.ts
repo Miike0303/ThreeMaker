@@ -25,6 +25,7 @@ import {
 } from '@tauri-apps/plugin-fs';
 import type { MapDocument } from '@threemaker/map-format';
 import { parseMapDocument, serializeMapDocument } from '@threemaker/map-format';
+import { authoringPlugins } from './authoring-plugins.js';
 import { isTauriAvailable } from './catalog-client.js';
 import {
   assertMapName,
@@ -117,7 +118,7 @@ export async function loadMapDocument(
     const fileExists = await exists(relative, FS_HOME);
     if (!fileExists) return null;
     const text = await readTextFile(relative, FS_HOME);
-    return parseMapDocument(JSON.parse(text));
+    return parseMapDocument(JSON.parse(text), authoringPlugins());
   }
   const response = await fetch(`${DEV_MAP_API_BASE}/load${mapNameQuery(name)}`);
   if (response.status === 404) return null;
@@ -125,7 +126,7 @@ export async function loadMapDocument(
     throw new MapClientError(`Failed to load the map: HTTP ${response.status}`);
   }
   const json = await response.json();
-  return parseMapDocument(json);
+  return parseMapDocument(json, authoringPlugins());
 }
 
 /** Sorted map stems present in the maps directory (includes legacy `current`). */
