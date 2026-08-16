@@ -9,7 +9,12 @@ import type { FloorDocument, MapDocument } from '@threemaker/map-format';
 import { CURRENT_MAP_FORMAT_VERSION, MAP_FORMAT_MAGIC } from '@threemaker/map-format';
 import { buildChunks, type SheetPixelSizes } from '@threemaker/renderer';
 import { describe, expect, it } from 'vitest';
-import { painterChunkArgs, painterFloorsFromDocument } from '../src/map-compose.js';
+import {
+  painterChunkArgs,
+  painterChunkArgsFromSnapshot,
+  painterFloorsFromDocument,
+  renderableSnapshot,
+} from '../src/map-compose.js';
 import { createPainterState } from '../src/painter-store.js';
 
 const SHEET_SIZES: SheetPixelSizes = {
@@ -116,5 +121,38 @@ describe('painter ramp chunks', () => {
     const rampTile = tiles.find((tile) => tile.tileY === 0);
 
     expect(rampTile?.ramp).toEqual({ direction: 'south', highHeight: 3, lowHeight: 2 });
+  });
+
+  it('painterChunkArgsFromSnapshot reuses rampCells without a second snapshot', () => {
+    const doc = rampStepDocument();
+    const state = createPainterState({
+      floors: painterFloorsFromDocument(doc),
+      width: doc.width,
+      height: doc.height,
+      semantics: doc.tileset.semantics,
+    });
+    const snapshot = renderableSnapshot(doc, state);
+    const dirtyKeys = new Set(['0,0']);
+
+    const fromSnapshot = painterChunkArgsFromSnapshot(
+      snapshot,
+      doc.tileset.tilePixelSize,
+      SHEET_SIZES,
+      dirtyKeys,
+    );
+    const viaPainterChunkArgs = painterChunkArgs(doc, state, SHEET_SIZES, dirtyKeys);
+
+    // Same rampCells reference as the single snapshot (live path must not re-derive).
+    expect(fromSnapshot[5]).toBe(snapshot.rampCells);
+    expect(fromSnapshot[0]).toBe(snapshot.map);
+    expect(fromSnapshot[1]).toBe(snapshot.tileset);
+    expect(fromSnapshot[4]).toBe(dirtyKeys);
+    // Behavior parity with the full helper (values, not necessarily same refs).
+    expect(fromSnapshot[5]).toEqual(viaPainterChunkArgs[5]);
+    expect(buildChunks(...fromSnapshot)[0]?.tiles.find((t) => t.tileY === 0)?.ramp).toEqual({
+      direction: 'south',
+      highHeight: 3,
+      lowHeight: 2,
+    });
   });
 });

@@ -24,6 +24,7 @@ import {
   composeDocumentFromPainterFloors,
   normalizeMapName,
   painterChunkArgs,
+  painterChunkArgsFromSnapshot,
   painterFloorsFromDocument,
   renderableSnapshot,
 } from './map-compose.js';
@@ -1060,16 +1061,22 @@ export class PainterViewport {
     this.scene.add(this.tilemap.group);
   }
 
-  /** Scoped live update on the ACTIVE floor: dirty-region -> buildChunks(onlyChunks) -> patchChunks, plus explicit buildChunk for any dirty chunk not yet live (a from-scratch blank map starts with zero live chunks). */
+  /** Scoped live update on the ACTIVE floor: dirty-region -> buildChunks(onlyChunks) -> patchChunks, plus explicit buildChunk for any dirty chunk not yet live (a from-scratch blank map starts with zero live chunks). One renderableSnapshot per stroke (not a second via painterChunkArgs). */
   private applyDiffLiveUpdate(diff: TileDiff): void {
     if (!this.doc || !this.state || !this.tilemap) return;
-    const { map, tileset } = renderableSnapshot(this.doc, this.state);
+    const snapshot = renderableSnapshot(this.doc, this.state);
+    const { map, tileset } = snapshot;
 
     const dirtyKeys = computeDirtyChunkKeys(diff.cells, map, tileset, DEFAULT_CHUNK_SIZE);
     if (dirtyKeys.size === 0) return;
 
     const rebuilt = buildChunks(
-      ...painterChunkArgs(this.doc, this.state, this.sheetPixelSizes, dirtyKeys),
+      ...painterChunkArgsFromSnapshot(
+        snapshot,
+        this.doc.tileset.tilePixelSize,
+        this.sheetPixelSizes,
+        dirtyKeys,
+      ),
     );
     const rebuiltKeys = new Set(rebuilt.map((chunk) => chunkKey(chunk.chunkX, chunk.chunkY)));
     const cleared: ChunkBuildData[] = [];

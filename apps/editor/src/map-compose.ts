@@ -305,22 +305,36 @@ export function renderableSnapshot(doc: MapDocument, state: PainterState) {
  * while playtest sloped it. A test that calls `buildChunks` itself cannot catch
  * that regression -- only one that observes what the painter assembles can.
  */
+export type RenderableSnapshot = ReturnType<typeof renderableSnapshot>;
+
+/**
+ * Assemble `buildChunks` args from an existing {@link renderableSnapshot}.
+ * Live paint must call `renderableSnapshot` once per stroke and reuse it here —
+ * calling {@link painterChunkArgs} after a separate snapshot would derive ramps
+ * twice (full W×H×layers each time).
+ */
+export function painterChunkArgsFromSnapshot(
+  snapshot: RenderableSnapshot,
+  tilePixelSize: number,
+  sheetPixelSizes: SheetPixelSizes,
+  dirtyKeys: ReadonlySet<string> | undefined,
+): Parameters<typeof import('@threemaker/renderer').buildChunks> {
+  const { map, tileset, rampCells } = snapshot;
+  return [map, tileset, sheetPixelSizes, DEFAULT_CHUNK_SIZE, dirtyKeys, rampCells, tilePixelSize];
+}
+
 export function painterChunkArgs(
   doc: MapDocument,
   state: PainterState,
   sheetPixelSizes: SheetPixelSizes,
   dirtyKeys: ReadonlySet<string> | undefined,
 ): Parameters<typeof import('@threemaker/renderer').buildChunks> {
-  const { map, tileset, rampCells } = renderableSnapshot(doc, state);
-  return [
-    map,
-    tileset,
-    sheetPixelSizes,
-    DEFAULT_CHUNK_SIZE,
-    dirtyKeys,
-    rampCells,
+  return painterChunkArgsFromSnapshot(
+    renderableSnapshot(doc, state),
     doc.tileset.tilePixelSize,
-  ];
+    sheetPixelSizes,
+    dirtyKeys,
+  );
 }
 
 /** Bridges a `MapDocument`'s merged flags to the `RpgmTileset` shape `buildChunks` expects. `sheetNames` is unused by the renderer's build pipeline (only `computeTileUv`'s caller-provided `sheetPixelSizes` matters), so it's a harmless placeholder. */
