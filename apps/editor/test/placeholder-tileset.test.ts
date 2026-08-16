@@ -2,7 +2,6 @@
  * Starter placeholder A5/B sheets + composePlaceholderMap (catalog-free paint path).
  */
 import { getTileSheet } from '@threemaker/importer-rpgm';
-import { primaryFloorLayers } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import { composePlaceholderMap, toRenderableMap } from '../src/map-compose.js';
 import {
@@ -110,7 +109,7 @@ describe('composePlaceholderMap', () => {
     expect(getTileSheet(PLACEHOLDER_GROUND_TILE_ID)).toBe('A5');
     expect(getTileSheet(PLACEHOLDER_DECOR_TILE_ID)).toBe('B');
 
-    const ground = primaryFloorLayers(doc).tiles[0];
+    const ground = doc.floors[0]!.layers.tiles[0];
     expect(ground).toBeDefined();
     expect(ground?.every((id) => id === PLACEHOLDER_GROUND_TILE_ID)).toBe(true);
     expect(doc.tileset.flags).toHaveLength(8192);

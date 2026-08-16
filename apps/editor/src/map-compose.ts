@@ -7,9 +7,7 @@
  * `painterFloorsFromDocument`/`composeDocumentFromPainterFloors` bridge a
  * v2 `MapDocument`'s `floors[]` to/from the painter store's per-floor
  * state, and `toRenderableMap` takes an explicit floor index. This
- * replaces Slice 1's transitional `primaryFloorLayers`/
- * `withPrimaryFloorLayers` single-floor accessors (still exported from
- * `@threemaker/map-format` for other, not-yet-floor-aware consumers).
+ * floor-aware compose (multi-floor is the real model).
  */
 
 import { documentFloorToRpgm, type RpgmMap, type RpgmTileset } from '@threemaker/importer-rpgm';

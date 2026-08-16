@@ -1457,26 +1457,3 @@ function validateTileLayer(input: unknown, expectedLength: number, label: string
 export function serializeMapDocument(doc: MapDocument): string {
   return JSON.stringify(doc);
 }
-
-/**
- * Transitional single-floor accessor for callers not yet floor-aware ahead
- * of the floor-aware gameplay/renderer/painter work (plantas-apiladas
- * Slices 2-4). Reads floor `[0]`'s layers; call sites that need real floor
- * selection move to the floor-aware entry points those slices introduce.
- */
-export function primaryFloorLayers(doc: MapDocument): MapLayers {
-  const floor = doc.floors[0];
-  if (!floor) {
-    throw new MapFormatError('malformed', 'Map document has no floors.');
-  }
-  return floor.layers;
-}
-
-/** Transitional single-floor writer counterpart to `primaryFloorLayers` -- see its doc comment. */
-export function withPrimaryFloorLayers(doc: MapDocument, layers: MapLayers): MapDocument {
-  const [first, ...rest] = doc.floors;
-  if (!first) {
-    throw new MapFormatError('malformed', 'Map document has no floors.');
-  }
-  return { ...doc, floors: [{ ...first, layers }, ...rest] };
-}

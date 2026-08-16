@@ -48,11 +48,9 @@ export {
   DEFAULT_FLOOR_HEIGHT,
   MAP_FORMAT_MAGIC,
   MapFormatError,
-  primaryFloorLayers,
   serializeMapDocument,
   TILE_SHEET_SLOTS,
   validateCurrentVersionShape,
-  withPrimaryFloorLayers,
 } from './schema.js';
 export type {
   CommandStackState,
