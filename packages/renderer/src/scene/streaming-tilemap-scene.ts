@@ -1,7 +1,7 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import * as THREE from 'three';
-import { computeWallTileKeys } from '../geometry/elevation.js';
-import type { ChunkBuildData } from '../geometry/types.js';
+import { computeWallTileKeys, isWallSheet, tileKey } from '../geometry/elevation.js';
+import type { ChunkBuildData, TileBuildData } from '../geometry/types.js';
 import { chunkKey } from '../streaming/chunk-streamer.js';
 import { type BuildChunkGroupOptions, buildChunkGroup } from './build-chunk-group.js';
 import type { PixelArtTextureOptions } from './pixel-art-texture.js';
@@ -54,6 +54,28 @@ function parseRoomMeshName(
   const sheet = match[1] as TileSheetId;
   const roomId = Number(match[2]);
   return { sheet, roomId };
+}
+
+function isGroundWallTile(tile: Pick<TileBuildData, 'sheet' | 'elevation'>): boolean {
+  return tile.elevation !== 'upper' && isWallSheet(tile.sheet);
+}
+
+function removeWallKeysFromTiles(
+  keys: Set<string>,
+  tiles: readonly Pick<TileBuildData, 'tileX' | 'tileY' | 'sheet' | 'elevation'>[],
+): void {
+  for (const tile of tiles) {
+    if (isGroundWallTile(tile)) keys.delete(tileKey(tile.tileX, tile.tileY));
+  }
+}
+
+function addWallKeysFromTiles(
+  keys: Set<string>,
+  tiles: readonly Pick<TileBuildData, 'tileX' | 'tileY' | 'sheet' | 'elevation'>[],
+): void {
+  for (const tile of tiles) {
+    if (isGroundWallTile(tile)) keys.add(tileKey(tile.tileX, tile.tileY));
+  }
 }
 
 /** Opaque rest opacity for a room's ceiling material -- identical to the shared per-sheet material's default state. */
@@ -297,20 +319,20 @@ export class StreamingTilemapScene {
   patchChunks(chunks: readonly ChunkBuildData[]): void {
     if (this.disposed || chunks.length === 0) return;
 
+    // Incremental wall occupancy: drop keys from previous chunk tiles, add
+    // from the replacement. Same whole-map Set semantics as a full recompute
+    // (one cell → one chunk) without O(map) flatMap on every stroke.
+    const nextWallKeys = new Set(this.wallTileKeys);
     const patchedKeys: string[] = [];
     for (const chunk of chunks) {
       const key = chunkKey(chunk.chunkX, chunk.chunkY);
+      const previous = this.chunkData.get(key);
+      if (previous) removeWallKeysFromTiles(nextWallKeys, previous.tiles);
       this.chunkData.set(key, chunk);
+      addWallKeysFromTiles(nextWallKeys, chunk.tiles);
       patchedKeys.push(key);
     }
-
-    // Recomputed from the FULL, now-updated chunk data set -- not just the
-    // patched chunks -- so a wall tile painted in one chunk still culls its
-    // shared interior face against an already-live neighbor chunk, and vice
-    // versa (matches the constructor's whole-map computation exactly).
-    this.wallTileKeys = computeWallTileKeys(
-      [...this.chunkData.values()].flatMap((chunk) => chunk.tiles),
-    );
+    this.wallTileKeys = nextWallKeys;
 
     for (const key of patchedKeys) {
       if (!this.liveChunks.has(key)) continue;
