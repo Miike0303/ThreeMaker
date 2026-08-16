@@ -960,6 +960,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
     if (!doc) return;
     try {
       await saveMapDocument(doc, openMapName);
+      // Desktop single-file boot always loads `current.tmmap.json`. Dual-write so
+      // Play on a named map (e.g. starter "New Map") still launches that content.
+      if (openMapName !== LEGACY_MAP_NAME) {
+        await saveMapDocument(doc, LEGACY_MAP_NAME);
+      }
       setDocDirty(false);
       void refreshSavedMaps();
       await openPlaytest();
