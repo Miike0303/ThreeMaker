@@ -1,9 +1,9 @@
 import type { RampCellInput, RpgmMap, RpgmTileset } from '@threemaker/importer-rpgm';
 import {
-  computeHeightGrid,
   computeRampGrid,
   decodeTileFlags,
   getTileSheet,
+  heightForRegion,
 } from '@threemaker/importer-rpgm';
 import { computeCliffEdges, isObjectSheet, rampDataAt } from './elevation.js';
 import { computeTileUv } from './tile-uv.js';
@@ -17,43 +17,54 @@ import type {
 import { DEFAULT_CHUNK_SIZE, TILE_SIZE_PX } from './types.js';
 
 /**
- * Marks every map cell that carries a star-bit ("upper layer") tile on any
- * of the 4 editable layers -- the per-cell lookup `computeStarStack` needs
- * to walk south past consecutive star tiles to find a stack's base, which
- * requires random access across the whole map, not just the tile currently
- * being visited in `buildChunks`' main loop.
+ * Height / star-bit / wall-autotile lookup grids for `buildChunks`.
+ * Allocates full-map typed arrays (so `y * width + x` indexing stays
+ * unchanged) but only *fills* `region` -- a scoped rebuild leaves cells
+ * outside that window at 0, which is correct because those cells are
+ * never read (tile scan is also scoped) except along the halo/south
+ * columns the region is required to include.
  */
-function computeUpperGrid(map: RpgmMap, tileset: RpgmTileset): Uint8Array {
-  const grid = new Uint8Array(map.width * map.height);
-  for (const layer of map.layers.tileLayers) {
-    for (let i = 0; i < layer.length; i++) {
-      if (grid[i]) continue;
-      const tileId = layer[i] ?? 0;
-      if (tileId === 0) continue;
-      if (decodeTileFlags(tileset.flags[tileId] ?? 0).isUpperLayer) grid[i] = 1;
-    }
-  }
-  return grid;
-}
+function fillLookupGrids(
+  map: RpgmMap,
+  tileset: RpgmTileset,
+  region: TileRegion,
+): { heightGrid: Uint8Array; upperGrid: Uint8Array; wallGrid: Uint8Array } {
+  const { width } = map;
+  const size = width * map.height;
+  const heightGrid = new Uint8Array(size);
+  const upperGrid = new Uint8Array(size);
+  const wallGrid = new Uint8Array(size);
+  const regions = map.layers.regions;
 
-/**
- * Marks every map cell where any of the 4 tile layers holds a
- * ground-elevation (non-star) A3/A4 wall-autotile -- needed so a star tile
- * stacking on a wall base stands on top of the wall prism's height, not the
- * bare floor (see `computeStarStack`).
- */
-function computeWallGrid(map: RpgmMap): Uint8Array {
-  const grid = new Uint8Array(map.width * map.height);
-  for (const layer of map.layers.tileLayers) {
-    for (let i = 0; i < layer.length; i++) {
-      if (grid[i]) continue;
-      const tileId = layer[i] ?? 0;
-      if (tileId === 0) continue;
-      const sheet = getTileSheet(tileId);
-      if (sheet === 'A3' || sheet === 'A4') grid[i] = 1;
+  for (let y = region.yStart; y < region.yEnd; y++) {
+    const row = y * width;
+    for (let x = region.xStart; x < region.xEnd; x++) {
+      heightGrid[row + x] = heightForRegion(regions[row + x] ?? 0);
     }
   }
-  return grid;
+
+  // One pass sets both marker grids (they used to be two independent
+  // W×H×4 walks). Skip the tile-id read once both bits at a cell are set.
+  for (const layer of map.layers.tileLayers) {
+    for (let y = region.yStart; y < region.yEnd; y++) {
+      const row = y * width;
+      for (let x = region.xStart; x < region.xEnd; x++) {
+        const i = row + x;
+        if (upperGrid[i] && wallGrid[i]) continue;
+        const tileId = layer[i] ?? 0;
+        if (tileId === 0) continue;
+        if (!upperGrid[i] && decodeTileFlags(tileset.flags[tileId] ?? 0).isUpperLayer) {
+          upperGrid[i] = 1;
+        }
+        if (!wallGrid[i]) {
+          const sheet = getTileSheet(tileId);
+          if (sheet === 'A3' || sheet === 'A4') wallGrid[i] = 1;
+        }
+      }
+    }
+  }
+
+  return { heightGrid, upperGrid, wallGrid };
 }
 
 /**
@@ -121,6 +132,37 @@ function chunkTileRegion(
 }
 
 /**
+ * Cells the lookup grids must fill so a scoped rebuild stays byte-identical
+ * to a full build filtered to those chunks: the scan rectangles, plus a
+ * 1-tile halo (cliff / ramp neighbors) and every row south of the union
+ * (`computeStarStack` walks `y+1` until a non-star cell). Stale/empty
+ * rectangles contribute nothing; if none remain, the caller returns `[]`
+ * without allocating grids.
+ */
+function lookupGridFillRegion(
+  mapWidth: number,
+  mapHeight: number,
+  scanRegions: readonly TileRegion[],
+): TileRegion | undefined {
+  let xStart = Number.POSITIVE_INFINITY;
+  let yStart = Number.POSITIVE_INFINITY;
+  let xEnd = Number.NEGATIVE_INFINITY;
+  for (const region of scanRegions) {
+    if (region.xStart >= region.xEnd || region.yStart >= region.yEnd) continue;
+    xStart = Math.min(xStart, region.xStart);
+    yStart = Math.min(yStart, region.yStart);
+    xEnd = Math.max(xEnd, region.xEnd);
+  }
+  if (xStart === Number.POSITIVE_INFINITY) return undefined;
+  return {
+    xStart: Math.max(0, xStart - 1),
+    yStart: Math.max(0, yStart - 1),
+    xEnd: Math.min(mapWidth, xEnd + 1),
+    yEnd: mapHeight,
+  };
+}
+
+/**
  * Splits a map's 4 tile layers into `chunkSize` x `chunkSize` chunks of
  * render-ready tile data: which sheet each tile belongs to, its UV rect, and
  * whether it sits on the ground plane or should be extruded as a standing
@@ -138,12 +180,11 @@ function chunkTileRegion(
  * equivalent to a full build filtered down to those keys (see
  * `chunk-geometry.test.ts`'s "onlyChunks" property test), but at a fraction
  * of the cost on a large map, since cells outside the requested chunks are
- * never even visited. The region-derived grids (`heightGrid`/`upperGrid`/
- * `wallGrid`/`rampGrid`) are still computed over the WHOLE map regardless --
- * they are cheap flat typed-array passes, and cliff/star-stack/ramp lookups
- * need whole-map neighbor data to stay correct at a scoped chunk's own edges
- * (benchmarked as a small fraction of full `buildChunks` cost; see the
- * decision-gate benchmark in `test/build-chunks-benchmark.test.ts`).
+ * never even visited. Lookup grids (`heightGrid`/`upperGrid`/`wallGrid`)
+ * fill the same window plus a 1-tile halo and the columns south of it
+ * (`computeStarStack` walks toward the map's southern edge; cliffs read
+ * one neighbor in each cardinal direction). `rampGrid` is already O(ramp
+ * cells), not O(map area).
  *
  * `rampCells`, when given, is the resolved list of map cells classified
  * `'ramp'` by tileset semantics (see importer-rpgm's `computeRampGrid`,
@@ -167,20 +208,6 @@ export function buildChunks(
     throw new Error(`chunkSize must be a positive number, got ${chunkSize}.`);
   }
 
-  // Region-derived elevation (MV3D convention), computed once for the whole
-  // map so cliff-edge lookups can freely check neighbors across chunk
-  // boundaries (unlike the wall-prism interior-face check in
-  // build-chunk-group.ts, which only has chunk-local data to work with).
-  const heightGrid = computeHeightGrid(map);
-  const upperGrid = computeUpperGrid(map, tileset);
-  const wallGrid = computeWallGrid(map);
-  const rampGrid = computeRampGrid(
-    { heightGrid, mapWidth: map.width, mapHeight: map.height },
-    rampCells ?? [],
-  );
-
-  const chunkTiles = new Map<string, TileBuildData[]>();
-
   // Scan regions: the whole map (full rebuild), or just the tile-space
   // rectangles the requested chunk keys cover (scoped rebuild). Chunk keys
   // outside the map's actual chunk grid clip to an empty (zero-area)
@@ -193,6 +220,17 @@ export function buildChunks(
         return chunkTileRegion(chunkX, chunkY, chunkSize, map.width, map.height);
       })
     : [{ xStart: 0, yStart: 0, xEnd: map.width, yEnd: map.height }];
+
+  const fillRegion = lookupGridFillRegion(map.width, map.height, regions);
+  if (!fillRegion) return [];
+
+  const { heightGrid, upperGrid, wallGrid } = fillLookupGrids(map, tileset, fillRegion);
+  const rampGrid = computeRampGrid(
+    { heightGrid, mapWidth: map.width, mapHeight: map.height },
+    rampCells ?? [],
+  );
+
+  const chunkTiles = new Map<string, TileBuildData[]>();
 
   const layers = map.layers.tileLayers;
   for (let layerIndex = 0; layerIndex < layers.length; layerIndex++) {

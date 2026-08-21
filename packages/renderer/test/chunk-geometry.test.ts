@@ -681,4 +681,103 @@ describe('buildChunks onlyChunks (property: onlyChunks output === full output fi
     const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, CHUNK_SIZE, new Set());
     expect(chunks).toEqual([]);
   });
+
+  it('does not scan tile layers outside the lookup window of a scoped rebuild', () => {
+    // Fails today: computeUpperGrid + computeWallGrid each walk every cell
+    // of every layer before onlyChunks scopes the tile scan, so index reads
+    // land at 8 * W * H plus the one-chunk scan. After windowing, reads stay
+    // under one full 4-layer pass.
+    const width = 64;
+    const height = 64;
+    const size = width * height;
+    const indexReads = { count: 0 };
+    const instrument = (raw: number[]): number[] =>
+      new Proxy(raw, {
+        get(target, prop, receiver) {
+          if (typeof prop === 'string' && /^[0-9]+$/.test(prop)) indexReads.count += 1;
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [
+          instrument(new Array(size).fill(1)),
+          instrument(new Array(size).fill(1)),
+          instrument(new Array(size).fill(1)),
+          instrument(new Array(size).fill(1)),
+        ],
+        shadows: new Array(size).fill(0),
+        regions: new Array(size).fill(0),
+      },
+    });
+
+    buildChunks(map, makeTileset(), SHEET_SIZES, 16, new Set(['0,0']));
+
+    expect(indexReads.count).toBeLessThan(width * height * 4);
+  });
+
+  it('scoped rebuild of a north chunk keeps a star stack whose base sits in a southern chunk', () => {
+    const width = 8;
+    const height = 20;
+    const size = width * height;
+    const layer0 = new Array(size).fill(0);
+    // Stars at (3,0)..(3,10) cross the y=8 chunk boundary (chunk size 8).
+    for (let y = 0; y <= 10; y++) layer0[y * width + 3] = 2;
+    layer0[11 * width + 3] = 1; // ground base south of the stack
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [
+          layer0,
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+        ],
+        shadows: new Array(size).fill(0),
+        regions: new Array(size).fill(0),
+      },
+    });
+    const tileset = makeTileset();
+    const full = buildChunks(map, tileset, SHEET_SIZES, 8);
+    const scoped = buildChunks(map, tileset, SHEET_SIZES, 8, new Set(['0,0']));
+    const pick = (chunks: ReturnType<typeof buildChunks>) =>
+      chunks.flatMap((chunk) => chunk.tiles).find((tile) => tile.tileX === 3 && tile.tileY === 0);
+    expect(pick(scoped)?.starStack).toEqual(pick(full)?.starStack);
+  });
+
+  it('scoped rebuild keeps a cliff face whose lower neighbor sits in the next chunk', () => {
+    const width = 8;
+    const height = 8;
+    const size = width * height;
+    const layer0 = new Array(size).fill(1);
+    const regions = new Array(size).fill(0);
+    // Elevated cell on the east edge of chunk 0,0; neighbor (4,3) is chunk 1,0.
+    regions[3 * width + 3] = 3;
+    const map = makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [
+          layer0,
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+        ],
+        shadows: new Array(size).fill(0),
+        regions,
+      },
+    });
+    const tileset = makeTileset();
+    const full = buildChunks(map, tileset, SHEET_SIZES, 4);
+    const scoped = buildChunks(map, tileset, SHEET_SIZES, 4, new Set(['0,0']));
+    const pick = (chunks: ReturnType<typeof buildChunks>) =>
+      chunks.flatMap((chunk) => chunk.tiles).find((tile) => tile.tileX === 3 && tile.tileY === 3);
+    expect(pick(scoped)?.cliffEdges).toEqual(pick(full)?.cliffEdges);
+    expect(pick(scoped)?.cliffEdges).toEqual(
+      expect.arrayContaining([{ edge: 'east', neighborHeight: 0 }]),
+    );
+  });
 });
