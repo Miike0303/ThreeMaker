@@ -1,5 +1,9 @@
 import { parseEventScript } from '@threemaker/core';
-import { createBlankMapDocument, parseMapDocument, serializeMapDocument } from '@threemaker/map-format';
+import {
+  createBlankMapDocument,
+  parseMapDocument,
+  serializeMapDocument,
+} from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import { authoringPlugins } from '../src/authoring-plugins.js';
 import { validateEventsDraft } from '../src/painter-store.js';
@@ -36,7 +40,9 @@ describe('authoringPlugins', () => {
   });
 
   it('validateEventsDraft accepts playSound via authoring plugins', () => {
-    expect(validateEventsDraft({ hit: [{ type: 'playSound', path: 'se/hit.ogg' } as never] })).toBeNull();
+    expect(
+      validateEventsDraft({ hit: [{ type: 'playSound', path: 'se/hit.ogg' } as never] }),
+    ).toBeNull();
   });
 
   it('validateEventsDraft still rejects unknown command types', () => {

@@ -74,15 +74,17 @@ describe('createAudioCommandPlugins', () => {
       registry,
     );
     expect(parsed.intro).toEqual([{ type: 'playSound', path: 'se/hit.ogg', volume: 0.5 }]);
-    expect(registry.get('playSound')?.run({ type: 'playSound', path: 'se/hit.ogg' }, {} as never)).toBe(
-      'continue',
-    );
+    expect(
+      registry.get('playSound')?.run({ type: 'playSound', path: 'se/hit.ogg' }, {} as never),
+    ).toBe('continue');
   });
 
   it('forwards playSound to a handler when provided', () => {
     const playSound = vi.fn();
     const registry = registryFor({ playSound });
-    registry.get('playSound')?.run({ type: 'playSound', path: 'se/hit.ogg', volume: 0.5 }, {} as never);
+    registry
+      .get('playSound')
+      ?.run({ type: 'playSound', path: 'se/hit.ogg', volume: 0.5 }, {} as never);
     expect(playSound).toHaveBeenCalledWith('se/hit.ogg', 0.5);
   });
 

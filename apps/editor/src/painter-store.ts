@@ -74,8 +74,6 @@
 
 import type { EventCommand } from '@threemaker/core';
 import { parseEventScript } from '@threemaker/core';
-
-import { authoringPlugins } from './authoring-plugins.js';
 import type {
   CommandStackState,
   LightDocument,
@@ -104,6 +102,7 @@ import {
   redoCommand,
   undoCommand,
 } from '@threemaker/map-format';
+import { authoringPlugins } from './authoring-plugins.js';
 import { clampRoomRect, clampTileIndex } from './clamp.js';
 import {
   clampLightHeight,
