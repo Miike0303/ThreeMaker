@@ -44,7 +44,9 @@ function depsOf(fs: GlbIngestFs): IngestBytesDeps {
 describe('starter tiles object-store stamping', () => {
   it('ingests A5 PNG bytes to a 64-hex sha under objects/{sha[0:2]}/{sha} and dedupes', async () => {
     const fs = makeFakeFs();
-    const bytes = placeholderSheetPngBytes('A5');
+    // 8px sheet: the ingest/dedupe contract, not a production-size encode.
+    // Full 48px A5 (384×768) CRC+adler regularly trips vitest's 5s default.
+    const bytes = placeholderSheetPngBytes('A5', 8);
     expect(Array.from(bytes.subarray(0, 8))).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
 
     const first = await ingestBytes(bytes, depsOf(fs));
@@ -71,8 +73,8 @@ describe('starter tiles object-store stamping', () => {
     expect(doc.tileset.slots.B?.object).toBeUndefined();
 
     const [a5, b] = await Promise.all([
-      ingestBytes(placeholderSheetPngBytes('A5'), deps),
-      ingestBytes(placeholderSheetPngBytes('B'), deps),
+      ingestBytes(placeholderSheetPngBytes('A5', 8), deps),
+      ingestBytes(placeholderSheetPngBytes('B', 8), deps),
     ]);
     const stamped = stampPlaceholderSlotObjects(doc, { A5: a5.sha256, B: b.sha256 });
 
