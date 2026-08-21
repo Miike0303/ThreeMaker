@@ -73,4 +73,8 @@ describe('shouldConfirmMapSwitch', () => {
     expect(shouldConfirmMapSwitch({ mapReady: false, docDirty: true })).toBe(false);
     expect(shouldConfirmMapSwitch({ mapReady: false, docDirty: false })).toBe(false);
   });
+
+  it('confirms when the map document is clean but Ink is dirty', () => {
+    expect(shouldConfirmMapSwitch({ mapReady: true, docDirty: false, inkDirty: true })).toBe(true);
+  });
 });

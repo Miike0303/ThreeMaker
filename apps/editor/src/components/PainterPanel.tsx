@@ -163,7 +163,7 @@ import {
 import type { ToolId } from '../tool-sm.js';
 import { CommandList } from './CommandForm.js';
 import { GameTilesetPicker } from './GameTilesetPicker.js';
-import { InkPanel } from './InkPanel.js';
+import { InkPanel, type InkSaveHandle } from './InkPanel.js';
 import { TilePalette } from './TilePalette.js';
 
 export interface PainterPanelProps {
@@ -389,6 +389,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [postProcessingEnabled, setPostProcessingEnabled] = useState(false);
   /** Unsaved-changes indicator (WU-UX-13): derived from emitted painter-state slice refs. */
   const [docDirty, setDocDirty] = useState(false);
+  /** Ink sidecar buffer dirty — isolated from map slices (InkPanel useState). */
+  const [inkDirty, setInkDirty] = useState(false);
+  const inkSaveRef = useRef<InkSaveHandle | null>(null);
   /** Last emitted painter state — the dirty checker's baseline (reset on fresh load/create). */
   const prevPainterStateRef = useRef<PainterState | undefined>(undefined);
   /** Live Save handler for the viewport's Ctrl/Cmd+S chord (WU-UX-03) -- a ref because the viewport (and its callbacks object) mounts once while handleSave re-binds with settings. */
@@ -783,6 +786,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
     try {
       await saveMapDocument(doc, openMapName);
       setDocDirty(false);
+      const inkFlush = (await inkSaveRef.current?.saveIfDirty()) ?? 'clean';
       void refreshSavedMaps();
       // Community share is opt-out (default on); no network in v0 — enqueue only.
       const tileShas = Object.values(doc.tileset.slots)
@@ -798,7 +802,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
         version: doc.version,
         licenseTag,
       });
-      if (enqueue) {
+      if (inkFlush === 'failed') {
+        reportStatus({ message: t('painter.ink.saveFailed'), severity: 'error' });
+      } else if (inkFlush === 'blocked') {
+        reportStatus({ message: t('painter.ink.saveBlocked'), severity: 'warning' });
+      } else if (enqueue) {
         console.info('[Three Maker] community share queued (offline stub)', enqueue);
         setCommunityQueue(pushCommunityShareQueue(enqueue));
         reportStatus({ message: t('painter.saveSuccessShareQueued'), severity: 'success' });
@@ -1067,7 +1075,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
 
   const handleOpenMap = useCallback(
     async (name: string) => {
-      if (shouldConfirmMapSwitch({ mapReady, docDirty })) {
+      if (shouldConfirmMapSwitch({ mapReady, docDirty, inkDirty })) {
         if (!window.confirm(formatTemplate(t('painter.maps.switchConfirm'), { name }))) return;
       }
       try {
@@ -1094,7 +1102,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
         reportStatus({ message: t('painter.loadFailed'), severity: 'error' });
       }
     },
-    [t, characterSprites, reportStatus, mapReady, docDirty],
+    [t, characterSprites, reportStatus, mapReady, docDirty, inkDirty],
   );
 
   const handleLoad = useCallback(async () => {
@@ -1219,11 +1227,11 @@ export function PainterPanel({ t }: PainterPanelProps) {
             <button
               type="button"
               className="primary"
-              title={docDirty ? t('painter.status.unsaved') : undefined}
+              title={docDirty || inkDirty ? t('painter.status.unsaved') : undefined}
               onClick={handleSave}
             >
               {t('painter.save')}
-              {docDirty && <span className="ide-dirty-dot" aria-hidden="true" />}
+              {(docDirty || inkDirty) && <span className="ide-dirty-dot" aria-hidden="true" />}
             </button>
           )}
           {mapReady && (
@@ -2823,6 +2831,8 @@ export function PainterPanel({ t }: PainterPanelProps) {
                       mapName={openMapName}
                       onStatus={reportStatus}
                       onStorySaved={loadInkInventory}
+                      onDirtyChange={setInkDirty}
+                      saveHandleRef={inkSaveRef}
                     />
                   </div>
                 )}
@@ -3634,7 +3644,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
           painterState &&
           (eventsValidationError !== null ? (
             <span className="ide-status-err">{t('painter.status.eventsInvalid')}</span>
-          ) : docDirty ? (
+          ) : docDirty || inkDirty ? (
             <span className="ide-status-warn">{t('painter.status.unsaved')}</span>
           ) : (
             <span className="ide-status-ok">{t('painter.status.ready')}</span>

@@ -3,7 +3,7 @@
  * Text is the source of truth; graph drag rewrites `@tm-node` layout comments.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type MutableRefObject, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   buildInkStoryOpenModel,
   isSafeStoryId,
@@ -17,15 +17,32 @@ import type { PainterState } from '../painter-store.js';
 import type { StatusReport } from '../status-feedback.js';
 import { InkGraph } from './InkGraph.js';
 
+/** Result of flushing the unsaved Ink buffer. `clean` = nothing to write. */
+export type InkFlushResult = 'clean' | 'saved' | 'blocked' | 'failed';
+
+export interface InkSaveHandle {
+  saveIfDirty: () => Promise<InkFlushResult>;
+}
+
 export interface InkPanelProps {
   readonly t: (key: string) => string;
   readonly painterState: PainterState | null;
   readonly mapName: string;
   readonly onStatus: (report: StatusReport) => void;
   readonly onStorySaved?: (storyId: string) => void;
+  readonly onDirtyChange?: (dirty: boolean) => void;
+  readonly saveHandleRef?: MutableRefObject<InkSaveHandle | null>;
 }
 
-export function InkPanel({ t, painterState, mapName, onStatus, onStorySaved }: InkPanelProps) {
+export function InkPanel({
+  t,
+  painterState,
+  mapName,
+  onStatus,
+  onStorySaved,
+  onDirtyChange,
+  saveHandleRef,
+}: InkPanelProps) {
   const referencedIds = useMemo(
     () => (painterState ? listInkStoryIdsFromEvents(painterState.events) : []),
     [painterState],
@@ -111,23 +128,49 @@ export function InkPanel({ t, painterState, mapName, onStatus, onStorySaved }: I
 
   const compile = useMemo(() => tryCompileInkSource(source), [source]);
 
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  const persistInk = useCallback(
+    async (quiet: boolean): Promise<InkFlushResult> => {
+      if (selectedStoryId === undefined || !isSafeStoryId(selectedStoryId)) return 'clean';
+      if (!compile.ok) {
+        if (!quiet) onStatus({ message: t('painter.ink.saveBlocked'), severity: 'warning' });
+        return 'blocked';
+      }
+      try {
+        await saveInkSidecar(selectedStoryId, source, mapName);
+        setDirty(false);
+        onStorySaved?.(selectedStoryId);
+        refreshDiskStories();
+        if (!quiet) onStatus({ message: t('painter.ink.saveSuccess'), severity: 'success' });
+        return 'saved';
+      } catch (err) {
+        console.error('Failed to save ink sidecar:', err);
+        if (!quiet) onStatus({ message: t('painter.ink.saveFailed'), severity: 'error' });
+        return 'failed';
+      }
+    },
+    [selectedStoryId, compile.ok, source, mapName, onStatus, onStorySaved, t, refreshDiskStories],
+  );
+
   const handleSave = useCallback(async () => {
-    if (selectedStoryId === undefined || !isSafeStoryId(selectedStoryId)) return;
-    if (!compile.ok) {
-      onStatus({ message: t('painter.ink.saveBlocked'), severity: 'warning' });
-      return;
-    }
-    try {
-      await saveInkSidecar(selectedStoryId, source, mapName);
-      setDirty(false);
-      onStorySaved?.(selectedStoryId);
-      refreshDiskStories();
-      onStatus({ message: t('painter.ink.saveSuccess'), severity: 'success' });
-    } catch (err) {
-      console.error('Failed to save ink sidecar:', err);
-      onStatus({ message: t('painter.ink.saveFailed'), severity: 'error' });
-    }
-  }, [selectedStoryId, compile.ok, source, mapName, onStatus, onStorySaved, t, refreshDiskStories]);
+    await persistInk(false);
+  }, [persistInk]);
+
+  const saveIfDirty = useCallback(async (): Promise<InkFlushResult> => {
+    if (!dirty) return 'clean';
+    return persistInk(true);
+  }, [dirty, persistInk]);
+
+  useEffect(() => {
+    if (!saveHandleRef) return;
+    saveHandleRef.current = { saveIfDirty };
+    return () => {
+      saveHandleRef.current = null;
+    };
+  }, [saveHandleRef, saveIfDirty]);
 
   if (!painterState) return null;
 
