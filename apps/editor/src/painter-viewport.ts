@@ -7,12 +7,21 @@ import type {
   TileDiff,
   WorldSeedValue,
 } from '@threemaker/map-format';
-import type { ChunkBuildData, Hd2dPipeline, SheetPixelSizes } from '@threemaker/renderer';
+import type {
+  ChunkBuildData,
+  FloorElevationSource,
+  Hd2dPipeline,
+  MapLightsBundle,
+  NpcLightAnchor,
+  SheetPixelSizes,
+} from '@threemaker/renderer';
 import {
   buildChunks,
+  buildMapLights,
   chunkKey,
   createHd2dPipeline,
   DEFAULT_CHUNK_SIZE,
+  LIGHT_BUDGET,
   loadSheetTexture,
   StreamingTilemapScene,
 } from '@threemaker/renderer';
@@ -29,6 +38,12 @@ import {
   renderableSnapshot,
 } from './map-compose.js';
 import { computeNpcOverlayPoints } from './npc-overlay.js';
+import {
+  painterBaseLightSetup,
+  painterHasAuthoredLights,
+  painterPreviewLights,
+  painterSheetLighting,
+} from './painter-lighting.js';
 import type { PainterState } from './painter-store.js';
 import * as painter from './painter-store.js';
 import { computePropOverlayPoints } from './prop-overlay.js';
@@ -230,6 +245,9 @@ export class PainterViewport {
   // menu must never cover it (right-drag pans, WU-VIEW-02).
   private readonly onContextMenu = (event: MouseEvent) => event.preventDefault();
 
+  private readonly ambientLight: THREE.AmbientLight;
+  private readonly directionalLight: THREE.DirectionalLight;
+  private lightsBundle: MapLightsBundle | undefined;
   private tilemap: StreamingTilemapScene | undefined;
   private animationHandle: number | undefined;
   private ready = false;
@@ -271,10 +289,10 @@ export class PainterViewport {
     this.callbacks = callbacks;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x1a1a2e);
-    this.scene.add(new THREE.AmbientLight(0x808090, 2.5));
-    const light = new THREE.DirectionalLight(0xffffff, 2);
-    light.position.set(10, 20, 10);
-    this.scene.add(light);
+    this.ambientLight = new THREE.AmbientLight(0x808090, 2.5);
+    this.directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+    this.directionalLight.position.set(10, 20, 10);
+    this.scene.add(this.ambientLight, this.directionalLight);
 
     this.camera = new THREE.PerspectiveCamera(
       OVERVIEW_FOV_DEG,
@@ -707,37 +725,28 @@ export class PainterViewport {
 
   removeLight(id: string): void {
     if (!this.state) return;
-    this.state = painter.removeLight(this.state, id);
-    this.emitState();
-    this.recomputeLightOverlay();
+    this.applyLightMutation(painter.removeLight(this.state, id));
   }
 
   placeLightAtTile(x: number, y: number): void {
     if (!this.state) return;
-    this.state = painter.placeLightAtTile(this.state, { x, y });
-    this.emitState();
-    this.recomputeLightOverlay();
+    this.applyLightMutation(painter.placeLightAtTile(this.state, { x, y }));
   }
 
   /** Attach a light to player or an NPC id (no canvas marker; document-wide). */
   placeAttachedLight(attach: string): void {
     if (!this.state) return;
-    this.state = painter.placeAttachedLightAction(this.state, attach);
-    this.emitState();
+    this.applyLightMutation(painter.placeAttachedLightAction(this.state, attach));
   }
 
   undoLight(): void {
     if (!this.state) return;
-    this.state = painter.undoLight(this.state).state;
-    this.emitState();
-    this.recomputeLightOverlay();
+    this.applyLightMutation(painter.undoLight(this.state).state);
   }
 
   redoLight(): void {
     if (!this.state) return;
-    this.state = painter.redoLight(this.state).state;
-    this.emitState();
-    this.recomputeLightOverlay();
+    this.applyLightMutation(painter.redoLight(this.state).state);
   }
 
   // --- Event scripts + worldSeeds (events editor WU-02; no overlay recompute) ---
@@ -1061,11 +1070,77 @@ export class PainterViewport {
     );
 
     this.tilemap?.dispose();
+    const lighting = painterSheetLighting(this.state.lights);
     this.tilemap = new StreamingTilemapScene(chunks, this.textures, {
       tileWorldSize: TILE_WORLD_SIZE,
+      ...(lighting ? { lighting } : {}),
     });
     for (const chunk of chunks) this.tilemap.buildChunk(chunkKey(chunk.chunkX, chunk.chunkY));
     this.scene.add(this.tilemap.group);
+    this.syncPreviewLights();
+  }
+
+  /**
+   * 0↔N authored lights changes the sheet material (constructor-only `lighting`
+   * bag), so the tilemap must rebuild. Same-lit-count edits only refresh the
+   * point/spot bundle.
+   */
+  private applyLightMutation(next: PainterState): void {
+    const wasLit = painterHasAuthoredLights(this.state?.lights ?? []);
+    this.state = next;
+    if (wasLit !== painterHasAuthoredLights(next.lights)) {
+      this.rebuildActiveFloorScene();
+    } else {
+      this.syncPreviewLights();
+    }
+    this.emitState();
+    this.recomputeLightOverlay();
+  }
+
+  private syncPreviewLights(): void {
+    if (!this.state) return;
+    const setup = painterBaseLightSetup(this.state.lights);
+    this.ambientLight.color.setHex(setup.ambient.color);
+    this.ambientLight.intensity = setup.ambient.intensity;
+    if (setup.directional) {
+      this.directionalLight.color.setHex(setup.directional.color);
+      this.directionalLight.intensity = setup.directional.intensity;
+    } else {
+      this.directionalLight.intensity = 0;
+    }
+
+    this.lightsBundle?.dispose();
+    this.lightsBundle = undefined;
+    const activeFloor = this.state.floors[this.state.activeFloor];
+    if (!activeFloor) return;
+    const lights = painterPreviewLights(this.state.lights, activeFloor.id);
+    const flatElevation = {
+      surfaceHeightAt: () => 0,
+    } as unknown as FloorElevationSource['elevation'];
+    const floors: FloorElevationSource[] = this.state.floors.map((floor) => ({
+      floorId: floor.id,
+      baseElevation: floor.baseElevation,
+      elevation: flatElevation,
+    }));
+    const npcPositions = new Map<string, NpcLightAnchor>();
+    for (const npc of this.state.npcs) {
+      const floorIndex = this.state.floors.findIndex((floor) => floor.id === npc.floor);
+      npcPositions.set(npc.id, {
+        x: npc.x,
+        y: npc.y,
+        floor: floorIndex < 0 ? 0 : floorIndex,
+        groundY: this.state.floors[floorIndex]?.baseElevation ?? 0,
+      });
+    }
+    this.lightsBundle = buildMapLights({
+      lights,
+      scene: this.scene,
+      floors,
+      tileWorldSize: TILE_WORLD_SIZE,
+      heightUnit: TILE_WORLD_SIZE,
+      npcPositions,
+      budget: LIGHT_BUDGET,
+    });
   }
 
   /** Scoped live update on the ACTIVE floor: dirty-region -> buildChunks(onlyChunks) -> patchChunks, plus explicit buildChunk for any dirty chunk not yet live (a from-scratch blank map starts with zero live chunks). One renderableSnapshot per stroke (not a second via painterChunkArgs). */
@@ -1454,6 +1529,8 @@ export class PainterViewport {
     this.renderer.domElement.removeEventListener('wheel', this.onWheel);
     this.hd2d?.dispose();
     this.hd2d = undefined;
+    this.lightsBundle?.dispose();
+    this.lightsBundle = undefined;
     this.tilemap?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
