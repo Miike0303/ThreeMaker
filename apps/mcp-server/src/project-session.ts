@@ -1,12 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, isAbsolute, join, relative, resolve, win32 } from 'node:path';
-import {
-  CommandRegistry,
-  createAudioCommandPlugins,
-  parseEventScript,
-  WorldState,
-  type WorldValue,
-} from '@threemaker/core';
+import { authoringPlugins, parseEventScript, WorldState, type WorldValue } from '@threemaker/core';
 import type { MapDocument } from '@threemaker/map-format';
 import {
   createBlankMapDocument,
@@ -20,13 +14,6 @@ import { resolveInsideProject } from './project-paths.js';
 const MAP_SUFFIX = '.tmmap.json';
 const DEFAULT_FLAGS = new Array(8192).fill(0);
 const NO_PROJECT = 'No project is open. Call open_project first.';
-
-/** Parse-only audio plugins so MCP accepts the same verbs as desktop/editor. */
-function authoringPlugins(): CommandRegistry {
-  const registry = new CommandRegistry();
-  for (const plugin of createAudioCommandPlugins()) registry.register(plugin);
-  return registry;
-}
 
 export type MapSummary = {
   readonly id: string;

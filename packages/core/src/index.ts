@@ -5,6 +5,7 @@ export {
   parseFadeMs,
   parseVolume,
 } from './audio-commands.js';
+export { authoringPlugins, createAuthoringCommandRegistry } from './authoring-registry.js';
 export type { Clock } from './clock.js';
 export { PerformanceClock } from './clock.js';
 export type { DialogueProvider, DialogueStep } from './dialogue-provider.js';
