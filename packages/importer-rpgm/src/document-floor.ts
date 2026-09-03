@@ -44,7 +44,9 @@ export function documentFloorToRpgm(
   doc: MapDocument,
   floor: FloorDocument,
   semantics?: SemanticOverrides,
+  rampCells?: readonly RampCellInput[],
 ): DocumentFloorToRpgmResult {
+  const resolvedSemantics = semantics ?? doc.tileset.semantics;
   return {
     map: {
       id: null,
@@ -65,12 +67,8 @@ export function documentFloorToRpgm(
       sheetNames: EMPTY_SHEET_NAMES,
       flags: doc.tileset.flags,
     },
-    rampCells: deriveRampCells(
-      floor.layers.tiles,
-      semantics ?? doc.tileset.semantics,
-      doc.width,
-      doc.height,
-    ),
+    rampCells:
+      rampCells ?? deriveRampCells(floor.layers.tiles, resolvedSemantics, doc.width, doc.height),
     tilePixelSize: doc.tileset.tilePixelSize,
   };
 }

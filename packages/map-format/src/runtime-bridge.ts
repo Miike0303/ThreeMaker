@@ -42,21 +42,63 @@ export function deriveRampCells(
   const rampCells: RampCellInput[] = [];
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const index = y * width + x;
-      for (const layer of layers) {
-        const tileId = layer[index] ?? 0;
-        if (tileId === 0) continue;
-        const entry = semantics[String(tileId)];
-        if (entry?.class === 'ramp') {
-          rampCells.push(
-            entry.rampDirection === undefined
-              ? { x, y }
-              : { x, y, rampDirection: entry.rampDirection },
-          );
-          break;
-        }
-      }
+      const cell = deriveRampCellAt(layers, semantics, width, x, y);
+      if (cell) rampCells.push(cell);
     }
   }
   return rampCells;
+}
+
+/**
+ * Winning ramp contribution of one cell (or `undefined` if none). Same
+ * bottom-to-top first-non-zero-ramp rule as {@link deriveRampCells}.
+ */
+export function deriveRampCellAt(
+  layers: readonly [TileLayerData, TileLayerData, TileLayerData, TileLayerData],
+  semantics: SemanticOverrides,
+  width: number,
+  x: number,
+  y: number,
+): RampCellInput | undefined {
+  const index = y * width + x;
+  for (const layer of layers) {
+    const tileId = layer[index] ?? 0;
+    if (tileId === 0) continue;
+    const entry = semantics[String(tileId)];
+    if (entry?.class === 'ramp') {
+      return entry.rampDirection === undefined
+        ? { x, y }
+        : { x, y, rampDirection: entry.rampDirection };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Patch a previously derived ramp-cell list for a set of dirty tile coords.
+ * Cells not in `dirtyCells` keep their prior entry. Used by the painter so
+ * ordinary ground strokes on large maps do not re-scan W×H×layers.
+ *
+ * Callers must pass a fresh full {@link deriveRampCells} result whenever
+ * `semantics` changes (a class retag of tile id N affects every cell holding
+ * N, not only the stroked ones).
+ */
+export function syncRampCells(
+  previous: readonly RampCellInput[],
+  layers: readonly [TileLayerData, TileLayerData, TileLayerData, TileLayerData],
+  semantics: SemanticOverrides,
+  width: number,
+  dirtyCells: readonly { readonly x: number; readonly y: number }[],
+): readonly RampCellInput[] {
+  if (dirtyCells.length === 0) return previous;
+
+  const dirtyKeys = new Set(dirtyCells.map((cell) => `${cell.x},${cell.y}`));
+  const next = previous.filter((cell) => !dirtyKeys.has(`${cell.x},${cell.y}`));
+  for (const dirty of dirtyCells) {
+    const cell = deriveRampCellAt(layers, semantics, width, dirty.x, dirty.y);
+    if (cell) next.push(cell);
+  }
+  // Restore row-major order (deriveRampCells contract) after appends.
+  next.sort((a, b) => a.y - b.y || a.x - b.x);
+  return next;
 }

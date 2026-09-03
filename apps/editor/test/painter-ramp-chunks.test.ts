@@ -155,4 +155,17 @@ describe('painter ramp chunks', () => {
       lowHeight: 2,
     });
   });
+
+  it('renderableSnapshot accepts a precomputed rampCells override', () => {
+    const doc = rampStepDocument();
+    const state = createPainterState({
+      floors: painterFloorsFromDocument(doc),
+      width: doc.width,
+      height: doc.height,
+      semantics: doc.tileset.semantics,
+    });
+    const override = [{ x: 0, y: 0, rampDirection: 'north' as const }];
+    const snapshot = renderableSnapshot(doc, state, override);
+    expect(snapshot.rampCells).toBe(override);
+  });
 });

@@ -13,7 +13,7 @@ export {
 } from './migrate.js';
 export { computeRoomIdGrid } from './rooms.js';
 export type { RampCellInput } from './runtime-bridge.js';
-export { deriveRampCells } from './runtime-bridge.js';
+export { deriveRampCellAt, deriveRampCells, syncRampCells } from './runtime-bridge.js';
 export type {
   FloorDocument,
   LightDocument,

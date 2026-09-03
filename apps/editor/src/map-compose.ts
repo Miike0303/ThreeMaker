@@ -12,6 +12,7 @@
 
 import {
   documentFloorToRpgm,
+  type RampCellInput,
   type RpgmMap,
   type RpgmTileset,
   SHEET_BASE_ID,
@@ -285,7 +286,11 @@ export function composeDocumentFromPainterFloors(
  * `buildChunks`. Live store semantics win over the composed document
  * (`composeDocumentFromPainterFloors` does not rebuild `tileset`).
  */
-export function renderableSnapshot(doc: MapDocument, state: PainterState) {
+export function renderableSnapshot(
+  doc: MapDocument,
+  state: PainterState,
+  rampCells?: readonly RampCellInput[],
+) {
   const composed = composeDocumentFromPainterFloors(doc, state.floors, state.rooms);
   const floor = composed.floors[state.activeFloor];
   if (!floor) {
@@ -293,8 +298,12 @@ export function renderableSnapshot(doc: MapDocument, state: PainterState) {
       `toRenderableMap: no floor at index ${state.activeFloor} (doc has ${composed.floors.length} floor(s)).`,
     );
   }
-  const { map, tileset, rampCells } = documentFloorToRpgm(composed, floor, state.semantics);
-  return { composed, map, tileset, rampCells };
+  const {
+    map,
+    tileset,
+    rampCells: derived,
+  } = documentFloorToRpgm(composed, floor, state.semantics, rampCells);
+  return { composed, map, tileset, rampCells: derived };
 }
 
 /**

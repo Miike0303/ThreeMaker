@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { deriveRampCells } from '../src/runtime-bridge.js';
+import { deriveRampCells, syncRampCells } from '../src/runtime-bridge.js';
 import type { SemanticOverrides } from '../src/schema.js';
 
 const EMPTY_LAYER = (size: number) => new Array(size).fill(0);
@@ -114,5 +114,73 @@ describe('deriveRampCells', () => {
       { x: 9, y: 7 },
       { x: 11, y: 7 },
     ]);
+  });
+});
+
+describe('syncRampCells', () => {
+  it('matches a full derive when every cell is marked dirty', () => {
+    const width = 3;
+    const height = 2;
+    const size = width * height;
+    const layers = [
+      [0, 7, 0, 7, 0, 0],
+      EMPTY_LAYER(size),
+      EMPTY_LAYER(size),
+      EMPTY_LAYER(size),
+    ] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp', rampDirection: 'east' } };
+    const dirty = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ];
+    expect(syncRampCells([], layers, semantics, width, dirty)).toEqual(
+      deriveRampCells(layers, semantics, width, height),
+    );
+  });
+
+  it('adds and removes only at dirty coords (parity with full derive)', () => {
+    const width = 3;
+    const height = 1;
+    const layersA = [[7, 0, 7], EMPTY_LAYER(3), EMPTY_LAYER(3), EMPTY_LAYER(3)] as const;
+    const layersB = [[7, 7, 0], EMPTY_LAYER(3), EMPTY_LAYER(3), EMPTY_LAYER(3)] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+    const previous = deriveRampCells(layersA, semantics, width, height);
+    const synced = syncRampCells(previous, layersB, semantics, width, [
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    expect(synced).toEqual(deriveRampCells(layersB, semantics, width, height));
+  });
+
+  it('does not scan tile layers outside the dirty cells', () => {
+    const width = 64;
+    const height = 64;
+    const size = width * height;
+    const indexReads = { count: 0 };
+    const instrument = (raw: number[]): number[] =>
+      new Proxy(raw, {
+        get(target, prop, receiver) {
+          if (typeof prop === 'string' && /^[0-9]+$/.test(prop)) indexReads.count += 1;
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+    const layers = [
+      instrument(new Array(size).fill(1)),
+      instrument(new Array(size).fill(0)),
+      instrument(new Array(size).fill(0)),
+      instrument(new Array(size).fill(0)),
+    ] as const;
+    const semantics: SemanticOverrides = {};
+
+    syncRampCells([], layers, semantics, width, [{ x: 3, y: 4 }]);
+
+    // One dirty cell × up to 4 layers (layer 0 has a non-zero tile so deeper
+    // layers may still be read). Full derive would be W×H×4 = 16384+.
+    expect(indexReads.count).toBeLessThan(16);
+    expect(indexReads.count).toBeLessThan(width * height * 4);
   });
 });

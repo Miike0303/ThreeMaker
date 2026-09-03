@@ -3,10 +3,13 @@ import type {
   LightDocument,
   MapDocument,
   NpcFacing,
+  RampCellInput,
   SemanticClass,
+  SemanticOverrides,
   TileDiff,
   WorldSeedValue,
 } from '@threemaker/map-format';
+import { deriveRampCells, syncRampCells } from '@threemaker/map-format';
 import type {
   ChunkBuildData,
   FloorElevationSource,
@@ -32,7 +35,6 @@ import { computeLightOverlayPoints } from './light-overlay.js';
 import {
   composeDocumentFromPainterFloors,
   normalizeMapName,
-  painterChunkArgs,
   painterChunkArgsFromSnapshot,
   painterFloorsFromDocument,
   renderableSnapshot,
@@ -283,6 +285,14 @@ export class PainterViewport {
    * a human-pressed toggle, not a per-frame decision.
    */
   private hd2d: Hd2dPipeline | undefined;
+  /**
+   * Incremental ramp-cell cache for live paint. Invalidated when the active
+   * floor index or `state.semantics` object identity changes (a class retag
+   * of tile id N affects every cell holding N, not only the stroked ones).
+   */
+  private rampCellsCache: readonly RampCellInput[] | undefined;
+  private rampCacheFloor = -1;
+  private rampCacheSemantics: SemanticOverrides | undefined;
 
   constructor(container: HTMLElement, callbacks: PainterViewportCallbacks = {}) {
     this.container = container;
@@ -1077,8 +1087,18 @@ export class PainterViewport {
    */
   private rebuildActiveFloorScene(): void {
     if (!this.doc || !this.state) return;
+    const snapshot = renderableSnapshot(
+      this.doc,
+      this.state,
+      this.resolveRampCells({ forceFull: true }),
+    );
     const chunks = buildChunks(
-      ...painterChunkArgs(this.doc, this.state, this.sheetPixelSizes, undefined),
+      ...painterChunkArgsFromSnapshot(
+        snapshot,
+        this.doc.tileset.tilePixelSize,
+        this.sheetPixelSizes,
+        undefined,
+      ),
     );
 
     this.tilemap?.dispose();
@@ -1155,10 +1175,49 @@ export class PainterViewport {
     });
   }
 
+  /**
+   * Full derive on floor/semantics identity change; otherwise patch only the
+   * dirty cells so ordinary ground strokes skip the W×H×layers ramp scan.
+   */
+  private resolveRampCells(options: {
+    readonly forceFull?: boolean;
+    readonly dirtyCells?: readonly { readonly x: number; readonly y: number }[];
+  }): readonly RampCellInput[] {
+    if (!this.state) return [];
+    const floor = this.state.floors[this.state.activeFloor];
+    if (!floor) return [];
+
+    const { semantics, width, height, activeFloor } = this.state;
+    const needsFull =
+      options.forceFull === true ||
+      this.rampCellsCache === undefined ||
+      this.rampCacheFloor !== activeFloor ||
+      this.rampCacheSemantics !== semantics;
+
+    const next = needsFull
+      ? deriveRampCells(floor.layers, semantics, width, height)
+      : syncRampCells(
+          this.rampCellsCache ?? [],
+          floor.layers,
+          semantics,
+          width,
+          options.dirtyCells ?? [],
+        );
+
+    this.rampCellsCache = next;
+    this.rampCacheFloor = activeFloor;
+    this.rampCacheSemantics = semantics;
+    return next;
+  }
+
   /** Scoped live update on the ACTIVE floor: dirty-region -> buildChunks(onlyChunks) -> patchChunks, plus explicit buildChunk for any dirty chunk not yet live (a from-scratch blank map starts with zero live chunks). One renderableSnapshot per stroke (not a second via painterChunkArgs). */
   private applyDiffLiveUpdate(diff: TileDiff): void {
     if (!this.doc || !this.state || !this.tilemap) return;
-    const snapshot = renderableSnapshot(this.doc, this.state);
+    const snapshot = renderableSnapshot(
+      this.doc,
+      this.state,
+      this.resolveRampCells({ dirtyCells: diff.cells }),
+    );
     const { map, tileset } = snapshot;
 
     const dirtyKeys = computeDirtyChunkKeys(diff.cells, map, tileset, DEFAULT_CHUNK_SIZE);
