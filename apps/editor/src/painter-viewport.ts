@@ -293,6 +293,16 @@ export class PainterViewport {
   private rampCellsCache: readonly RampCellInput[] | undefined;
   private rampCacheFloor = -1;
   private rampCacheSemantics: SemanticOverrides | undefined;
+  /**
+   * Ramp-direction glyph *cells* (map space). Camera pan/zoom only re-projects
+   * these; full `computeRampGlyphCells` runs when floor/semantics/layers/
+   * regions identity changes (or after a live tile diff clears the cache).
+   */
+  private rampGlyphCellsCache: ReturnType<typeof computeRampGlyphCells> | undefined;
+  private rampGlyphCacheFloor = -1;
+  private rampGlyphCacheSemantics: SemanticOverrides | undefined;
+  private rampGlyphCacheLayers: PainterState['floors'][number]['layers'] | undefined;
+  private rampGlyphCacheRegions: MapDocument['floors'][number]['layers']['regions'] | undefined;
 
   constructor(container: HTMLElement, callbacks: PainterViewportCallbacks = {}) {
     this.container = container;
@@ -1242,6 +1252,10 @@ export class PainterViewport {
     const patched = [...rebuilt, ...cleared];
     this.tilemap.patchChunks(patched);
     for (const chunk of patched) this.tilemap.buildChunk(chunkKey(chunk.chunkX, chunk.chunkY));
+    // Tile/region edits can add or remove ramp-classed cells; drop the glyph
+    // cell cache so the next overlay pass re-derives instead of re-projecting
+    // a stale set (pan/zoom alone must not pay that scan).
+    this.rampGlyphCellsCache = undefined;
   }
 
   private emitState(): void {
@@ -1301,9 +1315,8 @@ export class PainterViewport {
   /**
    * Recomputes the display-only ramp-direction glyph overlay (design:
    * "Painter" -- glyph reflects auto/overridden direction, no picker input)
-   * and pushes it to `onRampGlyphsChange`. Cheap: painter maps are small,
-   * bounded authoring maps, never the streamed-world scale `main.ts` deals
-   * with.
+   * and pushes it to `onRampGlyphsChange`. Cell derivation is cached across
+   * camera-only pan/zoom; only screen projection runs every time.
    */
   private recomputeRampGlyphs(): void {
     if (!this.doc || !this.state || !this.cameraPose) return;
@@ -1314,13 +1327,23 @@ export class PainterViewport {
     );
     const activeFloor = composed.floors[this.state.activeFloor];
     if (!activeFloor) return;
-    const cells = computeRampGlyphCells(
-      painter.activeFloorState(this.state).layers,
-      activeFloor.layers.regions,
-      this.state.semantics,
-      this.doc.width,
-      this.doc.height,
-    );
+    const layers = painter.activeFloorState(this.state).layers;
+    const regions = activeFloor.layers.regions;
+    const { semantics, activeFloor: floorIndex } = this.state;
+    const needsCellRefresh =
+      this.rampGlyphCellsCache === undefined ||
+      this.rampGlyphCacheFloor !== floorIndex ||
+      this.rampGlyphCacheSemantics !== semantics ||
+      this.rampGlyphCacheLayers !== layers ||
+      this.rampGlyphCacheRegions !== regions;
+    const cells = needsCellRefresh
+      ? computeRampGlyphCells(layers, regions, semantics, this.doc.width, this.doc.height)
+      : (this.rampGlyphCellsCache ?? []);
+    this.rampGlyphCellsCache = cells;
+    this.rampGlyphCacheFloor = floorIndex;
+    this.rampGlyphCacheSemantics = semantics;
+    this.rampGlyphCacheLayers = layers;
+    this.rampGlyphCacheRegions = regions;
     const glyphs: RampGlyphOverlayItem[] = [];
     for (const cell of cells) {
       const projected = projectToScreenFraction(
