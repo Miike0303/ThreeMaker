@@ -49,6 +49,7 @@ import {
   setActiveNpcEventKey,
   setActiveNpcFacing,
   setActiveNpcSpriteObject,
+  setActivePropAnimation,
   setActivePropObject,
   setActivePropRotationY,
   setActivePropScale,
@@ -1417,11 +1418,12 @@ describe('painter-store: prop tool (C5 WU-04 -- depth-props-hd)', () => {
     expect(state.props[0]).not.toHaveProperty('animation');
   });
 
-  it('placeProp writes scale and rotationY when the active place transform is not the schema default', () => {
+  it('placeProp writes scale, rotationY, and animation when active place fields are set', () => {
     let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
     state = setActivePropObject(state, PROP_OBJECT_A);
     state = setActivePropScale(state, 2);
     state = setActivePropRotationY(state, 90);
+    state = setActivePropAnimation(state, 'Idle');
     state = placeProp(state, { x: 1, y: 1 });
 
     expect(state.props).toEqual([
@@ -1433,8 +1435,20 @@ describe('painter-store: prop tool (C5 WU-04 -- depth-props-hd)', () => {
         object: PROP_OBJECT_A,
         scale: 2,
         rotationY: 90,
+        animation: 'Idle',
       },
     ]);
+  });
+
+  it('setActivePropAnimation trims; empty clip is omitted on place', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setActivePropObject(state, PROP_OBJECT_A);
+    state = setActivePropAnimation(state, '  Walk  ');
+    expect(state.activePropAnimation).toBe('Walk');
+    state = setActivePropAnimation(state, '   ');
+    expect(state.activePropAnimation).toBe('');
+    state = placeProp(state, { x: 0, y: 0 });
+    expect(state.props[0]).not.toHaveProperty('animation');
   });
 
   it('setActivePropScale rejects non-positive values; setActivePropRotationY rejects NaN', () => {

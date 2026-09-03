@@ -605,6 +605,12 @@ export class PainterViewport {
     this.emitState();
   }
 
+  setActivePropAnimation(animation: string): void {
+    if (!this.state) return;
+    this.state = painter.setActivePropAnimation(this.state, animation);
+    this.emitState();
+  }
+
   undoProp(): void {
     if (!this.state) return;
     this.state = painter.undoProp(this.state).state;

@@ -275,6 +275,8 @@
     "painter.props.ingestNeedsTauri": "Importar .glb requiere el host Tauri del editor.",
     "painter.props.scale": "Escala",
     "painter.props.rotationY": "Giro (°)",
+    "painter.props.animation": "Clip de animación",
+    "painter.props.animationPlaceholder": "Nombre del clip (opcional)",
     "painter.placeAtTile": "Colocar en casilla",
     "painter.placeAtTile.x": "X",
     "painter.placeAtTile.y": "Y",

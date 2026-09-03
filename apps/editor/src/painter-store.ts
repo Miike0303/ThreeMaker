@@ -45,9 +45,8 @@
  * `MapDocument.props` exactly (flat, top-level, each entry referencing its
  * floor by stable id -- same shape as `rooms`). Place/delete push a
  * `PropCommand` onto the active floor's OWN `propCommandStack` (a third
- * per-floor undo stack alongside tiles + rooms). Scale/rotation/animation
- * stay JSON-side this WU -- the store only authors the required fields
- * (id/x/y/floor/object) with schema defaults for the rest.
+ * per-floor undo stack alongside tiles + rooms). Scale / rotationY /
+ * animation are authored via `activeProp*` place fields (omit schema defaults).
  *
  * NPC + trigger authoring (c1a follow-up): `PainterState.npcs`/`triggers`
  * mirror `MapDocument.npcs`/`triggers` exactly (flat, top-level, floor by
@@ -310,6 +309,11 @@ export interface PainterState {
    * are written onto the PropDocument; `0` stays omitted (schema default).
    */
   readonly activePropRotationY: number;
+  /**
+   * GLB animation clip name for the next placed prop (default empty).
+   * Non-empty values are written onto the PropDocument; empty stays omitted.
+   */
+  readonly activePropAnimation: string;
   /** Every authored NPC across every floor (c1a follow-up), mirroring `MapDocument.npcs`. */
   readonly npcs: readonly NpcDocument[];
   /** Every authored trigger across every floor (c1a follow-up), mirroring `MapDocument.triggers`. */
@@ -391,6 +395,8 @@ export interface CreatePainterStateOptions {
   readonly activePropScale?: number;
   /** Initial prop place yaw degrees (session-only; default 0). */
   readonly activePropRotationY?: number;
+  /** Initial prop place animation clip (session-only; default empty). */
+  readonly activePropAnimation?: string;
   /** Initial NPCs (map load path), matching `MapDocument.npcs`; defaults to none authored. */
   readonly npcs?: readonly NpcDocument[];
   /** Initial triggers (map load path), matching `MapDocument.triggers`; defaults to none authored. */
@@ -450,6 +456,7 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     activePropObject,
     activePropScale = 1,
     activePropRotationY = 0,
+    activePropAnimation = '',
     npcs = [],
     triggers = [],
     lights = [],
@@ -503,6 +510,7 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     eventKeys,
     activePropScale,
     activePropRotationY,
+    activePropAnimation,
     activeNpcCharacterIndex,
     activeNpcFacing,
     activeTriggerOn,
@@ -1312,6 +1320,12 @@ export function setActivePropRotationY(state: PainterState, rotationY: number): 
   return { ...idle, activePropRotationY: rotationY };
 }
 
+/** Sets the GLB clip name for the next placed prop. Cancels a stuck stroke first. */
+export function setActivePropAnimation(state: PainterState, animation: string): PainterState {
+  const idle = cancelStroke(state);
+  return { ...idle, activePropAnimation: animation.trim() };
+}
+
 /** Replaces (or removes, if `next` is `undefined`) the prop identified by `id` in `props`, preserving document order; a brand-new id is appended. */
 function upsertProp(
   props: readonly PropDocument[],
@@ -1341,8 +1355,9 @@ function applyPropMutation(
 /**
  * Places a prop on the ACTIVE floor at `point` using `activePropObject` as
  * the content-addressed glb sha and the next free `prop-N` id. Applies
- * `activePropScale` / `activePropRotationY` when they differ from schema
- * defaults (1 / 0). Ignored mid-stroke. A safe no-op when no glb is selected.
+ * `activePropScale` / `activePropRotationY` / `activePropAnimation` when they
+ * differ from schema defaults (1 / 0 / none). Ignored mid-stroke. A safe
+ * no-op when no glb is selected.
  */
 export function placeProp(
   state: PainterState,
@@ -1363,6 +1378,7 @@ export function placeProp(
     object: state.activePropObject,
     ...(state.activePropScale !== 1 ? { scale: state.activePropScale } : {}),
     ...(state.activePropRotationY !== 0 ? { rotationY: state.activePropRotationY } : {}),
+    ...(state.activePropAnimation !== '' ? { animation: state.activePropAnimation } : {}),
   };
   const props = upsertProp(state.props, id, prop);
   return applyPropMutation(state, props, { floor: floor.id, id, after: prop });

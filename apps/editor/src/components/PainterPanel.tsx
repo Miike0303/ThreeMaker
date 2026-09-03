@@ -3033,6 +3033,17 @@ export function PainterPanel({ t }: PainterPanelProps) {
                             }}
                           />
                         </label>
+                        <label>
+                          {t('painter.props.animation')}
+                          <input
+                            type="text"
+                            value={painterState.activePropAnimation}
+                            placeholder={t('painter.props.animationPlaceholder')}
+                            onChange={(event) =>
+                              viewportRef.current?.setActivePropAnimation(event.target.value)
+                            }
+                          />
+                        </label>
                         <button
                           type="button"
                           disabled={!painterState.activePropObject}
@@ -3064,6 +3075,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                 onClick={() => {
                                   const brush = propPlacementFromDocument(prop);
                                   viewportRef.current?.setActivePropObject(brush.object);
+                                  viewportRef.current?.setActivePropScale(brush.scale);
+                                  viewportRef.current?.setActivePropRotationY(brush.rotationY);
+                                  viewportRef.current?.setActivePropAnimation(brush.animation);
                                   routeExplicitToolSelection('prop');
                                   reportStatus({
                                     message: formatTemplate(t('painter.props.reuseToast'), {

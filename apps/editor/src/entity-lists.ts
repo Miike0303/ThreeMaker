@@ -154,10 +154,18 @@ export function triggerPlacementFromDocument(trigger: TriggerDocument): TriggerP
 /** Placement brush fields copied from an authored prop (list-place reuse). */
 export type PropPlacementBrush = {
   readonly object: string;
+  readonly scale: number;
+  readonly rotationY: number;
+  readonly animation: string;
 };
 
 export function propPlacementFromDocument(prop: PropDocument): PropPlacementBrush {
-  return { object: prop.object };
+  return {
+    object: prop.object,
+    scale: prop.scale ?? 1,
+    rotationY: prop.rotationY ?? 0,
+    animation: prop.animation ?? '',
+  };
 }
 
 /**

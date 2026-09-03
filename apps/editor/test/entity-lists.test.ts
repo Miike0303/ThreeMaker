@@ -217,9 +217,26 @@ describe('triggerPlacementFromDocument', () => {
 });
 
 describe('propPlacementFromDocument', () => {
-  it('copies object sha for reuse', () => {
-    expect(propPlacementFromDocument(PROP_1)).toEqual({ object: OBJ_A });
-    expect(propPlacementFromDocument(PROP_2)).toEqual({ object: OBJ_B });
+  it('copies object sha and place transforms for reuse', () => {
+    expect(propPlacementFromDocument(PROP_1)).toEqual({
+      object: OBJ_A,
+      scale: 1,
+      rotationY: 0,
+      animation: '',
+    });
+    expect(
+      propPlacementFromDocument({
+        ...PROP_2,
+        scale: 2,
+        rotationY: 45,
+        animation: 'Spin',
+      }),
+    ).toEqual({
+      object: OBJ_B,
+      scale: 2,
+      rotationY: 45,
+      animation: 'Spin',
+    });
   });
 });
 

@@ -224,6 +224,8 @@ const NEW_KEYS = [
   'painter.props.ingestNeedsTauri',
   'painter.props.scale',
   'painter.props.rotationY',
+  'painter.props.animation',
+  'painter.props.animationPlaceholder',
   'painter.placeAtTile',
   'painter.placeAtTile.x',
   'painter.placeAtTile.y',

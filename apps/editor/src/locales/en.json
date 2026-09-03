@@ -275,6 +275,8 @@
     "painter.props.ingestNeedsTauri": "Importing .glb requires the Tauri editor host.",
     "painter.props.scale": "Scale",
     "painter.props.rotationY": "Yaw (°)",
+    "painter.props.animation": "Animation clip",
+    "painter.props.animationPlaceholder": "Clip name (optional)",
     "painter.placeAtTile": "Place at tile",
     "painter.placeAtTile.x": "X",
     "painter.placeAtTile.y": "Y",
