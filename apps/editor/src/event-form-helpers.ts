@@ -7,6 +7,7 @@
  */
 
 import type { EventCommand, WorldValue } from '@threemaker/core';
+import { BUILTIN_COMMAND_TYPES } from '@threemaker/core';
 import { isSafeStoryId } from './ink-sidecar.js';
 import { type EventCommandKind, validateEventsDraft } from './painter-store.js';
 
@@ -84,17 +85,8 @@ export function buildTransferMapPickerModel(
 /** Discriminator for WorldValue / WorldSeedValue type selectors in forms. */
 export type WorldValueKind = 'boolean' | 'number' | 'string';
 
-/** All 8 event-script command kinds (schema v1), stable order for the kind picker. */
-export const EVENT_COMMAND_KINDS: readonly EventCommandKind[] = [
-  'moveEntity',
-  'showDialogue',
-  'conditional',
-  'setWorldVar',
-  'teleport',
-  'transferMap',
-  'giveItem',
-  'modifyStat',
-];
+/** Builtin event-script command kinds for the kind picker — same list core parses. */
+export const EVENT_COMMAND_KINDS: readonly EventCommandKind[] = BUILTIN_COMMAND_TYPES;
 
 /** `typeof` for a WorldValue (boolean | number | string). */
 export function worldValueKind(value: WorldValue): WorldValueKind {

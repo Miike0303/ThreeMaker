@@ -1,4 +1,4 @@
-import { CommandRegistry, parseEventScript } from '@threemaker/core';
+import { authoringPlugins, CommandRegistry, parseEventScript } from '@threemaker/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
   type AudioPlayer,
@@ -130,5 +130,11 @@ describe('audio command plugins', () => {
 
   it('registers all three verbs without colliding', () => {
     expect(registryFor(fakePlayer()).types()).toEqual(['playSound', 'playBgm', 'stopBgm']);
+  });
+
+  it('live audio registry types match authoringPlugins so Play cannot reject editor verbs', () => {
+    const live = [...registryFor(fakePlayer()).types()].sort();
+    const authoring = [...authoringPlugins().types()].sort();
+    expect(live).toEqual(authoring);
   });
 });

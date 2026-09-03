@@ -1,6 +1,7 @@
 /**
  * Pure helpers for the events editor forms (WU-02) + save hard-gate.
  */
+import { BUILTIN_COMMAND_TYPES } from '@threemaker/core';
 import { describe, expect, it } from 'vitest';
 import {
   buildInkDialoguePickerModel,
@@ -79,7 +80,8 @@ describe('event-form-helpers: dialogue lines', () => {
 });
 
 describe('event-form-helpers: command kinds', () => {
-  it('lists all 8 event command kinds', () => {
+  it('tracks BUILTIN_COMMAND_TYPES so the picker cannot drift from core parse', () => {
+    expect(EVENT_COMMAND_KINDS).toBe(BUILTIN_COMMAND_TYPES);
     expect(EVENT_COMMAND_KINDS).toEqual([
       'moveEntity',
       'showDialogue',
