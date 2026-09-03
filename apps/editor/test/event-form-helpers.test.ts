@@ -1,9 +1,10 @@
 /**
  * Pure helpers for the events editor forms (WU-02) + save hard-gate.
  */
-import { BUILTIN_COMMAND_TYPES } from '@threemaker/core';
+import { authoringPlugins, BUILTIN_COMMAND_TYPES } from '@threemaker/core';
 import { describe, expect, it } from 'vitest';
 import {
+  AUTHORING_AUDIO_KINDS,
   buildInkDialoguePickerModel,
   buildTransferMapPickerModel,
   canSavePainterDocument,
@@ -84,12 +85,11 @@ describe('event-form-helpers: command kinds', () => {
     expect(EVENT_COMMAND_KINDS.slice(0, BUILTIN_COMMAND_TYPES.length)).toEqual([
       ...BUILTIN_COMMAND_TYPES,
     ]);
-    expect(EVENT_COMMAND_KINDS).toEqual([
-      ...BUILTIN_COMMAND_TYPES,
-      'playSound',
-      'playBgm',
-      'stopBgm',
-    ]);
+    expect(EVENT_COMMAND_KINDS).toEqual([...BUILTIN_COMMAND_TYPES, ...AUTHORING_AUDIO_KINDS]);
+  });
+
+  it('AUTHORING_AUDIO_KINDS matches authoringPlugins().types()', () => {
+    expect([...AUTHORING_AUDIO_KINDS].sort()).toEqual([...authoringPlugins().types()].sort());
   });
 });
 
