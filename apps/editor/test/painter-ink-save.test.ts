@@ -20,4 +20,18 @@ describe('Painter Save flushes Ink', () => {
     expect(PANEL_SOURCE).toContain('inkSaveRef.current?.saveIfDirty()');
     expect(PANEL_SOURCE).toContain('shouldConfirmMapSwitch({ mapReady, docDirty, inkDirty })');
   });
+
+  it('handlePlaytest also flushes dirty Ink before openPlaytest', () => {
+    const playtestFn = PANEL_SOURCE.match(
+      /const handlePlaytest = useCallback\(async \(\) => \{[\s\S]*?\}, \[t, reportStatus, openMapName, refreshSavedMaps\]\);/,
+    );
+    expect(playtestFn?.[0]).toBeDefined();
+    expect(playtestFn?.[0]).toContain('inkSaveRef.current?.saveIfDirty()');
+    expect(playtestFn?.[0]).toContain('await openPlaytest()');
+    // Flush must happen before launch so the sidecar on disk matches the buffer.
+    const flushAt = playtestFn?.[0].indexOf('saveIfDirty()') ?? -1;
+    const launchAt = playtestFn?.[0].indexOf('await openPlaytest()') ?? -1;
+    expect(flushAt).toBeGreaterThan(-1);
+    expect(launchAt).toBeGreaterThan(flushAt);
+  });
 });

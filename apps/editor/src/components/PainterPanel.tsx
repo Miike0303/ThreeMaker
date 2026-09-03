@@ -974,9 +974,18 @@ export function PainterPanel({ t }: PainterPanelProps) {
         await saveMapDocument(doc, LEGACY_MAP_NAME);
       }
       setDocDirty(false);
+      // Same Ink door as Save: playtest loads sidecars from disk, so a dirty
+      // buffer must flush or dialogue edits never reach the launched game.
+      const inkFlush = (await inkSaveRef.current?.saveIfDirty()) ?? 'clean';
       void refreshSavedMaps();
       await openPlaytest();
-      reportStatus({ message: t('painter.playtest.success'), severity: 'success' });
+      if (inkFlush === 'failed') {
+        reportStatus({ message: t('painter.ink.saveFailed'), severity: 'error' });
+      } else if (inkFlush === 'blocked') {
+        reportStatus({ message: t('painter.ink.saveBlocked'), severity: 'warning' });
+      } else {
+        reportStatus({ message: t('painter.playtest.success'), severity: 'success' });
+      }
     } catch (err) {
       console.error('Failed to open playtest:', err);
       if (err instanceof PlaytestClientError) {
