@@ -13,8 +13,11 @@ import { MAP_FORMAT_MAGIC } from '@threemaker/map-format';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
 import { type AudioPlayer, createAudioCommands } from '../src/audio.js';
-import type { AuthoredMapDeps } from '../src/authored-map.js';
-import { loadAuthoredMap } from '../src/authored-map.js';
+import {
+  type AuthoredMapDeps,
+  loadAuthoredMap,
+  shouldLoadDevFixture,
+} from '../src/authored-map.js';
 
 const SIZE = 4;
 
@@ -157,15 +160,20 @@ describe('loadAuthoredMap', () => {
     expect(deps.resolveObjectTexture).not.toHaveBeenCalled();
   });
 
-  it('returns null and logs when the file fails to parse/validate', async () => {
+  it('throws when the file is not valid JSON, so Play cannot treat it as a missing map', async () => {
     const deps = buildDeps({ readMapDocumentText: vi.fn(async () => 'not valid json') });
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const result = await loadAuthoredMap(deps);
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/not valid JSON/);
+  });
 
-    expect(result).toBeNull();
-    expect(errorSpy).toHaveBeenCalled();
-    errorSpy.mockRestore();
+  it('throws when the map version is newer than this app supports', async () => {
+    const deps = buildDeps({
+      readMapDocumentText: vi.fn(async () =>
+        JSON.stringify({ format: MAP_FORMAT_MAGIC, version: 99 }),
+      ),
+    });
+
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/newer than the current supported version/);
   });
 
   it('returns null and logs when reading the shared file itself throws', async () => {
@@ -298,17 +306,12 @@ describe('loadAuthoredMap', () => {
     } as unknown as AudioPlayer;
   }
 
-  it('returns null when events use playSound without a plugins CommandRegistry', async () => {
+  it('throws when events use playSound without a plugins CommandRegistry', async () => {
     const deps = buildDeps({
       readMapDocumentText: vi.fn(async () => playSoundMapDocText()),
     });
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const result = await loadAuthoredMap(deps);
-
-    expect(result).toBeNull();
-    expect(errorSpy).toHaveBeenCalled();
-    errorSpy.mockRestore();
+    await expect(loadAuthoredMap(deps)).rejects.toThrow(/unknown command type "playSound"/);
   });
 
   it('loads playSound events when the same-style audio CommandRegistry is passed as plugins', async () => {
@@ -324,5 +327,14 @@ describe('loadAuthoredMap', () => {
 
     expect(result).not.toBeNull();
     expect(result?.narrative?.events.hit).toEqual([{ type: 'playSound', path: 'se/hit.ogg' }]);
+  });
+});
+
+describe('shouldLoadDevFixture', () => {
+  it('loads the DEV demo only when no authored file failed', () => {
+    expect(shouldLoadDevFixture(undefined, true)).toBe(true);
+    expect(shouldLoadDevFixture('not valid JSON', true)).toBe(false);
+    expect(shouldLoadDevFixture(undefined, false)).toBe(false);
+    expect(shouldLoadDevFixture('not valid JSON', false)).toBe(false);
   });
 });

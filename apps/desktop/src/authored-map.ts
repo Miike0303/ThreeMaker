@@ -18,13 +18,10 @@
  * narrative-free map.
  *
  * Returns `null` (after logging why) whenever the caller should fall back to
- * the existing DEV fixture path instead: no MAP DOCUMENT saved yet, or
- * that document fails to read/parse/validate (spec: "DEV demos remain
- * fallback"). Scope matters: only the map-document read degrades to `null`. A
- * SIDECAR read failure does not -- it joins the loud narrative rejections
- * above, because a map that authors narrative and then loses it is a broken
- * map, not a map without one (spec R4). A per-slot texture failure is handled
- * differently again (W1, below) -- it degrades that one slot, not the load.
+ * the existing DEV fixture path: no MAP DOCUMENT saved yet, or the document
+ * file itself failed to read. Parse/validate failures THROW -- a broken file
+ * is not "no authored map". A SIDECAR read failure also throws (spec R4).
+ * A per-slot texture failure degrades that one slot, not the load (W1).
  */
 
 import { BaseDirectory, readFile } from '@tauri-apps/plugin-fs';
@@ -546,15 +543,13 @@ async function loadNarrative(
 
 /**
  * Attempts to load the shared authored map file end to end. Returns `null`
- * when the caller should fall back to the existing DEV demos/fixture path: no
- * map file saved yet, the map-document read itself throwing, or a
- * parse/validation failure -- each is logged so the reason is visible, and
- * none of them crash `main()`.
+ * only when there is no map file yet (`readMapDocumentText` yields `null`)
+ * or the read itself throws -- the caller may fall back to the DEV fixture.
  *
- * THROWS, deliberately, for every authored-narrative failure `loadNarrative`
- * detects -- including a failed `.ink` SIDECAR read, which is not a
- * "fall back quietly" case (spec R4). Callers that swallow this turn a broken
- * map into a misleading "no authored map".
+ * THROWS for parse/validate failures and for every authored-narrative
+ * failure `loadNarrative` detects (including a failed `.ink` sidecar).
+ * Callers that swallow those turn a broken map into a misleading
+ * "no authored map" / demo fixture.
  */
 export async function loadAuthoredMap(
   deps: AuthoredMapDeps = DEFAULT_DEPS,
@@ -568,13 +563,14 @@ export async function loadAuthoredMap(
   }
   if (rawText === null) return null;
 
-  let doc: MapDocument;
+  let json: unknown;
   try {
-    doc = parseMapDocument(JSON.parse(rawText), deps.plugins);
+    json = JSON.parse(rawText);
   } catch (error) {
-    console.error('authored-map: the shared map file failed to parse/validate.', error);
-    return null;
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`authored-map: the shared map file is not valid JSON (${detail}).`);
   }
+  const doc = parseMapDocument(json, deps.plugins);
 
   const translated = translateMapDocument(doc);
   // Deliberately BEFORE texture resolution: a dangling narrative reference is
@@ -616,6 +612,15 @@ export async function loadAuthoredMap(
     // Schema-validated lights (map-lights enforces budget + runtime attach).
     lights: doc.lights,
   };
+}
+
+/**
+ * The DEV Roseliam fixture is only for "no authored map file yet".
+ * A parse/validate/narrative failure must stay on screen — loading the
+ * demo after `statusEl.remove()` hid the error and looked like Play worked.
+ */
+export function shouldLoadDevFixture(authoredFailure: string | undefined, isDev: boolean): boolean {
+  return isDev && authoredFailure === undefined;
 }
 
 /**

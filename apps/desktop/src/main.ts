@@ -75,7 +75,7 @@ import Stats from 'stats-gl';
 import * as THREE from 'three/webgpu';
 import { AudioPlayer, createAudioCommands } from './audio.js';
 import type { AuthoredMapNarrative, AuthoredMapResult, GameDefsCatalog } from './authored-map.js';
-import { EMPTY_GAME_DEFS_CATALOG, loadAuthoredMap } from './authored-map.js';
+import { EMPTY_GAME_DEFS_CATALOG, loadAuthoredMap, shouldLoadDevFixture } from './authored-map.js';
 import {
   CharacterSprite,
   DEFAULT_SHEET_COLUMNS,
@@ -3274,20 +3274,7 @@ async function main(): Promise<void> {
         return;
       }
     } catch (error) {
-      // Previously this returned here (skipping the DEV fixture below
-      // entirely) -- now it falls through, same as every other layer, so a
-      // single-file authored failure still leaves the DEV fixture as a last
-      // resort in `tauri dev` instead of leaving `main()` with nothing left
-      // to try.
-      console.error(
-        'main: single-file authored map load/render failed; falling back to the DEV fixture.',
-        error,
-      );
-      // Kept for the terminal status below: since C1a a map can parse perfectly
-      // and still fail HERE on a dangling narrative reference, a missing `.ink`
-      // sidecar or an unseeded `world_get` key -- failures whose messages name
-      // the map, the event, the story and the expected path. Reporting those as
-      // "no authored map found" told the author the opposite of the truth.
+      console.error('main: single-file authored map load/render failed.', error);
       authoredFailure = describeAuthoredFailure(error);
       showStatus(authoredFailure);
     }
@@ -3295,11 +3282,10 @@ async function main(): Promise<void> {
 
   // `/@fs/` and `server.fs.allow` (vite.config.ts) only exist under `vite
   // dev` -- a production build has no dev server to serve the (git-ignored,
-  // never-shipped) DEV-demo fixture from. At this point either no authored map
-  // was found at all (every branch above already returned if one rendered), or
-  // one was found and REJECTED -- and only in the first case is "no authored
-  // map found" the truth. Production has no fixture concept at all.
-  if (!import.meta.env.DEV) {
+  // never-shipped) DEV-demo fixture from. A rejected authored file must not
+  // fall through to that fixture: Play would look like it worked (demo map)
+  // after the error banner was removed. Missing file → fixture in DEV only.
+  if (!shouldLoadDevFixture(authoredFailure, import.meta.env.DEV)) {
     showStatus(authoredFailure ?? i18n.t('map.noAuthoredMap'));
     return;
   }
