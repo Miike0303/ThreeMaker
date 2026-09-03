@@ -23,7 +23,7 @@ describe('Painter Save flushes Ink', () => {
 
   it('handlePlaytest also flushes dirty Ink before openPlaytest', () => {
     const playtestFn = PANEL_SOURCE.match(
-      /const handlePlaytest = useCallback\(async \(\) => \{[\s\S]*?\}, \[t, reportStatus, openMapName, refreshSavedMaps\]\);/,
+      /const handlePlaytest = useCallback\(async \(\) => \{[\s\S]*?\}, \[t, reportStatus, openMapName, savedMapNames, refreshSavedMaps\]\);/,
     );
     expect(playtestFn?.[0]).toBeDefined();
     expect(playtestFn?.[0]).toContain('inkSaveRef.current?.saveIfDirty()');
@@ -33,5 +33,12 @@ describe('Painter Save flushes Ink', () => {
     const launchAt = playtestFn?.[0].indexOf('await openPlaytest()') ?? -1;
     expect(flushAt).toBeGreaterThan(-1);
     expect(launchAt).toBeGreaterThan(flushAt);
+  });
+
+  it('handlePlaytest confirms before dual-writing onto an existing current map', () => {
+    expect(PANEL_SOURCE).toContain(
+      'shouldConfirmPlaytestDualWrite({ openMapName, savedMapNames })',
+    );
+    expect(PANEL_SOURCE).toContain("t('painter.playtest.overwriteCurrent')");
   });
 });

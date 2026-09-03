@@ -93,7 +93,7 @@ import {
   normalizeMapName,
   seedDemoTiles,
 } from '../map-compose.js';
-import { mapDocumentFileName } from '../map-identity.js';
+import { mapDocumentFileName, shouldConfirmPlaytestDualWrite } from '../map-identity.js';
 import {
   DEFAULT_MAP_HEIGHT,
   DEFAULT_MAP_NAME,
@@ -966,6 +966,14 @@ export function PainterPanel({ t }: PainterPanelProps) {
     }
     const doc = viewportRef.current?.currentDocument();
     if (!doc) return;
+    // Desktop boots `current.tmmap.json`. Dual-writing a named map onto that
+    // file silently overwrote whatever `current` held — confirm first.
+    if (
+      shouldConfirmPlaytestDualWrite({ openMapName, savedMapNames }) &&
+      !window.confirm(formatTemplate(t('painter.playtest.overwriteCurrent'), { name: openMapName }))
+    ) {
+      return;
+    }
     try {
       await saveMapDocument(doc, openMapName);
       // Desktop single-file boot always loads `current.tmmap.json`. Dual-write so
@@ -1001,7 +1009,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
       }
       reportStatus({ message: t('painter.playtest.failed'), severity: 'error' });
     }
-  }, [t, reportStatus, openMapName, refreshSavedMaps]);
+  }, [t, reportStatus, openMapName, savedMapNames, refreshSavedMaps]);
 
   // Keep selected event key in sync with the live eventKeys list.
   useEffect(() => {

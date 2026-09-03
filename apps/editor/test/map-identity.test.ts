@@ -22,6 +22,7 @@ import {
   mapNameFromDocumentFileName,
   planDeleteMapFiles,
   planRenameMapFiles,
+  shouldConfirmPlaytestDualWrite,
   validateMapName,
 } from '../src/map-identity.js';
 
@@ -197,5 +198,31 @@ describe('filename case folding', () => {
     expect(collidingSavedMapName('TOWN', ['alpha', 'town'])).toBe('town');
     expect(collidingSavedMapName('town', ['town'])).toBe('town');
     expect(collidingSavedMapName('Castle', ['town'])).toBeUndefined();
+  });
+});
+
+describe('shouldConfirmPlaytestDualWrite', () => {
+  it('confirms when a named map would overwrite an existing current', () => {
+    expect(
+      shouldConfirmPlaytestDualWrite({
+        openMapName: 'town',
+        savedMapNames: ['town', LEGACY_MAP_NAME],
+      }),
+    ).toBe(true);
+  });
+
+  it('does not confirm when current is the open map or does not exist yet', () => {
+    expect(
+      shouldConfirmPlaytestDualWrite({
+        openMapName: LEGACY_MAP_NAME,
+        savedMapNames: [LEGACY_MAP_NAME],
+      }),
+    ).toBe(false);
+    expect(
+      shouldConfirmPlaytestDualWrite({
+        openMapName: 'town',
+        savedMapNames: ['town'],
+      }),
+    ).toBe(false);
   });
 });

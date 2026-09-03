@@ -141,6 +141,7 @@
     "painter.playtest.success": "Playtest iniciado.",
     "painter.playtest.failed": "No se pudo iniciar el playtest — ver la consola para más detalles.",
     "painter.playtest.needDesktop": "El playtest requiere el editor de escritorio y la app desktop de ThreeMaker compilada.",
+    "painter.playtest.overwriteCurrent": "Jugar sobrescribirá el mapa “current” con “{name}” para que la app desktop pueda cargarlo. ¿Continuar?",
     "painter.procgen": "Procgen",
     "painter.procgen.hint": "Pincel = suelo. Pared/puerta: id, desde pincel o Auto. Misma seed + preset = mismo layout. Spawn en la sala mayor; conserva eventos/NPCs.",
     "painter.procgen.generate": "Generar",

@@ -79,6 +79,7 @@ const NEW_KEYS = [
   'painter.playtest.success',
   'painter.playtest.failed',
   'painter.playtest.needDesktop',
+  'painter.playtest.overwriteCurrent',
   'painter.procgen.generateAfterCreate',
   'painter.procgen',
   'painter.procgen.hint',

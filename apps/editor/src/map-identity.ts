@@ -12,6 +12,20 @@ export const INK_FILE_SUFFIX = '.ink';
 export const LEGACY_MAP_NAME = 'current';
 export const MAP_NAME_MAX_LENGTH = 64;
 
+/**
+ * Play dual-writes the open named map onto `current` so desktop single-file
+ * boot can load it. Confirm first when that would overwrite an existing
+ * `current` map that is not the one already open.
+ */
+export function shouldConfirmPlaytestDualWrite(input: {
+  readonly openMapName: string;
+  readonly savedMapNames: readonly string[];
+  readonly legacyMapName?: string;
+}): boolean {
+  const legacy = input.legacyMapName ?? LEGACY_MAP_NAME;
+  return input.openMapName !== legacy && input.savedMapNames.includes(legacy);
+}
+
 const SAFE_STORY_ID = /^[A-Za-z0-9_-]+$/;
 const WINDOWS_RESERVED = /^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$/i;
 const ILLEGAL_FILENAME_CHARS = /[<>:"|?*]/;

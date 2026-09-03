@@ -141,6 +141,7 @@
     "painter.playtest.success": "Playtest launched.",
     "painter.playtest.failed": "Failed to launch playtest — see console for details.",
     "painter.playtest.needDesktop": "Playtest requires the desktop editor and a built ThreeMaker desktop app.",
+    "painter.playtest.overwriteCurrent": "Play will overwrite the map named “current” with “{name}” so the desktop app can load it. Continue?",
     "painter.procgen.generateAfterCreate": "Generate dungeon after creating map",
     "painter.procgen": "Procgen",
     "painter.procgen.hint": "Brush = ground. Wall/door: pick id, from brush, or Auto. Same seed + preset = same layout. Spawn moves to the largest room; keeps events/NPCs.",
