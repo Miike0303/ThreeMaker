@@ -71,6 +71,7 @@
     "painter.maps.deleteSuccess": "Map deleted.",
     "painter.maps.deleteFailed": "Could not delete the map — see console for details.",
     "painter.maps.switchConfirm": "Open “{name}”? Unsaved changes in the current map will be replaced.",
+    "painter.unsaved.closeConfirm": "You have unsaved changes. Close anyway?",
     "painter.tools": "Tools",
     "painter.toolGroup.paint": "Paint",
     "painter.toolGroup.structure": "Structure",

@@ -71,6 +71,7 @@
     "painter.maps.deleteSuccess": "Mapa borrado.",
     "painter.maps.deleteFailed": "No se pudo borrar el mapa — mirá la consola.",
     "painter.maps.switchConfirm": "¿Abrir “{name}”? Se reemplazarán los cambios sin guardar del mapa actual.",
+    "painter.unsaved.closeConfirm": "Tenés cambios sin guardar. ¿Cerrar igual?",
     "painter.tools": "Herramientas",
     "painter.toolGroup.paint": "Pintar",
     "painter.toolGroup.structure": "Estructura",

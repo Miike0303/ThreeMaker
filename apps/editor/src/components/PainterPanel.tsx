@@ -1090,6 +1090,46 @@ export function PainterPanel({ t }: PainterPanelProps) {
     dispatchInspectorRouting({ type: 'tool-state-changed', tool: activeTool });
   }, [activeTool]);
 
+  // Refresh/tab close and Tauri window close still skip in-app map-switch
+  // confirms; reuse the same dirty predicate so those exits cannot silently
+  // drop doc or Ink work.
+  useEffect(() => {
+    if (!shouldConfirmMapSwitch({ mapReady, docDirty, inkDirty })) return;
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+
+    let cancelled = false;
+    let unlistenClose: (() => void) | undefined;
+    void (async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        if (cancelled) return;
+        const unlisten = await getCurrentWindow().onCloseRequested((event) => {
+          if (!window.confirm(t('painter.unsaved.closeConfirm'))) {
+            event.preventDefault();
+          }
+        });
+        if (cancelled) {
+          unlisten();
+          return;
+        }
+        unlistenClose = unlisten;
+      } catch {
+        // Browser / non-Tauri shells: beforeunload is the only door.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      unlistenClose?.();
+    };
+  }, [mapReady, docDirty, inkDirty, t]);
+
   const handleOpenMap = useCallback(
     async (name: string) => {
       if (shouldConfirmMapSwitch({ mapReady, docDirty, inkDirty })) {
