@@ -50,6 +50,8 @@ import {
   setActiveNpcFacing,
   setActiveNpcSpriteObject,
   setActivePropObject,
+  setActivePropRotationY,
+  setActivePropScale,
   setActiveRoomId,
   setActiveTriggerEventKey,
   setActiveTriggerOn,
@@ -1413,6 +1415,34 @@ describe('painter-store: prop tool (C5 WU-04 -- depth-props-hd)', () => {
     expect(state.props[0]).not.toHaveProperty('scale');
     expect(state.props[0]).not.toHaveProperty('rotationY');
     expect(state.props[0]).not.toHaveProperty('animation');
+  });
+
+  it('placeProp writes scale and rotationY when the active place transform is not the schema default', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setActivePropObject(state, PROP_OBJECT_A);
+    state = setActivePropScale(state, 2);
+    state = setActivePropRotationY(state, 90);
+    state = placeProp(state, { x: 1, y: 1 });
+
+    expect(state.props).toEqual([
+      {
+        id: 'prop-1',
+        x: 1,
+        y: 1,
+        floor: 'floor-0',
+        object: PROP_OBJECT_A,
+        scale: 2,
+        rotationY: 90,
+      },
+    ]);
+  });
+
+  it('setActivePropScale rejects non-positive values; setActivePropRotationY rejects NaN', () => {
+    let state = createPainterState({ ...oneFloor(4, 4), width: 4, height: 4 });
+    state = setActivePropScale(state, 1.5);
+    expect(setActivePropScale(state, 0).activePropScale).toBe(1.5);
+    expect(setActivePropScale(state, -1).activePropScale).toBe(1.5);
+    expect(setActivePropRotationY(state, Number.NaN).activePropRotationY).toBe(0);
   });
 
   it('placeProp / place with no selected glb is a no-op', () => {

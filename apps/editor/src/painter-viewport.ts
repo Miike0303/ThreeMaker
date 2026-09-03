@@ -573,6 +573,18 @@ export class PainterViewport {
     this.recomputePropOverlay();
   }
 
+  setActivePropScale(scale: number): void {
+    if (!this.state) return;
+    this.state = painter.setActivePropScale(this.state, scale);
+    this.emitState();
+  }
+
+  setActivePropRotationY(rotationY: number): void {
+    if (!this.state) return;
+    this.state = painter.setActivePropRotationY(this.state, rotationY);
+    this.emitState();
+  }
+
   undoProp(): void {
     if (!this.state) return;
     this.state = painter.undoProp(this.state).state;

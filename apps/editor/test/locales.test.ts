@@ -221,6 +221,8 @@ const NEW_KEYS = [
   'painter.props.ingestSuccess',
   'painter.props.ingestFailed',
   'painter.props.ingestNeedsTauri',
+  'painter.props.scale',
+  'painter.props.rotationY',
   'painter.placeAtTile',
   'painter.placeAtTile.x',
   'painter.placeAtTile.y',

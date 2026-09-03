@@ -2947,6 +2947,35 @@ export function PainterPanel({ t }: PainterPanelProps) {
                             }}
                           />
                         </label>
+                        <label>
+                          {t('painter.props.scale')}
+                          <input
+                            type="number"
+                            min={0.01}
+                            step={0.1}
+                            value={painterState.activePropScale}
+                            onChange={(event) => {
+                              const parsed = Number.parseFloat(event.target.value);
+                              if (Number.isFinite(parsed)) {
+                                viewportRef.current?.setActivePropScale(parsed);
+                              }
+                            }}
+                          />
+                        </label>
+                        <label>
+                          {t('painter.props.rotationY')}
+                          <input
+                            type="number"
+                            step={15}
+                            value={painterState.activePropRotationY}
+                            onChange={(event) => {
+                              const parsed = Number.parseFloat(event.target.value);
+                              if (Number.isFinite(parsed)) {
+                                viewportRef.current?.setActivePropRotationY(parsed);
+                              }
+                            }}
+                          />
+                        </label>
                         <button
                           type="button"
                           disabled={!painterState.activePropObject}

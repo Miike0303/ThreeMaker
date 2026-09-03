@@ -300,6 +300,16 @@ export interface PainterState {
    * `setActivePropObject` after `ingestGlbBytes` succeeds.
    */
   readonly activePropObject?: string;
+  /**
+   * Uniform scale for the next placed prop (default `1`). Values other than
+   * `1` are written onto the PropDocument; `1` stays omitted (schema default).
+   */
+  readonly activePropScale: number;
+  /**
+   * Yaw in degrees for the next placed prop (default `0`). Non-zero values
+   * are written onto the PropDocument; `0` stays omitted (schema default).
+   */
+  readonly activePropRotationY: number;
   /** Every authored NPC across every floor (c1a follow-up), mirroring `MapDocument.npcs`. */
   readonly npcs: readonly NpcDocument[];
   /** Every authored trigger across every floor (c1a follow-up), mirroring `MapDocument.triggers`. */
@@ -377,6 +387,10 @@ export interface CreatePainterStateOptions {
   readonly props?: readonly PropDocument[];
   /** Initial selected prop object sha (session-only; never persisted). */
   readonly activePropObject?: string;
+  /** Initial prop place scale (session-only; default 1). */
+  readonly activePropScale?: number;
+  /** Initial prop place yaw degrees (session-only; default 0). */
+  readonly activePropRotationY?: number;
   /** Initial NPCs (map load path), matching `MapDocument.npcs`; defaults to none authored. */
   readonly npcs?: readonly NpcDocument[];
   /** Initial triggers (map load path), matching `MapDocument.triggers`; defaults to none authored. */
@@ -434,6 +448,8 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     spawn,
     props = [],
     activePropObject,
+    activePropScale = 1,
+    activePropRotationY = 0,
     npcs = [],
     triggers = [],
     lights = [],
@@ -485,6 +501,8 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     events,
     worldSeeds,
     eventKeys,
+    activePropScale,
+    activePropRotationY,
     activeNpcCharacterIndex,
     activeNpcFacing,
     activeTriggerOn,
@@ -1280,6 +1298,20 @@ export function setActivePropObject(state: PainterState, object: string | undefi
   return rest;
 }
 
+/** Sets the uniform scale for the next placed prop. Cancels a stuck stroke first. */
+export function setActivePropScale(state: PainterState, scale: number): PainterState {
+  const idle = cancelStroke(state);
+  if (!Number.isFinite(scale) || scale <= 0) return idle;
+  return { ...idle, activePropScale: scale };
+}
+
+/** Sets the yaw (degrees) for the next placed prop. Cancels a stuck stroke first. */
+export function setActivePropRotationY(state: PainterState, rotationY: number): PainterState {
+  const idle = cancelStroke(state);
+  if (!Number.isFinite(rotationY)) return idle;
+  return { ...idle, activePropRotationY: rotationY };
+}
+
 /** Replaces (or removes, if `next` is `undefined`) the prop identified by `id` in `props`, preserving document order; a brand-new id is appended. */
 function upsertProp(
   props: readonly PropDocument[],
@@ -1308,9 +1340,9 @@ function applyPropMutation(
 
 /**
  * Places a prop on the ACTIVE floor at `point` using `activePropObject` as
- * the content-addressed glb sha and the next free `prop-N` id. Defaults only
- * (no scale/rotation/animation) -- those stay JSON-side this WU. Ignored
- * mid-stroke. A safe no-op when no glb is selected.
+ * the content-addressed glb sha and the next free `prop-N` id. Applies
+ * `activePropScale` / `activePropRotationY` when they differ from schema
+ * defaults (1 / 0). Ignored mid-stroke. A safe no-op when no glb is selected.
  */
 export function placeProp(
   state: PainterState,
@@ -1323,14 +1355,14 @@ export function placeProp(
   const x = clampTileIndex(point.x, state.width);
   const y = clampTileIndex(point.y, state.height);
   const id = nextPropId(state.props);
-  // scale/rotationY/animation omitted deliberately -- authoring those stays
-  // JSON-side for now (C5 WU-04 minimal place tool).
   const prop: PropDocument = {
     id,
     x,
     y,
     floor: floor.id,
     object: state.activePropObject,
+    ...(state.activePropScale !== 1 ? { scale: state.activePropScale } : {}),
+    ...(state.activePropRotationY !== 0 ? { rotationY: state.activePropRotationY } : {}),
   };
   const props = upsertProp(state.props, id, prop);
   return applyPropMutation(state, props, { floor: floor.id, id, after: prop });
