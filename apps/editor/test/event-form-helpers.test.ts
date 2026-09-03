@@ -80,17 +80,15 @@ describe('event-form-helpers: dialogue lines', () => {
 });
 
 describe('event-form-helpers: command kinds', () => {
-  it('tracks BUILTIN_COMMAND_TYPES so the picker cannot drift from core parse', () => {
-    expect(EVENT_COMMAND_KINDS).toBe(BUILTIN_COMMAND_TYPES);
+  it('lists builtins then authoring audio verbs for the picker', () => {
+    expect(EVENT_COMMAND_KINDS.slice(0, BUILTIN_COMMAND_TYPES.length)).toEqual([
+      ...BUILTIN_COMMAND_TYPES,
+    ]);
     expect(EVENT_COMMAND_KINDS).toEqual([
-      'moveEntity',
-      'showDialogue',
-      'conditional',
-      'setWorldVar',
-      'teleport',
-      'transferMap',
-      'giveItem',
-      'modifyStat',
+      ...BUILTIN_COMMAND_TYPES,
+      'playSound',
+      'playBgm',
+      'stopBgm',
     ]);
   });
 });

@@ -1982,7 +1982,7 @@ export type CommandPathSegment = number | 'then' | 'else';
 export type CommandPath = readonly CommandPathSegment[];
 
 /** Discriminator of every event-script command kind (schema v1). */
-export type EventCommandKind = EventCommand['type'];
+export type EventCommandKind = EventCommand['type'] | 'playSound' | 'playBgm' | 'stopBgm';
 
 function withEvents(state: PainterState, events: MapEventScripts): PainterState {
   return { ...state, events, eventKeys: Object.keys(events) };
@@ -2015,6 +2015,12 @@ export function defaultEventCommand(kind: EventCommandKind): EventCommand {
       return { type: 'giveItem', itemId: '', amount: 1 };
     case 'modifyStat':
       return { type: 'modifyStat', statId: '', delta: 1 };
+    case 'playSound':
+      return { type: 'playSound', path: '' } as unknown as EventCommand;
+    case 'playBgm':
+      return { type: 'playBgm', path: '', loop: true } as unknown as EventCommand;
+    case 'stopBgm':
+      return { type: 'stopBgm' } as unknown as EventCommand;
   }
 }
 

@@ -6,7 +6,7 @@ import {
 } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import { authoringPlugins } from '../src/authoring-plugins.js';
-import { validateEventsDraft } from '../src/painter-store.js';
+import { defaultEventCommand, validateEventsDraft } from '../src/painter-store.js';
 
 const DEFAULT_FLAGS = new Array(8192).fill(0);
 
@@ -42,6 +42,17 @@ describe('authoringPlugins', () => {
   it('validateEventsDraft accepts playSound via authoring plugins', () => {
     expect(
       validateEventsDraft({ hit: [{ type: 'playSound', path: 'se/hit.ogg' } as never] }),
+    ).toBeNull();
+  });
+
+  it('defaultEventCommand builds audio shapes the picker can validate once path is set', () => {
+    expect(defaultEventCommand('playSound')).toEqual({ type: 'playSound', path: '' });
+    expect(defaultEventCommand('playBgm')).toEqual({ type: 'playBgm', path: '', loop: true });
+    expect(defaultEventCommand('stopBgm')).toEqual({ type: 'stopBgm' });
+    expect(
+      validateEventsDraft({
+        hit: [{ type: 'playSound', path: 'se/hit.ogg' } as never],
+      }),
     ).toBeNull();
   });
 

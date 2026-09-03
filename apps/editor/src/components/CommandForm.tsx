@@ -207,6 +207,109 @@ function CommandFields({
   savedMapFiles,
   onUpdate,
 }: CommandFieldsProps) {
+  // Authoring audio plugins sit outside the closed EventCommand union.
+  const pluginKind = (command as { readonly type: string }).type;
+  if (pluginKind === 'playSound') {
+    const audio = command as unknown as { readonly path: string; readonly volume?: number };
+    return (
+      <div className="painter-events-fields">
+        <label>
+          {t('painter.events.field.audioPath')}
+          <input
+            type="text"
+            value={audio.path}
+            onChange={(e) => onUpdate(path, { path: e.target.value })}
+          />
+        </label>
+        <label>
+          {t('painter.events.field.volume')}
+          <input
+            type="number"
+            min={0}
+            max={1}
+            step={0.05}
+            value={audio.volume ?? 1}
+            onChange={(e) =>
+              onUpdate(path, { volume: parseNumberField(e.target.value, audio.volume ?? 1) })
+            }
+          />
+        </label>
+      </div>
+    );
+  }
+  if (pluginKind === 'playBgm') {
+    const audio = command as unknown as {
+      readonly path: string;
+      readonly volume?: number;
+      readonly fadeMs?: number;
+      readonly loop?: boolean;
+    };
+    return (
+      <div className="painter-events-fields">
+        <label>
+          {t('painter.events.field.audioPath')}
+          <input
+            type="text"
+            value={audio.path}
+            onChange={(e) => onUpdate(path, { path: e.target.value })}
+          />
+        </label>
+        <label>
+          {t('painter.events.field.volume')}
+          <input
+            type="number"
+            min={0}
+            max={1}
+            step={0.05}
+            value={audio.volume ?? 1}
+            onChange={(e) =>
+              onUpdate(path, { volume: parseNumberField(e.target.value, audio.volume ?? 1) })
+            }
+          />
+        </label>
+        <label>
+          {t('painter.events.field.fadeMs')}
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={audio.fadeMs ?? 0}
+            onChange={(e) =>
+              onUpdate(path, { fadeMs: parseIntField(e.target.value, audio.fadeMs ?? 0) })
+            }
+          />
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={audio.loop !== false}
+            onChange={(e) => onUpdate(path, { loop: e.target.checked })}
+          />{' '}
+          {t('painter.events.field.loop')}
+        </label>
+      </div>
+    );
+  }
+  if (pluginKind === 'stopBgm') {
+    const audio = command as unknown as { readonly fadeMs?: number };
+    return (
+      <div className="painter-events-fields">
+        <label>
+          {t('painter.events.field.fadeMs')}
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={audio.fadeMs ?? 0}
+            onChange={(e) =>
+              onUpdate(path, { fadeMs: parseIntField(e.target.value, audio.fadeMs ?? 0) })
+            }
+          />
+        </label>
+      </div>
+    );
+  }
+
   switch (command.type) {
     case 'moveEntity':
       return (

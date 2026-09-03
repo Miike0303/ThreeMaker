@@ -85,8 +85,13 @@ export function buildTransferMapPickerModel(
 /** Discriminator for WorldValue / WorldSeedValue type selectors in forms. */
 export type WorldValueKind = 'boolean' | 'number' | 'string';
 
-/** Builtin event-script command kinds for the kind picker — same list core parses. */
-export const EVENT_COMMAND_KINDS: readonly EventCommandKind[] = BUILTIN_COMMAND_TYPES;
+/** Builtin + authoring audio verbs for the kind picker (parse accepts both). */
+export const AUTHORING_AUDIO_KINDS = ['playSound', 'playBgm', 'stopBgm'] as const;
+
+export const EVENT_COMMAND_KINDS: readonly EventCommandKind[] = [
+  ...BUILTIN_COMMAND_TYPES,
+  ...AUTHORING_AUDIO_KINDS,
+];
 
 /** `typeof` for a WorldValue (boolean | number | string). */
 export function worldValueKind(value: WorldValue): WorldValueKind {
