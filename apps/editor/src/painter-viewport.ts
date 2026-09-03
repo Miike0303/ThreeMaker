@@ -72,6 +72,9 @@ import {
   zoomPercentForDistance,
 } from './viewer-camera.js';
 
+/** GPU chunk builds per animation frame while amortizing load / floor switch. */
+const PROGRESSIVE_CHUNK_BUILDS_PER_FRAME = 4;
+
 /** Loads a texture (+ its pixel size) for every composed slot that has a resolved object hash. Thin IO glue, untested per this module's convention. */
 export async function loadSlotTextures(doc: MapDocument): Promise<{
   readonly textures: Partial<Record<TileSheetId, THREE.Texture>>;
@@ -303,6 +306,12 @@ export class PainterViewport {
   private rampGlyphCacheSemantics: SemanticOverrides | undefined;
   private rampGlyphCacheLayers: PainterState['floors'][number]['layers'] | undefined;
   private rampGlyphCacheRegions: MapDocument['floors'][number]['layers']['regions'] | undefined;
+  /**
+   * Chunk keys still waiting for GPU `buildChunk` after load / floor switch.
+   * Drained a few per frame so large maps become interactive before every
+   * chunk is live (paint still force-builds dirty keys immediately).
+   */
+  private pendingChunkKeys: string[] = [];
 
   constructor(container: HTMLElement, callbacks: PainterViewportCallbacks = {}) {
     this.container = container;
@@ -387,7 +396,9 @@ export class PainterViewport {
     return enabled;
   }
 
-  /** Mounts `doc`, building every chunk of its ACTIVE (floor 0, ground) floor with data live up front (a bounded authoring map, not a streamed world). Every floor is loaded into the painter store (spec: floor switcher), but only the active floor's chunks are ever built (spec: "editor viewport shows active floor only"). */
+  /** Mounts `doc` for the ACTIVE floor. CPU chunk data is built up front;
+   * GPU geometry is filled progressively across frames so large maps do not
+   * freeze the painter on load / floor switch. */
   loadMap(
     doc: MapDocument,
     textures: Partial<Record<TileSheetId, THREE.Texture>>,
@@ -1103,6 +1114,7 @@ export class PainterViewport {
    */
   private rebuildActiveFloorScene(): void {
     if (!this.doc || !this.state) return;
+    this.pendingChunkKeys = [];
     const snapshot = renderableSnapshot(
       this.doc,
       this.state,
@@ -1123,9 +1135,31 @@ export class PainterViewport {
       tileWorldSize: TILE_WORLD_SIZE,
       ...(lighting ? { lighting } : {}),
     });
-    for (const chunk of chunks) this.tilemap.buildChunk(chunkKey(chunk.chunkX, chunk.chunkY));
+    // Center-first so the overview fills from the map middle outward.
+    const centerChunkX = this.doc.width / (2 * DEFAULT_CHUNK_SIZE);
+    const centerChunkY = this.doc.height / (2 * DEFAULT_CHUNK_SIZE);
+    this.pendingChunkKeys = chunks
+      .map((chunk) => ({
+        key: chunkKey(chunk.chunkX, chunk.chunkY),
+        dist: (chunk.chunkX + 0.5 - centerChunkX) ** 2 + (chunk.chunkY + 0.5 - centerChunkY) ** 2,
+      }))
+      .sort((a, b) => a.dist - b.dist)
+      .map((entry) => entry.key);
+    this.drainProgressiveChunkBuilds();
     this.scene.add(this.tilemap.group);
     this.syncPreviewLights();
+  }
+
+  /** Builds up to `PROGRESSIVE_CHUNK_BUILDS_PER_FRAME` pending GPU chunks. */
+  private drainProgressiveChunkBuilds(): void {
+    if (!this.tilemap || this.pendingChunkKeys.length === 0) return;
+    let built = 0;
+    while (built < PROGRESSIVE_CHUNK_BUILDS_PER_FRAME && this.pendingChunkKeys.length > 0) {
+      const key = this.pendingChunkKeys.shift();
+      if (key === undefined) break;
+      this.tilemap.buildChunk(key);
+      built += 1;
+    }
   }
 
   /**
@@ -1591,6 +1625,7 @@ export class PainterViewport {
     if (this.animationHandle !== undefined || this.disposed) return;
     const renderFrame = () => {
       if (this.disposed) return;
+      this.drainProgressiveChunkBuilds();
       if (this.ready) {
         if (this.hd2d) this.hd2d.render();
         else this.renderer.render(this.scene, this.camera);
@@ -1614,6 +1649,7 @@ export class PainterViewport {
   dispose(): void {
     this.disposed = true;
     this.ready = false;
+    this.pendingChunkKeys = [];
     if (this.animationHandle !== undefined) {
       cancelAnimationFrame(this.animationHandle);
       this.animationHandle = undefined;
