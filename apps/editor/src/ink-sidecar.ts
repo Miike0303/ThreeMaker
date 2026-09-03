@@ -17,6 +17,10 @@ import {
 } from '@tauri-apps/plugin-fs';
 import type { EventCommand } from '@threemaker/core';
 import {
+  inkSidecarRelativePath as buildInkSidecarRelativePath,
+  isSafeStoryId,
+} from '@threemaker/map-format';
+import {
   buildInkGraphModel,
   compileInk,
   InkCompileError,
@@ -35,28 +39,19 @@ import {
 } from './map-identity.js';
 
 const DEV_MAP_API_BASE = '/api/dev-map';
-const MAP_FILE_SUFFIX = '.tmmap.json';
-const SAFE_STORY_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
-/** Same charset gate desktop load uses before building a sidecar path. */
-export function isSafeStoryId(storyId: string): boolean {
-  return SAFE_STORY_ID_PATTERN.test(storyId);
-}
+export { isSafeStoryId };
 
 /**
  * Home-relative (or maps-root-relative) path for one story's `.ink` sidecar.
  * Throws when `storyId` is not path-safe.
  */
 export function inkSidecarRelativePath(mapRelativePath: string, storyId: string): string {
-  if (!isSafeStoryId(storyId)) {
-    throw new MapClientError(
-      `Ink story id ${JSON.stringify(storyId)} is not path-safe (letters, digits, "_" and "-" only).`,
-    );
+  try {
+    return buildInkSidecarRelativePath(mapRelativePath, storyId);
+  } catch (error) {
+    throw new MapClientError(error instanceof Error ? error.message : String(error));
   }
-  const base = mapRelativePath.endsWith(MAP_FILE_SUFFIX)
-    ? mapRelativePath.slice(0, -MAP_FILE_SUFFIX.length)
-    : mapRelativePath;
-  return `${base}.${storyId}.ink`;
 }
 
 export type InkStoryOpenStatus = 'empty' | 'ready' | 'unknown-story' | 'unsafe-story-id';

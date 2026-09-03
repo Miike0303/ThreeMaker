@@ -4,11 +4,11 @@ import { authoringPlugins, parseEventScript, WorldState, type WorldValue } from 
 import type { MapDocument } from '@threemaker/map-format';
 import {
   createBlankMapDocument,
+  inkSidecarRelativePath,
   parseMapDocument,
   serializeMapDocument,
 } from '@threemaker/map-format';
 import { writeFileAtomic } from './atomic-write.js';
-import { inkSidecarRelativePath } from './ink-sidecar-path.js';
 import { resolveInsideProject } from './project-paths.js';
 
 const MAP_SUFFIX = '.tmmap.json';

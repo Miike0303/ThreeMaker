@@ -34,7 +34,7 @@ import type {
   PropDocument,
   WorldSeedValue,
 } from '@threemaker/map-format';
-import { parseMapDocument } from '@threemaker/map-format';
+import { inkSidecarRelativePath, isSafeStoryId, parseMapDocument } from '@threemaker/map-format';
 import type { SheetPixelSizes } from '@threemaker/renderer';
 import { loadSheetTexture } from '@threemaker/renderer';
 import * as THREE from 'three/webgpu';
@@ -252,27 +252,7 @@ async function resolveTileset(
   return { textures, sheetPixelSizes };
 }
 
-/** Suffix an authored map file carries; the sidecar base is the path without it. */
-const MAP_FILE_SUFFIX = '.tmmap.json';
-
-/**
- * Story ids that are safe to interpolate into a sidecar file name: one or more
- * letters, digits, `_` or `-`, and nothing else. A `.tmmap` is UNTRUSTED input
- * (these files get shared), and `sidecarPath` below turns a document-supplied
- * `storyId` straight into a home-relative fs path -- so `"../../../evil"`
- * would otherwise address `.threemaker/maps/current.../../../evil.ink`. The
- * Tauri capability also confines the read, but this gate is what keeps the
- * rejection a named authoring error rather than a scope denial.
- */
-const SAFE_STORY_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-
-/** Sidecar path for one story of one map: `<dir>/<name>.tmmap.json` -> `<dir>/<name>.<storyId>.ink` (design D7, inherited from the deleted DEV demo's own `map007.elder.ink` convention). A path that does not end in the suffix keeps its whole name as the base. Callers MUST have validated `storyId` against `SAFE_STORY_ID_PATTERN` first. */
-function sidecarPath(mapRelativePath: string, storyId: string): string {
-  const base = mapRelativePath.endsWith(MAP_FILE_SUFFIX)
-    ? mapRelativePath.slice(0, -MAP_FILE_SUFFIX.length)
-    : mapRelativePath;
-  return `${base}.${storyId}.ink`;
-}
+/** Ink sidecar path + SAFE_STORY_ID live in `@threemaker/map-format`. */
 
 /** Matches an ink `world_get("key")` external call, capturing the key. Ported verbatim from the since-deleted `demo-content.ts`. */
 const WORLD_GET_CALL_PATTERN = /world_get\(\s*"([^"]+)"\s*\)/g;
@@ -380,7 +360,7 @@ function describeCause(error: unknown): string {
  * content loads with loud cross-validation"):
  *
  * - every `showDialogue` ink `storyId` must be a safe file-name identifier
- *   (`SAFE_STORY_ID_PATTERN`), checked BEFORE any path is built from it;
+ *   (`isSafeStoryId`), checked BEFORE any path is built from it;
  * - every `showDialogue` ink story (including inside `conditional` branches)
  *   must have a sidecar at `<map>.<storyId>.ink`, that read must succeed, and
  *   its contents must not be blank;
@@ -420,10 +400,10 @@ async function loadNarrative(
 
   const stories = [...requiredInkStories(doc.events)];
 
-  // Charset gate FIRST, before a single `sidecarPath` call: the whole point is
+  // Charset gate FIRST, before a single `inkSidecarRelativePath` call: the whole point is
   // that a hostile id never reaches the fs layer, not even to be denied there.
   for (const [storyId, eventKey] of stories) {
-    if (!SAFE_STORY_ID_PATTERN.test(storyId)) {
+    if (!isSafeStoryId(storyId)) {
       failNarrative(
         mapRelativePath,
         `event ${JSON.stringify(eventKey)} references ink story ${JSON.stringify(storyId)}, which is not a usable story id -- only letters, digits, "_" and "-" are allowed, because the id becomes a sidecar file name.`,
@@ -433,7 +413,7 @@ async function loadNarrative(
 
   const sources = await Promise.all(
     stories.map(async ([storyId, eventKey]) => {
-      const path = sidecarPath(mapRelativePath, storyId);
+      const path = inkSidecarRelativePath(mapRelativePath, storyId);
       try {
         return await readSidecarText(path);
       } catch (error) {
@@ -454,7 +434,7 @@ async function loadNarrative(
     if (source === undefined || source === null) {
       failNarrative(
         mapRelativePath,
-        `event ${JSON.stringify(eventKey)} references ink story ${JSON.stringify(storyId)}, but no sidecar exists at ${JSON.stringify(sidecarPath(mapRelativePath, storyId))}.`,
+        `event ${JSON.stringify(eventKey)} references ink story ${JSON.stringify(storyId)}, but no sidecar exists at ${JSON.stringify(inkSidecarRelativePath(mapRelativePath, storyId))}.`,
       );
     }
     // A blank sidecar would otherwise load "successfully" and fail far away,
@@ -464,7 +444,7 @@ async function loadNarrative(
     if (source.trim() === '') {
       failNarrative(
         mapRelativePath,
-        `event ${JSON.stringify(eventKey)} references ink story ${JSON.stringify(storyId)}, but its sidecar at ${JSON.stringify(sidecarPath(mapRelativePath, storyId))} is empty.`,
+        `event ${JSON.stringify(eventKey)} references ink story ${JSON.stringify(storyId)}, but its sidecar at ${JSON.stringify(inkSidecarRelativePath(mapRelativePath, storyId))} is empty.`,
       );
     }
     inkSources.set(storyId, source);
@@ -501,7 +481,7 @@ async function loadNarrative(
       if (key !== undefined && !Object.hasOwn(doc.worldSeeds, key)) {
         failNarrative(
           mapRelativePath,
-          `ink sidecar ${JSON.stringify(sidecarPath(mapRelativePath, storyId))} calls world_get("${key}"), but no world seed exists for ${JSON.stringify(key)} -- seed it in the document's "worldSeeds".`,
+          `ink sidecar ${JSON.stringify(inkSidecarRelativePath(mapRelativePath, storyId))} calls world_get("${key}"), but no world seed exists for ${JSON.stringify(key)} -- seed it in the document's "worldSeeds".`,
         );
       }
     }
@@ -510,7 +490,7 @@ async function loadNarrative(
       if (itemId !== undefined && !catalog.itemIds.has(itemId)) {
         failNarrative(
           mapRelativePath,
-          `ink sidecar ${JSON.stringify(sidecarPath(mapRelativePath, storyId))} calls item_count("${itemId}"), but no game-defs item exists for ${JSON.stringify(itemId)}.`,
+          `ink sidecar ${JSON.stringify(inkSidecarRelativePath(mapRelativePath, storyId))} calls item_count("${itemId}"), but no game-defs item exists for ${JSON.stringify(itemId)}.`,
         );
       }
     }
@@ -519,7 +499,7 @@ async function loadNarrative(
       if (statId !== undefined && !catalog.statIds.has(statId)) {
         failNarrative(
           mapRelativePath,
-          `ink sidecar ${JSON.stringify(sidecarPath(mapRelativePath, storyId))} calls stat_get("${statId}"), but no game-defs stat exists for ${JSON.stringify(statId)}.`,
+          `ink sidecar ${JSON.stringify(inkSidecarRelativePath(mapRelativePath, storyId))} calls stat_get("${statId}"), but no game-defs stat exists for ${JSON.stringify(statId)}.`,
         );
       }
     }

@@ -6,6 +6,8 @@
  * place so existing files and `current.<storyId>.ink` sidecars stay put.
  */
 
+import { isSafeStoryId } from '../../../packages/map-format/src/ink-sidecar-path.js';
+
 export const MAP_DIR_RELATIVE = '.threemaker/maps';
 export const MAP_FILE_SUFFIX = '.tmmap.json';
 export const INK_FILE_SUFFIX = '.ink';
@@ -26,7 +28,6 @@ export function shouldConfirmPlaytestDualWrite(input: {
   return input.openMapName !== legacy && input.savedMapNames.includes(legacy);
 }
 
-const SAFE_STORY_ID = /^[A-Za-z0-9_-]+$/;
 const WINDOWS_RESERVED = /^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$/i;
 const ILLEGAL_FILENAME_CHARS = /[<>:"|?*]/;
 
@@ -158,7 +159,7 @@ export function inkStoryIdFromSidecarFileName(fileName: string, mapName: string)
   const prefix = `${assertMapName(mapName)}.`;
   if (!fileName.startsWith(prefix) || !fileName.endsWith(INK_FILE_SUFFIX)) return null;
   const storyId = fileName.slice(prefix.length, -INK_FILE_SUFFIX.length);
-  return SAFE_STORY_ID.test(storyId) ? storyId : null;
+  return isSafeStoryId(storyId) ? storyId : null;
 }
 
 /** Sorted unique path-safe story ids for `mapName` found among directory entry names. */

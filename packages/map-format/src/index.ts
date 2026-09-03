@@ -1,5 +1,11 @@
 export type { CreateBlankMapDocumentOptions } from './blank-document.js';
 export { createBlankMapDocument } from './blank-document.js';
+export {
+  inkSidecarRelativePath,
+  isSafeStoryId,
+  MAP_DOCUMENT_FILE_SUFFIX,
+  SAFE_STORY_ID_PATTERN,
+} from './ink-sidecar-path.js';
 export type { MapMigration } from './migrate.js';
 export {
   clearMigrations,

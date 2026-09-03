@@ -4,6 +4,10 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 import {
+  inkSidecarRelativePath,
+  isSafeStoryId,
+} from '../../packages/map-format/src/ink-sidecar-path.js';
+import {
   DevCatalogReader,
   isValidSha256,
   SchemaVersionMismatchError,
@@ -23,7 +27,6 @@ import {
   LEGACY_MAP_NAME,
   listInkStoryIdsFromEntries,
   listMapNamesFromEntries,
-  MAP_FILE_SUFFIX,
   mapDocumentFileName,
   planDeleteMapFiles,
   planRenameMapFiles,
@@ -52,7 +55,6 @@ const DEV_ASSET_STORE_DIR = resolve(dirname(DEV_CATALOG_DB_PATH));
 // `current.tmmap.json` is adopted as the map named `current`.
 const DEV_HOME_DIR = process.env.USERPROFILE ?? process.env.HOME ?? '.';
 const DEV_MAPS_DIR = resolve(DEV_HOME_DIR, '.threemaker', 'maps');
-const SAFE_STORY_ID = /^[A-Za-z0-9_-]+$/;
 
 // Mirrors apps/editor/src-tauri/src/catalog_ipc.rs's PAGE_SIZE (100) -- no
 // cross-language sharing needed for a single fixed constant; keep both in
@@ -333,7 +335,7 @@ function devMapApiPlugin(): Plugin {
         // Ink sidecars next to the named map: GET/POST /ink?storyId=&name=
         if (segments.length === 1 && segments[0] === 'ink' && req.method === 'GET') {
           const storyId = url.searchParams.get('storyId') ?? '';
-          if (!SAFE_STORY_ID.test(storyId)) {
+          if (!isSafeStoryId(storyId)) {
             res.statusCode = 400;
             res.end('invalid storyId');
             return;
@@ -344,7 +346,7 @@ function devMapApiPlugin(): Plugin {
             res.end('invalid name');
             return;
           }
-          const inkPath = `${mapPath.slice(0, -MAP_FILE_SUFFIX.length)}.${storyId}.ink`;
+          const inkPath = inkSidecarRelativePath(mapPath.replaceAll('\\', '/'), storyId);
           const text = loadInkFile(inkPath);
           if (text === null) {
             res.statusCode = 404;
@@ -367,7 +369,7 @@ function devMapApiPlugin(): Plugin {
               const storyId = typeof parsed.storyId === 'string' ? parsed.storyId : '';
               const source = typeof parsed.source === 'string' ? parsed.source : null;
               const rawName = typeof parsed.name === 'string' ? parsed.name : null;
-              if (!SAFE_STORY_ID.test(storyId) || source === null) {
+              if (!isSafeStoryId(storyId) || source === null) {
                 res.statusCode = 400;
                 res.end('invalid body');
                 return;
@@ -378,7 +380,7 @@ function devMapApiPlugin(): Plugin {
                 res.end('invalid name');
                 return;
               }
-              const inkPath = `${mapPath.slice(0, -MAP_FILE_SUFFIX.length)}.${storyId}.ink`;
+              const inkPath = inkSidecarRelativePath(mapPath.replaceAll('\\', '/'), storyId);
               saveInkFile(inkPath, source);
               res.statusCode = 204;
               res.end();
