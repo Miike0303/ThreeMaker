@@ -1,4 +1,14 @@
+import type { RampCellInput } from '@threemaker/map-format';
 import type { RpgmMap } from './types.js';
+
+/**
+ * One map cell classified `'ramp'` by tileset semantics, resolved by the
+ * caller. Owned by `@threemaker/map-format` (`deriveRampCells` /
+ * `syncRampCells`); re-exported here so elevation APIs keep a stable
+ * importer-facing name. Callers resolve which cells are ramp-classed
+ * (map-format `SemanticOverrides`, keyed by tile id) and pass the list here.
+ */
+export type { RampCellInput } from '@threemaker/map-format';
 
 /**
  * MV3D community convention: a tile's region id (1-7) sets its floor
@@ -294,22 +304,6 @@ export function surfaceHeightAt(ctx: GridContext, fx: number, fy: number): numbe
  */
 function devWarn(message: string): void {
   (globalThis as { console?: { warn?: (message: string) => void } }).console?.warn?.(message);
-}
-
-/**
- * One map cell classified `'ramp'` by tileset semantics, resolved by the
- * caller. This module intentionally has no dependency on
- * `@threemaker/map-format` (that package isn't a dependency of
- * `@threemaker/importer-rpgm`, keeping the existing one-directional
- * layering: gameplay/renderer -> importer-rpgm) -- so callers resolve which
- * cells are ramp-classed (map-format's `SemanticOverrides`, keyed by tile
- * id) and pass the resulting per-cell list here.
- */
-export interface RampCellInput {
-  readonly x: number;
-  readonly y: number;
-  /** Author-provided `TileSemanticEntry.rampDirection` override for this cell, if any. */
-  readonly rampDirection?: RampDirection;
 }
 
 /**

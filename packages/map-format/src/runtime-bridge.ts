@@ -8,15 +8,14 @@
  * `@threemaker/map-format` keeps ZERO runtime dependencies (repo convention:
  * this package is pure/browser-safe with no Node/render-stack imports) --
  * `deriveRampCells` therefore only produces the STRUCTURAL, position-keyed
- * cell list (shape-compatible with `@threemaker/importer-rpgm`'s
- * `RampCellInput`, but not importing that type). Direction resolution
+ * cell list ({@link RampCellInput}). Direction resolution
  * (`computeRampGrid`/`heightForRegion`, tie-break rules) stays consumer-side
  * in `@threemaker/importer-rpgm` -- see `apps/editor/src/ramp-glyph.ts`,
  * which calls `deriveRampCells` and then resolves directions itself.
  */
 import type { RampDirection, SemanticOverrides, TileLayerData } from './schema.js';
 
-/** One derived ramp cell: its grid position, plus the tile-id's explicit direction override, if any. Structurally compatible with `@threemaker/importer-rpgm`'s `RampCellInput`. */
+/** One derived ramp cell: its grid position, plus the tile-id's explicit direction override, if any. Re-exported by `@threemaker/importer-rpgm` so paint and play share one shape. */
 export interface RampCellInput {
   readonly x: number;
   readonly y: number;
