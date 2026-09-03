@@ -244,6 +244,36 @@ describe('StreamingTilemapScene', () => {
     scene.dispose();
   });
 
+  // Blank-map first paint: a from-scratch floor starts with zero live chunks.
+  // patchChunks alone stores data (negative case above); the painter must then
+  // call buildChunk or the brush stroke is invisible until the camera streams in.
+  it('blank-floor paint recipe: patchChunks then buildChunk mounts a never-live chunk', () => {
+    const scene = new StreamingTilemapScene([], { B: new THREE.Texture() });
+    expect(scene.liveChunkCount).toBe(0);
+
+    scene.patchChunks([makeChunk(0, 0)]);
+    expect(scene.liveChunkCount).toBe(0);
+    expect(scene.group.children).toHaveLength(0);
+
+    scene.buildChunk('0,0');
+    expect(scene.liveChunkCount).toBe(1);
+    expect(scene.group.children.map((child) => child.name)).toEqual(['chunk-0-0']);
+    scene.dispose();
+  });
+
+  it('patchChunks with empty tiles clears a live chunk (erase last tiles)', () => {
+    const scene = new StreamingTilemapScene([makeChunk(0, 0)], { B: new THREE.Texture() });
+    scene.buildChunk('0,0');
+    expect(scene.liveChunkCount).toBe(1);
+
+    scene.patchChunks([{ chunkX: 0, chunkY: 0, tiles: [] }]);
+
+    expect(scene.liveChunkCount).toBe(1);
+    const group = scene.group.children.find((child) => child.name === 'chunk-0-0');
+    expect(group?.children).toHaveLength(0);
+    scene.dispose();
+  });
+
   it('patchChunks recomputes wallTileKeys from the full updated data, culling the PATCHED chunk correctly even though only its own geometry is rebuilt', () => {
     const chunkA: ChunkBuildData = { chunkX: 0, chunkY: 0, tiles: [] }; // starts empty at the border tile
     const chunkB: ChunkBuildData = {
