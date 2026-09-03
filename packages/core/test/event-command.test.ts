@@ -84,6 +84,42 @@ describe('parseEventScript', () => {
     ).toThrow(/"y"/);
   });
 
+  it('rejects teleport with NaN, non-integer, or negative tile coords', () => {
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: { warp: [{ type: 'teleport', entityId: 'player', x: Number.NaN, y: 0 }] },
+      }),
+    ).toThrow(/"x"/);
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: { warp: [{ type: 'teleport', entityId: 'player', x: 1.5, y: 0 }] },
+      }),
+    ).toThrow(/"x"/);
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: { warp: [{ type: 'teleport', entityId: 'player', x: -1, y: 0 }] },
+      }),
+    ).toThrow(/"x"/);
+    expect(() =>
+      parseEventScript({
+        version: 1,
+        events: { warp: [{ type: 'teleport', entityId: 'player', x: 0, y: -2 }] },
+      }),
+    ).toThrow(/"y"/);
+  });
+
+  it('accepts teleport with non-negative integer tile coords', () => {
+    expect(
+      parseEventScript({
+        version: 1,
+        events: { warp: [{ type: 'teleport', entityId: 'player', x: 0, y: 3 }] },
+      }).warp,
+    ).toEqual([{ type: 'teleport', entityId: 'player', x: 0, y: 3 }]);
+  });
+
   it('rejects transferMap mapFile with path traversal segments', () => {
     expect(() =>
       parseEventScript({
@@ -408,7 +444,7 @@ describe('parseEventScript', () => {
         version: 1,
         events: { intro: [{ type: 'teleport', entityId: 'hero', y: 2 }] },
       }),
-    ).toThrow('Invalid Event Script: events.intro[0] (teleport) requires a number "x".');
+    ).toThrow(/teleport.*"x" must be a non-negative integer/);
   });
 
   it('throws on teleport with an invalid "facing"', () => {

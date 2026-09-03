@@ -297,8 +297,14 @@ function parseEventCommand(
       const label = `${path} (teleport)`;
       const { entityId, x, y, facing } = value;
       if (typeof entityId !== 'string') fail(`${label} requires a string "entityId".`);
-      if (typeof x !== 'number') fail(`${label} requires a number "x".`);
-      if (typeof y !== 'number') fail(`${label} requires a number "y".`);
+      // Same tile-coord gate as transferMap: NaN/float/negative would land in
+      // GridMover.teleport and leave the player off-grid or with a NaN camera.
+      if (typeof x !== 'number' || !Number.isInteger(x) || x < 0) {
+        fail(`${label} "x" must be a non-negative integer, got ${JSON.stringify(x)}.`);
+      }
+      if (typeof y !== 'number' || !Number.isInteger(y) || y < 0) {
+        fail(`${label} "y" must be a non-negative integer, got ${JSON.stringify(y)}.`);
+      }
       if (facing === undefined) {
         return { type: 'teleport', entityId, x, y };
       }
