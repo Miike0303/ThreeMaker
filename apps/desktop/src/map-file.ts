@@ -11,10 +11,11 @@
  * module is NOT wired into `main.ts` yet.
  */
 import { BaseDirectory, exists, readFile, readTextFile } from '@tauri-apps/plugin-fs';
+import { LEGACY_MAP_FILE_RELATIVE, MAP_DIR_RELATIVE } from '@threemaker/map-format';
 
-/** Directory + file for the shared working map, relative to `BaseDirectory.Home` -- kept in sync by hand with `apps/editor/src/map-client.ts`'s `MAP_FILE_RELATIVE`. */
-export const MAP_DIR_RELATIVE = '.threemaker/maps';
-export const MAP_FILE_RELATIVE = `${MAP_DIR_RELATIVE}/current.tmmap.json`;
+/** Directory + file for the shared working map, relative to `BaseDirectory.Home` — owned by `@threemaker/map-format`. */
+export { MAP_DIR_RELATIVE };
+export const MAP_FILE_RELATIVE = LEGACY_MAP_FILE_RELATIVE;
 /** The batch `convert-rpgm-game` CLI's manifest (rpgm-whole-game-import change): an ordered list of converted maps plus an optional player character-sheet reference. Read by `main.ts`'s multi-map navigation -- see `game-manifest.ts`. */
 export const MANIFEST_FILE_RELATIVE = `${MAP_DIR_RELATIVE}/manifest.json`;
 

@@ -7,6 +7,7 @@ import {
   inkSidecarRelativePath,
   isSafeStoryId,
 } from '../../packages/map-format/src/ink-sidecar-path.js';
+import { MAP_DIR_RELATIVE } from '../../packages/map-format/src/maps-home-path.js';
 import {
   DevCatalogReader,
   isValidSha256,
@@ -54,7 +55,7 @@ const DEV_ASSET_STORE_DIR = resolve(dirname(DEV_CATALOG_DB_PATH));
 // Home-relative directory the Tauri host uses (`map-client.ts`). Legacy
 // `current.tmmap.json` is adopted as the map named `current`.
 const DEV_HOME_DIR = process.env.USERPROFILE ?? process.env.HOME ?? '.';
-const DEV_MAPS_DIR = resolve(DEV_HOME_DIR, '.threemaker', 'maps');
+const DEV_MAPS_DIR = resolve(DEV_HOME_DIR, ...MAP_DIR_RELATIVE.split('/'));
 
 // Mirrors apps/editor/src-tauri/src/catalog_ipc.rs's PAGE_SIZE (100) -- no
 // cross-language sharing needed for a single fixed constant; keep both in

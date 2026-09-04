@@ -6,12 +6,18 @@
  * place so existing files and `current.<storyId>.ink` sidecars stay put.
  */
 
-import { isSafeStoryId } from '../../../packages/map-format/src/ink-sidecar-path.js';
+import {
+  isSafeStoryId,
+  MAP_DOCUMENT_FILE_SUFFIX,
+} from '../../../packages/map-format/src/ink-sidecar-path.js';
+import {
+  LEGACY_MAP_NAME,
+  MAP_DIR_RELATIVE,
+} from '../../../packages/map-format/src/maps-home-path.js';
 
-export const MAP_DIR_RELATIVE = '.threemaker/maps';
-export const MAP_FILE_SUFFIX = '.tmmap.json';
+export { LEGACY_MAP_NAME, MAP_DIR_RELATIVE };
+export const MAP_FILE_SUFFIX = MAP_DOCUMENT_FILE_SUFFIX;
 export const INK_FILE_SUFFIX = '.ink';
-export const LEGACY_MAP_NAME = 'current';
 export const MAP_NAME_MAX_LENGTH = 64;
 
 /**

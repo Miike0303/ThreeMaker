@@ -8,6 +8,7 @@
  * Injectable `fetch` keeps unit tests free of a real network.
  */
 
+import { MAP_DIR_RELATIVE } from '@threemaker/map-format';
 import { loadSheetTexture } from '@threemaker/renderer';
 import type * as THREE from 'three/webgpu';
 
@@ -15,7 +16,7 @@ import type * as THREE from 'three/webgpu';
 export const WEB_GAME_BASE = 'game';
 
 /** Home-relative maps dir (`map-file.ts`); stripped when translating to web paths. */
-export const WEB_MAPS_HOME_PREFIX = '.threemaker/maps';
+export const WEB_MAPS_HOME_PREFIX = MAP_DIR_RELATIVE;
 
 export type FetchLike = (
   input: string,

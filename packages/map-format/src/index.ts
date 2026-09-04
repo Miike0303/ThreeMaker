@@ -6,6 +6,11 @@ export {
   MAP_DOCUMENT_FILE_SUFFIX,
   SAFE_STORY_ID_PATTERN,
 } from './ink-sidecar-path.js';
+export {
+  LEGACY_MAP_FILE_RELATIVE,
+  LEGACY_MAP_NAME,
+  MAP_DIR_RELATIVE,
+} from './maps-home-path.js';
 export type { MapMigration } from './migrate.js';
 export {
   clearMigrations,
