@@ -401,7 +401,12 @@ export function validateCurrentVersionShape(
   const tileset = validateTileset(raw.tileset);
   const floors = validateFloors(raw.floors, raw.width as number, raw.height as number);
   const floorIds = new Set(floors.map((floor) => floor.id));
-  const stairLinks = validateStairLinks(raw.stairLinks, floorIds);
+  const stairLinks = validateStairLinks(
+    raw.stairLinks,
+    floorIds,
+    raw.width as number,
+    raw.height as number,
+  );
   const rooms = validateRooms(raw.rooms, floorIds, raw.width as number, raw.height as number);
   const spawn = validateSpawn(raw.spawn, floorIds, raw.width as number, raw.height as number);
   const npcs = validateNpcs(raw.npcs, floorIds, raw.width as number, raw.height as number);
@@ -1115,17 +1120,23 @@ function validateFloor(
 function validateStairLinks(
   input: unknown,
   floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
 ): readonly StairLinkDocument[] {
   if (!Array.isArray(input)) {
     throw new MapFormatError('malformed', '"stairLinks" must be an array.');
   }
-  return input.map((entry, index) => validateStairLink(entry, index, floorIds));
+  return input.map((entry, index) =>
+    validateStairLink(entry, index, floorIds, mapWidth, mapHeight),
+  );
 }
 
 function validateStairLink(
   input: unknown,
   index: number,
   floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
 ): StairLinkDocument {
   if (typeof input !== 'object' || input === null) {
     throw new MapFormatError('malformed', `"stairLinks[${index}]" must be an object.`);
@@ -1152,7 +1163,7 @@ function validateStairLink(
       `"stairLinks[${index}].bidirectional" must be a boolean.`,
     );
   }
-  const waypoints = validateWaypoints(raw.waypoints, index, floorIds);
+  const waypoints = validateWaypoints(raw.waypoints, index, floorIds, mapWidth, mapHeight);
 
   // Doc comment contract: waypoints[0] is the entry point ON fromFloor, the
   // last is the landing ON toFloor -- enforce it here so an authoring bug
@@ -1186,6 +1197,8 @@ function validateWaypoints(
   input: unknown,
   linkIndex: number,
   floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
 ): readonly StairLinkWaypoint[] {
   if (!Array.isArray(input) || input.length < 2) {
     throw new MapFormatError(
@@ -1193,7 +1206,9 @@ function validateWaypoints(
       `"stairLinks[${linkIndex}].waypoints" must be an array of at least 2 waypoints.`,
     );
   }
-  return input.map((entry, wIndex) => validateWaypoint(entry, linkIndex, wIndex, floorIds));
+  return input.map((entry, wIndex) =>
+    validateWaypoint(entry, linkIndex, wIndex, floorIds, mapWidth, mapHeight),
+  );
 }
 
 function validateWaypoint(
@@ -1201,6 +1216,8 @@ function validateWaypoint(
   linkIndex: number,
   wIndex: number,
   floorIds: ReadonlySet<string>,
+  mapWidth: number,
+  mapHeight: number,
 ): StairLinkWaypoint {
   if (typeof input !== 'object' || input === null) {
     throw new MapFormatError(
@@ -1209,16 +1226,16 @@ function validateWaypoint(
     );
   }
   const raw = input as Record<string, unknown>;
-  if (!Number.isInteger(raw.x)) {
+  if (!Number.isInteger(raw.x) || (raw.x as number) < 0 || (raw.x as number) >= mapWidth) {
     throw new MapFormatError(
       'malformed',
-      `"stairLinks[${linkIndex}].waypoints[${wIndex}].x" must be an integer.`,
+      `"stairLinks[${linkIndex}].waypoints[${wIndex}].x" must be an integer within [0, ${mapWidth}).`,
     );
   }
-  if (!Number.isInteger(raw.y)) {
+  if (!Number.isInteger(raw.y) || (raw.y as number) < 0 || (raw.y as number) >= mapHeight) {
     throw new MapFormatError(
       'malformed',
-      `"stairLinks[${linkIndex}].waypoints[${wIndex}].y" must be an integer.`,
+      `"stairLinks[${linkIndex}].waypoints[${wIndex}].y" must be an integer within [0, ${mapHeight}).`,
     );
   }
   if (typeof raw.floor !== 'string' || !floorIds.has(raw.floor)) {

@@ -184,6 +184,51 @@ describe('validateCurrentVersionShape', () => {
     expect(doc.stairLinks[0]).toMatchObject({ fromFloor: 'floor-0', toFloor: 'floor-1' });
   });
 
+  it('rejects stair waypoints with negative or out-of-bounds tile coords (mirrors spawn)', () => {
+    const floors = [
+      { id: 'floor-0', baseElevation: 0, layers: makeLayers(4) },
+      { id: 'floor-1', baseElevation: 3, layers: makeLayers(4) },
+    ];
+    const link = (waypoints: readonly Record<string, unknown>[]) =>
+      makeValidDocInput({
+        floors,
+        stairLinks: [
+          {
+            id: 'link-1',
+            fromFloor: 'floor-0',
+            toFloor: 'floor-1',
+            bidirectional: false,
+            waypoints,
+          },
+        ],
+      });
+
+    expect(() =>
+      validateCurrentVersionShape(
+        link([
+          { x: -1, y: 0, floor: 'floor-0' },
+          { x: 0, y: 0, floor: 'floor-1' },
+        ]),
+      ),
+    ).toThrow(/waypoints\[0\]\.x.*\[0, 2\)/);
+    expect(() =>
+      validateCurrentVersionShape(
+        link([
+          { x: 0, y: 0, floor: 'floor-0' },
+          { x: 2, y: 0, floor: 'floor-1' },
+        ]),
+      ),
+    ).toThrow(/waypoints\[1\]\.x.*\[0, 2\)/);
+    expect(() =>
+      validateCurrentVersionShape(
+        link([
+          { x: 0, y: 0, floor: 'floor-0' },
+          { x: 0, y: 1.5, floor: 'floor-1' },
+        ]),
+      ),
+    ).toThrow(/waypoints\[1\]\.y.*\[0, 2\)/);
+  });
+
   it('rejects two floors sharing the same id (ambiguous stair-link floor refs)', () => {
     const input = makeValidDocInput({
       floors: [
