@@ -396,6 +396,9 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const prevPainterStateRef = useRef<PainterState | undefined>(undefined);
   /** Live Save handler for the viewport's Ctrl/Cmd+S chord (WU-UX-03) -- a ref because the viewport (and its callbacks object) mounts once while handleSave re-binds with settings. */
   const saveRequestRef = useRef<() => void>(() => {});
+  /** Locale `t` for one-shot mount callbacks (viewport mounts with `[]`; locale can change later). */
+  const tRef = useRef(t);
+  tRef.current = t;
   const [characterSprites, setCharacterSprites] = useState<readonly AssetRow[]>([]);
   const glbInputRef = useRef<HTMLInputElement | null>(null);
   /** Blob URLs for starter A5/B palette sheets — revoked on replace/unmount. */
@@ -563,13 +566,19 @@ export function PainterPanel({ t }: PainterPanelProps) {
       onSaveRequest: () => saveRequestRef.current(),
       onCameraChange: setZoomPercent,
       onPostProcessingChange: setPostProcessingEnabled,
+      onInitError: () => {
+        reportStatus({
+          message: tRef.current('painter.webgpu.failed'),
+          severity: 'error',
+        });
+      },
     });
     viewportRef.current = viewport;
     return () => {
       viewport.dispose();
       viewportRef.current = null;
     };
-  }, []);
+  }, [reportStatus]);
 
   const handleGlbFile = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {

@@ -217,6 +217,8 @@ export interface PainterViewportCallbacks {
   readonly onCameraChange?: (zoomPercent: number) => void;
   /** Fired when the HD-2D look preview is toggled (button or `h`), so the surrounding UI can keep one source of truth. */
   readonly onPostProcessingChange?: (enabled: boolean) => void;
+  /** Fired when `WebGPURenderer.init()` rejects so the UI can toast instead of leaving a blank canvas. */
+  readonly onInitError?: (error: unknown) => void;
 }
 
 /**
@@ -356,6 +358,7 @@ export class PainterViewport {
       },
       (error: unknown) => {
         console.error('PainterViewport: WebGPURenderer.init() failed', error);
+        if (!this.disposed) this.callbacks.onInitError?.(error);
       },
     );
 

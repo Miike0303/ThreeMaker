@@ -74,6 +74,7 @@ const NEW_KEYS = [
   'painter.layer.over',
   'painter.saveSuccessShareQueued',
   'painter.saveSuccessShareBlockedImported',
+  'painter.webgpu.failed',
   'painter.generate',
   'painter.playtest',
   'painter.playtest.success',

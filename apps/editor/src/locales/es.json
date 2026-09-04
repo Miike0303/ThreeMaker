@@ -132,6 +132,7 @@
     "painter.loadEmpty": "Todavía no hay ningún mapa guardado.",
     "painter.loadSuccess": "Mapa cargado.",
     "painter.loadFailed": "No se pudo cargar el mapa — ver la consola para más detalles.",
+    "painter.webgpu.failed": "WebGPU no arrancó — el lienzo del mapa no puede renderizar. Mirá la consola para más detalles.",
     "painter.save": "Guardar",
     "painter.saveSuccess": "Mapa guardado.",
     "painter.saveSuccessShareQueued": "Mapa guardado · share a comunidad en cola (offline hasta el servidor).",

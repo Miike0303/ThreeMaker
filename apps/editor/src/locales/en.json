@@ -132,6 +132,7 @@
     "painter.loadEmpty": "No saved map found yet.",
     "painter.loadSuccess": "Map loaded.",
     "painter.loadFailed": "Failed to load the map — see console for details.",
+    "painter.webgpu.failed": "WebGPU failed to start — the map canvas cannot render. See the console for details.",
     "painter.save": "Save",
     "painter.saveSuccess": "Map saved.",
     "painter.saveSuccessShareQueued": "Map saved · community share queued (offline until server).",
