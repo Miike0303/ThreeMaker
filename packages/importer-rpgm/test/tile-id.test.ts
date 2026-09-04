@@ -5,7 +5,22 @@ import {
   getLocalTileIndex,
   getTileSheet,
   isAutotile,
+  SHEET_BASE_ID,
+  SHEET_END_ID,
+  SHEET_ID_RANGES,
+  type TileSheetId,
 } from '../src/tile-id.js';
+
+describe('SHEET_BASE_ID / SHEET_END_ID vs SHEET_ID_RANGES', () => {
+  it('keeps the twin tables equal (decode walks ranges; authoring uses BASE/END)', () => {
+    const sheets = Object.keys(SHEET_BASE_ID) as TileSheetId[];
+    expect(sheets.sort()).toEqual([...SHEET_ID_RANGES.map((r) => r.sheet)].sort());
+    for (const range of SHEET_ID_RANGES) {
+      expect(SHEET_BASE_ID[range.sheet], `${range.sheet} base`).toBe(range.start);
+      expect(SHEET_END_ID[range.sheet], `${range.sheet} end`).toBe(range.end);
+    }
+  });
+});
 
 describe('isAutotile', () => {
   it('is false for normal single-frame tile ids (B-E, A5)', () => {
