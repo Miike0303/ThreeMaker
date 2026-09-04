@@ -408,6 +408,10 @@ export function PainterPanel({ t }: PainterPanelProps) {
   const [propPlaceY, setPropPlaceY] = useState(0);
   const [npcPlaceX, setNpcPlaceX] = useState(0);
   const [npcPlaceY, setNpcPlaceY] = useState(0);
+  const [npcRoutineAt, setNpcRoutineAt] = useState('480');
+  const [npcRoutineX, setNpcRoutineX] = useState(0);
+  const [npcRoutineY, setNpcRoutineY] = useState(0);
+  const [npcRoutineFacing, setNpcRoutineFacing] = useState<NpcFacing>('down');
   const [triggerPlaceX, setTriggerPlaceX] = useState(0);
   const [triggerPlaceY, setTriggerPlaceY] = useState(0);
   const [lightPlaceX, setLightPlaceX] = useState(0);
@@ -3217,6 +3221,121 @@ export function PainterPanel({ t }: PainterPanelProps) {
                           )}
                         </select>
                       </label>
+                      <fieldset className="ide-fieldset">
+                        <legend>{t('painter.npcs.routine')}</legend>
+                        <p className="ide-hint">{t('painter.npcs.routine.hint')}</p>
+                        {painterState.activeNpcRoutine.length === 0 ? (
+                          <p className="ide-hint">{t('painter.npcs.routine.empty')}</p>
+                        ) : (
+                          <ul className="ide-list" aria-label={t('painter.npcs.routine')}>
+                            {painterState.activeNpcRoutine.map((stop) => (
+                              <li key={stop.at}>
+                                <span>
+                                  {formatTemplate(t('painter.npcs.routine.stopSummary'), {
+                                    at: stop.at,
+                                    x: stop.x,
+                                    y: stop.y,
+                                    facing: t(`painter.npcs.facing.${stop.facing}`),
+                                  })}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const index = painterState.activeNpcRoutine.findIndex(
+                                      (entry) => entry.at === stop.at,
+                                    );
+                                    if (index >= 0) {
+                                      viewportRef.current?.removeActiveNpcRoutineStop(index);
+                                    }
+                                  }}
+                                >
+                                  {t('painter.npcs.routine.remove')}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        <div className="ide-row">
+                          <label>
+                            {t('painter.npcs.routine.at')}
+                            <input
+                              type="number"
+                              min={0}
+                              max={1439}
+                              step={1}
+                              value={npcRoutineAt}
+                              onChange={(event) => setNpcRoutineAt(event.target.value)}
+                            />
+                          </label>
+                          <label>
+                            {t('painter.npcs.routine.x')}
+                            <input
+                              type="number"
+                              min={0}
+                              max={Math.max(0, painterState.width - 1)}
+                              step={1}
+                              value={npcRoutineX}
+                              onChange={(event) => {
+                                const parsed = Number.parseInt(event.target.value, 10);
+                                if (Number.isFinite(parsed)) setNpcRoutineX(parsed);
+                              }}
+                            />
+                          </label>
+                          <label>
+                            {t('painter.npcs.routine.y')}
+                            <input
+                              type="number"
+                              min={0}
+                              max={Math.max(0, painterState.height - 1)}
+                              step={1}
+                              value={npcRoutineY}
+                              onChange={(event) => {
+                                const parsed = Number.parseInt(event.target.value, 10);
+                                if (Number.isFinite(parsed)) setNpcRoutineY(parsed);
+                              }}
+                            />
+                          </label>
+                          <label>
+                            {t('painter.npcs.facing')}
+                            <select
+                              value={npcRoutineFacing}
+                              onChange={(event) =>
+                                setNpcRoutineFacing(event.target.value as NpcFacing)
+                              }
+                            >
+                              {NPC_FACINGS.map((facing) => (
+                                <option key={facing} value={facing}>
+                                  {t(`painter.npcs.facing.${facing}`)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        <div className="ide-row">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const at = Number.parseInt(npcRoutineAt, 10);
+                              if (!Number.isFinite(at)) return;
+                              viewportRef.current?.addActiveNpcRoutineStop({
+                                at,
+                                x: npcRoutineX,
+                                y: npcRoutineY,
+                                facing: npcRoutineFacing,
+                              });
+                            }}
+                          >
+                            {t('painter.npcs.routine.add')}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={painterState.activeNpcRoutine.length === 0}
+                            onClick={() => viewportRef.current?.setActiveNpcRoutine([])}
+                          >
+                            {t('painter.npcs.routine.clear')}
+                          </button>
+                        </div>
+                      </fieldset>
                       <div className="painter-place-at-tile">
                         <label>
                           {t('painter.placeAtTile.x')}
@@ -3276,6 +3395,7 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   );
                                   viewportRef.current?.setActiveNpcFacing(brush.facing);
                                   viewportRef.current?.setActiveNpcEventKey(brush.eventKey);
+                                  viewportRef.current?.setActiveNpcRoutine(brush.routine);
                                   routeExplicitToolSelection('npc');
                                   reportStatus({
                                     message: formatTemplate(t('painter.npcs.reuseToast'), {
@@ -3291,6 +3411,25 @@ export function PainterPanel({ t }: PainterPanelProps) {
                                   y: npc.y,
                                   event: npc.onInteract,
                                 })}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  viewportRef.current?.setNpcRoutine(npc.id);
+                                  reportStatus({
+                                    message: formatTemplate(
+                                      t(
+                                        painterState.activeNpcRoutine.length > 0
+                                          ? 'painter.npcs.routineApplied'
+                                          : 'painter.npcs.routineCleared',
+                                      ),
+                                      { id: npc.id },
+                                    ),
+                                    severity: 'success',
+                                  });
+                                }}
+                              >
+                                {t('painter.npcs.routine.apply')}
                               </button>
                               <button
                                 type="button"

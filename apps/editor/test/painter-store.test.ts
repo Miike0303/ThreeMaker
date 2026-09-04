@@ -2,6 +2,7 @@ import type { RoomDocument, TileLayerSet } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import {
   activeFloorState,
+  addActiveNpcRoutineStop,
   addCommand,
   addEvent,
   addFloor,
@@ -31,6 +32,7 @@ import {
   redoProp,
   redoRoom,
   redoTrigger,
+  removeActiveNpcRoutineStop,
   removeCommand,
   removeEvent,
   removeFloor,
@@ -48,6 +50,7 @@ import {
   setActiveNpcCharacterIndex,
   setActiveNpcEventKey,
   setActiveNpcFacing,
+  setActiveNpcRoutine,
   setActiveNpcSpriteObject,
   setActivePropAnimation,
   setActivePropObject,
@@ -58,6 +61,7 @@ import {
   setActiveTriggerOn,
   setFillTileId,
   setFloorLabel,
+  setNpcRoutine,
   setPendingStairEntry,
   setSemanticClass,
   setSemanticMode,
@@ -1664,6 +1668,30 @@ describe('painter-store: npc tool (c1a follow-up)', () => {
       },
     ]);
     expect(state.npcs[0]).not.toHaveProperty('routine');
+  });
+
+  it('placeNpc writes activeNpcRoutine; setNpcRoutine updates existing', () => {
+    let state = npcReadyState();
+    const stops = [
+      { at: 480, x: 1, y: 1, facing: 'right' as const },
+      { at: 720, x: 2, y: 2, facing: 'up' as const },
+    ];
+    state = setActiveNpcRoutine(state, stops);
+    state = placeNpc(state, { x: 0, y: 0 });
+    expect(state.npcs[0]?.routine).toEqual(stops);
+
+    state = setActiveNpcRoutine(state, []);
+    state = setNpcRoutine(state, 'npc-1');
+    expect(state.npcs[0]).not.toHaveProperty('routine');
+
+    state = addActiveNpcRoutineStop(state, { at: 100, x: 0, y: 1, facing: 'down' });
+    state = addActiveNpcRoutineStop(state, { at: 50, x: 0, y: 0, facing: 'down' }); // rejected: not ascending
+    expect(state.activeNpcRoutine).toEqual([{ at: 100, x: 0, y: 1, facing: 'down' }]);
+    state = setNpcRoutine(state, 'npc-1');
+    expect(state.npcs[0]?.routine).toEqual([{ at: 100, x: 0, y: 1, facing: 'down' }]);
+
+    state = removeActiveNpcRoutineStop(state, 0);
+    expect(state.activeNpcRoutine).toEqual([]);
   });
 
   it('duplicate-tile NPC placement on the same floor is a no-op', () => {

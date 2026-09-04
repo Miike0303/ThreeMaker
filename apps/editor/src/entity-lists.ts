@@ -6,6 +6,7 @@ import type {
   LightDocument,
   NpcDocument,
   NpcFacing,
+  NpcRoutineStopDocument,
   PropDocument,
   RoomDocument,
   StairLinkDocument,
@@ -127,6 +128,7 @@ export type NpcPlacementBrush = {
   readonly characterIndex: number;
   readonly facing: NpcFacing;
   readonly eventKey: string;
+  readonly routine: readonly NpcRoutineStopDocument[];
 };
 
 export function npcPlacementFromDocument(npc: NpcDocument): NpcPlacementBrush {
@@ -135,6 +137,7 @@ export function npcPlacementFromDocument(npc: NpcDocument): NpcPlacementBrush {
     characterIndex: npc.sprite.characterIndex,
     facing: npc.facing,
     eventKey: npc.onInteract,
+    routine: npc.routine ?? [],
   };
 }
 

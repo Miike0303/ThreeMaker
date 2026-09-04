@@ -193,12 +193,25 @@ describe('entitiesOnFloor / npcsOnFloor / triggersOnFloor', () => {
 });
 
 describe('npcPlacementFromDocument', () => {
-  it('copies sprite, facing, and onInteract for reuse', () => {
+  it('copies sprite, facing, onInteract, and routine for reuse', () => {
     expect(npcPlacementFromDocument(NPC_1)).toEqual({
       spriteObject: OBJ_A,
       characterIndex: 3,
       facing: 'down',
       eventKey: 'greet',
+      routine: [],
+    });
+    expect(
+      npcPlacementFromDocument({
+        ...NPC_1,
+        routine: [{ at: 480, x: 1, y: 2, facing: 'right' }],
+      }),
+    ).toEqual({
+      spriteObject: OBJ_A,
+      characterIndex: 3,
+      facing: 'down',
+      eventKey: 'greet',
+      routine: [{ at: 480, x: 1, y: 2, facing: 'right' }],
     });
   });
 });

@@ -52,7 +52,8 @@
  * mirror `MapDocument.npcs`/`triggers` exactly (flat, top-level, floor by
  * stable id). Place/delete push onto the active floor's OWN
  * `npcCommandStack` / `triggerCommandStack` (fourth and fifth per-floor
- * undo stacks). Routine editing stays JSON-side.
+ * undo stacks). Optional day `routine` is authored via `activeNpcRoutine`
+ * (place + apply-to-existing); omit when the draft is empty.
  *
  * Event-script + worldSeeds authoring (events editor WU-01): `PainterState.
  * events` / `worldSeeds` mirror `MapDocument.events` / `worldSeeds` exactly
@@ -80,6 +81,7 @@ import type {
   MapSpawn,
   NpcDocument,
   NpcFacing,
+  NpcRoutineStopDocument,
   PropDocument,
   RoomDocument,
   RoomRect,
@@ -353,6 +355,11 @@ export interface PainterState {
    * `eventKeys` (or placement is a no-op).
    */
   readonly activeNpcEventKey?: string;
+  /**
+   * Day-routine stops for the next placed NPC (and for Apply on an existing
+   * NPC). Empty → omit `routine` on place / clear on apply.
+   */
+  readonly activeNpcRoutine: readonly NpcRoutineStopDocument[];
   /** `on` mode for the next placed trigger (default `'enter'`). */
   readonly activeTriggerOn: 'enter' | 'interact';
   /**
@@ -424,6 +431,8 @@ export interface CreatePainterStateOptions {
   readonly activeNpcFacing?: NpcFacing;
   /** Initial NPC event key; defaults to the first of `eventKeys` when present. */
   readonly activeNpcEventKey?: string;
+  /** Initial day-routine draft (default empty → omit on place). */
+  readonly activeNpcRoutine?: readonly NpcRoutineStopDocument[];
   /** Initial trigger `on` mode (default `'enter'`). */
   readonly activeTriggerOn?: 'enter' | 'interact';
   /** Initial trigger event key; defaults to the first of `eventKeys` when present. */
@@ -467,6 +476,7 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     activeNpcCharacterIndex = 0,
     activeNpcFacing = 'down',
     activeNpcEventKey,
+    activeNpcRoutine = [],
     activeTriggerOn = 'enter',
     activeTriggerEventKey,
     activeLightKind = DEFAULT_LIGHT_KIND,
@@ -513,6 +523,7 @@ export function createPainterState(options: CreatePainterStateOptions): PainterS
     activePropAnimation,
     activeNpcCharacterIndex,
     activeNpcFacing,
+    activeNpcRoutine,
     activeTriggerOn,
     activeLightKind,
     activeLightColor: normalizeLightColor(activeLightColor) ?? DEFAULT_LIGHT_COLOR,
@@ -1482,6 +1493,44 @@ export function setActiveNpcFacing(state: PainterState, facing: NpcFacing): Pain
   return { ...idle, activeNpcFacing: facing };
 }
 
+/** Replaces the day-routine draft (empty clears). Cancels a stuck stroke first. */
+export function setActiveNpcRoutine(
+  state: PainterState,
+  routine: readonly NpcRoutineStopDocument[],
+): PainterState {
+  const idle = cancelStroke(state);
+  return { ...idle, activeNpcRoutine: routine };
+}
+
+/**
+ * Appends one stop to the day-routine draft when `at` is in [0, 1440) and
+ * strictly greater than the previous stop's `at`. Otherwise a no-op.
+ */
+export function addActiveNpcRoutineStop(
+  state: PainterState,
+  stop: NpcRoutineStopDocument,
+): PainterState {
+  const idle = cancelStroke(state);
+  if (!Number.isInteger(stop.at) || stop.at < 0 || stop.at >= 1440) return idle;
+  if (!Number.isInteger(stop.x) || stop.x < 0 || stop.x >= idle.width) return idle;
+  if (!Number.isInteger(stop.y) || stop.y < 0 || stop.y >= idle.height) return idle;
+  const last = idle.activeNpcRoutine[idle.activeNpcRoutine.length - 1];
+  if (last !== undefined && stop.at <= last.at) return idle;
+  return { ...idle, activeNpcRoutine: [...idle.activeNpcRoutine, stop] };
+}
+
+/** Removes the draft stop at `index`. No-op when out of range. */
+export function removeActiveNpcRoutineStop(state: PainterState, index: number): PainterState {
+  const idle = cancelStroke(state);
+  if (!Number.isInteger(index) || index < 0 || index >= idle.activeNpcRoutine.length) {
+    return idle;
+  }
+  return {
+    ...idle,
+    activeNpcRoutine: idle.activeNpcRoutine.filter((_, i) => i !== index),
+  };
+}
+
 /**
  * Sets (or clears) the event key for the next placed NPC's `onInteract`.
  * Cancels a stuck stroke first (same reason as `setActiveNpcSpriteObject`).
@@ -1526,7 +1575,7 @@ function applyNpcMutation(
  * - no sprite / event key is selected,
  * - another NPC already occupies that base tile on this floor (schema
  *   per-floor uniqueness — never author an invalid doc).
- * Routine is omitted deliberately (JSON-side).
+ * Non-empty `activeNpcRoutine` is written onto the NPC; empty omits the field.
  */
 export function placeNpc(
   state: PainterState,
@@ -1546,7 +1595,6 @@ export function placeNpc(
   if (occupied) return state;
 
   const id = nextNpcId(state.npcs);
-  // routine omitted deliberately -- authoring stays JSON-side (c1a follow-up).
   const npc: NpcDocument = {
     id,
     x,
@@ -1558,6 +1606,7 @@ export function placeNpc(
       characterIndex: state.activeNpcCharacterIndex,
     },
     onInteract: state.activeNpcEventKey,
+    ...(state.activeNpcRoutine.length > 0 ? { routine: state.activeNpcRoutine } : {}),
   };
   const npcs = upsertNpc(state.npcs, id, npc);
   return applyNpcMutation(state, npcs, { floor: floor.id, id, after: npc });
@@ -1576,6 +1625,46 @@ export function placeNpcAtTile(
 ): PainterState {
   const idle = cancelStroke(state);
   return placeNpc(idle, point);
+}
+
+/**
+ * Applies the current day-routine draft to an existing NPC on the active
+ * floor. Empty draft clears `routine`. No-op when the NPC is missing.
+ */
+export function setNpcRoutine(state: PainterState, id: string): PainterState {
+  if (state.stroke.status === 'stroking') return state;
+  const floor = activeFloorState(state);
+  const existing = state.npcs.find((npc) => npc.floor === floor.id && npc.id === id);
+  if (!existing) return state;
+  const existingRoutine = existing.routine;
+  const routine = state.activeNpcRoutine.length > 0 ? state.activeNpcRoutine : undefined;
+  if (routine === undefined && existingRoutine === undefined) return state;
+  if (
+    routine !== undefined &&
+    existingRoutine !== undefined &&
+    routine.length === existingRoutine.length &&
+    routine.every((stop, i) => {
+      const prev = existingRoutine[i];
+      return (
+        prev !== undefined &&
+        stop.at === prev.at &&
+        stop.x === prev.x &&
+        stop.y === prev.y &&
+        stop.facing === prev.facing
+      );
+    })
+  ) {
+    return state;
+  }
+  const npc: NpcDocument =
+    routine === undefined
+      ? (() => {
+          const { routine: _r, ...rest } = existing;
+          return rest;
+        })()
+      : { ...existing, routine };
+  const npcs = upsertNpc(state.npcs, id, npc);
+  return applyNpcMutation(state, npcs, { floor: floor.id, id, before: existing, after: npc });
 }
 
 /** Removes the NPC `id` from the ACTIVE floor. Ignored mid-stroke. A safe no-op if no such NPC exists on the active floor. Also drops lights attached to that NPC (WU-LIGHT-06). */

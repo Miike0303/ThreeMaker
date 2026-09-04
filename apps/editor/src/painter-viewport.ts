@@ -3,6 +3,7 @@ import type {
   LightDocument,
   MapDocument,
   NpcFacing,
+  NpcRoutineStopDocument,
   RampCellInput,
   SemanticClass,
   SemanticOverrides,
@@ -655,6 +656,30 @@ export class PainterViewport {
   setActiveNpcFacing(facing: NpcFacing): void {
     if (!this.state) return;
     this.state = painter.setActiveNpcFacing(this.state, facing);
+    this.emitState();
+  }
+
+  setActiveNpcRoutine(routine: readonly NpcRoutineStopDocument[]): void {
+    if (!this.state) return;
+    this.state = painter.setActiveNpcRoutine(this.state, routine);
+    this.emitState();
+  }
+
+  addActiveNpcRoutineStop(stop: NpcRoutineStopDocument): void {
+    if (!this.state) return;
+    this.state = painter.addActiveNpcRoutineStop(this.state, stop);
+    this.emitState();
+  }
+
+  removeActiveNpcRoutineStop(index: number): void {
+    if (!this.state) return;
+    this.state = painter.removeActiveNpcRoutineStop(this.state, index);
+    this.emitState();
+  }
+
+  setNpcRoutine(id: string): void {
+    if (!this.state) return;
+    this.state = painter.setNpcRoutine(this.state, id);
     this.emitState();
   }
 
