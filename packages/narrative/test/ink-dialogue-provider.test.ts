@@ -15,6 +15,17 @@ function makeProvider(): InkDialogueProvider {
 }
 
 describe('InkDialogueProvider', () => {
+  it('open() without a knot resumes the story where it left off', () => {
+    const story = compileInk('First.\nSecond.\n-> END\n');
+    const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+    provider.open({ kind: 'ink', storyId: 'inline' });
+    expect(provider.next()).toEqual({ kind: 'line', text: 'First.' });
+
+    provider.open({ kind: 'ink', storyId: 'inline' });
+    expect(provider.next()).toEqual({ kind: 'line', text: 'Second.' });
+  });
+
   it('steps through lines with speaker tags, then choices, then end', () => {
     const provider = makeProvider();
     const source: DialogueSource = { kind: 'ink', storyId: 'elder', knot: 'start' };
