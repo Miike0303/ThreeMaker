@@ -4,11 +4,12 @@
 // directory of RPG Maker MV/MZ games. Run via `tsx` (see the root `scan`
 // script) — this file is intentionally not part of the package's public
 // exports, since it's a Node-only entry point, not a library API.
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { loadProject } from '@threemaker/importer-rpgm/node';
 import { serializeMapDocument } from '@threemaker/map-format';
+import { writeTextFileAtomic } from './atomic-text-write.js';
 import type { Catalog, IngestGameResult } from './catalog.js';
 import { ingestGame, openCatalog, sumResults } from './catalog.js';
 import type { ConvertedMap, GameManifest } from './convert-rpgm-game.js';
@@ -27,7 +28,7 @@ function printUsage(): void {
   console.error('Usage: tsx src/cli.ts catalog <rootDir> [--store <dir>] [--max-depth <n>]');
   console.error('Usage: tsx src/cli.ts ingest-tilesets [--store <dir>]');
   console.error(
-    'Usage: tsx src/cli.ts convert-rpgm <gameDir> <mapId> --out <file.tmmap> [--store <dir>]',
+    'Usage: tsx src/cli.ts convert-rpgm <gameDir> <mapId> --out <file.tmmap.json> [--store <dir>]',
   );
   console.error(
     'Usage: tsx src/cli.ts convert-rpgm-game <gameDir> --out-dir <dir> [--store <dir>]',
@@ -232,7 +233,7 @@ async function runConvertRpgm(
       return;
     }
 
-    writeFileSync(outPath, serializeMapDocument(result.doc), 'utf8');
+    writeTextFileAtomic(outPath, serializeMapDocument(result.doc));
 
     console.log(
       JSON.stringify(
@@ -292,7 +293,7 @@ async function runConvertRpgmGame(
 
     mkdirSync(outDir, { recursive: true });
     for (const entry of converted) {
-      writeFileSync(join(outDir, entry.file), serializeMapDocument(entry.doc), 'utf8');
+      writeTextFileAtomic(join(outDir, entry.file), serializeMapDocument(entry.doc));
     }
 
     const manifest: GameManifest = {
@@ -304,7 +305,7 @@ async function runConvertRpgmGame(
       })),
       ...(actorSheet ? { actorSheet } : {}),
     };
-    writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+    writeTextFileAtomic(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
     const totalSlotsResolved = converted.reduce((sum, entry) => sum + entry.slotsResolved, 0);
     console.log(
