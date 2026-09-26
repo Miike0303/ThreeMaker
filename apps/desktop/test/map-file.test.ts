@@ -1,10 +1,12 @@
 const fsMocks = vi.hoisted(() => ({
   readTextFile: vi.fn(async () => ''),
+  readFile: vi.fn(async () => new Uint8Array()),
   exists: vi.fn(async () => false),
 }));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
   readTextFile: fsMocks.readTextFile,
+  readFile: fsMocks.readFile,
   exists: fsMocks.exists,
   BaseDirectory: { Home: 'Home' },
 }));
@@ -14,12 +16,14 @@ import {
   MANIFEST_FILE_RELATIVE,
   MAP_FILE_RELATIVE,
   readManifestText,
+  readMapAssetBytes,
   readMapDocumentText,
 } from '../src/map-file.js';
 
 describe('map-file (shared working-map read helper)', () => {
   beforeEach(() => {
     fsMocks.readTextFile.mockClear();
+    fsMocks.readFile.mockClear();
     fsMocks.exists.mockClear();
   });
 
@@ -85,6 +89,22 @@ describe('map-file (shared working-map read helper)', () => {
     expect(result).toBe('{"maps":[]}');
     expect(fsMocks.exists).toHaveBeenCalledWith(
       MANIFEST_FILE_RELATIVE,
+      expect.objectContaining({ baseDir: 'Home' }),
+    );
+  });
+
+  it('returns an exact, independent copy of the asset byte view', async () => {
+    const backing = new Uint8Array([99, 11, 22, 88]);
+    fsMocks.readFile.mockResolvedValueOnce(backing.subarray(1, 3));
+
+    const result = await readMapAssetBytes('audio/bgm.ogg');
+
+    expect(Array.from(new Uint8Array(result))).toEqual([11, 22]);
+    expect(result).not.toBe(backing.buffer);
+    new Uint8Array(result)[0] = 0;
+    expect(Array.from(backing)).toEqual([99, 11, 22, 88]);
+    expect(fsMocks.readFile).toHaveBeenCalledWith(
+      expect.stringMatching(/audio\/bgm\.ogg$/),
       expect.objectContaining({ baseDir: 'Home' }),
     );
   });
