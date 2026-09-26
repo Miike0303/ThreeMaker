@@ -71,14 +71,15 @@ export type BindStoryToWorldOptions = {
  * EXTERNAL item_add(itemId, delta)
  * EXTERNAL stat_get(statId)
  * ```
- * `world_get` reads `world.get(key)` and throws if `key` was never set —
+ * Alternatively, declare `EXTERNAL world_get(key, fallback)` to supply a fallback.
+ * One-argument `world_get` reads `world.get(key)` and throws if `key` was never set —
  * inkjs converts a bound external function's `undefined` return into ink
  * Void, and any comparison against Void (e.g. `{world_get("x") == true: ...}`)
  * throws an opaque, hard-to-diagnose inkjs `StoryException`. Requiring the
  * key to be seeded first fails loudly with a precise message instead, the
  * same "fail loudly on content bugs" philosophy as `WorldState.set`'s type
- * lock. Ponytail: an optional `world_get(key, fallback)` default-value
- * argument would be the ergonomic upgrade here — not implemented in v1.
+ * lock. The two-argument `world_get(key, fallback)` returns the fallback when
+ * the key is unset without writing it; existing values, including falsy ones, win.
  * `world_set` calls `world.set(key, value)`. Both directions are
  * externals-driven (ink pulls/pushes) — the optional observer mirror is a
  * SEPARATE, one-way channel (ink var change -> world-state key), never the
@@ -104,13 +105,17 @@ export type BindStoryToWorldOptions = {
 export function bindStoryToWorld(story: Story, options: BindStoryToWorldOptions): void {
   const { storyId, world, observedVariables = [], items, stats } = options;
 
-  story.BindExternalFunction('world_get', (key: string) => {
-    if (!world.has(key)) {
-      throw new Error(
-        `story-runtime: world_get("${key}") read a key that was never set — seed it in WorldState before running the story.`,
-      );
+  // The rest tuple keeps arity at 1 for inkjs's args.length >= func.length check.
+  story.BindExternalFunction('world_get', (key: string, ...[fallback]: [fallback?: WorldValue]) => {
+    if (world.has(key)) {
+      return world.get(key);
     }
-    return world.get(key);
+    if (fallback !== undefined) {
+      return fallback;
+    }
+    throw new Error(
+      `story-runtime: world_get("${key}") read a key that was never set — seed it in WorldState before running the story.`,
+    );
   });
   story.BindExternalFunction('world_set', (key: string, value: WorldValue) => {
     world.set(key, value);

@@ -70,6 +70,57 @@ describe('bindStoryToWorld', () => {
     );
   });
 
+  it('returns a string fallback for an unset world key without writing it', () => {
+    const world = new WorldState();
+    const story = compileInk(`EXTERNAL world_get(key, fallback)
+{world_get("quest_seen", "no")}
+-> END
+`);
+
+    bindStoryToWorld(story, { storyId: 'demo', world });
+
+    expect(runToEnd(story).trim()).toBe('no');
+    expect(world.has('quest_seen')).toBe(false);
+  });
+
+  it('returns a present false value instead of the fallback', () => {
+    const world = new WorldState();
+    world.set('flag', false);
+    const story = compileInk(`EXTERNAL world_get(key, fallback)
+{world_get("flag", true)}
+-> END
+`);
+
+    bindStoryToWorld(story, { storyId: 'demo', world });
+
+    expect(runToEnd(story).trim()).toBe('false');
+  });
+
+  it('returns a numeric fallback for an unset world key', () => {
+    const world = new WorldState();
+    const story = compileInk(`EXTERNAL world_get(key, fallback)
+{world_get("gold", 5)}
+-> END
+`);
+
+    bindStoryToWorld(story, { storyId: 'demo', world });
+
+    expect(runToEnd(story).trim()).toBe('5');
+  });
+
+  it('binds and reads a seeded world key with the one-argument declaration', () => {
+    const world = new WorldState();
+    world.set('weather', 'sunny');
+    const story = compileInk(`EXTERNAL world_get(key)
+{world_get("weather")}
+-> END
+`);
+
+    bindStoryToWorld(story, { storyId: 'demo', world });
+
+    expect(runToEnd(story).trim()).toBe('sunny');
+  });
+
   it('throws when the observed ink variable changes to a non-primitive value (e.g. an ink LIST)', () => {
     const world = new WorldState();
     const source = `
