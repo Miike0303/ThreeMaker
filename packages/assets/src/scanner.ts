@@ -2,6 +2,7 @@ import type { Dirent } from 'node:fs';
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { parseEncryptionKey } from './decrypt.js';
+import { stripBom } from './strip-bom.js';
 
 /**
  * Folder-agnostic scanner for RPG Maker MV/MZ game libraries. Walks an
@@ -336,9 +337,4 @@ function collectAssetFiles(
 
 function describeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-/** Strips a leading UTF-8 BOM (U+FEFF) — some deployed games ship `System.json` re-saved by editors/translation tools that add one, which `JSON.parse` otherwise rejects, skipping the whole game. */
-function stripBom(text: string): string {
-  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }

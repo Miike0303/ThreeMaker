@@ -6,16 +6,12 @@
 // `readPlayerStartIfStartMap`.
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { stripBom } from './strip-bom.js';
 
 export interface RpgmSystemStart {
   readonly mapId: number;
   readonly x: number;
   readonly y: number;
-}
-
-/** Strips a leading UTF-8 BOM (U+FEFF) -- some deployed games ship JSON re-saved by editors/translation tools that add one, which `JSON.parse` otherwise rejects (see commit beee919). */
-function stripBom(text: string): string {
-  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
 /**

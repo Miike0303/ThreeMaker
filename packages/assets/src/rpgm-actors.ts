@@ -5,17 +5,13 @@
 // RPG Maker itself uses to draw that actor's on-map sprite.
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { stripBom } from './strip-bom.js';
 
 export interface RpgmLeadActorSheet {
   /** Character-sheet image file name (without extension), e.g. `"Actor1"` -- resolves to `img/characters/<characterName>.png`. */
   readonly characterName: string;
   /** Which of the sheet's 8 character blocks (4 cols x 2 rows) this actor uses, 0-indexed. */
   readonly characterIndex: number;
-}
-
-/** Strips a leading UTF-8 BOM (U+FEFF), same convention as `rpgm-system.ts`'s `stripBom` (see commit beee919). */
-function stripBom(text: string): string {
-  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
 /**
