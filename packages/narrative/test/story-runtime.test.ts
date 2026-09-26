@@ -122,4 +122,61 @@ Done.
       'story-runtime: stat_get("mp") called but no stats store was bound — pass stats when binding the story.',
     );
   });
+
+  it('adds 2 items then consumes 1 through item_add without repeating mutations during lookahead', () => {
+    const world = new WorldState();
+    const items = {
+      counts: new Map<string, number>(),
+      count(id: string): number {
+        return this.counts.get(id) ?? 0;
+      },
+      add(id: string, delta: number): number {
+        const count = Math.max(0, this.count(id) + delta);
+        this.counts.set(id, count);
+        return count;
+      },
+    };
+    const story = compileInk(`EXTERNAL item_add(id, delta)
+The elder offers a potion.
+~ temp added = item_add("potion", 2)
+Added: {added}
+~ temp remaining = item_add("potion", -1)
+Remaining: {remaining}
+-> END
+`);
+
+    bindStoryToWorld(story, { storyId: 'demo', world, items });
+    const output = runToEnd(story);
+
+    expect(items.count('potion')).toBe(1);
+    expect(output).toContain('Added: 2');
+    expect(output).toContain('Remaining: 1');
+  });
+
+  it('throws a precise error when item_add is called with a read-only items store', () => {
+    const world = new WorldState();
+    const items = { count: (_id: string) => 0 };
+    const story = compileInk(
+      'EXTERNAL item_add(id, delta)\n~ item_add("potion", 2)\nDone.\n-> END\n',
+    );
+
+    bindStoryToWorld(story, { storyId: 'demo', world, items });
+
+    expect(() => runToEnd(story)).toThrow(
+      'story-runtime: item_add("potion") called but the bound items store is read-only (count-only) — provide an items store with an add method when binding the story.',
+    );
+  });
+
+  it('throws a precise error when item_add is called without an items store', () => {
+    const world = new WorldState();
+    const story = compileInk(
+      'EXTERNAL item_add(id, delta)\n~ item_add("potion", 2)\nDone.\n-> END\n',
+    );
+
+    bindStoryToWorld(story, { storyId: 'demo', world });
+
+    expect(() => runToEnd(story)).toThrow(
+      'story-runtime: item_add("potion") called but no items store was bound — pass items when binding the story.',
+    );
+  });
 });

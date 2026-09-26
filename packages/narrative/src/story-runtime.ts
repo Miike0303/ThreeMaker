@@ -6,11 +6,12 @@ function isWorldValue(value: unknown): value is WorldValue {
 }
 
 /**
- * Structural inventory surface for the `item_count` ink external (mirrors
+ * Structural inventory surface for the `item_count` / `item_add` ink externals (mirrors
  * core's ItemStore / gameplay's Inventory without importing either package).
  */
 export type StoryItemStore = {
   count(id: string): number;
+  add?(id: string, delta: number): number;
 };
 
 /**
@@ -44,10 +45,10 @@ export type BindStoryToWorldOptions = {
    */
   readonly observedVariables?: readonly string[];
   /**
-   * Optional inventory for `EXTERNAL item_count(itemId)`. When omitted and a
-   * story calls `item_count`, binding still installs the external but throws
+   * Optional inventory for `item_count` / `item_add`. When omitted and a
+   * story calls either, binding still installs the external but throws
    * a precise error (same fail-loud style as unseeded `world_get`) — never
-   * a silent 0.
+   * a silent 0. `item_add` requires the store's optional `add` method.
    */
   readonly items?: StoryItemStore;
   /**
@@ -59,7 +60,7 @@ export type BindStoryToWorldOptions = {
 
 /**
  * Binds `story`'s `world_get`/`world_set` external functions to `world`,
- * optionally `item_count`/`stat_get` to inventory/stat stores, and
+ * optionally `item_count`/`item_add`/`stat_get` to inventory/stat stores, and
  * optionally mirrors declared ink variables into world-state as they change.
  *
  * `story`'s ink source must declare the world externals it uses:
@@ -67,6 +68,7 @@ export type BindStoryToWorldOptions = {
  * EXTERNAL world_get(key)
  * EXTERNAL world_set(key, value)
  * EXTERNAL item_count(itemId)
+ * EXTERNAL item_add(itemId, delta)
  * EXTERNAL stat_get(statId)
  * ```
  * `world_get` reads `world.get(key)` and throws if `key` was never set —
@@ -85,6 +87,10 @@ export type BindStoryToWorldOptions = {
  * `item_count` / `stat_get` always bind so a missing store fails with a
  * precise message rather than inkjs's opaque unbound-external error or a
  * silent 0. When the store is present they delegate to `count` / `get`.
+ * `item_add` also always binds, delegates to `add`, and returns the new count.
+ * A missing or read-only (count-only) items store fails with a precise message.
+ * It is bound non-lookahead-safe because it mutates inventory; speculative
+ * lookahead must not grant or consume an item twice.
  *
  * Mirrored variable values must be a {@link WorldValue} (boolean, number, or
  * string); a variable that becomes a non-primitive ink value (e.g. a `LIST`)
@@ -118,6 +124,23 @@ export function bindStoryToWorld(story: Story, options: BindStoryToWorldOptions)
     }
     return items.count(itemId);
   });
+  story.BindExternalFunction(
+    'item_add',
+    (itemId: string, delta: number) => {
+      if (!items) {
+        throw new Error(
+          `story-runtime: item_add("${itemId}") called but no items store was bound — pass items when binding the story.`,
+        );
+      }
+      if (!items.add) {
+        throw new Error(
+          `story-runtime: item_add("${itemId}") called but the bound items store is read-only (count-only) — provide an items store with an add method when binding the story.`,
+        );
+      }
+      return items.add(itemId, delta);
+    },
+    false,
+  );
   story.BindExternalFunction('stat_get', (statId: string) => {
     if (!stats) {
       throw new Error(
