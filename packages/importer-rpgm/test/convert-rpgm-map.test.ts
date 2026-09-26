@@ -1,11 +1,20 @@
 import {
   CURRENT_MAP_FORMAT_VERSION,
   MAP_FORMAT_MAGIC,
+  parseMapDocument,
+  serializeMapDocument,
   validateCurrentVersionShape,
 } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
 import { convertRpgmMap } from '../src/convert-rpgm-map.js';
-import type { RpgmMap, RpgmTileset, TileSheetNames } from '../src/types.js';
+import type {
+  RpgmEvent,
+  RpgmEventCommand,
+  RpgmEventPage,
+  RpgmMap,
+  RpgmTileset,
+  TileSheetNames,
+} from '../src/types.js';
 
 const EMPTY_SHEET_NAMES: TileSheetNames = {
   A1: '',
@@ -19,10 +28,10 @@ const EMPTY_SHEET_NAMES: TileSheetNames = {
   E: '',
 };
 
-/** 3x2 map: tile id 1 on layer 0 everywhere except (0,0), which stays empty (id 0). */
+/** 3x2 by default: tile id 1 on layer 0 everywhere except (0,0), which stays empty (id 0). */
 function buildSyntheticMap(overrides: Partial<RpgmMap> = {}): RpgmMap {
-  const width = 3;
-  const height = 2;
+  const width = overrides.width ?? 3;
+  const height = overrides.height ?? 2;
   const size = width * height;
   const ground = new Array(size).fill(1);
   ground[0] = 0; // (0,0) left empty on purpose
@@ -45,6 +54,43 @@ function buildSyntheticMap(overrides: Partial<RpgmMap> = {}): RpgmMap {
     },
     ...overrides,
   };
+}
+
+const CLEAR_CONDITIONS: RpgmEventPage['conditions'] = {
+  actorValid: false,
+  itemValid: false,
+  selfSwitchValid: false,
+  switch1Valid: false,
+  switch2Valid: false,
+  variableValid: false,
+};
+
+function showTextPage(
+  trigger: number,
+  lines: readonly string[],
+  speaker?: string,
+  conditions: RpgmEventPage['conditions'] = CLEAR_CONDITIONS,
+  extra: readonly RpgmEventCommand[] = [],
+): RpgmEventPage {
+  const header: RpgmEventCommand = {
+    code: 101,
+    indent: 0,
+    parameters: speaker === undefined ? [] : ['', 0, 0, 2, speaker],
+  };
+  const body: RpgmEventCommand[] = lines.map((line) => ({
+    code: 401,
+    indent: 0,
+    parameters: [line],
+  }));
+  return {
+    conditions,
+    trigger,
+    list: [header, ...body, ...extra, { code: 0, indent: 0, parameters: [] }],
+  };
+}
+
+function placedEvent(page: RpgmEventPage, pages: readonly RpgmEventPage[] = [page]): RpgmEvent {
+  return { id: 1, name: 'Elder', x: 2, y: 3, pages };
 }
 
 function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTileset {
@@ -172,5 +218,125 @@ describe('convertRpgmMap', () => {
     const doc = convertRpgmMap(map, tileset);
 
     expect(doc.tileset.slots).toEqual({});
+  });
+
+  it('imports an unconditional action-button Show Text page as an interact trigger', () => {
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [null, placedEvent(showTextPage(0, ['Hello', 'Traveler'], 'Elder'))],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([
+      {
+        id: 'rpgm-event-1',
+        x: 2,
+        y: 3,
+        floor: 'floor-0',
+        on: 'interact',
+        event: 'rpgm-event-1',
+      },
+    ]);
+    expect(doc.events['rpgm-event-1']).toEqual([
+      {
+        type: 'showDialogue',
+        speaker: 'Elder',
+        source: { kind: 'text', lines: ['Hello', 'Traveler'] },
+      },
+    ]);
+
+    const roundTrip = parseMapDocument(JSON.parse(serializeMapDocument(doc)));
+    expect(roundTrip.triggers).toEqual(doc.triggers);
+    expect(roundTrip.events).toEqual(doc.events);
+    expect(() => validateCurrentVersionShape(doc)).not.toThrow();
+  });
+
+  it('maps a player-touch Show Text page to an enter trigger', () => {
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [placedEvent(showTextPage(1, ['Hello'], 'Elder'))],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([
+      {
+        id: 'rpgm-event-1',
+        x: 2,
+        y: 3,
+        floor: 'floor-0',
+        on: 'enter',
+        event: 'rpgm-event-1',
+      },
+    ]);
+  });
+
+  it('skips an event whose page contains a non-text command', () => {
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [
+          placedEvent(
+            showTextPage(0, ['Hello'], 'Elder', CLEAR_CONDITIONS, [
+              { code: 201, indent: 0, parameters: [1, 0, 0] },
+            ]),
+          ),
+        ],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips an event whose last page is conditional even when an earlier page is pure text', () => {
+    const text = showTextPage(0, ['Hello'], 'Elder');
+    const conditional = showTextPage(0, ['Hello'], 'Elder', {
+      ...CLEAR_CONDITIONS,
+      switch1Valid: true,
+    });
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [placedEvent(conditional, [text, conditional])],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips autorun Show Text pages', () => {
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [placedEvent(showTextPage(3, ['Hello'], 'Elder'))],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('emits empty ports for null event slots and for a map with no events', () => {
+    const tileset = buildSyntheticTileset();
+    const withNulls = convertRpgmMap(buildSyntheticMap({ events: [null, null] }), tileset);
+    expect(withNulls.triggers).toEqual([]);
+    expect(withNulls.events).toEqual({});
+
+    const without = convertRpgmMap(buildSyntheticMap(), tileset);
+    expect(without.triggers).toEqual([]);
+    expect(without.events).toEqual({});
   });
 });

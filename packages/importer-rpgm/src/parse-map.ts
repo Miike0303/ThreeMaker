@@ -1,4 +1,4 @@
-import type { RpgmMap, RpgmMapLayers, TileLayer } from './types.js';
+import type { RpgmEvent, RpgmMap, RpgmMapLayers, TileLayer } from './types.js';
 
 const LOGICAL_LAYER_COUNT = 6;
 
@@ -6,6 +6,18 @@ function sliceLayer(data: readonly number[], z: number, width: number, height: n
   const size = width * height;
   const start = z * size;
   return data.slice(start, start + size);
+}
+
+/** Keeps object and `null` slots. Anything else is dropped; command shape is checked later. */
+function readMapEvents(value: unknown): readonly (RpgmEvent | null)[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const events: (RpgmEvent | null)[] = [];
+  for (const entry of value) {
+    if (entry === null || (typeof entry === 'object' && entry !== null)) {
+      events.push(entry as RpgmEvent | null);
+    }
+  }
+  return events;
 }
 
 /**
@@ -44,6 +56,7 @@ export function parseMap(json: unknown, id: number | null = null): RpgmMap {
     );
   }
 
+  const events = readMapEvents((json as Record<string, unknown>).events);
   const numericData = data as number[];
   const layers: RpgmMapLayers = {
     tileLayers: [
@@ -64,5 +77,6 @@ export function parseMap(json: unknown, id: number | null = null): RpgmMap {
     tilesetId,
     scrollType: typeof scrollType === 'number' ? scrollType : 0,
     layers,
+    ...(events !== undefined ? { events } : {}),
   };
 }

@@ -51,4 +51,17 @@ describe('parseMap', () => {
     expect(() => parseMap(null)).toThrow();
     expect(() => parseMap('nope')).toThrow();
   });
+
+  it('passes events through, keeping objects and null', () => {
+    const event = { id: 7, name: 'Elder', x: 1, y: 0, pages: [] };
+    const json = { ...makeMapJson(1, 1, () => 0), events: [null, event, 'drop-me', 2] };
+    const map = parseMap(json, 7);
+
+    expect(map.events).toEqual([null, event]);
+  });
+
+  it('leaves events undefined when the map JSON has no events array', () => {
+    const map = parseMap(makeMapJson(1, 1, () => 0));
+    expect(map.events).toBeUndefined();
+  });
 });

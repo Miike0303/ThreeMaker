@@ -37,6 +37,40 @@ export interface RpgmMapLayers {
   readonly regions: TileLayer;
 }
 
+/** One command in an RPG Maker MV/MZ event page list. */
+export interface RpgmEventCommand {
+  readonly code: number;
+  readonly indent: number;
+  readonly parameters: readonly unknown[];
+}
+
+/**
+ * One page of an RPG Maker event. `trigger` is the engine's numeric mode
+ * (0 action button, 1 player touch, 2 event touch, 3 autorun, 4 parallel).
+ * A page is unconditional when every present flag below is `false`.
+ */
+export interface RpgmEventPage {
+  readonly conditions: {
+    readonly actorValid?: boolean;
+    readonly itemValid?: boolean;
+    readonly selfSwitchValid?: boolean;
+    readonly switch1Valid?: boolean;
+    readonly switch2Valid?: boolean;
+    readonly variableValid?: boolean;
+  };
+  readonly trigger: number;
+  readonly list: readonly RpgmEventCommand[];
+}
+
+/** One event on a map. Deleted slots in the parent array are `null`, not an event. */
+export interface RpgmEvent {
+  readonly id: number;
+  readonly name: string;
+  readonly x: number;
+  readonly y: number;
+  readonly pages: readonly RpgmEventPage[];
+}
+
 /** A parsed `MapXXX.json` file. */
 export interface RpgmMap {
   /** Numeric map id, e.g. `21` for `Map021.json`. `null` if parsed without a known id. */
@@ -47,6 +81,13 @@ export interface RpgmMap {
   readonly tilesetId: number;
   readonly scrollType: number;
   readonly layers: RpgmMapLayers;
+  /**
+   * Raw `events` array when the map JSON had one. Entries are objects or
+   * `null` (index 0 and deleted slots). Omitted when `events` is absent so
+   * synthetic maps stay valid without it. Command shape is checked by the
+   * Show Text importer, not by `parseMap`.
+   */
+  readonly events?: readonly (RpgmEvent | null)[];
 }
 
 /** The parsed subset of an RPG Maker MV/MZ project this importer understands. */

@@ -1,7 +1,8 @@
 /**
  * RPGM -> ThreeMaker `.tmmap` converter (`convertRpgmMap`). Pure -- no
- * fs/network here. Emits a document at `CURRENT_MAP_FORMAT_VERSION` (v4 as of
- * C1a: empty narrative ports `npcs`/`triggers`/`events`/`worldSeeds`).
+ * fs/network here. Emits a document at `CURRENT_MAP_FORMAT_VERSION`.
+ * `npcs` and `worldSeeds` stay empty; unconditional Show Text events become
+ * `triggers` and `events`.
  * Mirrors `apps/editor/src/map-compose.ts`'s `toRenderableMap` /
  * `toRenderableTileset` in the opposite direction (document -> RpgmMap there,
  * RpgmMap -> document here).
@@ -9,12 +10,14 @@
  * `RpgmMap.layers`'s 4 tile layers + shadows + regions are already
  * structurally identical to `MapLayers` (`readonly number[]`, length
  * `width * height`), so the layer copy is a direct 1:1 passthrough -- no
- * transformation needed. Everything this map has no RPGM-native source for
- * (`stairLinks`, `rooms`, narrative ports) comes out empty.
+ * transformation needed. `stairLinks`, `rooms`, `npcs`, and `worldSeeds`
+ * have no RPGM-native source and come out empty. Show Text events are the
+ * one narrative port this converter fills.
  */
 
 import type { MapDocument, SlotComposition } from '@threemaker/map-format';
 import { CURRENT_MAP_FORMAT_VERSION, MAP_FORMAT_MAGIC } from '@threemaker/map-format';
+import { showTextEventPorts } from './rpgm-show-text.js';
 import type { RpgmMap, RpgmTileset } from './types.js';
 
 const FLOOR_ID = 'floor-0';
@@ -54,8 +57,10 @@ export interface ConvertRpgmMapOptions {
 /**
  * Converts one parsed RPGM map + its matching tileset into a single-floor
  * `MapDocument` at `baseElevation` 0 and the current format version.
- * `stairLinks`/`rooms`/narrative ports are always empty (no RPGM-native
- * source). `tileset.slots` defaults to `{}` and is otherwise exactly whatever
+ * `stairLinks`/`rooms` are always empty (no RPGM-native source).
+ * Unconditional Show Text events become `triggers` and `events`; `npcs` and
+ * `worldSeeds` stay empty. `tileset.slots` defaults to `{}` and is otherwise
+ * exactly whatever
  * `opts.slots` gives -- this pure converter never touches the catalog itself
  * (see `ConvertRpgmMapOptions.slots`); a slot with no `object` stays
  * unsourced, so `apps/desktop/src/authored-map.ts`'s per-slot resolver simply
@@ -67,6 +72,10 @@ export function convertRpgmMap(
   opts: ConvertRpgmMapOptions = {},
 ): MapDocument {
   const id = opts.id ?? `rpgm-map-${map.id ?? 'unknown'}`;
+  const showText =
+    map.events === undefined
+      ? undefined
+      : showTextEventPorts(map.events, FLOOR_ID, map.width, map.height);
 
   const doc: MapDocument = {
     format: MAP_FORMAT_MAGIC,
@@ -95,8 +104,8 @@ export function convertRpgmMap(
     stairLinks: [],
     rooms: [],
     npcs: [],
-    triggers: [],
-    events: {},
+    triggers: showText?.triggers ?? [],
+    events: showText?.events ?? {},
     worldSeeds: {},
     props: [],
     lights: [],
