@@ -7,7 +7,15 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/dist", "!**/target", "!**/src-tauri/gen"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/target",
+      "!**/src-tauri/gen",
+      "!output",
+      "!examples",
+      "!assets"
+    ]
   },
   "formatter": {
     "enabled": true,
