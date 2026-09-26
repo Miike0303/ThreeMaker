@@ -42,3 +42,29 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect(project.tilesets[0]?.name).toBe('Outside');
   });
 });
+
+describe('loadProject — data folder layouts', () => {
+  let workDir: string;
+
+  beforeEach(() => {
+    workDir = mkdtempSync(join(tmpdir(), 'threemaker-load-project-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(workDir, { recursive: true, force: true });
+  });
+
+  it('finds the data folder of a deployed MV game under <root>/www/data', async () => {
+    const dataDir = join(workDir, 'www', 'data');
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(join(dataDir, 'MapInfos.json'), JSON.stringify(MAP_INFOS_JSON), 'utf8');
+    writeFileSync(join(dataDir, 'Tilesets.json'), JSON.stringify(TILESETS_JSON), 'utf8');
+
+    const project = await loadProject(workDir);
+
+    expect(project.mapInfos).toHaveLength(1);
+    expect(project.mapInfos[0]?.name).toBe('Map001');
+    expect(project.tilesets).toHaveLength(1);
+    expect(project.tilesets[0]?.name).toBe('Outside');
+  });
+});
