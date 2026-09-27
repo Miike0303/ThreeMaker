@@ -31,12 +31,14 @@ export function roomLandingTile(
     y: Math.min(Math.max(0, height - 1), Math.max(0, Math.floor(height / 2))),
   };
   const onFloor = rooms.filter((room) => room.floor === floorId);
-  if (onFloor.length === 0) return mapCenter;
+  const firstRoom = onFloor[0];
+  if (!firstRoom) return mapCenter;
 
-  let best = onFloor[0]!;
+  let best = firstRoom;
   let bestArea = roomArea(best);
   for (let i = 1; i < onFloor.length; i++) {
-    const room = onFloor[i]!;
+    const room = onFloor[i];
+    if (!room) continue;
     const area = roomArea(room);
     if (area > bestArea) {
       best = room;
@@ -84,16 +86,26 @@ function linksConnectFloors(link: StairLinkDocument, floorA: string, floorB: str
 }
 
 /**
- * Drop any existing links for the floor pair (either direction), then append
- * `stampLink` when defined. Re-Generate stays one stamp stair per adjacency.
+ * Replace generated links for the floor pair (either direction). Keep authored
+ * links unless a waypoint on the stamped floor is no longer standable, then
+ * append `stampLink` when defined. Other floor pairs are untouched.
  */
 export function mergeStampStairLinks(
   existing: readonly StairLinkDocument[],
   floorA: string,
   floorB: string,
   stampLink: StairLinkDocument | undefined,
+  stampedFloorId: string,
+  isStandableOnStampedFloor: (x: number, y: number) => boolean,
 ): readonly StairLinkDocument[] {
-  const kept = existing.filter((link) => !linksConnectFloors(link, floorA, floorB));
+  const kept = existing.filter((link) => {
+    if (!linksConnectFloors(link, floorA, floorB)) return true;
+    if (link.id.startsWith(STAMP_STAIR_ID_PREFIX)) return false;
+    return link.waypoints.every(
+      (waypoint) =>
+        waypoint.floor !== stampedFloorId || isStandableOnStampedFloor(waypoint.x, waypoint.y),
+    );
+  });
   return stampLink === undefined ? kept : [...kept, stampLink];
 }
 

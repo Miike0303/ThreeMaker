@@ -56,7 +56,8 @@ export type ApplyDungeonStampOptions = {
   /**
    * When true and the map has 2+ floors, place a bidirectional stair between
    * the stamped main room and the adjacent floor's main room (prefer floor
-   * below; ground links up). Replaces prior links for that floor pair only.
+   * below; ground links up). Replaces generated links for that floor pair and
+   * authored links whose stamped-floor waypoints are no longer standable.
    * No-op on single-floor maps. Default false preserves stairLinks.
    */
   readonly placeStairToAdjacentFloor?: boolean;
@@ -199,9 +200,22 @@ export function applyDungeonStampToMapDocument(
         const entry = pickMainRoomSpawn(stamp.rooms, doc.width, doc.height);
         const exit = roomLandingTile(next.rooms, adjacentFloor.id, doc.width, doc.height);
         const link = stampStairLinkBetween(targetFloor.id, entry, adjacentFloor.id, exit);
+        const isStandableOnStampedFloor = (x: number, y: number): boolean => {
+          if (!Number.isInteger(x) || !Number.isInteger(y)) return false;
+          if (x < 0 || x >= doc.width || y < 0 || y >= doc.height) return false;
+          const index = y * doc.width + x;
+          return tiles0[index] !== 0 && tiles2[index] === 0;
+        };
         next = {
           ...next,
-          stairLinks: mergeStampStairLinks(next.stairLinks, targetFloor.id, adjacentFloor.id, link),
+          stairLinks: mergeStampStairLinks(
+            next.stairLinks,
+            targetFloor.id,
+            adjacentFloor.id,
+            link,
+            targetFloor.id,
+            isStandableOnStampedFloor,
+          ),
         };
       }
     }

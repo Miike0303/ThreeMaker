@@ -539,6 +539,57 @@ describe('applyDungeonStampToMapDocument', () => {
     );
   });
 
+  it('drops an authored stair whose stamped-floor waypoint has ground beneath a wall', () => {
+    const blank = createBlankMapDocument({
+      id: 'stamp-wall-stair',
+      name: 'Wall stair',
+      width: 16,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const floor0 = blank.floors[0];
+    if (!floor0) throw new Error('fixture has no ground floor');
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 9,
+      groundTileId: 2816,
+      wallTileId: 4352,
+    });
+    const wallIndex = stamp.layers[0].findIndex(
+      (ground, index) => ground !== 0 && stamp.layers[2][index] !== 0,
+    );
+    if (wallIndex < 0) throw new Error('fixture has no ground-backed wall');
+    const wallWaypoint = {
+      x: wallIndex % blank.width,
+      y: Math.floor(wallIndex / blank.width),
+      floor: 'floor-1',
+    };
+    const doc = {
+      ...blank,
+      floors: [floor0, { ...floor0, id: 'floor-1', baseElevation: 1 }],
+      stairLinks: [
+        {
+          id: 'authored-wall-stair',
+          fromFloor: 'floor-1',
+          toFloor: 'floor-0',
+          bidirectional: true,
+          waypoints: [wallWaypoint, { x: 1, y: 1, floor: 'floor-0' }],
+        },
+      ],
+    };
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.floors[1]?.layers.tiles[0][wallIndex]).toBe(2816);
+    expect(next.floors[1]?.layers.tiles[2][wallIndex]).toBe(4352);
+    expect(next.stairLinks.some((link) => link.id === 'authored-wall-stair')).toBe(false);
+  });
+
   it('places a stair to the adjacent floor when multi-floor and requested', () => {
     const blank = createBlankMapDocument({
       id: 'stamp-stair',
@@ -565,6 +616,28 @@ describe('applyDungeonStampToMapDocument', () => {
         regions: new Array(size).fill(0),
       },
     };
+    const stamp = stampSimpleDungeon({
+      width: 20,
+      height: 16,
+      seed: 9,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      roomCount: 3,
+    });
+    const room = stamp.rooms[0];
+    if (!room) throw new Error('fixture has no stamped room');
+    const roomCell = { x: room.x + Math.floor(room.w / 2), y: room.y + Math.floor(room.h / 2) };
+    const roomIndex = roomCell.y * blank.width + roomCell.x;
+    expect(stamp.layers[0][roomIndex]).not.toBe(0);
+    expect(stamp.layers[2][roomIndex]).toBe(0);
+    const blockedIndex = stamp.layers[0].findIndex(
+      (ground, index) => ground === 0 || stamp.layers[2][index] !== 0,
+    );
+    if (blockedIndex < 0) throw new Error('fixture has no blocked stamped cell');
+    const blockedCell = {
+      x: blockedIndex % blank.width,
+      y: Math.floor(blockedIndex / blank.width),
+    };
     const doc = {
       ...blank,
       floors: [ground, floor1],
@@ -583,7 +656,17 @@ describe('applyDungeonStampToMapDocument', () => {
           bidirectional: true,
           waypoints: [
             { x: 0, y: 0, floor: 'floor-0' },
-            { x: 1, y: 1, floor: 'floor-1' },
+            { ...roomCell, floor: 'floor-1' },
+          ],
+        },
+        {
+          id: 'authored-blocked',
+          fromFloor: 'floor-1',
+          toFloor: 'floor-0',
+          bidirectional: true,
+          waypoints: [
+            { ...blockedCell, floor: 'floor-1' },
+            { x: 1, y: 1, floor: 'floor-0' },
           ],
         },
         {
@@ -598,14 +681,6 @@ describe('applyDungeonStampToMapDocument', () => {
         },
       ],
     };
-    const stamp = stampSimpleDungeon({
-      width: 20,
-      height: 16,
-      seed: 9,
-      groundTileId: 2816,
-      wallTileId: 4352,
-      roomCount: 3,
-    });
     const next = applyDungeonStampToMapDocument(doc, stamp, {
       targetFloorIndex: 1,
       replaceFloor0Rooms: true,
@@ -616,8 +691,9 @@ describe('applyDungeonStampToMapDocument', () => {
     expect(stampStairs[0]?.fromFloor).toBe('floor-1');
     expect(stampStairs[0]?.toFloor).toBe('floor-0');
     expect(stampStairs[0]?.bidirectional).toBe(true);
-    // Pair links replaced; unrelated pair kept.
-    expect(next.stairLinks.some((l) => l.id === 'authored-other')).toBe(false);
+    // Standable authored stair and unrelated pair stay; blocked authored stair is removed.
+    expect(next.stairLinks.some((l) => l.id === 'authored-other')).toBe(true);
+    expect(next.stairLinks.some((l) => l.id === 'authored-blocked')).toBe(false);
     expect(next.stairLinks.some((l) => l.id === 'keep-far')).toBe(true);
   });
 

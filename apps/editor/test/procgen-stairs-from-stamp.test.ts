@@ -74,14 +74,61 @@ describe('mergeStampStairLinks', () => {
   const a = stampStairLinkBetween('floor-0', { x: 1, y: 1 }, 'floor-1', { x: 2, y: 2 });
   const other = stampStairLinkBetween('floor-1', { x: 0, y: 0 }, 'floor-2', { x: 1, y: 1 });
   const reverse = stampStairLinkBetween('floor-1', { x: 9, y: 9 }, 'floor-0', { x: 8, y: 8 });
+  const authored = { ...a, id: 'hand-drawn' };
+  const isStandable = (x: number, y: number) => x === 1 && y === 1;
 
-  it('replaces either-direction links for the pair and keeps others', () => {
-    const next = mergeStampStairLinks([a, other, reverse], 'floor-0', 'floor-1', a);
-    expect(next).toEqual([other, a]);
+  it('replaces generated links in either direction and keeps authored and other pairs', () => {
+    const next = mergeStampStairLinks(
+      [a, authored, other, reverse],
+      'floor-0',
+      'floor-1',
+      a,
+      'floor-0',
+      isStandable,
+    );
+    expect(next).toEqual([authored, other, a]);
   });
 
-  it('drops the pair when stamp link is undefined', () => {
-    expect(mergeStampStairLinks([a, other], 'floor-0', 'floor-1', undefined)).toEqual([other]);
+  it('removes generated pair links when stamp link is undefined', () => {
+    expect(
+      mergeStampStairLinks(
+        [a, authored, other],
+        'floor-0',
+        'floor-1',
+        undefined,
+        'floor-0',
+        isStandable,
+      ),
+    ).toEqual([authored, other]);
+  });
+
+  it('keeps an authored pair link on standable stamped-floor cells', () => {
+    expect(
+      mergeStampStairLinks([authored], 'floor-0', 'floor-1', a, 'floor-0', isStandable),
+    ).toEqual([authored, a]);
+  });
+
+  it('drops an authored pair link with a non-standable stamped-floor waypoint', () => {
+    const blocked = {
+      ...authored,
+      waypoints: [{ x: 0, y: 0, floor: 'floor-0' }, ...authored.waypoints],
+    };
+    expect(
+      mergeStampStairLinks([blocked], 'floor-0', 'floor-1', a, 'floor-0', isStandable),
+    ).toEqual([a]);
+  });
+
+  it('replaces a stamp-prefixed pair link even when its landing is standable', () => {
+    expect(
+      mergeStampStairLinks([a], 'floor-0', 'floor-1', reverse, 'floor-0', isStandable),
+    ).toEqual([reverse]);
+  });
+
+  it('keeps links for other floor pairs without checking their waypoints', () => {
+    expect(mergeStampStairLinks([other], 'floor-0', 'floor-1', a, 'floor-0', () => false)).toEqual([
+      other,
+      a,
+    ]);
   });
 });
 
