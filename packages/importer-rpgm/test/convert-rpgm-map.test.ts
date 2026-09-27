@@ -289,6 +289,34 @@ describe('convertRpgmMap', () => {
     ]);
   });
 
+  it('imports an event placed at the top-left map coordinate', () => {
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [
+          {
+            ...placedEvent(showTextPage(1, ['At the edge'])),
+            x: 0,
+            y: 0,
+          },
+        ],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([
+      {
+        id: 'rpgm-event-1',
+        x: 0,
+        y: 0,
+        floor: 'floor-0',
+        on: 'enter',
+        event: 'rpgm-event-1',
+      },
+    ]);
+  });
+
   describe('Transfer Player and author comments', () => {
     function convertPage(list: readonly RpgmEventCommand[], opts: ConvertRpgmMapOptions = {}) {
       const doc = convertRpgmMap(
@@ -332,6 +360,14 @@ describe('convertRpgmMap', () => {
       ]);
       expect(doc.events['rpgm-event-1']).toEqual([
         { type: 'transferMap', mapFile: 'map002.tmmap.json', x: 1, y: 2, facing: 'right' },
+      ]);
+    });
+
+    it('imports a transfer to map 1', () => {
+      const doc = convertPage([{ ...transfer, parameters: [0, 1, 0, 0, 2, 0] }, end]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'transferMap', mapFile: 'map001.tmmap.json', x: 0, y: 0, facing: 'down' },
       ]);
     });
 
@@ -1037,6 +1073,27 @@ describe('convertRpgmMap', () => {
         { type: 'showDialogue', source: { kind: 'text', lines: ['Reset'] } },
         { type: 'setWorldVar', key: 'rpgm.self.100.1.B', value: false },
       ]);
+    });
+
+    it('sets self switch D to true', () => {
+      const doc = convertRpgmMap(
+        buildSyntheticMap({
+          width: 4,
+          height: 4,
+          events: [
+            placedEvent(
+              showTextPage(0, ['Complete'], undefined, CLEAR_CONDITIONS, [selfSwitch('D', 0)]),
+            ),
+          ],
+        }),
+        buildSyntheticTileset(),
+      );
+
+      expect(doc.events['rpgm-event-1']).toContainEqual({
+        type: 'setWorldVar',
+        key: 'rpgm.self.100.1.D',
+        value: true,
+      });
     });
 
     it.each([

@@ -42,6 +42,22 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect(project.tilesets[0]?.name).toBe('Outside');
   });
 
+  it('loads a Map001.json file that starts with a UTF-8 BOM', async () => {
+    const dataDir = join(workDir, 'data');
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(join(dataDir, 'MapInfos.json'), JSON.stringify(MAP_INFOS_JSON), 'utf8');
+    writeFileSync(join(dataDir, 'Tilesets.json'), JSON.stringify(TILESETS_JSON), 'utf8');
+    writeFileSync(
+      join(dataDir, 'Map001.json'),
+      BOM + JSON.stringify({ width: 1, height: 1, tilesetId: 1, data: new Array(6).fill(0) }),
+      'utf8',
+    );
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.get(1)?.editorName).toBe('Map001');
+  });
+
   function writeProjectFiles(dataDir: string, mapNames: readonly string[]): void {
     mkdirSync(dataDir, { recursive: true });
     writeFileSync(join(dataDir, 'MapInfos.json'), JSON.stringify(MAP_INFOS_JSON), 'utf8');
