@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  createDebugPanel,
   DEBUG_PANEL_COLLAPSED_STORAGE_KEY,
   formatDebugRows,
   readDebugPanelCollapsed,
@@ -170,5 +171,79 @@ describe('debug panel collapsed-state persistence', () => {
   it('treats a corrupt/unexpected stored value as not-collapsed rather than throwing', () => {
     const storage = createFakeStorage({ [DEBUG_PANEL_COLLAPSED_STORAGE_KEY]: 'garbage' });
     expect(readDebugPanelCollapsed(storage)).toBe(false);
+  });
+});
+
+type FakeNode = {
+  readonly tag: string;
+  readonly attributes: Map<string, string>;
+  readonly listeners: Map<string, () => void>;
+  readonly classList: { toggle(name: string, on?: boolean): void };
+  setAttribute(name: string, value: string): void;
+  addEventListener(type: string, listener: () => void): void;
+  append(...nodes: unknown[]): void;
+  appendChild(node: unknown): void;
+};
+
+function fakeNode(tag: string): FakeNode {
+  const node: FakeNode = {
+    tag,
+    attributes: new Map(),
+    listeners: new Map(),
+    classList: { toggle: () => {} },
+    setAttribute: (name, value) => {
+      node.attributes.set(name, value);
+    },
+    addEventListener: (type, listener) => {
+      node.listeners.set(type, listener);
+    },
+    append: () => {},
+    appendChild: () => {},
+  };
+  return node;
+}
+
+describe('debug panel toggle accessibility', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function mountPanel(storedCollapsed: boolean): FakeNode {
+    const created: FakeNode[] = [];
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => {
+        const node = fakeNode(tag);
+        created.push(node);
+        return node;
+      },
+    });
+    const store = new Map([[DEBUG_PANEL_COLLAPSED_STORAGE_KEY, String(storedCollapsed)]]);
+    createDebugPanel(createI18n(LOCALES, 'en').t, {
+      devMode: false,
+      collapsedStorage: {
+        getItem: (key) => store.get(key) ?? null,
+        setItem: (key, value) => {
+          store.set(key, value);
+        },
+      },
+    });
+    const toggle = created.find((node) => node.tag === 'button');
+    if (!toggle) throw new Error('debug panel created no toggle button');
+    return toggle;
+  }
+
+  it('reports the restored state and flips aria-expanded on each click', () => {
+    const toggle = mountPanel(true);
+    expect(toggle.attributes.get('aria-expanded')).toBe('false');
+
+    toggle.listeners.get('click')?.();
+    expect(toggle.attributes.get('aria-expanded')).toBe('true');
+
+    toggle.listeners.get('click')?.();
+    expect(toggle.attributes.get('aria-expanded')).toBe('false');
+  });
+
+  it('starts expanded when nothing collapsed was stored', () => {
+    expect(mountPanel(false).attributes.get('aria-expanded')).toBe('true');
   });
 });

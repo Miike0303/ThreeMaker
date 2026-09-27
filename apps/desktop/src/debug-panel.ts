@@ -342,6 +342,7 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
   function applyCollapsed(collapsed: boolean): void {
     panel.classList.toggle('debug-panel-collapsed', collapsed);
     toggle.textContent = collapsed ? '▸' : '▾';
+    toggle.setAttribute('aria-expanded', String(!collapsed));
   }
 
   let collapsed = readDebugPanelCollapsed(options.collapsedStorage);
