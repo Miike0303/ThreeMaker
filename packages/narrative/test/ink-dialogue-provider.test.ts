@@ -15,6 +15,33 @@ function makeProvider(): InkDialogueProvider {
 }
 
 describe('InkDialogueProvider', () => {
+  it('returns choices immediately for a choice-only knot', () => {
+    const story = compileInk('-> start\n=== start ===\n* [Yes] -> END\n* [No] -> END\n');
+    const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+    provider.open({ kind: 'ink', storyId: 'inline' });
+
+    expect(provider.next()).toEqual({ kind: 'choices', options: ['Yes', 'No'] });
+  });
+
+  it('ends when the story produces only empty output', () => {
+    const story = compileInk('-> start\n=== start ===\n-> END\n');
+    const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+    provider.open({ kind: 'ink', storyId: 'inline' });
+
+    expect(provider.next()).toEqual({ kind: 'end' });
+  });
+
+  it('keeps an empty line when it has a speaker tag', () => {
+    const story = compileInk('-> start\n=== start ===\n# speaker: Elder\n-> END\n');
+    const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+    provider.open({ kind: 'ink', storyId: 'inline' });
+
+    expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: '' });
+  });
+
   it('open() without a knot resumes the story where it left off', () => {
     const story = compileInk('First.\nSecond.\n-> END\n');
     const provider = new InkDialogueProvider(new Map([['inline', story]]));

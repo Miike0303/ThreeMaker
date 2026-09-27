@@ -62,10 +62,13 @@ export class InkDialogueProvider implements DialogueProvider {
   next(): DialogueStep {
     const story = this.requireActiveStory('next()');
 
-    if (story.canContinue) {
+    while (story.canContinue) {
       const text = (story.Continue() ?? '').replace(/\r?\n$/, '');
-      const speaker = extractSpeaker(story.currentTags ?? []);
-      return speaker !== undefined ? { kind: 'line', speaker, text } : { kind: 'line', text };
+      const tags = story.currentTags ?? [];
+      if (text !== '' || tags.length > 0) {
+        const speaker = extractSpeaker(tags);
+        return speaker !== undefined ? { kind: 'line', speaker, text } : { kind: 'line', text };
+      }
     }
 
     if (story.currentChoices.length > 0) {
