@@ -1,24 +1,14 @@
-/**
- * Painter NPC-placement authoring overlay (c1a follow-up). Pure -- mirrors
- * `prop-overlay.ts`/`spawn-overlay.ts`: exposes each NPC's tile-space
- * position on the given floor for `painter-viewport.ts` to project to a
- * screen-space fraction.
- */
+/** Painter NPC-placement overlay: NPC markers on one floor (see `floor-overlay.ts`). */
 
 import type { NpcDocument } from '@threemaker/map-format';
+import { computeFloorOverlayPoints, type FloorOverlayPoint } from './floor-overlay.js';
 
-export interface NpcOverlayPoint {
-  readonly id: string;
-  readonly x: number;
-  readonly y: number;
-}
+export type NpcOverlayPoint = FloorOverlayPoint;
 
 /** Every NPC marker on `floorId` (schema forbids two NPCs on the same base tile per floor). */
 export function computeNpcOverlayPoints(
   npcs: readonly NpcDocument[],
   floorId: string,
 ): readonly NpcOverlayPoint[] {
-  return npcs
-    .filter((npc) => npc.floor === floorId)
-    .map((npc) => ({ id: npc.id, x: npc.x, y: npc.y }));
+  return computeFloorOverlayPoints(npcs, floorId);
 }
