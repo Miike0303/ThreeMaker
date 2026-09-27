@@ -443,7 +443,7 @@ describe('convertRpgmMap', () => {
     });
   });
 
-  describe('Show Scrolling Text and switch/variable assignments', () => {
+  describe('Show Scrolling Text, assignments, and item changes', () => {
     function convertList(list: readonly RpgmEventCommand[]) {
       const doc = convertRpgmMap(
         buildSyntheticMap({
@@ -503,6 +503,54 @@ describe('convertRpgmMap', () => {
       expect(doc.events['rpgm-event-1']).toEqual([
         { type: 'setWorldVar', key: 'rpgm.switch.1', value: false },
       ]);
+    });
+
+    it('imports Change Items 126 increases as giveItem', () => {
+      const doc = convertList([{ code: 126, indent: 0, parameters: [7, 0, 0, 1] }, end]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'giveItem', itemId: 'rpgm.item.7', amount: 1 },
+      ]);
+    });
+
+    it('imports Change Items 126 decreases as negative giveItem amounts', () => {
+      const doc = convertList([{ code: 126, indent: 0, parameters: [7, 1, 0, 3] }, end]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'giveItem', itemId: 'rpgm.item.7', amount: -3 },
+      ]);
+    });
+
+    it('preserves Show Text before and after Change Items 126', () => {
+      const doc = convertList([
+        ...showTextPage(0, ['Before']).list,
+        { code: 126, indent: 0, parameters: [7, 0, 0, 1] },
+        ...showTextPage(0, ['After']).list,
+        end,
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'showDialogue', source: { kind: 'text', lines: ['Before'] } },
+        { type: 'giveItem', itemId: 'rpgm.item.7', amount: 1 },
+        { type: 'showDialogue', source: { kind: 'text', lines: ['After'] } },
+      ]);
+    });
+
+    it.each([
+      [7, 0, 1, 5],
+      [7, 0, 0, 0],
+      [7, 0, 0, -1],
+      [7, 0, 0, 1.5],
+      [0, 0, 0, 1],
+      [7.5, 0, 0, 1],
+      [7, 2, 0, 1],
+      [7, 0, 0],
+      [7, 0, 0, 1, 2],
+    ])('skips Change Items 126 with invalid parameters %j', (...parameters) => {
+      const doc = convertList([{ code: 126, indent: 0, parameters }, end]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
     });
 
     it('rejects variable 122 operationType 1 (add)', () => {

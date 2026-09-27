@@ -1,6 +1,6 @@
 /**
  * RPG Maker MV/MZ Show Text, Show Scrolling Text, Control Switches, Control
- * Variables, and Transfer Player events → map triggers.
+ * Variables, Change Items, and Transfer Player events → map triggers.
  *
  * For each non-null event, pages below the highest unconditional page are
  * unreachable. Every reachable page must have only supported switch
@@ -9,8 +9,8 @@
  * whose switch conditions hold supplies the commands. Lists may contain Show
  * Text (101 header, 401 lines), Show Scrolling Text (105 header, 405 lines),
  * Control Switches (121), Control Variables (122) that Set an integer
- * constant, Control Self Switch (123), an optional terminal direct-coordinate
- * Transfer Player (201),
+ * constant, Control Self Switch (123), Change Items (126) with a positive
+ * constant operand, an optional terminal direct-coordinate Transfer Player (201),
  * comments (108/408), and end-of-list terminators (0). Comments emit nothing.
  * A 105 with no 405 lines emits nothing. Switch and variable ids must be
  * integers ≥ 1, with start ≤ end and at most 100 ids. Any other variable
@@ -49,6 +49,12 @@ type SetWorldVarCommand = {
   readonly value: boolean | number;
 };
 
+type GiveItemCommand = {
+  readonly type: 'giveItem';
+  readonly itemId: string;
+  readonly amount: number;
+};
+
 type ConditionalCommand = {
   readonly type: 'conditional';
   readonly if: { readonly key: string; readonly op: 'eq'; readonly value: true };
@@ -60,6 +66,7 @@ type ImportedCommand =
   | ShowTextCommand
   | TransferMapCommand
   | SetWorldVarCommand
+  | GiveItemCommand
   | ConditionalCommand;
 
 type PendingDialogue = {
@@ -265,13 +272,15 @@ function showTextCommands(
       pending.lines.push(line);
       continue;
     }
-    if (entry.code === 121 || entry.code === 122 || entry.code === 123) {
+    if (entry.code === 121 || entry.code === 122 || entry.code === 123 || entry.code === 126) {
       const assigned =
         entry.code === 121
           ? controlSwitches(entry.parameters)
           : entry.code === 122
             ? controlVariables(entry.parameters)
-            : controlSelfSwitch(entry.parameters, mapId, eventId);
+            : entry.code === 123
+              ? controlSelfSwitch(entry.parameters, mapId, eventId)
+              : changeItems(entry.parameters);
       if (assigned === null) return null;
       pushPending(commands, pending);
       pending = null;
@@ -389,6 +398,23 @@ function controlVariables(parameters: unknown): readonly SetWorldVarCommand[] | 
     commands.push({ type: 'setWorldVar', key: `rpgm.variable.${id}`, value: constant });
   }
   return commands;
+}
+
+/** Change Items (126): constant increases and decreases become signed amounts. */
+function changeItems(parameters: unknown): readonly GiveItemCommand[] | null {
+  if (!Array.isArray(parameters) || parameters.length !== 4) return null;
+  const [itemId, operation, operandType, operand]: readonly unknown[] = parameters;
+  if (!isAssignmentId(itemId) || (operation !== 0 && operation !== 1) || operandType !== 0) {
+    return null;
+  }
+  if (typeof operand !== 'number' || !Number.isSafeInteger(operand) || operand < 1) return null;
+  return [
+    {
+      type: 'giveItem',
+      itemId: `rpgm.item.${itemId}`,
+      amount: operation === 0 ? operand : -operand,
+    },
+  ];
 }
 
 /** Integer ids ≥ 1, start ≤ end, at most {@link MAX_ASSIGNMENT_IDS} ids. */
