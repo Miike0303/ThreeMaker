@@ -34,6 +34,13 @@ describe('resolveTouchedTileIds', () => {
     );
     expect(ids.size).toBe(0);
   });
+
+  it('uses the cell row when resolving a painted tile', () => {
+    const layer = [5, 6, 7, 8, 9, 10];
+    const ids = resolveTouchedTileIds([{ x: 1, y: 1 }], layer, 3);
+
+    expect(ids).toEqual(new Set([9]));
+  });
 });
 
 describe('assignSemanticClass / getSemanticClass', () => {
@@ -60,6 +67,16 @@ describe('assignSemanticClass / getSemanticClass', () => {
     semantics = assignSemanticClass(semantics, new Set([1]), 'wall');
     semantics = assignSemanticClass(semantics, new Set([1]), 'window');
     expect(getSemanticClass(semantics, 1)).toBe('window');
+  });
+
+  it('assigns the painted tile without altering another tile override', () => {
+    const layer = [5, 6, 7, 8, 9, 10];
+    const semantics: SemanticOverrides = { '6': { class: 'wall' } };
+    const touched = resolveTouchedTileIds([{ x: 1, y: 1 }], layer, 3);
+    const next = assignSemanticClass(semantics, touched, 'door');
+
+    expect(getSemanticClass(next, 9)).toBe('door');
+    expect(getSemanticClass(next, 6)).toBe('wall');
   });
 
   it('assigns the ramp class to every touched tile id (spec: "Assign ramp class")', () => {

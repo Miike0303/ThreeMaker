@@ -126,4 +126,21 @@ describe('applyBindingOverrides / collectBindingOverrides', () => {
     expect(table.actionForKeyboardKey('F5')).toBe(Actions.SystemSave);
     expect(table.actionForKeyboardKey('F9')).toBe(Actions.SystemLoad);
   });
+
+  it('persists multiple aliases for one action while replacing all of its defaults', () => {
+    const loaded = bindingTableFromPersistedText(
+      serializeInputBindingsDocument([
+        { action: Actions.MoveUp, source: { device: 'keyboard', key: 'i' } },
+        { action: Actions.MoveUp, source: { device: 'keyboard', key: '8' } },
+      ]),
+    );
+    const collected = collectBindingOverrides(loaded);
+    const reloaded = bindingTableFromPersistedText(serializeInputBindingsDocument(collected));
+
+    expect(reloaded.actionForKeyboardKey('i')).toBe(Actions.MoveUp);
+    expect(reloaded.actionForKeyboardKey('8')).toBe(Actions.MoveUp);
+    expect(reloaded.actionForKeyboardKey('w')).toBeUndefined();
+    expect(reloaded.actionForKeyboardKey('ArrowUp')).toBeUndefined();
+    expect(reloaded.actionForKeyboardKey('F5')).toBe(Actions.SystemSave);
+  });
 });

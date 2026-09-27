@@ -92,6 +92,18 @@ describe('decryptRpgmv', () => {
     expect(Array.from(decrypted)).toEqual(Array.from(plain));
   });
 
+  it('decrypts an M4A fixture with ftyp at offset 4 back to its original bytes', () => {
+    const plain = concat(
+      new Uint8Array([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70, 0x4d, 0x34, 0x41, 0x20]),
+      new TextEncoder().encode('synthetic-m4a-tail'),
+    );
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+
+    const decrypted = decryptRpgmv(encrypted, KEY_BYTES);
+
+    expect(Array.from(decrypted)).toEqual(Array.from(plain));
+  });
+
   it('throws DecryptError(bad-header) when the fake header magic is wrong', () => {
     const bogus = concat(new TextEncoder().encode('NOTRPGMV........'), new Uint8Array(16));
 
