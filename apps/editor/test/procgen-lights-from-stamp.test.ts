@@ -158,4 +158,22 @@ describe('playerTorchLight / ensurePlayerTorch', () => {
     expect(next.map((l) => l.id)).toEqual(['npc-glow', 'stamp-light-1', 'player-torch']);
     expect(next.find((l) => l.id === 'player-torch')?.attach).toBe('player');
   });
+
+  it('replaces a placed light that already uses the player torch id', () => {
+    const existing: LightDocument[] = [
+      {
+        id: 'player-torch',
+        kind: 'point',
+        color: '#ffffff',
+        intensity: 1,
+        range: 2,
+        x: 1,
+        y: 1,
+        floor: 'floor-0',
+      },
+    ];
+    const next = ensurePlayerTorch(existing);
+    expect(next.filter((light) => light.id === 'player-torch')).toHaveLength(1);
+    expect(next.find((light) => light.id === 'player-torch')?.attach).toBe('player');
+  });
 });

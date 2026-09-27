@@ -239,6 +239,23 @@ describe('resolveDungeonTileIds', () => {
     expect(r.doorTileId).toBe(77);
   });
 
+  it('does not select the ground tile as furniture', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      midLayer: [1, 1, 200],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: {
+        '1': { class: 'furniture' },
+        '5': { class: 'wall' },
+        '200': { class: 'furniture' },
+      },
+    });
+    expect(r.furnitureTileId).toBe(200);
+  });
+
   it('furnitureTileOverride wins and skips collisions with ground/wall/door', () => {
     const r = resolveDungeonTileIds({
       fillTileId: 1,

@@ -20,6 +20,7 @@ describe('resolveToolShortcut', () => {
     expect(resolveToolShortcut('G')).toBe('flood-fill');
     expect(resolveToolShortcut('i')).toBe('eyedropper');
     expect(resolveToolShortcut('I')).toBe('eyedropper');
+    expect(resolveToolShortcut('L')).toBe('light');
   });
 
   it('returns undefined for a non-shortcut key', () => {

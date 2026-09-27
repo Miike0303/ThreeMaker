@@ -61,6 +61,11 @@ describe('findSpawnTile', () => {
     expect(findSpawnTile(grid, 0, 0)).toEqual({ x: 2, y: 2 });
   });
 
+  it('searches to the full map extent on long maps', () => {
+    const grid = fakeGrid(['########..', '########..']);
+    expect(findSpawnTile(grid, 0, 0)).toEqual({ x: 8, y: 0 });
+  });
+
   it('rounds a fractional origin to the nearest tile', () => {
     const grid = fakeGrid(['...', '...', '...']);
     expect(findSpawnTile(grid, 1.4, 0.6)).toEqual({ x: 1, y: 1 });

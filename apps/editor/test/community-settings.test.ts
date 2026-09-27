@@ -333,6 +333,14 @@ describe('community share offline queue', () => {
     });
   });
 
+  it('preserves mixed provenance when importing a queued job', () => {
+    const job = { ...sampleJob('mixed-job'), licenseTag: 'mixed' as const };
+    expect(parseCommunityShareQueueJson(JSON.stringify([job]))).toEqual({
+      ok: true,
+      jobs: [job],
+    });
+  });
+
   it('parseCommunityShareQueueJson accepts export and rejects bad input', () => {
     const jobs = [sampleJob('z'), sampleJob('y')];
     expect(parseCommunityShareQueueJson(serializeCommunityShareQueue(jobs))).toEqual({
