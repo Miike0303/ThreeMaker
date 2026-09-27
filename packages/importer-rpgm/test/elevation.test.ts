@@ -450,6 +450,17 @@ describe('profilesEqual', () => {
 });
 
 describe('surfaceHeightAt', () => {
+  it('clamps a sample beyond the east edge to the ramp endpoint', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2]),
+      rampGrid: new Uint8Array([3]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(surfaceHeightAt(ctx, 1.5, 0.5)).toBe(1);
+  });
+
   it('returns the constant integer height for a flat map regardless of fractional position', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([3]),

@@ -62,6 +62,12 @@ describe('parseMap', () => {
     expect(() => parseMap(makeMapJson(1, 1, () => 0))).not.toThrow();
   });
 
+  it('rejects a tile value above the safe integer limit', () => {
+    expect(() => parseMap(makeMapJson(1, 1, () => Number.MAX_SAFE_INTEGER + 1))).toThrow(
+      /non-negative safe integers/,
+    );
+  });
+
   it('throws on non-object input', () => {
     expect(() => parseMap(null)).toThrow();
     expect(() => parseMap('nope')).toThrow();
@@ -83,5 +89,9 @@ describe('parseMap', () => {
   it('defaults a missing scroll type to no scrolling', () => {
     const { scrollType: _scrollType, ...json } = makeMapJson(1, 1, () => 0);
     expect(parseMap(json).scrollType).toBe(0);
+  });
+
+  it('preserves a valid nonzero scroll type', () => {
+    expect(parseMap({ ...makeMapJson(1, 1, () => 0), scrollType: 2 }).scrollType).toBe(2);
   });
 });

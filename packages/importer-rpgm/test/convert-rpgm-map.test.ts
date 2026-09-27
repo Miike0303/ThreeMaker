@@ -180,6 +180,12 @@ describe('convertRpgmMap', () => {
     expect(doc.id).toBe('rpgm-map-42');
   });
 
+  it('uses an unknown-map id when the RPGM map has no numeric id', () => {
+    const doc = convertRpgmMap(buildSyntheticMap({ id: null }), buildSyntheticTileset());
+
+    expect(doc.id).toBe('rpgm-map-unknown');
+  });
+
   it('honors an explicit id override', () => {
     const map = buildSyntheticMap();
     const tileset = buildSyntheticTileset();

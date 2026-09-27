@@ -109,4 +109,13 @@ describe('documentFloorToRpgm', () => {
       { x: 0, y: 1 },
     ]);
   });
+
+  it('uses caller-provided ramp cells even when semantics derive none', () => {
+    const doc = rampStepDocument({});
+    const floor = doc.floors[0];
+    if (!floor) throw new Error('test setup: rampStepDocument always has floors[0]');
+    const rampCells = [{ x: 0, y: 1, rampDirection: 'north' as const }];
+
+    expect(documentFloorToRpgm(doc, floor, undefined, rampCells).rampCells).toEqual(rampCells);
+  });
 });

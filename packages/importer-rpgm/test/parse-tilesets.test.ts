@@ -67,6 +67,14 @@ describe('parseTilesets', () => {
     ).toThrow();
   });
 
+  it('rejects tilesetNames with an extra sheet slot', () => {
+    expect(() =>
+      parseTilesets([
+        { id: 1, name: 'x', flags: makeFlags(), tilesetNames: new Array(10).fill('') },
+      ]),
+    ).toThrow(/exactly 9 entries/);
+  });
+
   it('throws when flags contain a non-finite number', () => {
     const json = JSON.parse(
       '{"id":1,"name":"x","flags":[0,1e400],"tilesetNames":["","","","","","","","",""]}',

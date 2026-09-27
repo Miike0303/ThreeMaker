@@ -92,6 +92,29 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect(project.maps.get(1)?.editorName).toBe('Map001');
     expect(project.maps.get(1)?.displayName).toBe('');
   });
+
+  it('ignores a map filename with a trailing extension', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json.bak']);
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.size).toBe(0);
+  });
+
+  it('omits an empty editor name from a loaded map', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json']);
+    writeFileSync(
+      join(dataDir, 'MapInfos.json'),
+      JSON.stringify([null, { id: 1, name: '', parentId: 0, order: 1 }]),
+      'utf8',
+    );
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.get(1)?.editorName).toBeUndefined();
+  });
 });
 
 describe('loadProject — data folder layouts', () => {
