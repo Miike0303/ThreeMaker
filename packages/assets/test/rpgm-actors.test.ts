@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -101,6 +101,19 @@ describe('readLeadActorSheet', () => {
 
   it('returns undefined when Actors.json is malformed', () => {
     writeFileSync(join(gameDir, 'Actors.json'), 'not valid json', 'utf8');
+
+    expect(readLeadActorSheet(gameDir)).toBeUndefined();
+  });
+
+  it('does not hide a malformed first Actors.json behind a later valid candidate', () => {
+    writeFileSync(join(gameDir, 'Actors.json'), 'not valid json', 'utf8');
+    const dataDir = join(gameDir, 'data');
+    mkdirSync(dataDir);
+    writeFileSync(
+      join(dataDir, 'Actors.json'),
+      JSON.stringify([null, { characterName: 'Actor1', characterIndex: 0 }]),
+      'utf8',
+    );
 
     expect(readLeadActorSheet(gameDir)).toBeUndefined();
   });

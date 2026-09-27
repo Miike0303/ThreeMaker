@@ -69,6 +69,19 @@ describe('readRpgmSystemStart', () => {
     expect(readRpgmSystemStart(gameDir)).toBeUndefined();
   });
 
+  it('does not hide a malformed first System.json behind a later valid candidate', () => {
+    writeFileSync(join(gameDir, 'System.json'), 'not valid json', 'utf8');
+    const dataDir = join(gameDir, 'data');
+    mkdirSync(dataDir);
+    writeFileSync(
+      join(dataDir, 'System.json'),
+      JSON.stringify({ startMapId: 9, startX: 2, startY: 3 }),
+      'utf8',
+    );
+
+    expect(readRpgmSystemStart(gameDir)).toBeUndefined();
+  });
+
   it('returns undefined when the required fields are missing/wrong type', () => {
     writeFileSync(join(gameDir, 'System.json'), JSON.stringify({ startMapId: 3 }), 'utf8');
 

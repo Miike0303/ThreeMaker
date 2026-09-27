@@ -183,6 +183,26 @@ describe('scanGames — asset extensions are matched case-insensitively', () => 
     expect(result.games[0]?.audioAssets).toContain('bgm/Theme.m4a_');
   });
 
+  it('includes plain M4A audio assets', () => {
+    const gameDir = join(workDir, 'plain-m4a');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    const audioDir = join(gameDir, 'audio', 'bgm');
+    mkdirSync(audioDir, { recursive: true });
+    writeFileSync(join(audioDir, 'Theme.m4a'), 'fake-plain-m4a');
+
+    expect(scanGames(workDir).games[0]?.audioAssets).toContain('bgm/Theme.m4a');
+  });
+
+  it('includes encrypted RPG Maker MV audio assets', () => {
+    const gameDir = join(workDir, 'encrypted-rpgmvo');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    const audioDir = join(gameDir, 'audio', 'bgm');
+    mkdirSync(audioDir, { recursive: true });
+    writeFileSync(join(audioDir, 'Theme.rpgmvo'), 'fake-encrypted-audio');
+
+    expect(scanGames(workDir).games[0]?.audioAssets).toContain('bgm/Theme.rpgmvo');
+  });
+
   it('includes image assets with uppercase extensions', () => {
     const gameDir = join(workDir, 'uppercase-image-extension');
     writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
@@ -319,6 +339,29 @@ describe('scanGames — game title normalization', () => {
     const result = scanGames(workDir);
 
     expect(result.games[0]?.systemTitle).toBe('My Game');
+  });
+
+  it('uses no displayed title when gameTitle contains only whitespace', () => {
+    const gameDir = join(workDir, 'blank-title');
+    writeSystemJson(join(gameDir, 'data'), { gameTitle: '   ' });
+
+    expect(scanGames(workDir).games[0]?.systemTitle).toBeNull();
+  });
+});
+
+describe('scanGames — asset ordering', () => {
+  it('returns assets in ascending relative-path order', () => {
+    const gameDir = join(workDir, 'ordered-assets');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    const imageDir = join(gameDir, 'img', 'characters');
+    mkdirSync(imageDir, { recursive: true });
+    writeFileSync(join(imageDir, 'Zed.png'), 'z');
+    writeFileSync(join(imageDir, 'Alpha.png'), 'a');
+
+    expect(scanGames(workDir).games[0]?.imageAssets).toEqual([
+      'characters/Alpha.png',
+      'characters/Zed.png',
+    ]);
   });
 });
 
