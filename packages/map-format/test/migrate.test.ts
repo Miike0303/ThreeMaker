@@ -129,6 +129,12 @@ describe('parseMapDocument', () => {
     }
   });
 
+  it('rejects a fractional format version as malformed', () => {
+    expect(() =>
+      parseMapDocument(makeValidDocInput({ version: CURRENT_MAP_FORMAT_VERSION + 0.5 })),
+    ).toThrow('"version" must be an integer.');
+  });
+
   it('rejects an older version with no registered migration', () => {
     clearMigrations();
     expect(() => parseMapDocument(makeValidDocInput({ version: 0 }))).toThrow(MapFormatError);

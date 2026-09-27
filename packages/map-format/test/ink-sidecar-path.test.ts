@@ -20,6 +20,10 @@ describe('isSafeStoryId / inkSidecarRelativePath', () => {
     expect(isSafeStoryId('has space')).toBe(false);
   });
 
+  it('accepts 9 at the upper edge of the story-id digit range', () => {
+    expect(isSafeStoryId('chapter9')).toBe(true);
+  });
+
   it('derives <mapBase>.<storyId>.ink beside a .tmmap.json map', () => {
     expect(MAP_DOCUMENT_FILE_SUFFIX).toBe('.tmmap.json');
     expect(inkSidecarRelativePath('.threemaker/maps/current.tmmap.json', 'elder')).toBe(

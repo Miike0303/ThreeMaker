@@ -75,4 +75,18 @@ describe('computeRoomIdGrid', () => {
     // both, and room-2 (ordinal 2, later in document order) wins.
     expect(Array.from(grid)).toEqual([1, 2]);
   });
+
+  it('clips room rows against map height on a tall map', () => {
+    const rooms: readonly RoomDocument[] = [
+      { id: 'lower-room', floor: 'floor-0', rects: [{ x: 0, y: 2, width: 1, height: 1 }] },
+    ];
+    expect(Array.from(computeRoomIdGrid(rooms, 'floor-0', 2, 4))).toEqual([0, 0, 0, 0, 1, 0, 0, 0]);
+  });
+
+  it('uses map width as the row stride on a rectangular map', () => {
+    const rooms: readonly RoomDocument[] = [
+      { id: 'lower-room', floor: 'floor-0', rects: [{ x: 1, y: 1, width: 1, height: 1 }] },
+    ];
+    expect(Array.from(computeRoomIdGrid(rooms, 'floor-0', 3, 2))).toEqual([0, 0, 0, 0, 1, 0]);
+  });
 });

@@ -90,6 +90,12 @@ describe('deriveRampCells', () => {
     expect(deriveRampCells(layers, semantics, width, height)).toEqual([]);
   });
 
+  it('ignores empty tile id zero even if semantics mark it as a ramp', () => {
+    const layers = [[0], EMPTY_LAYER(1), EMPTY_LAYER(1), EMPTY_LAYER(1)] as const;
+    const semantics: SemanticOverrides = { '0': { class: 'ramp' } };
+    expect(deriveRampCells(layers, semantics, 1, 1)).toEqual([]);
+  });
+
   it('emits a position-keyed cell with no direction when the tile carries no override', () => {
     const width = 1;
     const height = 2;

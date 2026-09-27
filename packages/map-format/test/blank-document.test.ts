@@ -37,6 +37,10 @@ describe('createBlankMapDocument', () => {
     expect(new Set(layerArrays).size).toBe(layerArrays.length);
   });
 
+  it('uses the standard 48-pixel tile size for a new map', () => {
+    expect(createBlankMapDocument(BLANK_OPTIONS).tileset.tilePixelSize).toBe(48);
+  });
+
   it('round-trips through parseMapDocument', () => {
     const doc = createBlankMapDocument(BLANK_OPTIONS);
     const parsed = parseMapDocument(JSON.parse(serializeMapDocument(doc)));
