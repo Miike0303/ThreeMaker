@@ -55,4 +55,15 @@ describe('withNoclip', () => {
 
     expect(wrapped(1, 2, 'right')).toBe(false);
   });
+
+  it('uses the upward destination when escaping an unstandable tile', () => {
+    const grid = { isStandable: (x: number, y: number) => x === 4 && y === 3 };
+    const wrapped = withNoclip(
+      () => false,
+      grid,
+      () => false,
+    );
+
+    expect(wrapped(4, 4, 'up')).toBe(true);
+  });
 });

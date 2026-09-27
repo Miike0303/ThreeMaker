@@ -172,6 +172,17 @@ describe('debug panel collapsed-state persistence', () => {
     const storage = createFakeStorage({ [DEBUG_PANEL_COLLAPSED_STORAGE_KEY]: 'garbage' });
     expect(readDebugPanelCollapsed(storage)).toBe(false);
   });
+
+  it('starts expanded when reading collapsed state throws', () => {
+    expect(
+      readDebugPanelCollapsed({
+        getItem: () => {
+          throw new Error('Storage disabled');
+        },
+        setItem: () => {},
+      }),
+    ).toBe(false);
+  });
 });
 
 type FakeNode = {

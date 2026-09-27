@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { fixtureCharacterUrl, fixtureImageUrl, fixtureJsonUrl } from '../src/fixture-paths.js';
+import {
+  fixtureCharacterUrl,
+  fixtureImageUrl,
+  fixtureJsonUrl,
+  mzFixtureJsonUrl,
+} from '../src/fixture-paths.js';
 
 const FIXTURES_DIR = 'C:/Projects/ThreeMaker/fixtures/roseliam';
 
@@ -7,6 +12,14 @@ describe('fixtureJsonUrl', () => {
   it('builds a Vite /@fs/ absolute-path URL for a fixture JSON file', () => {
     expect(fixtureJsonUrl(FIXTURES_DIR, 'Map007.json')).toBe(
       '/@fs/C:/Projects/ThreeMaker/fixtures/roseliam/Map007.json',
+    );
+  });
+});
+
+describe('mzFixtureJsonUrl', () => {
+  it('loads an MZ project map from its data directory', () => {
+    expect(mzFixtureJsonUrl(FIXTURES_DIR, 'Map007.json')).toBe(
+      '/@fs/C:/Projects/ThreeMaker/fixtures/roseliam/data/Map007.json',
     );
   });
 });

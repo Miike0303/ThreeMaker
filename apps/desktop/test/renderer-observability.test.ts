@@ -36,6 +36,10 @@ describe('smoothFrameTimeMs', () => {
     // 16 + 0.1 * (20 - 16) = 16.4
     expect(next).toBeCloseTo(16.4);
   });
+
+  it('seeds from the raw delta when the previous frame estimate is negative', () => {
+    expect(smoothFrameTimeMs(-5, 120, 100)).toBe(20);
+  });
 });
 
 describe('shouldForceWebGL', () => {

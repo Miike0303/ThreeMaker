@@ -18,4 +18,8 @@ describe('pointerTargetFromDialogueHit', () => {
     expect(pointerTargetFromDialogueHit('nope')).toEqual({ kind: 'actionable' });
     expect(pointerTargetFromDialogueHit('-1')).toEqual({ kind: 'actionable' });
   });
+
+  it('does not treat a fractional choice index as a choice row', () => {
+    expect(pointerTargetFromDialogueHit('1.5')).toEqual({ kind: 'actionable' });
+  });
 });

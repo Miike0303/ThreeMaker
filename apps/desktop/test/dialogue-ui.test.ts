@@ -59,6 +59,10 @@ describe('resolveDialogueKeyAction', () => {
     expect(resolveDialogueKeyAction('q', true)).toBeUndefined();
     expect(resolveDialogueKeyAction('0', true)).toBeUndefined();
   });
+
+  it('ignores multi-character digit strings when choices are pending', () => {
+    expect(resolveDialogueKeyAction('01', true)).toBeUndefined();
+  });
 });
 
 describe('nextHighlightedIndex', () => {
