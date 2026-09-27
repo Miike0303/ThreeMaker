@@ -14,8 +14,3 @@ export function defaultBindingTable(): BindingTable {
   }
   return cached;
 }
-
-/** Test helper: drop the cached default so isolation tests can rebuild it. */
-export function resetDefaultBindingTableForTests(): void {
-  cached = undefined;
-}

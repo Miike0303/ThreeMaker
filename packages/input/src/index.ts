@@ -14,7 +14,7 @@ export {
   parseInputBindingsDocument,
   serializeInputBindingsDocument,
 } from './bindings-document.js';
-export { defaultBindingTable, resetDefaultBindingTableForTests } from './default-table.js';
+export { defaultBindingTable } from './default-table.js';
 export { defaultKeyboardBindings } from './defaults.js';
 export type {
   GamepadLike,

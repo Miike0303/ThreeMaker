@@ -1,16 +1,8 @@
-import {
-  createBindingTable,
-  defaultKeyboardBindings,
-  resetDefaultBindingTableForTests,
-} from '@threemaker/input';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { createBindingTable, defaultKeyboardBindings } from '@threemaker/input';
+import { describe, expect, it } from 'vitest';
 import { resolveViewKeyAction } from '../src/view-input.js';
 
 describe('resolveViewKeyAction', () => {
-  beforeEach(() => {
-    resetDefaultBindingTableForTests();
-  });
-
   it('maps view keys on keydown', () => {
     expect(resolveViewKeyAction('p', 'down')).toEqual({ kind: 'toggle-post-processing' });
     expect(resolveViewKeyAction('C', 'down')).toEqual({ kind: 'cycle-camera-mode' });
