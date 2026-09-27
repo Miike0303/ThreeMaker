@@ -59,12 +59,20 @@ export async function loadProject(dir: string): Promise<RpgmProject> {
 
   const entries = await readdir(dataDir);
   const maps = new Map<number, RpgmMap>();
+  const mapFileById = new Map<number, string>();
   for (const entry of entries) {
     const match = MAP_FILE_PATTERN.exec(entry);
     if (!match?.[1]) continue;
     const id = Number(match[1]);
+    const previousFile = mapFileById.get(id);
+    if (maps.has(id) && previousFile !== undefined) {
+      throw new Error(
+        `Duplicate RPG Maker map id ${id}: "${previousFile}" and "${entry}" both resolve to it.`,
+      );
+    }
     const mapJson = await readJson(join(dataDir, entry));
     maps.set(id, parseMap(mapJson, id));
+    mapFileById.set(id, entry);
   }
 
   return { mapInfos, tilesets, maps };

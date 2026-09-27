@@ -41,6 +41,39 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect(project.tilesets).toHaveLength(1);
     expect(project.tilesets[0]?.name).toBe('Outside');
   });
+
+  function writeProjectFiles(dataDir: string, mapNames: readonly string[]): void {
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(join(dataDir, 'MapInfos.json'), JSON.stringify(MAP_INFOS_JSON), 'utf8');
+    writeFileSync(join(dataDir, 'Tilesets.json'), JSON.stringify(TILESETS_JSON), 'utf8');
+    const mapJson = JSON.stringify({
+      width: 1,
+      height: 1,
+      tilesetId: 1,
+      data: new Array(6).fill(0),
+    });
+    for (const mapName of mapNames) {
+      writeFileSync(join(dataDir, mapName), mapJson, 'utf8');
+    }
+  }
+
+  it('rejects two map files that resolve to the same numeric id', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map1.json']);
+
+    await expect(loadProject(workDir)).rejects.toThrow(/Duplicate RPG Maker map id 1/);
+    await expect(loadProject(workDir)).rejects.toThrow(/Map001\.json/);
+    await expect(loadProject(workDir)).rejects.toThrow(/Map1\.json/);
+  });
+
+  it('loads Map001.json and Map002.json as distinct maps', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map002.json']);
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.size).toBe(2);
+  });
 });
 
 describe('loadProject — data folder layouts', () => {
