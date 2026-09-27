@@ -3,7 +3,13 @@
  * Pure data + resolver — no I/O.
  */
 
-import type { StampRoomLightOptions } from './lights-from-stamp.js';
+import {
+  DEFAULT_STAMP_LIGHT_COLOR,
+  DEFAULT_STAMP_LIGHT_HEIGHT,
+  DEFAULT_STAMP_LIGHT_INTENSITY,
+  DEFAULT_STAMP_LIGHT_RANGE,
+  type StampRoomLightOptions,
+} from './lights-from-stamp.js';
 
 export type ProcgenPresetId = 'dungeon' | 'house' | 'cave';
 
@@ -39,8 +45,13 @@ export const PROCGEN_PRESETS: readonly ProcgenPreset[] = [
     maxRoomSize: 8,
     corridorWidth: 1,
     tightBorder: false,
-    // Warm torch amber.
-    roomLight: { color: '#ffaa00', intensity: 1.2, range: 5, height: 2 },
+    // The stamp defaults (warm torch amber), so the dungeon preset cannot drift from them.
+    roomLight: {
+      color: DEFAULT_STAMP_LIGHT_COLOR,
+      intensity: DEFAULT_STAMP_LIGHT_INTENSITY,
+      range: DEFAULT_STAMP_LIGHT_RANGE,
+      height: DEFAULT_STAMP_LIGHT_HEIGHT,
+    },
   },
   {
     id: 'house',
