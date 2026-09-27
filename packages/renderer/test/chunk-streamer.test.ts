@@ -60,6 +60,18 @@ describe('ChunkStreamer', () => {
     expect(diff.toBuild.sort()).toEqual(['0,30', '0,31', '1,30', '1,31']);
   });
 
+  it('keeps a fractional focus inside its current chunk until the boundary is crossed', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 32,
+      mapHeight: 16,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(15.5, 0).toBuild).toEqual(['0,0']);
+  });
+
   it('returns an empty diff while the focus stays inside the same chunk', () => {
     const streamer = new ChunkStreamer({ ...GIANT, buildRadius: 2 });
     streamer.update(256, 256);

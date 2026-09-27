@@ -67,4 +67,36 @@ describe('generateSyntheticMap', () => {
     expect(() => generateSyntheticMap({ width: 0, height: 10 })).toThrow(/width/);
     expect(() => generateSyntheticMap({ width: 10, height: -1 })).toThrow(/height/);
   });
+
+  it('rejects a fractional map width before allocating tile layers', () => {
+    expect(() => generateSyntheticMap({ width: 2.5, height: 4 })).toThrow(/width/);
+  });
+
+  it('honors a zero clear radius outside the spawn row', () => {
+    const map = generateSyntheticMap({ width: 9, height: 9, wallDensity: 1, clearRadius: 0 });
+
+    expect(map.layers.tileLayers[0][3 * 9 + 4]).toBe(ROSELIAM_DUNGEON_WALL_TILE_ID);
+    expect(map.layers.tileLayers[0][4 * 9 + 4]).toBe(ROSELIAM_DUNGEON_GROUND_TILE_ID);
+  });
+
+  it('paints the west half of ground immediately east of a wall', () => {
+    const map = generateSyntheticMap({
+      width: 16,
+      height: 16,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+    const ground = map.layers.tileLayers[0];
+    const eastOfWall = ground.findIndex(
+      (tileId, index) =>
+        index % map.width > 0 &&
+        tileId === ROSELIAM_DUNGEON_GROUND_TILE_ID &&
+        ground[index - 1] === ROSELIAM_DUNGEON_WALL_TILE_ID,
+    );
+
+    expect(eastOfWall).toBeGreaterThanOrEqual(0);
+    expect(map.layers.shadows[eastOfWall]).toBe(5);
+  });
 });
