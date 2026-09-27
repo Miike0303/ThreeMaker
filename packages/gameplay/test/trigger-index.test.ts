@@ -108,6 +108,15 @@ describe('TriggerIndex — floor scoping', () => {
 });
 
 describe('TriggerIndex — on-interact', () => {
+  it('interacts with the tile to the right, not the tile behind the player', () => {
+    const index = new TriggerIndex([
+      trigger({ id: 'right', on: 'interact', x: 4, y: 4, event: 'right-event' }),
+      trigger({ id: 'left', on: 'interact', x: 2, y: 4, event: 'left-event' }),
+    ]);
+
+    expect(index.interact(0, 3, 4, 'right')).toEqual(['right-event']);
+  });
+
   it('fires when the player is adjacent to and facing the trigger tile', () => {
     const index = new TriggerIndex([trigger({ on: 'interact', event: 'talk', x: 3, y: 4 })]);
 

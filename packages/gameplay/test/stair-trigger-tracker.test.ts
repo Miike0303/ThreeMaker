@@ -74,6 +74,12 @@ describe('StairTriggerTracker — shouldTrigger (landing, reversed/bidirectional
 
     expect(tracker.shouldTrigger({ floor: 1, x: 4, y: 2 }, [oneWay])).toBeUndefined();
   });
+
+  it('does not reverse a link at landing coordinates on another floor', () => {
+    const tracker = new StairTriggerTracker({ floor: 0, x: 0, y: 0 });
+
+    expect(tracker.shouldTrigger({ floor: 0, x: 4, y: 2 }, [LINK])).toBeUndefined();
+  });
 });
 
 describe('StairTriggerTracker — mark (completion-frame arrival, no re-trigger)', () => {
