@@ -6,7 +6,7 @@ import {
   heightForRegion,
 } from '@threemaker/importer-rpgm';
 import { computeCliffEdges, isObjectSheet, rampDataAt } from './elevation.js';
-import { computeTileUv } from './tile-uv.js';
+import { computeTileUv, type TileUv } from './tile-uv.js';
 import type {
   ChunkBuildData,
   ShadowBuildData,
@@ -231,6 +231,9 @@ export function buildChunks(
   );
 
   const chunkTiles = new Map<string, TileBuildData[]>();
+  // Sheet sizes and tile pixel size are fixed for this call, so UV depends
+  // only on tile id. Kept local: a later call can pass different sheet sizes.
+  const tileUvCache = new Map<number, TileUv | null>();
 
   const layers = map.layers.tileLayers;
   for (let layerIndex = 0; layerIndex < layers.length; layerIndex++) {
@@ -243,7 +246,10 @@ export function buildChunks(
           const tileId = layer[y * map.width + x] ?? 0;
           if (tileId === 0) continue;
 
-          const tileUv = computeTileUv(tileId, sheetPixelSizes, tilePixelSize);
+          if (!tileUvCache.has(tileId)) {
+            tileUvCache.set(tileId, computeTileUv(tileId, sheetPixelSizes, tilePixelSize));
+          }
+          const tileUv = tileUvCache.get(tileId);
           if (!tileUv) continue;
 
           const flags = decodeTileFlags(tileset.flags[tileId] ?? 0);

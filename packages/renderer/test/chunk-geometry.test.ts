@@ -781,3 +781,53 @@ describe('buildChunks onlyChunks (property: onlyChunks output === full output fi
     );
   });
 });
+
+describe('buildChunks tile UV cache', () => {
+  const AUTOTILE_ID = 2048; // A1 autotile; computeTileUv returns 4 quarter rects
+
+  function filledAutotileMap(width: number, height: number): RpgmMap {
+    const size = width * height;
+    const layer0 = new Array<number>(size).fill(AUTOTILE_ID);
+    return makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [
+          layer0,
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+        ],
+        shadows: new Array(size).fill(0),
+        regions: new Array(size).fill(0),
+      },
+    });
+  }
+
+  it('shares one quads array across every cell of the same autotile id', () => {
+    const width = 16;
+    const height = 16;
+    const chunks = buildChunks(filledAutotileMap(width, height), makeTileset(), {
+      A1: { width: 768, height: 768 },
+    });
+    const tiles = chunks.flatMap((chunk) => chunk.tiles);
+
+    expect(tiles).toHaveLength(width * height);
+    expect(tiles[0]?.quads).toHaveLength(4);
+    expect(new Set(tiles.map((tile) => tile.quads)).size).toBe(1);
+  });
+
+  it('computes fresh UV values when a later call passes different sheet pixel sizes', () => {
+    const map = filledAutotileMap(1, 1);
+    const tileset = makeTileset();
+    const narrow = buildChunks(map, tileset, { A1: { width: 768, height: 768 } });
+    const wide = buildChunks(map, tileset, { A1: { width: 1536, height: 1536 } });
+    const narrowUv = narrow[0]?.tiles[0]?.quads[0];
+    const wideUv = wide[0]?.tiles[0]?.quads[0];
+
+    expect(narrowUv).toBeDefined();
+    expect(wideUv).toBeDefined();
+    expect(wideUv?.u0).toBeLessThan(narrowUv?.u0 ?? 0);
+    expect(wideUv?.v0).toBeGreaterThan(narrowUv?.v0 ?? 1);
+  });
+});
