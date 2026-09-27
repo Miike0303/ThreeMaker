@@ -106,6 +106,15 @@ describe('createAudioCommandPlugins', () => {
     ]);
   });
 
+  it('forwards playBgm fadeMs to a handler', () => {
+    const playBgm = vi.fn();
+    const registry = registryFor({ playBgm });
+    registry
+      .get('playBgm')
+      ?.run({ type: 'playBgm', path: 'bgm/town.ogg', fadeMs: 800 }, {} as never);
+    expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { fadeMs: 800 });
+  });
+
   it('rejects a non-boolean loop', () => {
     const registry = registryFor();
     expect(() =>

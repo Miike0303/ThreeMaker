@@ -115,4 +115,24 @@ describe('GameLoop (fixed timestep)', () => {
     expect(steps).toBe(1);
     expect(onTick).toHaveBeenCalledTimes(2);
   });
+
+  it('resets the accumulator when restarted', () => {
+    const clock = new FakeClock();
+    const onTick = vi.fn();
+    const fixedStep = 1;
+    const loop = new GameLoop({ clock, onTick, fixedStep, maxDelta: 1 });
+    loop.start();
+
+    clock.advance(0.75 * fixedStep);
+    expect(loop.tick()).toBe(0);
+    expect(onTick).not.toHaveBeenCalled();
+
+    loop.stop();
+    loop.start();
+    clock.advance(0.5 * fixedStep);
+    const steps = loop.tick();
+
+    expect(steps).toBe(0);
+    expect(onTick).not.toHaveBeenCalled();
+  });
 });
