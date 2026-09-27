@@ -43,9 +43,6 @@ const LAYOUT_LINE =
 
 /** `-> target` divert (arrow form). */
 const ARROW_DIVERT = /->\s*([A-Za-z_][\w.]*)/g;
-
-/** `[[label|target]]` choice divert. */
-const BRACKET_DIVERT = /\[\[[^\]]*\|([A-Za-z_][\w.]*)\]\]/g;
 /**
  * Lists knot and stitch names from ink source in first-seen order.
  * Does not compile — works on incomplete drafts so the graph can still open.
@@ -152,20 +149,18 @@ export function listInkEdges(source: string): readonly InkEdge[] {
     }
     if (current === null) continue;
 
-    for (const re of [ARROW_DIVERT, BRACKET_DIVERT]) {
-      re.lastIndex = 0;
-      let match = re.exec(line);
-      while (match) {
-        const to = match[1];
-        if (to) {
-          const key = `${current}\0${to}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            edges.push({ from: current, to });
-          }
+    ARROW_DIVERT.lastIndex = 0;
+    let match = ARROW_DIVERT.exec(line);
+    while (match) {
+      const to = match[1];
+      if (to) {
+        const key = `${current}\0${to}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          edges.push({ from: current, to });
         }
-        match = re.exec(line);
       }
+      match = ARROW_DIVERT.exec(line);
     }
   }
   return edges;

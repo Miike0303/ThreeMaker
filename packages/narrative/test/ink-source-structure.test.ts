@@ -101,7 +101,7 @@ B
 });
 
 describe('listInkEdges (lossy visual hops)', () => {
-  it('collects -> target and [[label|target]] diverts under the current knot', () => {
+  it('collects -> target diverts under the current knot', () => {
     const source = `
 === start ===
 Hello
@@ -121,9 +121,15 @@ Hi
     expect(listInkEdges(source)).toEqual([
       { from: 'start', to: 'mid' },
       { from: 'start', to: 'other' },
-      { from: 'start', to: 'chat' },
       { from: 'mid', to: 'END' },
     ]);
+  });
+
+  it('does not treat [[label|target]] as a divert (not valid ink)', () => {
+    const source = `=== start ===
+[[Talk|chat]]
+`;
+    expect(listInkEdges(source)).toEqual([]);
   });
 
   it('dedupes identical from→to pairs and ignores diverts before any knot header', () => {
