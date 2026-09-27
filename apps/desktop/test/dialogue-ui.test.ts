@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  createDialogueOverlay,
   formatDialogueHint,
   formatSpeakerLabel,
   nextHighlightedIndex,
@@ -100,5 +101,76 @@ describe('formatDialogueHint', () => {
   it('returns the choice hint when choices are pending', () => {
     const i18n = createI18n(LOCALES, 'en');
     expect(formatDialogueHint(true, i18n.t)).toBe('1-9 or arrows + Enter to choose');
+  });
+});
+
+type FakeElement = {
+  className: string;
+  textContent: string;
+  style: { display: string };
+  dataset: Record<string, string>;
+  children: FakeElement[];
+  classList: {
+    add(name: string): void;
+    remove(name: string): void;
+    toggle(name: string, on?: boolean): void;
+  };
+  append(...nodes: FakeElement[]): void;
+  replaceChildren(...nodes: FakeElement[]): void;
+};
+
+function fakeElement(): FakeElement {
+  const classes = new Set<string>();
+  const element: FakeElement = {
+    className: '',
+    textContent: '',
+    style: { display: '' },
+    dataset: {},
+    children: [],
+    classList: {
+      add: (name) => classes.add(name),
+      remove: (name) => classes.delete(name),
+      toggle: (name, on) => ((on ?? !classes.has(name)) ? classes.add(name) : classes.delete(name)),
+    },
+    append: (...nodes) => element.children.push(...nodes),
+    replaceChildren: (...nodes) => {
+      element.children = nodes;
+    },
+  };
+  return element;
+}
+
+describe('createDialogueOverlay', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function overlayParts() {
+    vi.stubGlobal('document', { createElement: () => fakeElement() });
+    const overlay = createDialogueOverlay(createI18n(LOCALES, 'en').t);
+    const [speaker, text, choices] = (overlay.element as unknown as FakeElement).children;
+    return { overlay, speaker, text, choices };
+  }
+
+  it('does not carry the previous speaker and line into a conversation that opens with choices', () => {
+    const { overlay, speaker, text, choices } = overlayParts();
+
+    overlay.showLine('Alice', 'Old conversation');
+    overlay.hide();
+    overlay.showChoices(['New option'], 0);
+
+    expect(speaker?.textContent).toBe('');
+    expect(text?.textContent).toBe('');
+    expect(choices?.children).toHaveLength(1);
+  });
+
+  it('keeps the current prompt above choices within one conversation', () => {
+    const { overlay, speaker, text } = overlayParts();
+
+    overlay.showLine('Alice', 'Pick one');
+    overlay.showChoices(['Yes', 'No'], 0);
+
+    expect(speaker?.textContent).toBe('Alice');
+    expect(text?.textContent).toBe('Pick one');
   });
 });

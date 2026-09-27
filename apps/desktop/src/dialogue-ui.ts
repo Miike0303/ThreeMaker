@@ -163,6 +163,12 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
     },
     hide() {
       overlay.style.display = 'none';
+      // A conversation that opens with choices never calls showLine, so leftover
+      // speaker/text here would reappear above the next conversation's options.
+      overlay.classList.remove('dialogue-overlay-error');
+      speakerEl.textContent = '';
+      textEl.textContent = '';
+      choicesEl.replaceChildren();
     },
   };
 }
