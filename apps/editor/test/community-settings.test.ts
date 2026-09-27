@@ -43,6 +43,19 @@ const sampleJob = (id: string, at = '2026-08-08T00:00:00.000Z'): CommunityShareE
 });
 
 describe('community-settings', () => {
+  it('truncates a fractional map version in a queued share payload', () => {
+    expect(
+      maybeEnqueueCommunityShare(DEFAULT_COMMUNITY_SETTINGS, {
+        mapId: 'map-1',
+        mapName: 'Map',
+        tileObjectShas: [],
+        usesOnlyImportedAssets: false,
+        version: 2.9,
+        now: () => '2026-08-08T00:00:00.000Z',
+      })?.version,
+    ).toBe(2);
+  });
+
   it('defaults to share-on-save true and imported assets false', () => {
     expect(DEFAULT_COMMUNITY_SETTINGS).toEqual({
       shareOnSave: true,
@@ -143,6 +156,10 @@ describe('communityShareTileCount (WU-COMM-10)', () => {
 });
 
 describe('formatCommunityShareMapId (WU-COMM-11)', () => {
+  it('truncates a fractional prefix limit instead of rounding it', () => {
+    expect(formatCommunityShareMapId('0123456789', 2.9)).toBe('01');
+  });
+
   it('returns short ids unchanged and trims whitespace', () => {
     expect(formatCommunityShareMapId('abc')).toBe('abc');
     expect(formatCommunityShareMapId('  map-1  ')).toBe('map-1');

@@ -125,6 +125,10 @@ describe('computePaletteCells - autotile sheets (A1-A4)', () => {
 });
 
 describe('computeAutotileKindCount', () => {
+  it('counts both alternating A4 kind rows at their average height', () => {
+    expect(computeAutotileKindCount('A4', { width: 768, height: 240 })).toBe(16);
+  });
+
   it('grows with real image height for A2 (3 tiles per kind-row)', () => {
     expect(computeAutotileKindCount('A2', { width: 768, height: 144 })).toBe(8); // 1 row
     expect(computeAutotileKindCount('A2', { width: 768, height: 288 })).toBe(16); // 2 rows

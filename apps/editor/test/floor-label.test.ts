@@ -18,6 +18,10 @@ function tFor(code: string) {
 }
 
 describe('resolveFloorLabel + spawn summary', () => {
+  it('preserves an explicitly blank floor label', () => {
+    expect(resolveFloorLabel([{ id: 'floor-0', label: '' }], 'floor-0', tFor('en'))).toBe('');
+  });
+
   it('does not re-prefix a default English floor label in the spawn row', () => {
     const t = tFor('en');
     const label = resolveFloorLabel(unlabeled, 'floor-0', t);

@@ -39,6 +39,15 @@ describe('clampTileIndex', () => {
 });
 
 describe('clampRoomRect', () => {
+  it('keeps a room on a one-tile map', () => {
+    expect(clampRoomRect({ x: 0, y: 0, width: 1, height: 1 }, 1, 1)).toEqual({
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+    });
+  });
+
   it('keeps in-bounds rects unchanged', () => {
     expect(clampRoomRect({ x: 1, y: 1, width: 2, height: 2 }, 4, 4)).toEqual({
       x: 1,

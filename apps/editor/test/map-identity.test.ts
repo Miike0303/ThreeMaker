@@ -27,6 +27,10 @@ import {
 } from '../src/map-identity.js';
 
 describe('validateMapName', () => {
+  it('accepts a map name at the exact length limit', () => {
+    expect(validateMapName('x'.repeat(MAP_NAME_MAX_LENGTH))).toBeNull();
+  });
+
   it('accepts ordinary stems including spaces and the legacy current name', () => {
     expect(validateMapName('current')).toBeNull();
     expect(validateMapName('town')).toBeNull();

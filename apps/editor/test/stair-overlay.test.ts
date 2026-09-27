@@ -3,6 +3,23 @@ import { describe, expect, it } from 'vitest';
 import { computeStairOverlayPoints } from '../src/stair-overlay.js';
 
 describe('computeStairOverlayPoints', () => {
+  it('shows entry and exit markers for a link on one floor', () => {
+    const link: StairLinkDocument = {
+      id: 'same-floor',
+      fromFloor: 'floor-0',
+      toFloor: 'floor-0',
+      bidirectional: false,
+      waypoints: [
+        { x: 1, y: 2, floor: 'floor-0' },
+        { x: 3, y: 4, floor: 'floor-0' },
+      ],
+    };
+    expect(computeStairOverlayPoints([link], 'floor-0')).toEqual([
+      { linkId: 'same-floor', role: 'entry', x: 1, y: 2, bidirectional: false },
+      { linkId: 'same-floor', role: 'exit', x: 3, y: 4, bidirectional: false },
+    ]);
+  });
+
   const links: readonly StairLinkDocument[] = [
     {
       id: 'stair-1',
