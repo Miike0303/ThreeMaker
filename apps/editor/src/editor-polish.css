@@ -1,0 +1,105 @@
+/**
+ * Visual polish layer, loaded after editor.css (see main.tsx).
+ *
+ * Pure presentation: no layout contract changes and no markup assumptions
+ * beyond the stable class names editor.css already styles. It raises text
+ * contrast, gives the map toolbar a visible hierarchy, and keeps the
+ * inspector tabs on one row.
+ */
+
+:root {
+  /* Hints and secondary labels were #646478 on #121218 (~3.3:1), below WCAG AA
+     for small text. These keep the same hue at ~4.7:1 and ~7:1. */
+  --tm-text-faint: #80809a;
+  --tm-text-dim: #a8a8bc;
+}
+
+/* ---- Map toolbar: grouped clusters instead of one flat row of text ---- */
+
+.ide-menubar {
+  gap: 10px;
+  padding: 7px 12px;
+}
+
+.ide-menubar-group {
+  gap: 2px;
+  padding: 2px;
+  background: var(--tm-bg-2);
+  border: 1px solid var(--tm-border-strong);
+  border-radius: 8px;
+}
+
+/* The groups themselves now separate the clusters. */
+.ide-menubar-sep {
+  display: none;
+}
+
+.ide-menubar button {
+  color: var(--tm-text);
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 3px 10px;
+}
+
+.ide-menubar button:disabled {
+  color: var(--tm-text-faint);
+}
+
+.ide-menubar button.primary {
+  background: var(--tm-accent);
+  border-color: var(--tm-accent);
+  color: #0b0d18;
+  font-weight: 600;
+}
+
+.ide-menubar button.primary:hover:not(:disabled) {
+  background: var(--tm-focus);
+  border-color: var(--tm-focus);
+  color: #0b0d18;
+}
+
+.ide-menubar label {
+  color: var(--tm-text-dim);
+  padding: 0 4px;
+}
+
+/* ---- Inspector tabs: one row that fits, instead of wrapping "Entities" ---- */
+
+.ide-inspector-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 0 4px;
+}
+
+.ide-inspector-tab {
+  flex: 1 0 auto;
+  padding: 9px 6px 8px;
+  font-size: 11.5px;
+  text-align: center;
+}
+
+/* ---- Inspector content: clearer section rhythm and readable hints ---- */
+
+.ide-section-title {
+  color: var(--tm-text);
+  letter-spacing: 0.08em;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--tm-border-strong);
+}
+
+.ide-hint {
+  font-size: 11.5px;
+  color: var(--tm-text-dim);
+  line-height: 1.45;
+}
+
+/* ---- Tool rail: readable group labels and tool letters ---- */
+
+.ide-tool-group-label {
+  color: var(--tm-text-dim);
+}
+
+.ide-tool-btn {
+  color: var(--tm-text);
+}
