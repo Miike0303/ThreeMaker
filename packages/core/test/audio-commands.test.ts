@@ -51,6 +51,14 @@ describe('parseVolume / parseFadeMs', () => {
     expect(parseVolume(undefined, 'x')).toBeUndefined();
   });
 
+  it('allows zero volume', () => {
+    expect(parseVolume(0, 'x')).toBe(0);
+  });
+
+  it('allows full volume', () => {
+    expect(parseVolume(1, 'x')).toBe(1);
+  });
+
   it.each([-0.1, 1.1, Number.NaN, '0.5'])('rejects volume %p', (value) => {
     expect(() => parseVolume(value, 'x')).toThrow(/between 0 and 1/);
   });
@@ -88,6 +96,15 @@ describe('createAudioCommandPlugins', () => {
     expect(playSound).toHaveBeenCalledWith('se/hit.ogg', 0.5);
   });
 
+  it('forwards a silent playSound volume to a handler', () => {
+    const playSound = vi.fn();
+    const registry = registryFor({ playSound });
+    registry
+      .get('playSound')
+      ?.run({ type: 'playSound', path: 'se/hit.ogg', volume: 0 }, {} as never);
+    expect(playSound).toHaveBeenCalledWith('se/hit.ogg', 0);
+  });
+
   it('defaults playSound volume when omitted', () => {
     const playSound = vi.fn();
     const registry = registryFor({ playSound });
@@ -115,6 +132,15 @@ describe('createAudioCommandPlugins', () => {
     expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { fadeMs: 800 });
   });
 
+  it('forwards loop false to a playBgm handler', () => {
+    const playBgm = vi.fn();
+    const registry = registryFor({ playBgm });
+    registry
+      .get('playBgm')
+      ?.run({ type: 'playBgm', path: 'bgm/town.ogg', loop: false }, {} as never);
+    expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { loop: false });
+  });
+
   it('rejects a non-boolean loop', () => {
     const registry = registryFor();
     expect(() =>
@@ -126,6 +152,13 @@ describe('createAudioCommandPlugins', () => {
     const registry = registryFor();
     const parsed = parseEventScript(script({ type: 'stopBgm' }), registry);
     expect(parsed.intro).toEqual([{ type: 'stopBgm' }]);
+  });
+
+  it('forwards stopBgm fadeMs to a handler', () => {
+    const stopBgm = vi.fn();
+    const registry = registryFor({ stopBgm });
+    registry.get('stopBgm')?.run({ type: 'stopBgm', fadeMs: 200 }, {} as never);
+    expect(stopBgm).toHaveBeenCalledWith(200);
   });
 
   it('rejects an escaping path through the full parse path', () => {
