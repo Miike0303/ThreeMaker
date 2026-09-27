@@ -298,6 +298,21 @@ describe('parseMapDocument', () => {
       expect(doc.name).toBe('V2 Map');
     });
 
+    it('rejects a v2 document that already carries authored rooms', () => {
+      const v2Input = makeV2DocInput({
+        rooms: [
+          {
+            id: 'room-1',
+            floor: 'floor-0',
+            rects: [{ x: 0, y: 0, width: 1, height: 1 }],
+          },
+        ],
+      });
+
+      expect(() => parseMapDocument(v2Input)).toThrow(MapFormatError);
+      expect(() => parseMapDocument(v2Input)).toThrow(/rooms/);
+    });
+
     it('full-document-equality roundtrip: reparse(migrate(v2)) deep-equals migrate(v2)', () => {
       const v2Input = makeV2DocInput();
       const migrated = parseMapDocument(v2Input);

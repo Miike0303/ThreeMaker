@@ -68,8 +68,15 @@ registerMigration(1, migrateV1ToV2);
  * geometry) plus zero loss of pre-existing fields; the serialized JSON
  * legitimately gains the `rooms` key (see `migrate.test.ts`'s "v2 -> v3
  * migration (THE compatibility gate)" describe block).
+ * A document that already carries `rooms` while still declaring `version: 2` fails loudly instead of discarding authored room content.
  */
 export function migrateV2ToV3(doc: Record<string, unknown>): Record<string, unknown> {
+  if (doc.rooms !== undefined) {
+    throw new MapFormatError(
+      'malformed',
+      'Map document declares "version": 2 but already carries v3 room content ("rooms"). Set "version" to 3 -- the v2 -> v3 migration would otherwise discard it.',
+    );
+  }
   return { ...doc, version: 3, rooms: [] };
 }
 
