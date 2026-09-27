@@ -87,4 +87,11 @@ describe('buildPlaceholderCharacterTexture', () => {
     const i = (y * image.width + x) * 4;
     expect(image.data[i + 3]).toBe(255);
   });
+
+  it('keeps the down-facing placeholder frame green', () => {
+    const texture = buildPlaceholderCharacterTexture();
+    const image = texture.image as { data: Uint8Array };
+
+    expect(Array.from(image.data.slice(0, 4))).toEqual([0, 170, 0, 255]);
+  });
 });

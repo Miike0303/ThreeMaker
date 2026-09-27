@@ -37,6 +37,10 @@ describe('smoothFrameTimeMs', () => {
     expect(next).toBeCloseTo(16.4);
   });
 
+  it('uses a tenth of a new frame sample by default', () => {
+    expect(smoothFrameTimeMs(16, 120, 100)).toBeCloseTo(16.4);
+  });
+
   it('seeds from the raw delta when the previous frame estimate is negative', () => {
     expect(smoothFrameTimeMs(-5, 120, 100)).toBe(20);
   });

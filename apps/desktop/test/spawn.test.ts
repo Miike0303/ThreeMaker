@@ -71,6 +71,12 @@ describe('findSpawnTile', () => {
     expect(findSpawnTile(grid, 1.4, 0.6)).toEqual({ x: 1, y: 1 });
   });
 
+  it('rounds an origin above the half-tile boundary upward', () => {
+    const grid = fakeGrid(['...', '...', '...']);
+
+    expect(findSpawnTile(grid, 1.6, 1)).toEqual({ x: 2, y: 1 });
+  });
+
   it('ignores out-of-bounds ring candidates near the map edge', () => {
     // (0,0) needs a standable neighbor to qualify under the strengthened
     // predicate; (1,0) being open too doesn't change which candidate is

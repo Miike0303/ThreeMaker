@@ -66,4 +66,15 @@ describe('withNoclip', () => {
 
     expect(wrapped(4, 4, 'up')).toBe(true);
   });
+
+  it('uses the eastern destination when escaping a wall to the right', () => {
+    const grid = { isStandable: (x: number, y: number) => x === 2 && y === 2 };
+    const wrapped = withNoclip(
+      () => false,
+      grid,
+      () => false,
+    );
+
+    expect(wrapped(1, 2, 'right')).toBe(true);
+  });
 });

@@ -60,6 +60,12 @@ describe('createRoomTracker', () => {
     expect(tracker.roomAt(0, 0, -1)).toBe(0);
   });
 
+  it('returns no room when the grid width is zero', () => {
+    const tracker = createRoomTracker([new Uint16Array([7])], 0);
+
+    expect(tracker.roomAt(0, 0, 0)).toBe(0);
+  });
+
   it('two floors are independent -- querying one never leaks into the other', () => {
     const width = 2;
     const floor0 = new Uint16Array([1, 1, 0, 0]);

@@ -203,6 +203,14 @@ describe('createDialogueOverlay', () => {
     expect(text?.textContent).toBe('Pick one');
   });
 
+  it('shows the choice navigation hint when choices appear', () => {
+    const { overlay, hint } = overlayParts();
+
+    overlay.showChoices(['Yes', 'No'], 0);
+
+    expect(hint?.textContent).toBe('1-9 or arrows + Enter to choose');
+  });
+
   it('clears displayed choices when the next dialogue line appears', () => {
     const { overlay, choices } = overlayParts();
 

@@ -129,6 +129,15 @@ describe('formatDebugRows', () => {
     expect(rows.find((r) => r.label === 'Tilt')?.value).toBe('75°');
     expect(rows.find((r) => r.label === 'Zoom')?.value).toBe('3.0');
   });
+
+  it('shows a single inventory entry instead of an empty inventory', () => {
+    const rows = formatDebugRows(
+      { ...SNAPSHOT, inventory: { potion: 1 } },
+      createI18n(LOCALES, 'en').t,
+    );
+
+    expect(rows.find((row) => row.label === 'Inventory')?.value).toBe('{potion:1}');
+  });
 });
 
 describe('debug panel collapsed-state persistence', () => {
@@ -270,5 +279,25 @@ describe('debug panel toggle accessibility', () => {
     const { created } = mountPanel(false, true);
 
     expect(created.some((node) => node.textContent === 'G')).toBe(true);
+  });
+
+  it('shows noclip as on while the shortcut is active', () => {
+    const created: FakeNode[] = [];
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => {
+        const node = fakeNode(tag);
+        created.push(node);
+        return node;
+      },
+    });
+    const panel = createDebugPanel(createI18n(LOCALES, 'en').t, {
+      devMode: false,
+      collapsedStorage: { getItem: () => null, setItem: () => {} },
+    });
+    const indicator = created.find((node) => node.textContent === 'debug.noclipOff');
+
+    panel.setNoclipActive(true);
+
+    expect(indicator?.textContent).toBe('debug.noclipOn');
   });
 });
