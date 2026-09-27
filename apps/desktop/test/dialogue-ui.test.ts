@@ -191,6 +191,15 @@ describe('createDialogueOverlay', () => {
     expect(text?.textContent).toBe('Pick one');
   });
 
+  it('clears displayed choices when the next dialogue line appears', () => {
+    const { overlay, choices } = overlayParts();
+
+    overlay.showChoices(['Yes', 'No'], 0);
+    overlay.showLine('Alice', 'Next line');
+
+    expect(choices?.children).toHaveLength(0);
+  });
+
   it('marks exactly the highlighted choice as current for assistive technology', () => {
     const { overlay, choices } = overlayParts();
     const current = () => choices?.children.map((row) => row.getAttribute('aria-current'));

@@ -48,6 +48,10 @@ describe('findSpawnTile', () => {
     expect(findSpawnTile(grid, 1, 1)).toEqual({ x: 0, y: 0 });
   });
 
+  it('includes the nearest tile on the right edge of a search ring', () => {
+    expect(findSpawnTile(fakeGrid(['###', '##.', '##.']), 1, 1)).toEqual({ x: 2, y: 1 });
+  });
+
   it('expands outward until it finds a standable tile several rings away', () => {
     // Two adjacent open tiles ((2,2) and (3,2)) rather than one isolated
     // dot: findSpawnTile now requires a GOOD spawn candidate (standable
