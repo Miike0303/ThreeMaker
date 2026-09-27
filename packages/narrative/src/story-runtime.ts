@@ -112,29 +112,41 @@ export function bindStoryToWorld(story: Story, options: BindStoryToWorldOptions)
   const { storyId, world, observedVariables = [], items, stats } = options;
 
   // The rest tuple keeps arity at 1 for inkjs's args.length >= func.length check.
-  story.BindExternalFunction('world_get', (key: string, ...[fallback]: [fallback?: WorldValue]) => {
-    if (world.has(key)) {
-      return world.get(key);
-    }
-    if (fallback !== undefined) {
-      return fallback;
-    }
-    throw new Error(
-      `story-runtime: world_get("${key}") read a key that was never set — seed it in WorldState before running the story.`,
-    );
-  });
-  story.BindExternalFunction('world_set', (key: string, value: WorldValue) => {
-    world.set(key, value);
-  });
-
-  story.BindExternalFunction('item_count', (itemId: string) => {
-    if (!items) {
+  story.BindExternalFunction(
+    'world_get',
+    (key: string, ...[fallback]: [fallback?: WorldValue]) => {
+      if (world.has(key)) {
+        return world.get(key);
+      }
+      if (fallback !== undefined) {
+        return fallback;
+      }
       throw new Error(
-        `story-runtime: item_count("${itemId}") called but no items store was bound — pass items when binding the story.`,
+        `story-runtime: world_get("${key}") read a key that was never set — seed it in WorldState before running the story.`,
       );
-    }
-    return items.count(itemId);
-  });
+    },
+    true,
+  );
+  story.BindExternalFunction(
+    'world_set',
+    (key: string, value: WorldValue) => {
+      world.set(key, value);
+    },
+    false,
+  );
+
+  story.BindExternalFunction(
+    'item_count',
+    (itemId: string) => {
+      if (!items) {
+        throw new Error(
+          `story-runtime: item_count("${itemId}") called but no items store was bound — pass items when binding the story.`,
+        );
+      }
+      return items.count(itemId);
+    },
+    true,
+  );
   story.BindExternalFunction(
     'item_add',
     (itemId: string, delta: number) => {
@@ -152,14 +164,18 @@ export function bindStoryToWorld(story: Story, options: BindStoryToWorldOptions)
     },
     false,
   );
-  story.BindExternalFunction('stat_get', (statId: string) => {
-    if (!stats) {
-      throw new Error(
-        `story-runtime: stat_get("${statId}") called but no stats store was bound — pass stats when binding the story.`,
-      );
-    }
-    return stats.get(statId);
-  });
+  story.BindExternalFunction(
+    'stat_get',
+    (statId: string) => {
+      if (!stats) {
+        throw new Error(
+          `story-runtime: stat_get("${statId}") called but no stats store was bound — pass stats when binding the story.`,
+        );
+      }
+      return stats.get(statId);
+    },
+    true,
+  );
   story.BindExternalFunction(
     'stat_modify',
     (statId: string, delta: number) => {

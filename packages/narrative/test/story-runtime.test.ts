@@ -25,6 +25,62 @@ function runToEnd(story: ReturnType<typeof compileInk>): string {
 }
 
 describe('bindStoryToWorld', () => {
+  it.each([
+    {
+      name: 'world_get',
+      external: 'world_get',
+      declaration: 'EXTERNAL world_get(key)',
+      argument: '"gold"',
+      label: 'Gold',
+      value: '5',
+      bindStores: (world: WorldState) => {
+        world.set('gold', 5);
+        return {};
+      },
+    },
+    {
+      name: 'item_count',
+      external: 'item_count',
+      declaration: 'EXTERNAL item_count(itemId)',
+      argument: '"potion"',
+      label: 'Potions',
+      value: '3',
+      bindStores: (_world: WorldState) => ({
+        items: { count: (id: string) => (id === 'potion' ? 3 : 0) },
+      }),
+    },
+    {
+      name: 'stat_get',
+      external: 'stat_get',
+      declaration: 'EXTERNAL stat_get(statId)',
+      argument: '"hp"',
+      label: 'HP',
+      value: '7',
+      bindStores: (_world: WorldState) => ({
+        stats: { get: (id: string) => (id === 'hp' ? 7 : 0) },
+      }),
+    },
+  ])('allows $name in interpolated choice text', ({
+    declaration,
+    external,
+    argument,
+    label,
+    value,
+    bindStores,
+  }) => {
+    const world = new WorldState();
+    const stores = bindStores(world);
+    const story = compileInk(`${declaration}
+The choices are ready.
+* [${label}: {${external}(${argument})}] -> END
+`);
+
+    bindStoryToWorld(story, { storyId: 'demo', world, ...stores });
+
+    expect(() => runToEnd(story)).not.toThrow();
+    expect(story.currentChoices[0]?.text).toBe(`${label}: ${value}`);
+  });
+
   it('roundtrips values through world_get/world_set externals over a real compiled story', () => {
     const world = new WorldState();
     world.set('weather', 'sunny');
