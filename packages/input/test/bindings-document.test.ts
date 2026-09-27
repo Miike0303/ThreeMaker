@@ -14,6 +14,12 @@ import { rebindKeyboard } from '../src/rebind.js';
 import { Actions } from '../src/types.js';
 
 describe('serializeInputBindingsDocument / parseInputBindingsDocument', () => {
+  it('reports a fractional document version as non-integer', () => {
+    expect(
+      parseInputBindingsDocument({ magic: INPUT_BINDINGS_MAGIC, version: 1.5, bindings: [] }),
+    ).toEqual({ ok: false, reason: 'version must be an integer' });
+  });
+
   it('round-trips a valid v1 document', () => {
     const bindings = [
       { action: Actions.Interact, source: { device: 'keyboard' as const, key: 'f' } },

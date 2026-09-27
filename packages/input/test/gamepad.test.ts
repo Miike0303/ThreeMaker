@@ -24,6 +24,16 @@ function snap(partial: {
 }
 
 describe('activeActionsFromGamepad', () => {
+  it('treats a missing horizontal axis as neutral', () => {
+    expect(activeActionsFromGamepad(snap({ axes: [] }))).toEqual([]);
+  });
+
+  it('honors a zero deadzone for small stick motion', () => {
+    expect(activeActionsFromGamepad(snap({ axes: [0.01, 0] }), { deadzone: 0 })).toEqual([
+      Actions.MoveRight,
+    ]);
+  });
+
   it('returns empty for null snapshot (no pad connected)', () => {
     expect(activeActionsFromGamepad(null)).toEqual([]);
   });

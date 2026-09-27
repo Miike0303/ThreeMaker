@@ -15,6 +15,10 @@ describe('isMoveAction', () => {
 });
 
 describe('directionFromMoveAction', () => {
+  it('maps the down action to the down grid direction', () => {
+    expect(directionFromMoveAction(Actions.MoveDown)).toBe('down');
+  });
+
   it('maps move actions to grid directions and rejects non-move', () => {
     expect(directionFromMoveAction(Actions.MoveUp)).toBe('up');
     expect(directionFromMoveAction(Actions.Interact)).toBeUndefined();
