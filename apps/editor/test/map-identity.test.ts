@@ -65,6 +65,7 @@ describe('validateMapName', () => {
     expect(validateMapName('a<b')).toBe('invalid-chars');
     expect(validateMapName('a:b')).toBe('absolute');
     expect(validateMapName('a|b')).toBe('invalid-chars');
+    expect(validateMapName('Town\nSquare')).toBe('invalid-chars');
     expect(validateMapName('ends.')).toBe('invalid-chars');
     expect(validateMapName('x'.repeat(MAP_NAME_MAX_LENGTH + 1))).toBe('too-long');
   });

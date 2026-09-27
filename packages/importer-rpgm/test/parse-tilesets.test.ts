@@ -53,6 +53,14 @@ describe('parseTilesets', () => {
     ).toThrow();
   });
 
+  it('throws when a tileset id is a string', () => {
+    expect(() =>
+      parseTilesets([
+        { id: '1', name: 'One', flags: makeFlags(), tilesetNames: new Array(9).fill('') },
+      ]),
+    ).toThrow();
+  });
+
   it('throws when tilesetNames does not have exactly 9 entries', () => {
     expect(() =>
       parseTilesets([{ id: 1, name: 'x', flags: makeFlags(), tilesetNames: ['a'] }]),
