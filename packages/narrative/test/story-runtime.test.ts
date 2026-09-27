@@ -104,6 +104,16 @@ The choices are ready.
     expect(world.get('ink.demo.mood')).toBe('happy');
   });
 
+  it('mirrors a boolean Ink variable into world-state', () => {
+    const world = new WorldState();
+    const story = compileInk('VAR gate = false\n~ gate = true\nDone.\n-> END\n');
+
+    bindStoryToWorld(story, { storyId: 'demo', world, observedVariables: ['gate'] });
+    runToEnd(story);
+
+    expect(world.get('ink.demo.gate')).toBe(true);
+  });
+
   it('does not mirror unobserved variables', () => {
     const world = new WorldState();
     world.set('weather', 'sunny');

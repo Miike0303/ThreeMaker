@@ -43,6 +43,10 @@ describe('inkjs import paths', () => {
 });
 
 describe('compileInk', () => {
+  it('explains an Ink compilation failure with no reported issues', () => {
+    expect(new InkCompileError([]).message).toBe('Ink compilation failed with no reported issues.');
+  });
+
   beforeEach(() => {
     clearInkCompileCacheForTests();
     vi.mocked(Compiler).mockClear();

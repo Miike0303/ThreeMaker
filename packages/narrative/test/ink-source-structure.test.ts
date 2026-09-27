@@ -14,6 +14,10 @@ import {
 } from '../src/ink-source-structure.js';
 
 describe('listInkKnots', () => {
+  it('deduplicates a repeated knot name across header spacing', () => {
+    expect(listInkKnots('=== Start ===\n===Start===\n')).toEqual(['Start']);
+  });
+
   it('returns empty for blank / knot-less source', () => {
     expect(listInkKnots('')).toEqual([]);
     expect(listInkKnots('Hello world\n')).toEqual([]);
@@ -121,6 +125,12 @@ Hi`);
 });
 
 describe('listInkEdges (lossy visual hops)', () => {
+  it('keeps dotted knot names in divert edges', () => {
+    expect(listInkEdges('=== start ===\n-> chapter.next\n')).toEqual([
+      { from: 'start', to: 'chapter.next' },
+    ]);
+  });
+
   it('collects -> target diverts under the current knot', () => {
     const source = `
 === start ===
@@ -179,6 +189,12 @@ Hi
 });
 
 describe('buildInkGraphModel / setInkNodePosition', () => {
+  it('places the second node at the default column width', () => {
+    const model = buildInkGraphModel('=== first ===\n=== second ===\n');
+
+    expect(model.nodes[1]).toEqual({ knot: 'second', x: 180, y: 0 });
+  });
+
   it('merges stored layouts with grid defaults for missing knots', () => {
     const source = `// @tm-node start x=10 y=20
 === start ===
