@@ -9,7 +9,8 @@
  * whose switch conditions hold supplies the commands. Lists may contain Show
  * Text (101 header, 401 lines), Show Scrolling Text (105 header, 405 lines),
  * Control Switches (121), Control Variables (122) that Set an integer
- * constant, an optional terminal direct-coordinate Transfer Player (201),
+ * constant, Control Self Switch (123), an optional terminal direct-coordinate
+ * Transfer Player (201),
  * comments (108/408), and end-of-list terminators (0). Comments emit nothing.
  * A 105 with no 405 lines emits nothing. Switch and variable ids must be
  * integers ≥ 1, with start ≤ end and at most 100 ids. Any other variable
@@ -21,12 +22,7 @@
 import type { MapEventScripts, TriggerDocument } from '@threemaker/map-format';
 import type { RpgmEvent } from './types.js';
 
-const UNSUPPORTED_PAGE_CONDITION_FLAGS = [
-  'actorValid',
-  'itemValid',
-  'selfSwitchValid',
-  'variableValid',
-] as const;
+const UNSUPPORTED_PAGE_CONDITION_FLAGS = ['actorValid', 'itemValid', 'variableValid'] as const;
 
 const MAX_EVENT_COMMANDS = 500;
 
@@ -75,6 +71,7 @@ type PendingDialogue = {
 
 export function showTextEventPorts(
   events: readonly (RpgmEvent | null)[],
+  mapId: number | null,
   floorId: string,
   width: number,
   height: number,
@@ -84,7 +81,7 @@ export function showTextEventPorts(
   const scripts: Record<string, readonly ImportedCommand[]> = {};
 
   for (const entry of events) {
-    const imported = importShowTextEvent(entry, floorId, width, height, transferMapFile);
+    const imported = importShowTextEvent(entry, mapId, floorId, width, height, transferMapFile);
     if (imported === null) continue;
     triggers.push(imported.trigger);
     scripts[imported.trigger.event] = imported.commands;
@@ -95,6 +92,7 @@ export function showTextEventPorts(
 
 function importShowTextEvent(
   entry: RpgmEvent | null,
+  mapId: number | null,
   floorId: string,
   width: number,
   height: number,
@@ -120,25 +118,27 @@ function importShowTextEvent(
   let commandCount = 0;
   for (const page of entry.pages.slice(firstReachablePage)) {
     if (!isRecord(page)) return null;
-    const switchIds = pageSwitchIds(page.conditions);
+    const conditionKeys = pageConditionKeys(page.conditions, mapId, eventId);
     const pageOn = triggerKind(page.trigger);
-    const pageCommands = showTextCommands(page.list, transferMapFile);
-    if (switchIds === null || pageOn === null || (on !== null && pageOn !== on)) return null;
+    const pageCommands = showTextCommands(page.list, mapId, eventId, transferMapFile);
+    if (conditionKeys === null || pageOn === null || (on !== null && pageOn !== on)) return null;
     if (pageCommands === null) return null;
     on = pageOn;
-    if (switchIds.length === 0) {
+    if (conditionKeys.length === 0) {
       commands = pageCommands;
       commandCount = pageCommands.length;
     } else {
       const fallback = commands;
       const fallbackCount = commandCount;
-      for (let index = switchIds.length - 1; index >= 0; index--) {
-        const then = index === switchIds.length - 1 ? pageCommands : commands;
-        const thenCount = index === switchIds.length - 1 ? pageCommands.length : commandCount;
+      for (let index = conditionKeys.length - 1; index >= 0; index--) {
+        const key = conditionKeys[index];
+        if (key === undefined) return null;
+        const then = index === conditionKeys.length - 1 ? pageCommands : commands;
+        const thenCount = index === conditionKeys.length - 1 ? pageCommands.length : commandCount;
         commands = [
           {
             type: 'conditional',
-            if: { key: `rpgm.switch.${switchIds[index]}`, op: 'eq', value: true },
+            if: { key, op: 'eq', value: true },
             then,
             ...(fallback.length > 0 ? { else: fallback } : {}),
           },
@@ -171,12 +171,17 @@ function isUnconditional(conditions: unknown): boolean {
       (flag) => conditions[flag] === undefined || conditions[flag] === false,
     ) &&
     (conditions.switch1Valid === undefined || conditions.switch1Valid === false) &&
-    (conditions.switch2Valid === undefined || conditions.switch2Valid === false)
+    (conditions.switch2Valid === undefined || conditions.switch2Valid === false) &&
+    (conditions.selfSwitchValid === undefined || conditions.selfSwitchValid === false)
   );
 }
 
-/** Active switch ids in RPG Maker's first, then second condition order. */
-function pageSwitchIds(conditions: unknown): number[] | null {
+/** Active condition keys in RPG Maker's switch 1, switch 2, self switch order. */
+function pageConditionKeys(
+  conditions: unknown,
+  mapId: number | null,
+  eventId: number,
+): string[] | null {
   if (!isRecord(conditions)) return null;
   if (
     UNSUPPORTED_PAGE_CONDITION_FLAGS.some(
@@ -185,19 +190,32 @@ function pageSwitchIds(conditions: unknown): number[] | null {
   ) {
     return null;
   }
-  const ids: number[] = [];
+  const keys: string[] = [];
   for (const [flag, idKey] of [
     ['switch1Valid', 'switch1Id'],
     ['switch2Valid', 'switch2Id'],
   ] as const) {
     if (conditions[flag] === true) {
       if (!isAssignmentId(conditions[idKey])) return null;
-      ids.push(conditions[idKey]);
+      keys.push(`rpgm.switch.${conditions[idKey]}`);
     } else if (conditions[flag] !== undefined && conditions[flag] !== false) {
       return null;
     }
   }
-  return ids;
+  if (conditions.selfSwitchValid === true) {
+    const key = selfSwitchKey(mapId, eventId, conditions.selfSwitchCh);
+    if (key === null) return null;
+    keys.push(key);
+  } else if (conditions.selfSwitchValid !== undefined && conditions.selfSwitchValid !== false) {
+    return null;
+  }
+  return keys;
+}
+
+function selfSwitchKey(mapId: number | null, eventId: number, letter: unknown): string | null {
+  if (!isAssignmentId(mapId)) return null;
+  if (letter !== 'A' && letter !== 'B' && letter !== 'C' && letter !== 'D') return null;
+  return `rpgm.self.${mapId}.${eventId}.${letter}`;
 }
 
 function triggerKind(trigger: unknown): TriggerDocument['on'] | null {
@@ -208,6 +226,8 @@ function triggerKind(trigger: unknown): TriggerDocument['on'] | null {
 
 function showTextCommands(
   list: unknown,
+  mapId: number | null,
+  eventId: number,
   transferMapFile: (mapId: number) => string,
 ): readonly ImportedCommand[] | null {
   if (!Array.isArray(list)) return null;
@@ -245,9 +265,13 @@ function showTextCommands(
       pending.lines.push(line);
       continue;
     }
-    if (entry.code === 121 || entry.code === 122) {
+    if (entry.code === 121 || entry.code === 122 || entry.code === 123) {
       const assigned =
-        entry.code === 121 ? controlSwitches(entry.parameters) : controlVariables(entry.parameters);
+        entry.code === 121
+          ? controlSwitches(entry.parameters)
+          : entry.code === 122
+            ? controlVariables(entry.parameters)
+            : controlSelfSwitch(entry.parameters, mapId, eventId);
       if (assigned === null) return null;
       pushPending(commands, pending);
       pending = null;
@@ -334,6 +358,18 @@ function controlSwitches(parameters: unknown): readonly SetWorldVarCommand[] | n
     commands.push({ type: 'setWorldVar', key: `rpgm.switch.${id}`, value });
   }
   return commands;
+}
+
+/** Control Self Switch (123): letter A-D, 0 = ON and 1 = OFF. */
+function controlSelfSwitch(
+  parameters: unknown,
+  mapId: number | null,
+  eventId: number,
+): readonly SetWorldVarCommand[] | null {
+  if (!Array.isArray(parameters) || parameters.length !== 2) return null;
+  const key = selfSwitchKey(mapId, eventId, parameters[0]);
+  if (key === null || (parameters[1] !== 0 && parameters[1] !== 1)) return null;
+  return [{ type: 'setWorldVar', key, value: parameters[1] === 0 }];
 }
 
 /**

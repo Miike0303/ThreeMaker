@@ -79,6 +79,7 @@ export function convertRpgmMap(
       ? undefined
       : showTextEventPorts(
           map.events,
+          map.id,
           FLOOR_ID,
           map.width,
           map.height,

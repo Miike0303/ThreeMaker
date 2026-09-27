@@ -809,6 +809,166 @@ describe('convertRpgmMap', () => {
     });
   });
 
+  describe('self switches', () => {
+    const selfSwitch = (letter: string, value: number): RpgmEventCommand => ({
+      code: 123,
+      indent: 0,
+      parameters: [letter, value],
+    });
+
+    it('sets A and selects the higher page using the same scoped key', () => {
+      const pages = [
+        showTextPage(0, ['First visit'], undefined, CLEAR_CONDITIONS, [selfSwitch('A', 0)]),
+        showTextPage(0, ['Welcome back'], undefined, {
+          ...CLEAR_CONDITIONS,
+          selfSwitchValid: true,
+          selfSwitchCh: 'A',
+        }),
+      ];
+      const doc = convertRpgmMap(
+        buildSyntheticMap({
+          width: 4,
+          height: 4,
+          events: [placedEvent(pages[0], pages)],
+        }),
+        buildSyntheticTileset(),
+      );
+
+      expect(doc.triggers).toHaveLength(1);
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'conditional',
+          if: { key: 'rpgm.self.100.1.A', op: 'eq', value: true },
+          then: [{ type: 'showDialogue', source: { kind: 'text', lines: ['Welcome back'] } }],
+          else: [
+            { type: 'showDialogue', source: { kind: 'text', lines: ['First visit'] } },
+            { type: 'setWorldVar', key: 'rpgm.self.100.1.A', value: true },
+          ],
+        },
+      ]);
+      const roundTrip = parseMapDocument(JSON.parse(serializeMapDocument(doc)));
+      expect(roundTrip.triggers).toEqual(doc.triggers);
+      expect(roundTrip.events).toEqual(doc.events);
+    });
+
+    it('sets B to false for value 1', () => {
+      const doc = convertRpgmMap(
+        buildSyntheticMap({
+          width: 4,
+          height: 4,
+          events: [
+            placedEvent(
+              showTextPage(0, ['Reset'], undefined, CLEAR_CONDITIONS, [selfSwitch('B', 1)]),
+            ),
+          ],
+        }),
+        buildSyntheticTileset(),
+      );
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'showDialogue', source: { kind: 'text', lines: ['Reset'] } },
+        { type: 'setWorldVar', key: 'rpgm.self.100.1.B', value: false },
+      ]);
+    });
+
+    it.each([
+      ['invalid letter', ['E', 0]],
+      ['invalid value', ['A', 2]],
+      ['missing value', ['A']],
+      ['extra value', ['A', 0, 1]],
+    ])('skips an event with %s in command 123', (_label, parameters) => {
+      const doc = convertRpgmMap(
+        buildSyntheticMap({
+          width: 4,
+          height: 4,
+          events: [
+            placedEvent(
+              showTextPage(0, ['Hello'], undefined, CLEAR_CONDITIONS, [
+                { code: 123, indent: 0, parameters },
+              ]),
+            ),
+          ],
+        }),
+        buildSyntheticTileset(),
+      );
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it.each([undefined, 'E'])('skips an active self switch with letter %s', (letter) => {
+      const doc = convertRpgmMap(
+        buildSyntheticMap({
+          width: 4,
+          height: 4,
+          events: [
+            placedEvent(
+              showTextPage(0, ['Hello'], undefined, {
+                ...CLEAR_CONDITIONS,
+                selfSwitchValid: true,
+                selfSwitchCh: letter,
+              }),
+            ),
+          ],
+        }),
+        buildSyntheticTileset(),
+      );
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('uses separate keys for two events on one map', () => {
+      const page = showTextPage(0, ['Hello'], undefined, CLEAR_CONDITIONS, [selfSwitch('A', 0)]);
+      const doc = convertRpgmMap(
+        buildSyntheticMap({
+          width: 4,
+          height: 4,
+          events: [placedEvent(page), { ...placedEvent(page), id: 2 }],
+        }),
+        buildSyntheticTileset(),
+      );
+
+      expect(doc.triggers).toHaveLength(2);
+      expect(doc.events['rpgm-event-1']?.[1]).toEqual({
+        type: 'setWorldVar',
+        key: 'rpgm.self.100.1.A',
+        value: true,
+      });
+      expect(doc.events['rpgm-event-2']?.[1]).toEqual({
+        type: 'setWorldVar',
+        key: 'rpgm.self.100.2.A',
+        value: true,
+      });
+    });
+
+    it.each([null, undefined])('skips command 123 when the map id is %s', (id) => {
+      const page = showTextPage(0, ['Hello'], undefined, CLEAR_CONDITIONS, [selfSwitch('A', 0)]);
+      const doc = convertRpgmMap(
+        buildSyntheticMap({ id, width: 4, height: 4, events: [placedEvent(page)] }),
+        buildSyntheticTileset(),
+      );
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('skips a self-switch page when the map id is unavailable', () => {
+      const page = showTextPage(0, ['Hello'], undefined, {
+        ...CLEAR_CONDITIONS,
+        selfSwitchValid: true,
+        selfSwitchCh: 'A',
+      });
+      const doc = convertRpgmMap(
+        buildSyntheticMap({ id: null, width: 4, height: 4, events: [placedEvent(page)] }),
+        buildSyntheticTileset(),
+      );
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+  });
+
   it('skips autorun Show Text pages', () => {
     const doc = convertRpgmMap(
       buildSyntheticMap({
