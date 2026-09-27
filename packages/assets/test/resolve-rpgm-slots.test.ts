@@ -127,4 +127,10 @@ describe('resolveRpgmSlotsFromCatalog', () => {
 
     expect(slots).toEqual({});
   });
+
+  it('does not resolve a different tileset with a larger RPG Maker id', () => {
+    seedA1Sheet();
+
+    expect(resolveRpgmSlotsFromCatalog(catalog, gameRoot, 0)).toEqual({});
+  });
 });

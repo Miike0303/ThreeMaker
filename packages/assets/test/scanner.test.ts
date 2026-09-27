@@ -64,6 +64,17 @@ const ENCRYPTED_SYSTEM_JSON = {
 };
 
 describe('scanGames — depth/cycle guard (modeled on the LoQOO self-nested folder case)', () => {
+  it('uses a default maximum depth of 12', () => {
+    let gameDir = workDir;
+    for (let depth = 0; depth < 13; depth++) gameDir = join(gameDir, 'nested');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+
+    const result = scanGames(workDir);
+
+    expect(result.games).toHaveLength(0);
+    expect(result.errors.some((error) => error.code === 'depth-exceeded')).toBe(true);
+  });
+
   it('includes a game at exactly maxDepth', () => {
     const gameDir = join(workDir, 'one', 'two');
     writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
@@ -148,6 +159,30 @@ describe('scanGames — folder-agnostic MV/MZ auto-detect', () => {
 });
 
 describe('scanGames — asset extensions are matched case-insensitively', () => {
+  it('includes encrypted PNG assets with the .png_ extension', () => {
+    const gameDir = join(workDir, 'encrypted-png');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    const imageDir = join(gameDir, 'img', 'characters');
+    mkdirSync(imageDir, { recursive: true });
+    writeFileSync(join(imageDir, 'Actor1.png_'), 'fake-encrypted-png');
+
+    const result = scanGames(workDir);
+
+    expect(result.games[0]?.imageAssets).toContain('characters/Actor1.png_');
+  });
+
+  it('includes encrypted M4A assets with the .m4a_ extension', () => {
+    const gameDir = join(workDir, 'encrypted-m4a');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    const audioDir = join(gameDir, 'audio', 'bgm');
+    mkdirSync(audioDir, { recursive: true });
+    writeFileSync(join(audioDir, 'Theme.m4a_'), 'fake-encrypted-m4a');
+
+    const result = scanGames(workDir);
+
+    expect(result.games[0]?.audioAssets).toContain('bgm/Theme.m4a_');
+  });
+
   it('includes image assets with uppercase extensions', () => {
     const gameDir = join(workDir, 'uppercase-image-extension');
     writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
@@ -273,6 +308,17 @@ describe('scanGames — UTF-8 BOM tolerance', () => {
     const game = result.games.find((g) => g.rootPath === gameDir);
     expect(game).toBeDefined();
     expect(game?.hasEncryptedImages).toBe(false);
+  });
+});
+
+describe('scanGames — game title normalization', () => {
+  it('trims surrounding whitespace from the displayed game title', () => {
+    const gameDir = join(workDir, 'spaced-title');
+    writeSystemJson(join(gameDir, 'data'), { gameTitle: '  My Game  ' });
+
+    const result = scanGames(workDir);
+
+    expect(result.games[0]?.systemTitle).toBe('My Game');
   });
 });
 
