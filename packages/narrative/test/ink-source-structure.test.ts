@@ -141,6 +141,16 @@ Hi
 `;
     expect(listInkEdges(source)).toEqual([{ from: 'a', to: 'b' }]);
   });
+
+  it('ignores // diverts that sit outside quotes', () => {
+    const source = '=== start ===\n// -> secret\nHello -> END // -> also\n';
+    expect(listInkEdges(source)).toEqual([{ from: 'start', to: 'END' }]);
+  });
+
+  it('still follows a divert after a quoted string that contains //', () => {
+    const source = '=== start ===\n"see http://x" -> other\n';
+    expect(listInkEdges(source)).toEqual([{ from: 'start', to: 'other' }]);
+  });
 });
 
 describe('buildInkGraphModel / setInkNodePosition', () => {

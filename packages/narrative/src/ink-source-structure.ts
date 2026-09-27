@@ -43,6 +43,29 @@ const LAYOUT_LINE =
 
 /** `-> target` divert (arrow form). */
 const ARROW_DIVERT = /->\s*([A-Za-z_][\w.]*)/g;
+
+/**
+ * Text before the first `//` that sits outside double quotes.
+ * Used only when scanning diverts. Knot headers and `// @tm-node` lines
+ * stay on the raw source. Block comments are left as-is.
+ * ponytail: block comments are not parsed; a divert inside one can still show up.
+ */
+function divertScanText(line: string): string {
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line.charAt(i);
+    if (quoted && ch === '\\') {
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (!quoted && ch === '/' && line.charAt(i + 1) === '/') return line.slice(0, i);
+  }
+  return line;
+}
 /**
  * Lists knot and stitch names from ink source in first-seen order.
  * Does not compile — works on incomplete drafts so the graph can still open.
@@ -149,8 +172,9 @@ export function listInkEdges(source: string): readonly InkEdge[] {
     }
     if (current === null) continue;
 
+    const divertLine = divertScanText(line);
     ARROW_DIVERT.lastIndex = 0;
-    let match = ARROW_DIVERT.exec(line);
+    let match = ARROW_DIVERT.exec(divertLine);
     while (match) {
       const to = match[1];
       if (to) {
@@ -160,7 +184,7 @@ export function listInkEdges(source: string): readonly InkEdge[] {
           edges.push({ from: current, to });
         }
       }
-      match = ARROW_DIVERT.exec(line);
+      match = ARROW_DIVERT.exec(divertLine);
     }
   }
   return edges;
