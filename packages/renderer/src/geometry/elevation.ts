@@ -1,19 +1,8 @@
-import type { TileSheetId } from '@threemaker/importer-rpgm';
+import type { EdgeDirection, RampDirection, TileSheetId } from '@threemaker/importer-rpgm';
 import { RAMP_DIRECTION_BY_CODE } from '@threemaker/importer-rpgm';
 import type { TileBuildData } from './types.js';
 
-/** Which of a tile's 4 edges, in map space (north = toward smaller tileY / image-top). */
-export type EdgeDirection = 'north' | 'south' | 'east' | 'west';
-
-/**
- * A ramp cell's downhill direction. Same 4-value union as `EdgeDirection`
- * (duplicated on purpose, not imported, from `@threemaker/importer-rpgm`'s
- * own `RampDirection` -- mirrors this file's existing `EdgeDirection`
- * duplication, a pattern already approved for this feature in Slice 1's
- * design notes: renderer/gameplay each keep their own copy of shared literal
- * unions rather than depending on importer-rpgm's types for them).
- */
-export type RampDirection = EdgeDirection;
+export type { EdgeDirection, RampDirection } from '@threemaker/importer-rpgm';
 
 export const EDGE_DIRECTIONS: readonly EdgeDirection[] = ['north', 'south', 'east', 'west'];
 
