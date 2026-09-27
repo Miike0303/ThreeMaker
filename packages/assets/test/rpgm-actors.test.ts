@@ -19,14 +19,47 @@ describe('readLeadActorSheet', () => {
     writeFileSync(join(gameDir, 'Actors.json'), JSON.stringify(actors), 'utf8');
   }
 
-  it('reads the first actor entry (index 1, RPGM 1-indexed sparse array)', () => {
+  it('uses the first actor when System.json is missing', () => {
     writeActors([
       null,
       { id: 1, name: 'Hero', characterName: 'Actor1', characterIndex: 0 },
-      { id: 2, name: 'Sidekick', characterName: 'Actor1', characterIndex: 1 },
+      { id: 2, name: 'Sidekick', characterName: 'Actor2', characterIndex: 1 },
     ]);
 
     expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor1', characterIndex: 0 });
+  });
+
+  it('uses the first starting party member instead of the first actor', () => {
+    writeActors([
+      null,
+      { id: 1, name: 'Hero', characterName: 'Actor1', characterIndex: 0 },
+      { id: 2, name: 'Leader', characterName: 'Actor2', characterIndex: 3 },
+    ]);
+    writeFileSync(join(gameDir, 'System.json'), JSON.stringify({ partyMembers: [2] }), 'utf8');
+
+    expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor2', characterIndex: 3 });
+  });
+
+  it('uses the first actor when the starting party member has no actor entry', () => {
+    writeActors([
+      null,
+      { id: 1, name: 'Hero', characterName: 'Actor1', characterIndex: 0 },
+      { id: 2, name: 'Sidekick', characterName: 'Actor2', characterIndex: 1 },
+    ]);
+    writeFileSync(join(gameDir, 'System.json'), JSON.stringify({ partyMembers: [99] }), 'utf8');
+
+    expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor1', characterIndex: 0 });
+  });
+
+  it('tolerates a UTF-8 BOM before System.json', () => {
+    writeActors([
+      null,
+      { id: 1, name: 'Hero', characterName: 'Actor1', characterIndex: 0 },
+      { id: 2, name: 'Leader', characterName: 'Actor2', characterIndex: 4 },
+    ]);
+    writeFileSync(join(gameDir, 'System.json'), `﻿${JSON.stringify({ partyMembers: [2] })}`, 'utf8');
+
+    expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor2', characterIndex: 4 });
   });
 
   it('returns undefined for a $-prefixed single-character sheet (different frame grid, out of scope)', () => {
