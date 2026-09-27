@@ -15,11 +15,12 @@ export type StoryItemStore = {
 };
 
 /**
- * Structural stat surface for the `stat_get` ink external (mirrors core's
- * StatStore / gameplay's StatBlock without importing either package).
+ * Structural stat surface for the `stat_get` / `stat_modify` ink externals
+ * (mirrors core's StatStore / gameplay's StatBlock without importing either package).
  */
 export type StoryStatStore = {
   get(id: string): number;
+  modify?(id: string, delta: number): number;
 };
 
 /** Options for {@link bindStoryToWorld}. */
@@ -52,15 +53,15 @@ export type BindStoryToWorldOptions = {
    */
   readonly items?: StoryItemStore;
   /**
-   * Optional stats for `EXTERNAL stat_get(statId)`. When omitted and a story
-   * calls `stat_get`, throws a precise error rather than a silent 0.
+   * Optional stats for `EXTERNAL stat_get(statId)` / `stat_modify(statId, delta)`.
+   * When omitted and a story calls either, throws a precise error rather than a silent 0.
    */
   readonly stats?: StoryStatStore;
 };
 
 /**
  * Binds `story`'s `world_get`/`world_set` external functions to `world`,
- * optionally `item_count`/`item_add`/`stat_get` to inventory/stat stores, and
+ * optionally `item_count`/`item_add`/`stat_get`/`stat_modify` to inventory/stat stores, and
  * optionally mirrors declared ink variables into world-state as they change.
  *
  * `story`'s ink source must declare the world externals it uses:
@@ -70,6 +71,7 @@ export type BindStoryToWorldOptions = {
  * EXTERNAL item_count(itemId)
  * EXTERNAL item_add(itemId, delta)
  * EXTERNAL stat_get(statId)
+ * EXTERNAL stat_modify(statId, delta)
  * ```
  * Alternatively, declare `EXTERNAL world_get(key, fallback)` to supply a fallback.
  * One-argument `world_get` reads `world.get(key)` and throws if `key` was never set —
@@ -92,6 +94,10 @@ export type BindStoryToWorldOptions = {
  * A missing or read-only (count-only) items store fails with a precise message.
  * It is bound non-lookahead-safe because it mutates inventory; speculative
  * lookahead must not grant or consume an item twice.
+ * `stat_modify` also always binds, delegates to `modify`, and returns the new
+ * stat value. A missing or read-only (get-only) stats store fails with a precise
+ * message. It is bound non-lookahead-safe because it mutates stats; speculative
+ * lookahead must not apply a modification twice.
  *
  * Mirrored variable values must be a {@link WorldValue} (boolean, number, or
  * string); a variable that becomes a non-primitive ink value (e.g. a `LIST`)
@@ -154,6 +160,23 @@ export function bindStoryToWorld(story: Story, options: BindStoryToWorldOptions)
     }
     return stats.get(statId);
   });
+  story.BindExternalFunction(
+    'stat_modify',
+    (statId: string, delta: number) => {
+      if (!stats) {
+        throw new Error(
+          `story-runtime: stat_modify("${statId}") called but no stats store was bound — pass stats when binding the story.`,
+        );
+      }
+      if (!stats.modify) {
+        throw new Error(
+          `story-runtime: stat_modify("${statId}") called but the bound stats store is read-only (get-only) — provide a stats store with a modify method when binding the story.`,
+        );
+      }
+      return stats.modify(statId, delta);
+    },
+    false,
+  );
 
   for (const variableName of observedVariables) {
     story.ObserveVariable(variableName, (name: string, newValue: unknown) => {

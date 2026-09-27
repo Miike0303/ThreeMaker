@@ -230,4 +230,58 @@ Remaining: {remaining}
       'story-runtime: item_add("potion") called but no items store was bound — pass items when binding the story.',
     );
   });
+
+  it('modifies a stat once through stat_modify without repeating mutations during lookahead', () => {
+    const world = new WorldState();
+    let hp = 10;
+    let modifyCalls = 0;
+    const stats = {
+      get: (id: string) => (id === 'hp' ? hp : 0),
+      modify(id: string, delta: number): number {
+        modifyCalls += 1;
+        if (id === 'hp') hp += delta;
+        return hp;
+      },
+    };
+    const story = compileInk(`EXTERNAL stat_modify(statId, delta)
+Before.
+~ temp r = stat_modify("hp", -3)
+After: {r}
+-> END
+`);
+
+    bindStoryToWorld(story, { storyId: 'demo', world, stats });
+    const output = runToEnd(story);
+
+    expect(output).toContain('7');
+    expect(hp).toBe(7);
+    expect(modifyCalls).toBe(1);
+  });
+
+  it('throws a precise error when stat_modify is called with a read-only stats store', () => {
+    const world = new WorldState();
+    const stats = { get: (_id: string) => 10 };
+    const story = compileInk(
+      'EXTERNAL stat_modify(statId, delta)\n~ stat_modify("hp", -3)\nDone.\n-> END\n',
+    );
+
+    bindStoryToWorld(story, { storyId: 'demo', world, stats });
+
+    expect(() => runToEnd(story)).toThrow(
+      'story-runtime: stat_modify("hp") called but the bound stats store is read-only (get-only) — provide a stats store with a modify method when binding the story.',
+    );
+  });
+
+  it('throws a precise error when stat_modify is called without a stats store', () => {
+    const world = new WorldState();
+    const story = compileInk(
+      'EXTERNAL stat_modify(statId, delta)\n~ stat_modify("hp", -3)\nDone.\n-> END\n',
+    );
+
+    bindStoryToWorld(story, { storyId: 'demo', world });
+
+    expect(() => runToEnd(story)).toThrow(
+      'story-runtime: stat_modify("hp") called but no stats store was bound — pass stats when binding the story.',
+    );
+  });
 });
