@@ -42,6 +42,17 @@ describe('InkDialogueProvider', () => {
     expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: '' });
   });
 
+  it('finds the speaker tag after another tag', () => {
+    const story = compileInk(
+      '-> start\n=== start ===\nHello. # mood: calm # speaker: Elder\n-> END\n',
+    );
+    const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+    provider.open({ kind: 'ink', storyId: 'inline' });
+
+    expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello.' });
+  });
+
   it('open() without a knot resumes the story where it left off', () => {
     const story = compileInk('First.\nSecond.\n-> END\n');
     const provider = new InkDialogueProvider(new Map([['inline', story]]));

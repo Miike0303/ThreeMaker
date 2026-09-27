@@ -69,6 +69,16 @@ describe('serializeInputBindingsDocument / parseInputBindingsDocument', () => {
       }).ok,
     ).toBe(false);
   });
+
+  it('rejects a non-keyboard device source', () => {
+    expect(
+      parseInputBindingsDocument({
+        magic: INPUT_BINDINGS_MAGIC,
+        version: 1,
+        bindings: [{ action: Actions.Interact, source: { device: 'gamepad', key: 'e' } }],
+      }).ok,
+    ).toBe(false);
+  });
 });
 
 describe('applyBindingOverrides / collectBindingOverrides', () => {

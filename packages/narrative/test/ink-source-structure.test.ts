@@ -202,6 +202,29 @@ describe('buildInkGraphModel / setInkNodePosition', () => {
     expect(model.edges).toEqual([{ from: 'start', to: 'END' }]);
   });
 
+  it('includes only one graph node for a repeated undeclared divert target', () => {
+    const source = `=== a ===
+-> END
+=== b ===
+-> END
+`;
+    const model = buildInkGraphModel(source);
+
+    expect(model.nodes.map((node) => node.knot)).toEqual(['a', 'b', 'END']);
+  });
+
+  it('starts the fifth default graph node on the second row', () => {
+    const source = `=== a ===
+=== b ===
+=== c ===
+=== d ===
+=== e ===
+`;
+    const model = buildInkGraphModel(source);
+
+    expect(model.nodes[4]).toEqual({ knot: 'e', x: 0, y: 100 });
+  });
+
   it('setInkNodePosition rewrites one knot and keeps other layouts', () => {
     const source = `// @tm-node start x=0 y=0
 // @tm-node mid x=1 y=1

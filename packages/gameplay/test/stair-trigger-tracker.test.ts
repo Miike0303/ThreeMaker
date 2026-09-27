@@ -24,6 +24,12 @@ describe('StairTriggerTracker — shouldTrigger (entry, forward)', () => {
     expect(tracker.shouldTrigger({ floor: 0, x: 2, y: 2 }, [LINK])).toEqual(LINK.waypoints);
   });
 
+  it('fires when the player steps vertically onto the entry waypoint', () => {
+    const tracker = new StairTriggerTracker({ floor: 0, x: 2, y: 1 });
+
+    expect(tracker.shouldTrigger({ floor: 0, x: 2, y: 2 }, [LINK])).toEqual(LINK.waypoints);
+  });
+
   it('does not re-fire while standing still on the same tile', () => {
     const tracker = new StairTriggerTracker({ floor: 0, x: 0, y: 0 });
 
@@ -48,6 +54,12 @@ describe('StairTriggerTracker — shouldTrigger (entry, forward)', () => {
 });
 
 describe('StairTriggerTracker — shouldTrigger (landing, reversed/bidirectional)', () => {
+  it('fires when the player reaches the same coordinates on a different floor', () => {
+    const tracker = new StairTriggerTracker({ floor: 1, x: 2, y: 2 });
+
+    expect(tracker.shouldTrigger({ floor: 0, x: 2, y: 2 }, [LINK])).toEqual(LINK.waypoints);
+  });
+
   it('returns the REVERSED waypoint order when the player steps onto a bidirectional landing', () => {
     const tracker = new StairTriggerTracker({ floor: 1, x: 0, y: 0 });
 

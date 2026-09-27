@@ -44,6 +44,12 @@ describe('activeActionsFromGamepad', () => {
     ]);
   });
 
+  it('keeps up as the priority when up and down are pressed together', () => {
+    expect(activeActionsFromGamepad(snap({ buttons: { 12: true, 13: true } }))).toEqual([
+      Actions.MoveUp,
+    ]);
+  });
+
   it('maps left stick past deadzone to one cardinal via dominant axis', () => {
     expect(activeActionsFromGamepad(snap({ axes: [0, -0.9, 0, 0] }))).toEqual([Actions.MoveUp]);
     expect(activeActionsFromGamepad(snap({ axes: [0, 0.9, 0, 0] }))).toEqual([Actions.MoveDown]);
