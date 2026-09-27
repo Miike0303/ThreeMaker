@@ -6,13 +6,20 @@
 import type { SemanticClass, SemanticOverrides } from '@threemaker/map-format';
 import { getSemanticClass } from '../semantic-store.js';
 
-/** Most common non-zero tile id in a layer, or `undefined` if empty. */
-export function majorityNonZeroTileId(layer: readonly number[]): number | undefined {
+/**
+ * Most common non-zero id in `layer`. When `include` is set, ids it rejects
+ * are ignored. Ties keep the first id to reach the best count (`>`).
+ */
+function majorityTileId(
+  layer: readonly number[],
+  include?: (id: number) => boolean,
+): number | undefined {
   const counts = new Map<number, number>();
   let bestId: number | undefined;
   let bestCount = 0;
   for (const id of layer) {
     if (id === 0) continue;
+    if (include !== undefined && !include(id)) continue;
     const next = (counts.get(id) ?? 0) + 1;
     counts.set(id, next);
     if (next > bestCount) {
@@ -21,6 +28,11 @@ export function majorityNonZeroTileId(layer: readonly number[]): number | undefi
     }
   }
   return bestId;
+}
+
+/** Most common non-zero tile id in a layer, or `undefined` if empty. */
+export function majorityNonZeroTileId(layer: readonly number[]): number | undefined {
+  return majorityTileId(layer);
 }
 
 /**
@@ -32,20 +44,7 @@ export function majorityClassedTileId(
   semantics: SemanticOverrides,
   cls: SemanticClass,
 ): number | undefined {
-  const counts = new Map<number, number>();
-  let bestId: number | undefined;
-  let bestCount = 0;
-  for (const id of layer) {
-    if (id === 0) continue;
-    if (getSemanticClass(semantics, id) !== cls) continue;
-    const next = (counts.get(id) ?? 0) + 1;
-    counts.set(id, next);
-    if (next > bestCount) {
-      bestCount = next;
-      bestId = id;
-    }
-  }
-  return bestId;
+  return majorityTileId(layer, (id) => getSemanticClass(semantics, id) === cls);
 }
 
 /**

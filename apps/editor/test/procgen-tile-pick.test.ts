@@ -14,6 +14,24 @@ describe('majorityNonZeroTileId', () => {
   it('picks the most frequent non-zero id', () => {
     expect(majorityNonZeroTileId([1, 2, 2, 0, 2, 1])).toBe(2);
   });
+
+  it('keeps the first id to reach the best count on a tie', () => {
+    expect(majorityNonZeroTileId([1, 2])).toBe(1);
+    // 1 reaches count 2 before 2 does.
+    expect(majorityNonZeroTileId([2, 1, 1, 2])).toBe(1);
+  });
+});
+
+describe('majorityClassedTileId', () => {
+  it('keeps the first same-class id to reach the best count on a tie', () => {
+    expect(
+      majorityClassedTileId(
+        [2, 1, 1, 2],
+        { '1': { class: 'wall' }, '2': { class: 'wall' } },
+        'wall',
+      ),
+    ).toBe(1);
+  });
 });
 
 describe('resolveDungeonTileIds', () => {
