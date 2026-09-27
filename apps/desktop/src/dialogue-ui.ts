@@ -67,9 +67,13 @@ export function nextHighlightedIndex(current: number, delta: -1 | 1, optionCount
   return (current + delta + optionCount) % optionCount;
 }
 
-/** Localized speaker label: the given speaker, or a localized fallback when a dialogue line carries no `# speaker:` tag. */
+/**
+ * Localized speaker label: the given speaker, or a localized fallback when a
+ * dialogue line has no `# speaker:` tag or an empty one (`# speaker:` with no
+ * name reaches here as `''`, which would otherwise render a blank label).
+ */
 export function formatSpeakerLabel(speaker: string | undefined, t: I18n['t']): string {
-  return speaker ?? t('dialogue.unknownSpeaker');
+  return speaker?.trim() ? speaker : t('dialogue.unknownSpeaker');
 }
 
 /** Localized keyboard-hint chrome, matching whichever key set is currently active (advance-only, or choice navigation/confirm). */
@@ -138,6 +142,7 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
     showLine(speaker, text) {
       overlay.style.display = '';
       overlay.classList.remove('dialogue-overlay-error');
+      overlay.removeAttribute('role');
       speakerEl.textContent = formatSpeakerLabel(speaker, t);
       textEl.textContent = text;
       choicesEl.replaceChildren();
@@ -146,6 +151,7 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
     showChoices(options, highlightedIndex) {
       overlay.style.display = '';
       overlay.classList.remove('dialogue-overlay-error');
+      overlay.removeAttribute('role');
       renderChoiceRows(options, highlightedIndex);
       hintEl.textContent = formatDialogueHint(true, t);
     },
@@ -158,6 +164,8 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
     showError(message) {
       overlay.style.display = '';
       overlay.classList.add('dialogue-overlay-error');
+      // Errors surface here without a dialogue turn; announce them to screen readers.
+      overlay.setAttribute('role', 'alert');
       speakerEl.textContent = '';
       textEl.textContent = `${t('dialogue.error')}: ${message}`;
       choicesEl.replaceChildren();
@@ -168,6 +176,7 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
       // A conversation that opens with choices never calls showLine, so leftover
       // speaker/text here would reappear above the next conversation's options.
       overlay.classList.remove('dialogue-overlay-error');
+      overlay.removeAttribute('role');
       speakerEl.textContent = '';
       textEl.textContent = '';
       choicesEl.replaceChildren();

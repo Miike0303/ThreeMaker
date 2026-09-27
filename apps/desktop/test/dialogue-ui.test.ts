@@ -90,6 +90,12 @@ describe('formatSpeakerLabel', () => {
     const i18n = createI18n(LOCALES, 'en');
     expect(formatSpeakerLabel(undefined, i18n.t)).toBe('Someone');
   });
+
+  it('falls back when the speaker tag is empty or whitespace', () => {
+    const i18n = createI18n(LOCALES, 'en');
+    expect(formatSpeakerLabel('', i18n.t)).toBe('Someone');
+    expect(formatSpeakerLabel('   ', i18n.t)).toBe('Someone');
+  });
 });
 
 describe('formatDialogueHint', () => {
@@ -119,6 +125,7 @@ type FakeElement = {
   replaceChildren(...nodes: FakeElement[]): void;
   setAttribute(name: string, value: string): void;
   getAttribute(name: string): string | null;
+  removeAttribute(name: string): void;
 };
 
 function fakeElement(): FakeElement {
@@ -129,6 +136,9 @@ function fakeElement(): FakeElement {
       attributes.set(name, value);
     },
     getAttribute: (name) => attributes.get(name) ?? null,
+    removeAttribute: (name) => {
+      attributes.delete(name);
+    },
     className: '',
     textContent: '',
     style: { display: '' },
@@ -193,5 +203,20 @@ describe('createDialogueOverlay', () => {
 
     overlay.showChoices(['A', 'B', 'C'], 2);
     expect(current()).toEqual(['false', 'false', 'true']);
+  });
+
+  it('announces errors as alerts and drops the role once dialogue resumes or hides', () => {
+    const { overlay } = overlayParts();
+    const role = () => (overlay.element as unknown as FakeElement).getAttribute('role');
+
+    overlay.showError('Could not save.');
+    expect(role()).toBe('alert');
+
+    overlay.showLine('Alice', 'Back to talking');
+    expect(role()).toBeNull();
+
+    overlay.showError('Could not load.');
+    overlay.hide();
+    expect(role()).toBeNull();
   });
 });
