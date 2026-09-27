@@ -19,4 +19,16 @@ describe('formatTemplate', () => {
   it('replaces every occurrence of a repeated placeholder', () => {
     expect(formatTemplate('{n} and {n}', { n: 3 })).toBe('3 and 3');
   });
+
+  it.each(['$&', '$$', '$`', "$'"])('inserts a value containing %s literally', (name) => {
+    expect(formatTemplate('Delete saved map "{name}"?', { name })).toBe(
+      `Delete saved map "${name}"?`,
+    );
+  });
+
+  it('does not substitute placeholders that appear inside a value', () => {
+    expect(formatTemplate('{name} on {floor}', { name: '{floor}', floor: 'Floor 1' })).toBe(
+      '{floor} on Floor 1',
+    );
+  });
 });
