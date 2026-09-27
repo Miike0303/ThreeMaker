@@ -24,6 +24,11 @@ describe('isSafeStoryId / inkSidecarRelativePath', () => {
     expect(isSafeStoryId('chapter9')).toBe(true);
   });
 
+  it('rejects a Windows path separator between upper and lower ASCII letters', () => {
+    expect(isSafeStoryId('bad\\name')).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'bad\\name')).toThrow(/story id/i);
+  });
+
   it('derives <mapBase>.<storyId>.ink beside a .tmmap.json map', () => {
     expect(MAP_DOCUMENT_FILE_SUFFIX).toBe('.tmmap.json');
     expect(inkSidecarRelativePath('.threemaker/maps/current.tmmap.json', 'elder')).toBe(

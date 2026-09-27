@@ -89,4 +89,18 @@ describe('computeRoomIdGrid', () => {
     ];
     expect(Array.from(computeRoomIdGrid(rooms, 'floor-0', 3, 2))).toEqual([0, 0, 0, 0, 1, 0]);
   });
+
+  it('clips a room rectangle that starts left of the map', () => {
+    const rooms: readonly RoomDocument[] = [
+      { id: 'left-edge', floor: 'floor-0', rects: [{ x: -1, y: 0, width: 2, height: 1 }] },
+    ];
+    expect(Array.from(computeRoomIdGrid(rooms, 'floor-0', 2, 1))).toEqual([1, 0]);
+  });
+
+  it('clips a room rectangle that starts above the map', () => {
+    const rooms: readonly RoomDocument[] = [
+      { id: 'top-edge', floor: 'floor-0', rects: [{ x: 0, y: -1, width: 1, height: 2 }] },
+    ];
+    expect(Array.from(computeRoomIdGrid(rooms, 'floor-0', 1, 2))).toEqual([1, 0]);
+  });
 });

@@ -195,6 +195,21 @@ describe('deriveRampCells', () => {
 });
 
 describe('syncRampCells', () => {
+  it('restores left-to-right order for dirty ramp cells on the same row', () => {
+    const layers = [[7, 0, 7], EMPTY_LAYER(3), EMPTY_LAYER(3), EMPTY_LAYER(3)] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+
+    expect(
+      syncRampCells([], layers, semantics, 3, [
+        { x: 2, y: 0 },
+        { x: 0, y: 0 },
+      ]),
+    ).toEqual([
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+  });
+
   it('preserves existing ramp cells when no cells are dirty', () => {
     const previous = [{ x: 1, y: 0 }];
     const layers = [EMPTY_LAYER(2), EMPTY_LAYER(2), EMPTY_LAYER(2), EMPTY_LAYER(2)] as const;

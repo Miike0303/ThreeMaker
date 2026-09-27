@@ -319,6 +319,16 @@ describe('parseMapDocument', () => {
       expect(() => parseMapDocument(v2Input)).toThrow(/rooms/);
     });
 
+    it('classifies a v2 document carrying rooms as malformed', () => {
+      try {
+        parseMapDocument(makeV2DocInput({ rooms: [] }));
+        throw new Error('Expected the migration to reject rooms on a v2 document.');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MapFormatError);
+        expect((error as MapFormatError).code).toBe('malformed');
+      }
+    });
+
     it('full-document-equality roundtrip: reparse(migrate(v2)) deep-equals migrate(v2)', () => {
       const v2Input = makeV2DocInput();
       const migrated = parseMapDocument(v2Input);
@@ -366,5 +376,29 @@ describe('parseMapDocument', () => {
       expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);
       expect(doc.rooms).toHaveLength(1);
     });
+  });
+
+  it('leaves a null v4 tileset for schema validation', () => {
+    expect(migrateV4ToV5({ tileset: null }).tileset).toBeNull();
+  });
+
+  it('rejects a null narrative field on a v3 document', () => {
+    expect(() => migrateV3ToV4({ npcs: null })).toThrow(MapFormatError);
+  });
+
+  it('rejects a null rooms field on a v2 document', () => {
+    expect(() => migrateV2ToV3({ rooms: null })).toThrow(MapFormatError);
+  });
+
+  it('rejects a null tile pixel size on a v4 document', () => {
+    expect(() => migrateV4ToV5({ tileset: { tilePixelSize: null } })).toThrow(MapFormatError);
+  });
+
+  it('rejects a null floor light map on a v5 document', () => {
+    expect(() => migrateV5ToV6({ floors: [{ lightMap: null }] })).toThrow(MapFormatError);
+  });
+
+  it('rejects a null lights field on a v5 document', () => {
+    expect(() => migrateV5ToV6({ lights: null })).toThrow(MapFormatError);
   });
 });
