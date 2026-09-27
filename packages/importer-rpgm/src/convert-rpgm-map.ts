@@ -30,6 +30,8 @@ export interface RpgmPlayerStart {
 export interface ConvertRpgmMapOptions {
   /** Document id; defaults to `rpgm-map-${map.id}` (or `rpgm-map-unknown` when `map.id` is `null`). */
   readonly id?: string;
+  /** Transfer destinations; the default mirrors assets' `mapFileName` naming convention. */
+  readonly transferMapFile?: (mapId: number) => string;
   /**
    * RPGM's `System.json` player start position, when this map IS the
    * project's configured start map. Omit for every other map -- no spawn
@@ -75,7 +77,13 @@ export function convertRpgmMap(
   const showText =
     map.events === undefined
       ? undefined
-      : showTextEventPorts(map.events, FLOOR_ID, map.width, map.height);
+      : showTextEventPorts(
+          map.events,
+          FLOOR_ID,
+          map.width,
+          map.height,
+          opts.transferMapFile ?? ((id) => `map${String(id).padStart(3, '0')}.tmmap.json`),
+        );
 
   const doc: MapDocument = {
     format: MAP_FORMAT_MAGIC,

@@ -1,12 +1,13 @@
 /**
- * RPG Maker MV/MZ "Show Text" events → map triggers.
+ * RPG Maker MV/MZ Show Text and Transfer Player events → map triggers.
  *
  * For each non-null event, only the last page is considered. It is imported
  * when that page is unconditional, its trigger is action-button (0 →
  * `interact`) or player-touch (1 → `enter`), and its list contains only Show
- * Text (101 header, 401 lines) plus the end-of-list terminator (0). Any other
- * command, a conditional last page, or a list that yields no dialogue skips
- * the event. Malformed entries are skipped and never thrown.
+ * Text (101 header, 401 lines), an optional terminal direct-coordinate Transfer
+ * Player (201), comments (108/408), and end-of-list terminators (0). Comments
+ * emit nothing. Any unsupported command, a conditional last page, or a list
+ * that yields no commands skips the event. Malformed entries are skipped.
  */
 
 import type { MapEventScripts, TriggerDocument } from '@threemaker/map-format';
@@ -27,6 +28,16 @@ type ShowTextCommand = {
   readonly source: { readonly kind: 'text'; readonly lines: readonly string[] };
 };
 
+type TransferMapCommand = {
+  readonly type: 'transferMap';
+  readonly mapFile: string;
+  readonly x: number;
+  readonly y: number;
+  readonly facing?: 'down' | 'left' | 'right' | 'up';
+};
+
+type ImportedCommand = ShowTextCommand | TransferMapCommand;
+
 type PendingDialogue = {
   readonly speaker?: string;
   readonly lines: string[];
@@ -37,12 +48,13 @@ export function showTextEventPorts(
   floorId: string,
   width: number,
   height: number,
+  transferMapFile: (mapId: number) => string,
 ): { triggers: TriggerDocument[]; events: MapEventScripts } {
   const triggers: TriggerDocument[] = [];
-  const scripts: Record<string, readonly ShowTextCommand[]> = {};
+  const scripts: Record<string, readonly ImportedCommand[]> = {};
 
   for (const entry of events) {
-    const imported = importShowTextEvent(entry, floorId, width, height);
+    const imported = importShowTextEvent(entry, floorId, width, height, transferMapFile);
     if (imported === null) continue;
     triggers.push(imported.trigger);
     scripts[imported.trigger.event] = imported.commands;
@@ -56,7 +68,8 @@ function importShowTextEvent(
   floorId: string,
   width: number,
   height: number,
-): { readonly trigger: TriggerDocument; readonly commands: readonly ShowTextCommand[] } | null {
+  transferMapFile: (mapId: number) => string,
+): { readonly trigger: TriggerDocument; readonly commands: readonly ImportedCommand[] } | null {
   if (!isRecord(entry)) return null;
   const eventId = entry.id;
   const x = entry.x;
@@ -68,7 +81,7 @@ function importShowTextEvent(
   if (!isRecord(page) || !isUnconditional(page.conditions)) return null;
   const on = triggerKind(page.trigger);
   if (on === null) return null;
-  const commands = showTextCommands(page.list);
+  const commands = showTextCommands(page.list, transferMapFile);
   if (commands === null || commands.length === 0) return null;
   const id = `rpgm-event-${eventId}`;
   return {
@@ -97,14 +110,29 @@ function triggerKind(trigger: unknown): TriggerDocument['on'] | null {
   return null;
 }
 
-function showTextCommands(list: unknown): readonly ShowTextCommand[] | null {
+function showTextCommands(
+  list: unknown,
+  transferMapFile: (mapId: number) => string,
+): readonly ImportedCommand[] | null {
   if (!Array.isArray(list)) return null;
-  const commands: ShowTextCommand[] = [];
+  const commands: ImportedCommand[] = [];
   let pending: PendingDialogue | null = null;
+  let transferred = false;
 
   for (const entry of list) {
     if (!isRecord(entry) || typeof entry.code !== 'number') return null;
     if (entry.code === 0) continue;
+    if (entry.code === 108 || entry.code === 408) continue;
+    if (transferred) return null;
+    if (entry.code === 201) {
+      const transfer = transferPlayer(entry.parameters, transferMapFile);
+      if (transfer === null) return null;
+      pushPending(commands, pending);
+      pending = null;
+      commands.push(transfer);
+      transferred = true;
+      continue;
+    }
     if (entry.code === 101) {
       pushPending(commands, pending);
       pending = startDialogue(entry.parameters);
@@ -129,9 +157,32 @@ function startDialogue(parameters: unknown): PendingDialogue {
   return speaker === undefined ? { lines } : { speaker, lines };
 }
 
-function pushPending(commands: ShowTextCommand[], pending: PendingDialogue | null): void {
+function pushPending(commands: ImportedCommand[], pending: PendingDialogue | null): void {
   if (pending === null || pending.lines.length === 0) return;
   commands.push(showDialogue(pending.lines, pending.speaker));
+}
+
+function transferPlayer(
+  parameters: unknown,
+  transferMapFile: (mapId: number) => string,
+): TransferMapCommand | null {
+  if (!Array.isArray(parameters)) return null;
+  // Ignore fadeType: the runtime owns transitions; RPG Maker defaults to black fade.
+  const [designation, mapId, x, y, direction]: readonly unknown[] = parameters;
+  if (designation !== 0) return null;
+  if (typeof mapId !== 'number' || !Number.isInteger(mapId) || mapId < 1) return null;
+  if (typeof x !== 'number' || !Number.isInteger(x) || x < 0) return null;
+  if (typeof y !== 'number' || !Number.isInteger(y) || y < 0) return null;
+  const directions = { 2: 'down', 4: 'left', 6: 'right', 8: 'up' } as const;
+  if (direction === 0) return { type: 'transferMap', mapFile: transferMapFile(mapId), x, y };
+  if (direction !== 2 && direction !== 4 && direction !== 6 && direction !== 8) return null;
+  return {
+    type: 'transferMap',
+    mapFile: transferMapFile(mapId),
+    x,
+    y,
+    facing: directions[direction],
+  };
 }
 
 function showDialogue(lines: readonly string[], speaker: string | undefined): ShowTextCommand {

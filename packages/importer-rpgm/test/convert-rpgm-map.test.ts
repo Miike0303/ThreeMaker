@@ -6,7 +6,7 @@ import {
   validateCurrentVersionShape,
 } from '@threemaker/map-format';
 import { describe, expect, it } from 'vitest';
-import { convertRpgmMap } from '../src/convert-rpgm-map.js';
+import { type ConvertRpgmMapOptions, convertRpgmMap } from '../src/convert-rpgm-map.js';
 import type {
   RpgmEvent,
   RpgmEventCommand,
@@ -276,7 +276,161 @@ describe('convertRpgmMap', () => {
     ]);
   });
 
-  it('skips an event whose page contains a non-text command', () => {
+  describe('Transfer Player and author comments', () => {
+    function convertPage(list: readonly RpgmEventCommand[], opts: ConvertRpgmMapOptions = {}) {
+      const doc = convertRpgmMap(
+        buildSyntheticMap({
+          width: 4,
+          height: 4,
+          events: [placedEvent({ conditions: CLEAR_CONDITIONS, trigger: 1, list })],
+        }),
+        buildSyntheticTileset(),
+        opts,
+      );
+      const roundTrip = parseMapDocument(JSON.parse(serializeMapDocument(doc)));
+      expect(roundTrip.triggers).toEqual(doc.triggers);
+      expect(roundTrip.events).toEqual(doc.events);
+      return doc;
+    }
+
+    const end: RpgmEventCommand = { code: 0, indent: 0, parameters: [] };
+    const transfer: RpgmEventCommand = {
+      code: 201,
+      indent: 0,
+      parameters: [0, 2, 1, 2, 6, 0],
+    };
+    const comments: readonly RpgmEventCommand[] = [
+      { code: 108, indent: 0, parameters: ['Author note'] },
+      { code: 408, indent: 0, parameters: ['Continuation note'] },
+    ];
+
+    it('imports a touch-triggered Transfer Player with the default black fade', () => {
+      const doc = convertPage([transfer, end]);
+
+      expect(doc.triggers).toEqual([
+        {
+          id: 'rpgm-event-1',
+          x: 2,
+          y: 3,
+          floor: 'floor-0',
+          on: 'enter',
+          event: 'rpgm-event-1',
+        },
+      ]);
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'transferMap', mapFile: 'map002.tmmap.json', x: 1, y: 2, facing: 'right' },
+      ]);
+    });
+
+    it('preserves Show Text before a terminal transfer', () => {
+      const doc = convertPage(
+        showTextPage(1, ['Through this door.'], 'Guide', CLEAR_CONDITIONS, [transfer]).list,
+      );
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'showDialogue',
+          speaker: 'Guide',
+          source: { kind: 'text', lines: ['Through this door.'] },
+        },
+        { type: 'transferMap', mapFile: 'map002.tmmap.json', x: 1, y: 2, facing: 'right' },
+      ]);
+    });
+
+    it('omits facing for direction zero and uses a custom transfer filename', () => {
+      const doc = convertPage([{ ...transfer, parameters: [0, 12, 0, 0, 0, 0] }, end], {
+        transferMapFile: (mapId) => `destination-${mapId}.tmmap.json`,
+      });
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'transferMap', mapFile: 'destination-12.tmmap.json', x: 0, y: 0 },
+      ]);
+      expect(doc.events['rpgm-event-1']?.[0]).not.toHaveProperty('facing');
+    });
+
+    it.each([
+      [2, 'down'],
+      [4, 'left'],
+      [6, 'right'],
+      [8, 'up'],
+    ])('maps direction %i to %s', (direction, facing) => {
+      const doc = convertPage([{ ...transfer, parameters: [0, 2, 1, 2, direction, 0] }, end]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'transferMap', mapFile: 'map002.tmmap.json', x: 1, y: 2, facing },
+      ]);
+    });
+
+    it.each([1, 2])('ignores fade type %i', (fadeType) => {
+      const doc = convertPage([{ ...transfer, parameters: [0, 2, 1, 2, 6, fadeType] }, end]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'transferMap', mapFile: 'map002.tmmap.json', x: 1, y: 2, facing: 'right' },
+      ]);
+    });
+
+    it.each([
+      ['variable designation', [1, 2, 1, 2, 6, 0]],
+      ['unknown designation', [2, 2, 1, 2, 6, 0]],
+      ['zero map id', [0, 0, 1, 2, 6, 0]],
+      ['negative map id', [0, -1, 1, 2, 6, 0]],
+      ['fractional map id', [0, 1.5, 1, 2, 6, 0]],
+      ['string map id', [0, '2', 1, 2, 6, 0]],
+      ['fractional x', [0, 2, 1.5, 2, 6, 0]],
+      ['negative x', [0, 2, -1, 2, 6, 0]],
+      ['string x', [0, 2, '1', 2, 6, 0]],
+      ['fractional y', [0, 2, 1, 2.5, 6, 0]],
+      ['negative y', [0, 2, 1, -1, 6, 0]],
+      ['string y', [0, 2, 1, '2', 6, 0]],
+      ['invalid direction', [0, 2, 1, 2, 3, 0]],
+      ['string direction', [0, 2, 1, 2, '6', 0]],
+      ['missing direction', [0, 2, 1, 2]],
+    ])('rejects a page containing a transfer with %s', (_label, parameters) => {
+      const doc = convertPage(
+        showTextPage(1, ['This whole page must be rejected.'], undefined, CLEAR_CONDITIONS, [
+          { ...transfer, parameters },
+        ]).list,
+      );
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it.each([101, 401, 201, 355])('rejects executable command %i after a transfer', (code) => {
+      const doc = convertPage([transfer, end, ...comments, { ...transfer, code }, end]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('ignores author comments before and between dialogue blocks', () => {
+      const first = showTextPage(1, ['Hello'], 'Guide').list;
+      const second = showTextPage(1, ['Welcome'], 'Host').list;
+      const plain = convertPage([...first, ...second]);
+      const annotated = convertPage([...comments, ...first, ...comments, ...second]);
+
+      expect(plain.events['rpgm-event-1']).toHaveLength(2);
+      expect(annotated.triggers).toEqual(plain.triggers);
+      expect(annotated.events).toEqual(plain.events);
+    });
+
+    it('allows comments and terminators after a terminal transfer', () => {
+      const plain = convertPage([transfer, end]);
+      const annotated = convertPage([...comments, transfer, end, ...comments, end]);
+
+      expect(annotated.triggers).toEqual(plain.triggers);
+      expect(annotated.events).toEqual(plain.events);
+    });
+
+    it('emits no trigger for a comment-only page', () => {
+      const doc = convertPage([...comments, end]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+  });
+
+  it('skips an event whose page contains an unsupported command', () => {
     const doc = convertRpgmMap(
       buildSyntheticMap({
         width: 4,
@@ -284,7 +438,7 @@ describe('convertRpgmMap', () => {
         events: [
           placedEvent(
             showTextPage(0, ['Hello'], 'Elder', CLEAR_CONDITIONS, [
-              { code: 201, indent: 0, parameters: [1, 0, 0] },
+              { code: 355, indent: 0, parameters: ['unsupportedScript()'] },
             ]),
           ),
         ],
