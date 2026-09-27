@@ -430,6 +430,101 @@ describe('convertRpgmMap', () => {
     });
   });
 
+  describe('Show Scrolling Text and switch/variable assignments', () => {
+    function convertList(list: readonly RpgmEventCommand[]) {
+      const doc = convertRpgmMap(
+        buildSyntheticMap({
+          width: 4,
+          height: 4,
+          events: [placedEvent({ conditions: CLEAR_CONDITIONS, trigger: 0, list })],
+        }),
+        buildSyntheticTileset(),
+      );
+      const roundTrip = parseMapDocument(JSON.parse(serializeMapDocument(doc)));
+      expect(roundTrip.triggers).toEqual(doc.triggers);
+      expect(roundTrip.events).toEqual(doc.events);
+      return doc;
+    }
+
+    const end: RpgmEventCommand = { code: 0, indent: 0, parameters: [] };
+
+    it('imports a 105 scrolling-text block and its 405 lines as one speakerless showDialogue', () => {
+      const doc = convertList([
+        { code: 105, indent: 0, parameters: [2, false] },
+        { code: 405, indent: 0, parameters: ['The rain falls.'] },
+        { code: 405, indent: 0, parameters: ['The road is empty.'] },
+        end,
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'showDialogue',
+          source: { kind: 'text', lines: ['The rain falls.', 'The road is empty.'] },
+        },
+      ]);
+    });
+
+    it('preserves Show Text, then switches 121, then a constant variable set 122', () => {
+      const doc = convertList([
+        ...showTextPage(0, ['Hello'], 'Elder').list,
+        { code: 121, indent: 0, parameters: [1, 2, 0] },
+        { code: 122, indent: 0, parameters: [5, 5, 0, 0, 42] },
+        end,
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'showDialogue',
+          speaker: 'Elder',
+          source: { kind: 'text', lines: ['Hello'] },
+        },
+        { type: 'setWorldVar', key: 'rpgm.switch.1', value: true },
+        { type: 'setWorldVar', key: 'rpgm.switch.2', value: true },
+        { type: 'setWorldVar', key: 'rpgm.variable.5', value: 42 },
+      ]);
+    });
+
+    it('imports switch 121 OFF (value 1) as false', () => {
+      const doc = convertList([{ code: 121, indent: 0, parameters: [1, 1, 1] }, end]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'setWorldVar', key: 'rpgm.switch.1', value: false },
+      ]);
+    });
+
+    it('rejects variable 122 operationType 1 (add)', () => {
+      const doc = convertList([{ code: 122, indent: 0, parameters: [5, 5, 1, 0, 1] }, end]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('rejects variable 122 operandType 1 (variable)', () => {
+      const doc = convertList([{ code: 122, indent: 0, parameters: [5, 5, 0, 1, 1] }, end]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('rejects switch 121 when the id range contains 101 ids', () => {
+      const doc = convertList([{ code: 121, indent: 0, parameters: [1, 101, 0] }, end]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('rejects switch 121 after a terminal transfer 201', () => {
+      const doc = convertList([
+        { code: 201, indent: 0, parameters: [0, 2, 1, 2, 6, 0] },
+        { code: 121, indent: 0, parameters: [1, 1, 0] },
+        end,
+      ]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+  });
+
   it('skips an event whose page contains an unsupported command', () => {
     const doc = convertRpgmMap(
       buildSyntheticMap({
