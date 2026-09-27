@@ -46,4 +46,13 @@ describe('computePageRange', () => {
       hasNext: false,
     });
   });
+
+  it('shows no catalog rows when page size is zero', () => {
+    expect(computePageRange(0, 0, 42)).toEqual({
+      start: 0,
+      end: 0,
+      hasPrev: false,
+      hasNext: false,
+    });
+  });
 });

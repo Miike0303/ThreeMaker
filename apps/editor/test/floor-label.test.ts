@@ -40,4 +40,8 @@ describe('resolveFloorLabel + spawn summary', () => {
     expect(formatSpawnSummary(tFor('en'), custom, spawn)).toBe('Basement at (14, 4)');
     expect(formatSpawnSummary(tFor('es'), custom, spawn)).toBe('Basement en (14, 4)');
   });
+
+  it('shows the floor id when a referenced floor is missing', () => {
+    expect(resolveFloorLabel(unlabeled, 'floor-9', tFor('en'))).toBe('floor-9');
+  });
 });

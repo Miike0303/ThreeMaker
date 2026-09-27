@@ -34,6 +34,10 @@ describe('clampFurnitureDensity', () => {
     expect(clampFurnitureDensity(2)).toBe(1);
     expect(clampFurnitureDensity(Number.NaN)).toBe(DEFAULT_FURNITURE_DENSITY);
   });
+
+  it('uses a finite caller fallback for an invalid density', () => {
+    expect(clampFurnitureDensity(Number.NaN, 0.25)).toBe(0.25);
+  });
 });
 
 describe('furniture density percent round-trip', () => {

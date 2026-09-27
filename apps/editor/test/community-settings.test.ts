@@ -159,6 +159,10 @@ describe('formatCommunityShareMapId (WU-COMM-11)', () => {
     expect(formatCommunityShareMapId('')).toBe('');
     expect(formatCommunityShareMapId('   ')).toBe('');
   });
+
+  it('uses the default prefix length when a custom limit is zero', () => {
+    expect(formatCommunityShareMapId('0123456789abcdef', 0)).toBe('01234567');
+  });
 });
 
 describe('communityShareQueueTileTotal (WU-COMM-12)', () => {

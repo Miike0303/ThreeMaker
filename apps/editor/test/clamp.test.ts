@@ -67,4 +67,13 @@ describe('clampRoomRect', () => {
     expect(clampRoomRect({ x: 0, y: 0, width: 0, height: 1 }, 4, 4)).toBeUndefined();
     expect(clampRoomRect({ x: 0, y: 0, width: 1, height: 1 }, 0, 4)).toBeUndefined();
   });
+
+  it('floors a fractional room width before fitting it inside the map', () => {
+    expect(clampRoomRect({ x: 1, y: 1, width: 2.9, height: 1 }, 5, 5)).toEqual({
+      x: 1,
+      y: 1,
+      width: 2,
+      height: 1,
+    });
+  });
 });

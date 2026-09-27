@@ -172,4 +172,8 @@ describe('projectToScreenFraction', () => {
     const behind = { x: 0, y: 13.5355, z: 13.5355 };
     expect(projectToScreenFraction(behind, pose, 45, 1)).toBeUndefined();
   });
+
+  it('does not project a point on the camera plane', () => {
+    expect(projectToScreenFraction(pose.position, pose, 45, 1)).toBeUndefined();
+  });
 });
