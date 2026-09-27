@@ -53,6 +53,7 @@ export interface RpgmEventPage {
   readonly conditions: {
     readonly actorValid?: boolean;
     readonly itemValid?: boolean;
+    readonly itemId?: number;
     readonly selfSwitchValid?: boolean;
     readonly selfSwitchCh?: string;
     readonly switch1Valid?: boolean;

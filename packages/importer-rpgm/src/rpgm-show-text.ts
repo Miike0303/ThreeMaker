@@ -1,15 +1,15 @@
 /**
  * RPG Maker MV/MZ Show Text, Show Scrolling Text, Control Switches, Control
- * Variables, Change Items, and Transfer Player events → map triggers.
+ * Variables, inventory changes, and Transfer Player events → map triggers.
  *
  * For each non-null event, pages below the highest unconditional page are
- * unreachable. Every reachable page must have only supported switch
+ * unreachable. Every reachable page must have only supported
  * conditions, the same action-button (0 → `interact`) or player-touch (1 →
  * `enter`) trigger, and a convertible command list. The highest-index page
- * whose switch conditions hold supplies the commands. Lists may contain Show
+ * whose conditions hold supplies the commands. Lists may contain Show
  * Text (101 header, 401 lines), Show Scrolling Text (105 header, 405 lines),
  * Control Switches (121), Control Variables (122) that Set an integer
- * constant, Control Self Switch (123), Change Items (126) with a positive
+ * constant, Control Self Switch (123), Change Items/Weapons/Armors (126–128) with a positive
  * constant operand, an optional terminal direct-coordinate Transfer Player (201),
  * comments (108/408), and end-of-list terminators (0). Comments emit nothing.
  * A 105 with no 405 lines emits nothing. Switch and variable ids must be
@@ -22,7 +22,7 @@
 import type { MapEventScripts, TriggerDocument } from '@threemaker/map-format';
 import type { RpgmEvent } from './types.js';
 
-const UNSUPPORTED_PAGE_CONDITION_FLAGS = ['actorValid', 'itemValid', 'variableValid'] as const;
+const UNSUPPORTED_PAGE_CONDITION_FLAGS = ['actorValid', 'variableValid'] as const;
 
 const MAX_EVENT_COMMANDS = 500;
 
@@ -57,7 +57,12 @@ type GiveItemCommand = {
 
 type ConditionalCommand = {
   readonly type: 'conditional';
-  readonly if: { readonly key: string; readonly op: 'eq'; readonly value: true };
+  readonly if: {
+    readonly key: string;
+    readonly op: 'eq' | 'gt';
+    readonly value: true | 0;
+    readonly source?: 'world' | 'item' | 'stat';
+  };
   readonly then: readonly ImportedCommand[];
   readonly else?: readonly ImportedCommand[];
 };
@@ -125,27 +130,27 @@ function importShowTextEvent(
   let commandCount = 0;
   for (const page of entry.pages.slice(firstReachablePage)) {
     if (!isRecord(page)) return null;
-    const conditionKeys = pageConditionKeys(page.conditions, mapId, eventId);
+    const conditions = pageConditions(page.conditions, mapId, eventId);
     const pageOn = triggerKind(page.trigger);
     const pageCommands = showTextCommands(page.list, mapId, eventId, transferMapFile);
-    if (conditionKeys === null || pageOn === null || (on !== null && pageOn !== on)) return null;
+    if (conditions === null || pageOn === null || (on !== null && pageOn !== on)) return null;
     if (pageCommands === null) return null;
     on = pageOn;
-    if (conditionKeys.length === 0) {
+    if (conditions.length === 0) {
       commands = pageCommands;
       commandCount = pageCommands.length;
     } else {
       const fallback = commands;
       const fallbackCount = commandCount;
-      for (let index = conditionKeys.length - 1; index >= 0; index--) {
-        const key = conditionKeys[index];
-        if (key === undefined) return null;
-        const then = index === conditionKeys.length - 1 ? pageCommands : commands;
-        const thenCount = index === conditionKeys.length - 1 ? pageCommands.length : commandCount;
+      for (let index = conditions.length - 1; index >= 0; index--) {
+        const condition = conditions[index];
+        if (condition === undefined) return null;
+        const then = index === conditions.length - 1 ? pageCommands : commands;
+        const thenCount = index === conditions.length - 1 ? pageCommands.length : commandCount;
         commands = [
           {
             type: 'conditional',
-            if: { key, op: 'eq', value: true },
+            if: condition,
             then,
             ...(fallback.length > 0 ? { else: fallback } : {}),
           },
@@ -179,16 +184,17 @@ function isUnconditional(conditions: unknown): boolean {
     ) &&
     (conditions.switch1Valid === undefined || conditions.switch1Valid === false) &&
     (conditions.switch2Valid === undefined || conditions.switch2Valid === false) &&
-    (conditions.selfSwitchValid === undefined || conditions.selfSwitchValid === false)
+    (conditions.selfSwitchValid === undefined || conditions.selfSwitchValid === false) &&
+    (conditions.itemValid === undefined || conditions.itemValid === false)
   );
 }
 
-/** Active condition keys in RPG Maker's switch 1, switch 2, self switch order. */
-function pageConditionKeys(
+/** Active conditions in RPG Maker's switch 1, switch 2, self switch, item order. */
+function pageConditions(
   conditions: unknown,
   mapId: number | null,
   eventId: number,
-): string[] | null {
+): ConditionalCommand['if'][] | null {
   if (!isRecord(conditions)) return null;
   if (
     UNSUPPORTED_PAGE_CONDITION_FLAGS.some(
@@ -197,14 +203,14 @@ function pageConditionKeys(
   ) {
     return null;
   }
-  const keys: string[] = [];
+  const conditionsForPage: ConditionalCommand['if'][] = [];
   for (const [flag, idKey] of [
     ['switch1Valid', 'switch1Id'],
     ['switch2Valid', 'switch2Id'],
   ] as const) {
     if (conditions[flag] === true) {
       if (!isAssignmentId(conditions[idKey])) return null;
-      keys.push(`rpgm.switch.${conditions[idKey]}`);
+      conditionsForPage.push({ key: `rpgm.switch.${conditions[idKey]}`, op: 'eq', value: true });
     } else if (conditions[flag] !== undefined && conditions[flag] !== false) {
       return null;
     }
@@ -212,11 +218,22 @@ function pageConditionKeys(
   if (conditions.selfSwitchValid === true) {
     const key = selfSwitchKey(mapId, eventId, conditions.selfSwitchCh);
     if (key === null) return null;
-    keys.push(key);
+    conditionsForPage.push({ key, op: 'eq', value: true });
   } else if (conditions.selfSwitchValid !== undefined && conditions.selfSwitchValid !== false) {
     return null;
   }
-  return keys;
+  if (conditions.itemValid === true) {
+    if (!isAssignmentId(conditions.itemId)) return null;
+    conditionsForPage.push({
+      key: `rpgm.item.${conditions.itemId}`,
+      op: 'gt',
+      value: 0,
+      source: 'item',
+    });
+  } else if (conditions.itemValid !== undefined && conditions.itemValid !== false) {
+    return null;
+  }
+  return conditionsForPage;
 }
 
 function selfSwitchKey(mapId: number | null, eventId: number, letter: unknown): string | null {
@@ -272,7 +289,14 @@ function showTextCommands(
       pending.lines.push(line);
       continue;
     }
-    if (entry.code === 121 || entry.code === 122 || entry.code === 123 || entry.code === 126) {
+    if (
+      entry.code === 121 ||
+      entry.code === 122 ||
+      entry.code === 123 ||
+      entry.code === 126 ||
+      entry.code === 127 ||
+      entry.code === 128
+    ) {
       const assigned =
         entry.code === 121
           ? controlSwitches(entry.parameters)
@@ -280,7 +304,7 @@ function showTextCommands(
             ? controlVariables(entry.parameters)
             : entry.code === 123
               ? controlSelfSwitch(entry.parameters, mapId, eventId)
-              : changeItems(entry.parameters);
+              : changeInventory(entry.code, entry.parameters);
       if (assigned === null) return null;
       pushPending(commands, pending);
       pending = null;
@@ -400,9 +424,14 @@ function controlVariables(parameters: unknown): readonly SetWorldVarCommand[] | 
   return commands;
 }
 
-/** Change Items (126): constant increases and decreases become signed amounts. */
-function changeItems(parameters: unknown): readonly GiveItemCommand[] | null {
-  if (!Array.isArray(parameters) || parameters.length !== 4) return null;
+/** Change Items/Weapons/Armors (126–128): constant changes become signed amounts. */
+function changeInventory(
+  code: 126 | 127 | 128,
+  parameters: unknown,
+): readonly GiveItemCommand[] | null {
+  if (!Array.isArray(parameters)) return null;
+  if (parameters.length !== 4 && (code === 126 || parameters.length !== 5)) return null;
+  if (code !== 126 && parameters.length === 5 && typeof parameters[4] !== 'boolean') return null;
   const [itemId, operation, operandType, operand]: readonly unknown[] = parameters;
   if (!isAssignmentId(itemId) || (operation !== 0 && operation !== 1) || operandType !== 0) {
     return null;
@@ -411,7 +440,7 @@ function changeItems(parameters: unknown): readonly GiveItemCommand[] | null {
   return [
     {
       type: 'giveItem',
-      itemId: `rpgm.item.${itemId}`,
+      itemId: `rpgm.${code === 126 ? 'item' : code === 127 ? 'weapon' : 'armor'}.${itemId}`,
       amount: operation === 0 ? operand : -operand,
     },
   ];

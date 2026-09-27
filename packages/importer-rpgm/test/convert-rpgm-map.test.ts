@@ -505,6 +505,15 @@ describe('convertRpgmMap', () => {
       ]);
     });
 
+    it('imports exactly 100 switch ids from one command', () => {
+      const doc = convertList([{ code: 121, indent: 0, parameters: [1, 100, 0] }, end]);
+      const commands = doc.events['rpgm-event-1'];
+
+      expect(commands).toHaveLength(100);
+      expect(commands?.[0]).toEqual({ type: 'setWorldVar', key: 'rpgm.switch.1', value: true });
+      expect(commands?.[99]).toEqual({ type: 'setWorldVar', key: 'rpgm.switch.100', value: true });
+    });
+
     it('imports Change Items 126 increases as giveItem', () => {
       const doc = convertList([{ code: 126, indent: 0, parameters: [7, 0, 0, 1] }, end]);
 
@@ -519,6 +528,29 @@ describe('convertRpgmMap', () => {
       expect(doc.events['rpgm-event-1']).toEqual([
         { type: 'giveItem', itemId: 'rpgm.item.7', amount: -3 },
       ]);
+    });
+
+    it('imports Change Weapons 127 increases as weapon inventory', () => {
+      const doc = convertList([{ code: 127, indent: 0, parameters: [7, 0, 0, 2, true] }, end]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'giveItem', itemId: 'rpgm.weapon.7', amount: 2 },
+      ]);
+    });
+
+    it('imports Change Armors 128 decreases as negative armor inventory', () => {
+      const doc = convertList([{ code: 128, indent: 0, parameters: [4, 1, 0, 3] }, end]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'giveItem', itemId: 'rpgm.armor.4', amount: -3 },
+      ]);
+    });
+
+    it('skips Change Weapons 127 with a variable operand', () => {
+      const doc = convertList([{ code: 127, indent: 0, parameters: [7, 0, 1, 2, false] }, end]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
     });
 
     it('preserves Show Text before and after Change Items 126', () => {
@@ -650,6 +682,56 @@ describe('convertRpgmMap', () => {
       ]);
     });
 
+    it('selects an item-gated page over an unconditional fallback', () => {
+      const doc = convertPages([
+        showTextPage(0, ['No key']),
+        showTextPage(0, ['You have the key'], undefined, {
+          ...CLEAR_CONDITIONS,
+          itemValid: true,
+          itemId: 7,
+        }),
+      ]);
+
+      expect(doc.triggers).toHaveLength(1);
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'conditional',
+          if: { key: 'rpgm.item.7', op: 'gt', value: 0, source: 'item' },
+          then: [dialogue('You have the key')],
+          else: [dialogue('No key')],
+        },
+      ]);
+    });
+
+    it('nests item conditions after switches and the self switch', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Fallback']),
+        showTextPage(0, ['Matched'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: 1,
+          switch2Valid: true,
+          switch2Id: 2,
+          selfSwitchValid: true,
+          selfSwitchCh: 'A',
+          itemValid: true,
+          itemId: 7,
+        }),
+      ]);
+
+      const switch1 = doc.events['rpgm-event-1']?.[0];
+      expect(switch1?.type).toBe('conditional');
+      expect(switch1?.if).toEqual({ key: 'rpgm.switch.1', op: 'eq', value: true });
+      const switch2 = switch1?.then?.[0];
+      expect(switch2?.if).toEqual({ key: 'rpgm.switch.2', op: 'eq', value: true });
+      const selfSwitch = switch2?.then?.[0];
+      expect(selfSwitch?.if).toEqual({ key: 'rpgm.self.100.1.A', op: 'eq', value: true });
+      const item = selfSwitch?.then?.[0];
+      expect(item?.if).toEqual({ key: 'rpgm.item.7', op: 'gt', value: 0, source: 'item' });
+      expect(item?.then).toEqual([dialogue('Matched')]);
+      expect(item?.else).toEqual([dialogue('Fallback')]);
+    });
+
     it('omits the fallback when only a conditional page exists', () => {
       const doc = convertPages([
         showTextPage(0, ['Welcome'], undefined, {
@@ -737,6 +819,20 @@ describe('convertRpgmMap', () => {
           ...CLEAR_CONDITIONS,
           switch1Valid: true,
           switch1Id: id,
+        }),
+      ]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it.each([undefined, 0, 1.5])('skips an active item condition without a valid id (%s)', (id) => {
+      const doc = convertPages([
+        showTextPage(0, ['Fallback']),
+        showTextPage(0, ['Matched'], undefined, {
+          ...CLEAR_CONDITIONS,
+          itemValid: true,
+          itemId: id,
         }),
       ]);
 
