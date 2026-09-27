@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
-import { configurePixelArtTexture } from '../src/scene/pixel-art-texture.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { configurePixelArtTexture, loadSheetTexture } from '../src/scene/pixel-art-texture.js';
 
 describe('configurePixelArtTexture', () => {
   it('defaults to the crisp sprite configuration: nearest filter, no mipmaps, no anisotropy', () => {
@@ -63,5 +63,64 @@ describe('configurePixelArtTexture', () => {
     // `needsUpdate` is a write-only setter that increments `version` -- there
     // is no getter to read the flag back, so assert its actual effect.
     expect(texture.version).toBeGreaterThan(versionBefore);
+  });
+});
+
+describe('loadSheetTexture', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('resolves with the loaded texture and applies the requested pixel-art configuration', async () => {
+    let onLoad: ((texture: THREE.Texture) => void) | undefined;
+    const texture = new THREE.Texture();
+    const load = vi
+      .spyOn(THREE.TextureLoader.prototype, 'load')
+      .mockImplementation((_url, callback) => {
+        onLoad = callback;
+        return texture;
+      });
+
+    const resultPromise = loadSheetTexture('/sheet.png', {
+      mipmaps: true,
+      magFilter: THREE.LinearFilter,
+      maxAnisotropy: 4,
+    });
+
+    expect(load).toHaveBeenCalledWith(
+      '/sheet.png',
+      expect.any(Function),
+      undefined,
+      expect.any(Function),
+    );
+    onLoad?.(texture);
+
+    await expect(resultPromise).resolves.toBe(texture);
+    expect(texture.magFilter).toBe(THREE.LinearFilter);
+    expect(texture.minFilter).toBe(THREE.LinearMipmapLinearFilter);
+    expect(texture.generateMipmaps).toBe(true);
+    expect(texture.anisotropy).toBe(4);
+    expect(texture.colorSpace).toBe(THREE.SRGBColorSpace);
+  });
+
+  it.each([
+    ['an Error', new Error('sheet failed'), new Error('sheet failed')],
+    ['a string', 'sheet failed', new Error('sheet failed')],
+  ])('rejects with %s from the loader callback', async (_label, failure, expected) => {
+    let onError: ((error: unknown) => void) | undefined;
+    vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation(
+      (_url, _onLoad, _onProgress, callback) => {
+        onError = callback;
+        return new THREE.Texture();
+      },
+    );
+
+    const resultPromise = loadSheetTexture('/sheet.png');
+    onError?.(failure);
+
+    await expect(resultPromise).rejects.toEqual(expected);
+    if (failure instanceof Error) {
+      await expect(resultPromise).rejects.toBe(failure);
+    }
   });
 });

@@ -1,16 +1,52 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scanGames } from '../src/scanner.js';
+
+const fsFailure = vi.hoisted(() => ({
+  fn: null as 'realpathSync' | 'readdirSync' | 'readFileSync' | null,
+  path: null as string | null,
+  message: 'injected filesystem failure',
+}));
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+
+  return {
+    ...actual,
+    realpathSync: (...args: Parameters<typeof actual.realpathSync>) => {
+      if (fsFailure.fn === 'realpathSync' && args[0] === fsFailure.path) {
+        throw new Error(fsFailure.message);
+      }
+      return actual.realpathSync(...args);
+    },
+    readdirSync: (...args: Parameters<typeof actual.readdirSync>) => {
+      if (fsFailure.fn === 'readdirSync' && args[0] === fsFailure.path) {
+        throw new Error(fsFailure.message);
+      }
+      return actual.readdirSync(...args);
+    },
+    readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
+      if (fsFailure.fn === 'readFileSync' && args[0] === fsFailure.path) {
+        throw new Error(fsFailure.message);
+      }
+      return actual.readFileSync(...args);
+    },
+  };
+});
 
 let workDir: string;
 
 beforeEach(() => {
+  fsFailure.fn = null;
+  fsFailure.path = null;
   workDir = mkdtempSync(join(tmpdir(), 'assets-scanner-test-'));
 });
 
 afterEach(() => {
+  fsFailure.fn = null;
+  fsFailure.path = null;
   rmSync(workDir, { recursive: true, force: true });
 });
 
@@ -222,5 +258,70 @@ describe('scanGames — per-game error isolation', () => {
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]?.code).toBe('invalid-system-json');
     expect(result.errors[0]?.path).toBe(brokenGame);
+  });
+});
+
+describe('scanGames — an unreadable branch does not abort a later healthy game', () => {
+  // `aaa-unreadable` sorts before `zzz-healthy`, and is created first, so the
+  // failing branch is the one the walk reaches first.
+  function writeUnreadableThenHealthy(failingIsGame: boolean): {
+    failing: string;
+    healthy: string;
+    systemJsonPath: string;
+  } {
+    const failing = join(workDir, 'aaa-unreadable');
+    const systemJsonPath = join(failing, 'data', 'System.json');
+    if (failingIsGame) {
+      writeSystemJson(join(failing, 'data'), VALID_SYSTEM_JSON);
+    } else {
+      mkdirSync(failing);
+    }
+
+    const healthy = join(workDir, 'zzz-healthy');
+    writeSystemJson(join(healthy, 'data'), VALID_SYSTEM_JSON);
+    return { failing, healthy, systemJsonPath };
+  }
+
+  it('still finds the healthy game when realpathSync fails on the earlier branch', () => {
+    const { failing, healthy } = writeUnreadableThenHealthy(false);
+    fsFailure.fn = 'realpathSync';
+    fsFailure.path = failing;
+
+    const result = scanGames(workDir, { maxDepth: 12 });
+
+    expect(result.games.map((game) => game.rootPath)).toEqual([healthy]);
+    expect(result.errors).toEqual([
+      { path: failing, code: 'read-error', message: fsFailure.message },
+    ]);
+  });
+
+  it('still finds the healthy game when readdirSync fails on the earlier branch', () => {
+    const { failing, healthy } = writeUnreadableThenHealthy(false);
+    fsFailure.fn = 'readdirSync';
+    fsFailure.path = failing;
+
+    const result = scanGames(workDir, { maxDepth: 12 });
+
+    expect(result.games.map((game) => game.rootPath)).toEqual([healthy]);
+    expect(result.errors).toEqual([
+      { path: failing, code: 'read-error', message: fsFailure.message },
+    ]);
+  });
+
+  it('still finds the healthy game when readFileSync fails on the earlier game', () => {
+    const { failing, healthy, systemJsonPath } = writeUnreadableThenHealthy(true);
+    fsFailure.fn = 'readFileSync';
+    fsFailure.path = systemJsonPath;
+
+    const result = scanGames(workDir, { maxDepth: 12 });
+
+    expect(result.games.map((game) => game.rootPath)).toEqual([healthy]);
+    expect(result.errors).toEqual([
+      {
+        path: failing,
+        code: 'read-error',
+        message: `Could not read "${systemJsonPath}": ${fsFailure.message}`,
+      },
+    ]);
   });
 });
