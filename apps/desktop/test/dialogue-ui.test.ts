@@ -171,10 +171,17 @@ describe('createDialogueOverlay', () => {
 
   it('does not carry the previous speaker and line into a conversation that opens with choices', () => {
     const { overlay, speaker, text, choices } = overlayParts();
+    const element = overlay.element as unknown as FakeElement;
+
+    expect(element.getAttribute('aria-live')).toBe('polite');
+    expect(element.getAttribute('aria-atomic')).toBe('true');
 
     overlay.showLine('Alice', 'Old conversation');
+    expect(element.getAttribute('aria-live')).toBe('polite');
     overlay.hide();
+    expect(element.getAttribute('aria-live')).toBe('polite');
     overlay.showChoices(['New option'], 0);
+    expect(element.getAttribute('aria-live')).toBe('polite');
 
     expect(speaker?.textContent).toBe('');
     expect(text?.textContent).toBe('');
@@ -214,18 +221,22 @@ describe('createDialogueOverlay', () => {
     expect(current()).toEqual(['false', 'false', 'true']);
   });
 
-  it('announces errors as alerts and drops the role once dialogue resumes or hides', () => {
+  it('announces errors assertively and restores polite announcements when dialogue resumes or hides', () => {
     const { overlay } = overlayParts();
-    const role = () => (overlay.element as unknown as FakeElement).getAttribute('role');
+    const element = overlay.element as unknown as FakeElement;
+    const role = () => element.getAttribute('role');
 
     overlay.showError('Could not save.');
     expect(role()).toBe('alert');
+    expect(element.getAttribute('aria-live')).toBe('assertive');
 
     overlay.showLine('Alice', 'Back to talking');
     expect(role()).toBeNull();
+    expect(element.getAttribute('aria-live')).toBe('polite');
 
     overlay.showError('Could not load.');
     overlay.hide();
     expect(role()).toBeNull();
+    expect(element.getAttribute('aria-live')).toBe('polite');
   });
 });

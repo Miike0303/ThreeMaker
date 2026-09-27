@@ -107,6 +107,8 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
   const overlay = document.createElement('div');
   overlay.className = 'dialogue-overlay';
   overlay.style.display = 'none';
+  overlay.setAttribute('aria-live', 'polite');
+  overlay.setAttribute('aria-atomic', 'true');
 
   const speakerEl = document.createElement('div');
   speakerEl.className = 'dialogue-speaker';
@@ -143,6 +145,7 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
       overlay.style.display = '';
       overlay.classList.remove('dialogue-overlay-error');
       overlay.removeAttribute('role');
+      overlay.setAttribute('aria-live', 'polite');
       speakerEl.textContent = formatSpeakerLabel(speaker, t);
       textEl.textContent = text;
       choicesEl.replaceChildren();
@@ -152,6 +155,7 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
       overlay.style.display = '';
       overlay.classList.remove('dialogue-overlay-error');
       overlay.removeAttribute('role');
+      overlay.setAttribute('aria-live', 'polite');
       renderChoiceRows(options, highlightedIndex);
       hintEl.textContent = formatDialogueHint(true, t);
     },
@@ -166,6 +170,7 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
       overlay.classList.add('dialogue-overlay-error');
       // Errors surface here without a dialogue turn; announce them to screen readers.
       overlay.setAttribute('role', 'alert');
+      overlay.setAttribute('aria-live', 'assertive');
       speakerEl.textContent = '';
       textEl.textContent = `${t('dialogue.error')}: ${message}`;
       choicesEl.replaceChildren();
@@ -177,6 +182,7 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
       // speaker/text here would reappear above the next conversation's options.
       overlay.classList.remove('dialogue-overlay-error');
       overlay.removeAttribute('role');
+      overlay.setAttribute('aria-live', 'polite');
       speakerEl.textContent = '';
       textEl.textContent = '';
       choicesEl.replaceChildren();
