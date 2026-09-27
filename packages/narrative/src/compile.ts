@@ -1,6 +1,17 @@
-import type { Story } from 'inkjs';
 import { Compiler, CompilerOptions } from 'inkjs/compiler/Compiler';
 import { ErrorType } from 'inkjs/compiler/Parser/ErrorType';
+import { Story } from 'inkjs/engine/Story';
+
+// ponytail: Limit the LRU cache to 8 entries and 2 MiB of source.length + json.length to bound retained compilation data.
+const maxCacheEntries = 8;
+const maxCacheSize = 2 * 1024 * 1024;
+const compileCache = new Map<string, string>();
+let compileCacheSize = 0;
+
+export function clearInkCompileCacheForTests(): void {
+  compileCache.clear();
+  compileCacheSize = 0;
+}
 
 /** Severity of a single compiler-reported issue, mirroring inkjs's `ErrorType`. */
 export type InkIssueType = 'author' | 'warning' | 'error';
@@ -48,6 +59,8 @@ function toIssueType(type: ErrorType): InkIssueType {
  * {@link Story}. v1 scope: single-file stories only — no `INCLUDE`
  * `fileHandler` is configured, so `.ink` sources that use `INCLUDE` will fail
  * to compile.
+ * Successful compilations are cached by source with bounded LRU eviction;
+ * cache hits return a fresh Story with independent state and external bindings.
  *
  * Every issue the compiler reports (author notes, warnings, errors) is
  * collected via `CompilerOptions.errorHandler`. On a source with any
@@ -57,6 +70,13 @@ function toIssueType(type: ErrorType): InkIssueType {
  * instead of inkjs's opaque message.
  */
 export function compileInk(source: string): Story {
+  const cachedJson = compileCache.get(source);
+  if (cachedJson !== undefined) {
+    compileCache.delete(source);
+    compileCache.set(source, cachedJson);
+    return new Story(cachedJson);
+  }
+
   const issues: InkIssue[] = [];
   const options = new CompilerOptions(null, [], false, (message, type) => {
     issues.push({ type: toIssueType(type), message });
@@ -72,6 +92,20 @@ export function compileInk(source: string): Story {
 
   if (issues.some((issue) => issue.type === 'error')) {
     throw new InkCompileError(issues);
+  }
+
+  const json = story.ToJson();
+  if (typeof json !== 'string') {
+    throw new Error('Ink story serialization did not return JSON.');
+  }
+  compileCache.set(source, json);
+  compileCacheSize += source.length + json.length;
+  while (compileCache.size > maxCacheEntries || compileCacheSize > maxCacheSize) {
+    const oldest = compileCache.entries().next().value;
+    if (!oldest) break;
+    const [oldestSource, oldestJson] = oldest;
+    compileCache.delete(oldestSource);
+    compileCacheSize -= oldestSource.length + oldestJson.length;
   }
 
   return story;
