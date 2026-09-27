@@ -41,6 +41,10 @@ describe('parseAudioPath', () => {
     expect(() => parseAudioPath('C:\\Windows\\win.ini', 'x')).toThrow(/not absolute/);
   });
 
+  it('rejects a lowercase Windows drive path', () => {
+    expect(() => parseAudioPath('c:\\Windows\\win.ini', 'x')).toThrow(/not absolute/);
+  });
+
   it('rejects an empty path', () => {
     expect(() => parseAudioPath('', 'x')).toThrow(/non-empty string/);
   });
@@ -65,6 +69,10 @@ describe('parseVolume / parseFadeMs', () => {
 
   it('rejects a negative fade', () => {
     expect(() => parseFadeMs(-1, 'x')).toThrow(/non-negative/);
+  });
+
+  it('rejects a fractional negative fade', () => {
+    expect(() => parseFadeMs(-0.25, 'x')).toThrow(/non-negative/);
   });
 
   it('accepts a fractional fade duration', () => {
@@ -143,6 +151,15 @@ describe('createAudioCommandPlugins', () => {
       .get('playBgm')
       ?.run({ type: 'playBgm', path: 'bgm/town.ogg', fadeMs: 800 }, {} as never);
     expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { fadeMs: 800 });
+  });
+
+  it('forwards authored playBgm volume to a handler', () => {
+    const playBgm = vi.fn();
+    const registry = registryFor({ playBgm });
+    registry
+      .get('playBgm')
+      ?.run({ type: 'playBgm', path: 'bgm/town.ogg', volume: 0.4 }, {} as never);
+    expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { volume: 0.4 });
   });
 
   it('forwards loop false to a playBgm handler', () => {

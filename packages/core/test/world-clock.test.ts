@@ -30,6 +30,13 @@ describe('WorldClock', () => {
     expect(clock.minutes).toBe(103);
   });
 
+  it('accepts a fractional rate of simulated minutes per second', () => {
+    const clock = new WorldClock({ minutesPerRealSecond: 0.5, startMinutes: 100 });
+
+    expect(clock.advance(2)).toBe(1);
+    expect(clock.minutes).toBe(101);
+  });
+
   it('carries fractional remainder across successive advances', () => {
     const clock = new WorldClock({ minutesPerRealSecond: 1, startMinutes: 0 });
     expect(clock.advance(0.6)).toBe(0);

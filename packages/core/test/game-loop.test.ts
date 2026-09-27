@@ -66,6 +66,17 @@ describe('GameLoop (variable timestep)', () => {
     expect(onTick).toHaveBeenCalledWith(0.25);
   });
 
+  it('allows maxDelta zero to freeze elapsed time', () => {
+    const clock = new FakeClock();
+    const onTick = vi.fn();
+    const loop = new GameLoop({ clock, onTick, maxDelta: 0 });
+    loop.start();
+
+    clock.advance(0.1);
+    expect(loop.tick()).toBe(1);
+    expect(onTick).toHaveBeenCalledWith(0);
+  });
+
   it('clamps a backward clock reading to zero elapsed time', () => {
     const clock = new FakeClock();
     const onTick = vi.fn();
