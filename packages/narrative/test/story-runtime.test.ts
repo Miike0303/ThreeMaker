@@ -25,6 +25,16 @@ function runToEnd(story: ReturnType<typeof compileInk>): string {
 }
 
 describe('bindStoryToWorld', () => {
+  it('mirrors a numeric Ink variable into world-state', () => {
+    const world = new WorldState();
+    const story = compileInk('VAR score = 0\n~ score = 7\nDone.\n-> END\n');
+
+    bindStoryToWorld(story, { storyId: 'demo', world, observedVariables: ['score'] });
+    runToEnd(story);
+
+    expect(world.get('ink.demo.score')).toBe(7);
+  });
+
   it.each([
     {
       name: 'world_get',

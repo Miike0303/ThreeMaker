@@ -48,6 +48,17 @@ Bye
 });
 
 describe('parseInkNodeLayouts / applyInkNodeLayouts', () => {
+  it('writes one newline after a layout header when source is empty', () => {
+    expect(applyInkNodeLayouts('', [{ knot: 'start', x: 0, y: 0 }])).toBe(
+      '// @tm-node start x=0 y=0\n',
+    );
+  });
+
+  it('preserves the source when there are no layouts to write', () => {
+    const source = '=== start ===\nHello.\n';
+    expect(applyInkNodeLayouts(source, [])).toBe(source);
+  });
+
   it('parses // @tm-node <knot> x=<n> y=<n> lines', () => {
     const source = `// @tm-node start x=120 y=40
 // @tm-node mid x=-10 y=200.5
@@ -189,6 +200,11 @@ Hi
 });
 
 describe('buildInkGraphModel / setInkNodePosition', () => {
+  it('honors zero horizontal spacing in custom grid options', () => {
+    const model = buildInkGraphModel('=== first ===\n=== second ===\n', { colWidth: 0 });
+    expect(model.nodes[1]).toEqual({ knot: 'second', x: 0, y: 0 });
+  });
+
   it('places the second node at the default column width', () => {
     const model = buildInkGraphModel('=== first ===\n=== second ===\n');
 
