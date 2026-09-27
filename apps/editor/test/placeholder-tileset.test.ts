@@ -73,9 +73,14 @@ describe('buildPlaceholderTextures', () => {
       expect(b[3]).toBe(255);
       expect(`${a[0]},${a[1]},${a[2]}`).not.toBe(`${b[0]},${b[1]},${b[2]}`);
       // Every pixel opaque.
+      let firstNonOpaque = -1;
       for (let i = 3; i < image.data.length; i += 4) {
-        expect(image.data[i]).toBe(255);
+        if (image.data[i] !== 255) {
+          firstNonOpaque = i;
+          break;
+        }
       }
+      expect(firstNonOpaque).toBe(-1);
     } finally {
       revokePlaceholderPaletteUrls(built.paletteUrls);
     }
