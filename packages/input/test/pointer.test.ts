@@ -69,4 +69,14 @@ describe('resolvePointerIntent', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('ignores a down sample with no button pressed', () => {
+    expect(
+      resolvePointerIntent({
+        phase: 'down',
+        button: -1,
+        target: { kind: 'actionable' },
+      }),
+    ).toBeUndefined();
+  });
 });

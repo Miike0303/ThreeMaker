@@ -40,6 +40,15 @@ describe('createBindingTable', () => {
     expect(table.actionForKeyboardKey('ArrowUp')).toBe('move.up');
   });
 
+  it('keeps the original list slot when replacing a later binding', () => {
+    const replacement: ActionBinding = {
+      action: 'inspect',
+      source: { device: 'keyboard', key: 'e' },
+    };
+    const table = createBindingTable([...sample, replacement]);
+    expect(table.list()).toEqual([sample[0], sample[1], replacement]);
+  });
+
   it('withoutSource drops a keyboard binding by normalized key', () => {
     const table = createBindingTable(sample).withoutSource({
       device: 'keyboard',

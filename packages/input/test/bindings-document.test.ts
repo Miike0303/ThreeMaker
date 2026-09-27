@@ -46,6 +46,16 @@ describe('serializeInputBindingsDocument / parseInputBindingsDocument', () => {
     ).toBe(false);
   });
 
+  it('rejects a legacy document version', () => {
+    expect(
+      parseInputBindingsDocument({
+        magic: INPUT_BINDINGS_MAGIC,
+        version: 0,
+        bindings: [],
+      }).ok,
+    ).toBe(false);
+  });
+
   it('rejects malformed bindings entries', () => {
     expect(
       parseInputBindingsDocument({
@@ -101,6 +111,15 @@ describe('applyBindingOverrides / collectBindingOverrides', () => {
     expect(collectBindingOverrides(remapped)).toEqual([
       { action: Actions.Interact, source: { device: 'keyboard', key: 'f' } },
     ]);
+  });
+
+  it('does not persist unchanged aliases when their order differs', () => {
+    const defaults = [
+      { action: Actions.MoveUp, source: { device: 'keyboard' as const, key: 'w' } },
+      { action: Actions.MoveUp, source: { device: 'keyboard' as const, key: 'ArrowUp' } },
+    ];
+    const reordered = createBindingTable([...defaults].reverse());
+    expect(collectBindingOverrides(reordered, defaults)).toEqual([]);
   });
 
   it('load path: invalid document falls back to pure defaults (host uses this)', () => {

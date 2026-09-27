@@ -98,6 +98,12 @@ describe('activeActionsFromGamepad', () => {
 });
 
 describe('edgesBetweenActionSets', () => {
+  it('uses an injected hold set for release edges', () => {
+    expect(edgesBetweenActionSets([Actions.Interact], [], new Set([Actions.Interact]))).toEqual([
+      { action: Actions.Interact, edge: 'released' },
+    ]);
+  });
+
   it('emits pressed for newly active actions', () => {
     expect(edgesBetweenActionSets([], [Actions.Interact, Actions.MoveUp])).toEqual([
       { action: Actions.Interact, edge: 'pressed' },

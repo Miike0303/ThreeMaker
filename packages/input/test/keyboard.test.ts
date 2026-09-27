@@ -55,6 +55,13 @@ describe('resolveKeyboardEdge', () => {
     expect(HOLD_ACTIONS.has(Actions.MoveUp)).toBe(true);
     expect(HOLD_ACTIONS.has(Actions.Interact)).toBe(false);
   });
+
+  it('uses an injected hold set for keyup edges', () => {
+    expect(resolveKeyboardEdge('e', 'up', table, new Set([Actions.Interact]))).toEqual({
+      action: Actions.Interact,
+      edge: 'released',
+    });
+  });
 });
 
 describe('createMostRecentHeldAction', () => {
