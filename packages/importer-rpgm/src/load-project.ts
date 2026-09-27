@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseMap } from './parse-map.js';
-import { parseMapInfos } from './parse-map-infos.js';
+import { orderMapInfosByTree, parseMapInfos } from './parse-map-infos.js';
 import { parseTilesets } from './parse-tilesets.js';
 import type { RpgmMap, RpgmProject } from './types.js';
 
@@ -54,7 +54,7 @@ export async function loadProject(dir: string): Promise<RpgmProject> {
     readJson(join(dataDir, 'Tilesets.json')),
   ]);
 
-  const mapInfos = parseMapInfos(mapInfosJson);
+  const mapInfos = orderMapInfosByTree(parseMapInfos(mapInfosJson));
   const tilesets = parseTilesets(tilesetsJson);
   const editorNames = new Map(mapInfos.map((mapInfo) => [mapInfo.id, mapInfo.name]));
 

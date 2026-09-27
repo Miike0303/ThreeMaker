@@ -103,3 +103,35 @@ describe('loadProject — data folder layouts', () => {
     expect(project.tilesets[0]?.name).toBe('Outside');
   });
 });
+
+describe('loadProject — map info order', () => {
+  let workDir: string;
+
+  beforeEach(() => {
+    workDir = mkdtempSync(join(tmpdir(), 'threemaker-load-project-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(workDir, { recursive: true, force: true });
+  });
+
+  it('returns map infos in sidebar tree order', async () => {
+    const dataDir = join(workDir, 'data');
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(
+      join(dataDir, 'MapInfos.json'),
+      JSON.stringify([
+        null,
+        { id: 10, name: 'Ten', parentId: 0, order: 1 },
+        { id: 11, name: 'Eleven', parentId: 10, order: 0 },
+        { id: 12, name: 'Twelve', parentId: 0, order: 0 },
+      ]),
+      'utf8',
+    );
+    writeFileSync(join(dataDir, 'Tilesets.json'), JSON.stringify(TILESETS_JSON), 'utf8');
+
+    const project = await loadProject(workDir);
+
+    expect(project.mapInfos.map((info) => info.id)).toEqual([12, 10, 11]);
+  });
+});
