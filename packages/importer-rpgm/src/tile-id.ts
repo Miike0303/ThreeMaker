@@ -61,43 +61,37 @@ export function getAutotileShape(tileId: number): number {
   return (tileId - AUTOTILE_BASE) % AUTOTILE_IDS_PER_KIND;
 }
 
+/** Starting tile id of each sheet (same table as {@link SHEET_ID_RANGES}). */
+export const SHEET_BASE_ID: Readonly<Record<TileSheetId, number>> = Object.freeze(
+  Object.fromEntries(SHEET_ID_RANGES.map(({ sheet, start }) => [sheet, start])) as Record<
+    TileSheetId,
+    number
+  >,
+);
+
+/** Exclusive end id of each sheet's range. */
+export const SHEET_END_ID: Readonly<Record<TileSheetId, number>> = Object.freeze(
+  Object.fromEntries(SHEET_ID_RANGES.map(({ sheet, end }) => [sheet, end])) as Record<
+    TileSheetId,
+    number
+  >,
+);
+
+function findRange(tileId: number): SheetIdRange | null {
+  for (const range of SHEET_ID_RANGES) {
+    if (tileId >= range.start && tileId < range.end) {
+      return range;
+    }
+  }
+  return null;
+}
+
 /**
  * Which of the 9 tileset sheets a tile ID belongs to. Returns `null` for the
  * unused 1024-1535 gap or for IDs outside the valid 0-8191 range.
  */
-/** Starting tile id of each sheet (same table as {@link SHEET_ID_RANGES}). */
-export const SHEET_BASE_ID: Readonly<Record<TileSheetId, number>> = {
-  B: 0,
-  C: 256,
-  D: 512,
-  E: 768,
-  A5: 1536,
-  A1: 2048,
-  A2: 2816,
-  A3: 4352,
-  A4: 5888,
-};
-
-/** Exclusive end id of each sheet's range. */
-export const SHEET_END_ID: Readonly<Record<TileSheetId, number>> = {
-  B: 256,
-  C: 512,
-  D: 768,
-  E: 1024,
-  A5: 2048,
-  A1: 2816,
-  A2: 4352,
-  A3: 5888,
-  A4: 8192,
-};
-
 export function getTileSheet(tileId: number): TileSheetId | null {
-  for (const range of SHEET_ID_RANGES) {
-    if (tileId >= range.start && tileId < range.end) {
-      return range.sheet;
-    }
-  }
-  return null;
+  return findRange(tileId)?.sheet ?? null;
 }
 
 /**
@@ -105,10 +99,6 @@ export function getTileSheet(tileId: number): TileSheetId | null {
  * belong to any sheet (see `getTileSheet`).
  */
 export function getLocalTileIndex(tileId: number): number | null {
-  for (const range of SHEET_ID_RANGES) {
-    if (tileId >= range.start && tileId < range.end) {
-      return tileId - range.start;
-    }
-  }
-  return null;
+  const range = findRange(tileId);
+  return range === null ? null : tileId - range.start;
 }
