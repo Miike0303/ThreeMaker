@@ -176,6 +176,7 @@ describe('debug panel collapsed-state persistence', () => {
 
 type FakeNode = {
   readonly tag: string;
+  textContent: string;
   readonly attributes: Map<string, string>;
   readonly listeners: Map<string, () => void>;
   readonly classList: { toggle(name: string, on?: boolean): void };
@@ -188,6 +189,7 @@ type FakeNode = {
 function fakeNode(tag: string): FakeNode {
   const node: FakeNode = {
     tag,
+    textContent: '',
     attributes: new Map(),
     listeners: new Map(),
     classList: { toggle: () => {} },
@@ -208,7 +210,13 @@ describe('debug panel toggle accessibility', () => {
     vi.unstubAllGlobals();
   });
 
-  function mountPanel(storedCollapsed: boolean): FakeNode {
+  function mountPanel(
+    storedCollapsed: boolean,
+    devMode = false,
+  ): {
+    toggle: FakeNode;
+    created: FakeNode[];
+  } {
     const created: FakeNode[] = [];
     vi.stubGlobal('document', {
       createElement: (tag: string) => {
@@ -219,7 +227,7 @@ describe('debug panel toggle accessibility', () => {
     });
     const store = new Map([[DEBUG_PANEL_COLLAPSED_STORAGE_KEY, String(storedCollapsed)]]);
     createDebugPanel(createI18n(LOCALES, 'en').t, {
-      devMode: false,
+      devMode,
       collapsedStorage: {
         getItem: (key) => store.get(key) ?? null,
         setItem: (key, value) => {
@@ -229,11 +237,11 @@ describe('debug panel toggle accessibility', () => {
     });
     const toggle = created.find((node) => node.tag === 'button');
     if (!toggle) throw new Error('debug panel created no toggle button');
-    return toggle;
+    return { toggle, created };
   }
 
   it('reports the restored state and flips aria-expanded on each click', () => {
-    const toggle = mountPanel(true);
+    const { toggle } = mountPanel(true);
     expect(toggle.attributes.get('aria-expanded')).toBe('false');
 
     toggle.listeners.get('click')?.();
@@ -244,6 +252,12 @@ describe('debug panel toggle accessibility', () => {
   });
 
   it('starts expanded when nothing collapsed was stored', () => {
-    expect(mountPanel(false).attributes.get('aria-expanded')).toBe('true');
+    expect(mountPanel(false).toggle.attributes.get('aria-expanded')).toBe('true');
+  });
+
+  it('includes the map-cycle control row in dev mode', () => {
+    const { created } = mountPanel(false, true);
+
+    expect(created.some((node) => node.textContent === 'G')).toBe(true);
   });
 });

@@ -183,6 +183,7 @@ describe('createDialogueOverlay', () => {
     overlay.showChoices(['New option'], 0);
     expect(element.getAttribute('aria-live')).toBe('polite');
 
+    expect(element.style.display).toBe('');
     expect(speaker?.textContent).toBe('');
     expect(text?.textContent).toBe('');
     expect(choices?.children).toHaveLength(1);
