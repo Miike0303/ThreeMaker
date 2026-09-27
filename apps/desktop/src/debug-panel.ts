@@ -1,8 +1,12 @@
 import { formatClockMinutes } from '@threemaker/renderer';
+import { createHopStats, type HopStats } from './hop-stats.js';
 import type { I18n } from './i18n.js';
 
-/** One frame of the debug overlay's "live values" section (see main.ts's `window.__threemaker_debug`). */
-export interface DebugSnapshot {
+/**
+ * One frame of the debug overlay's "live values" section (see main.ts's
+ * `window.__threemaker_debug`). Hop disposal counters come from {@link HopStats}.
+ */
+export interface DebugSnapshot extends HopStats {
   readonly mapName: string;
   /** Already localized (reuses `CAMERA_MODE_LOCALE_KEY` in main.ts) -- this module stays decoupled from `CameraMode`. */
   readonly cameraModeLabel: string;
@@ -27,21 +31,6 @@ export interface DebugSnapshot {
   readonly backend: string;
   /** EMA frame time in milliseconds (display-rounded in {@link formatDebugRows}). */
   readonly frameTimeMs: number;
-  /** Successful G-cycle / transferMap hops completed this session. */
-  readonly hopsCompleted: number;
-  /**
-   * NPC sprites on the map disposed at the last completed hop (0 before any
-   * hop). PLAN_DEV_2 C1: GPU-leak contract, debug-panel verifiable.
-   */
-  readonly lastOutgoingNarrativeSprites: number;
-  /** Floor texture keys disposed with the outgoing map at the last hop. */
-  readonly lastOutgoingFloorTextureKeys: number;
-  /** Prop instances disposed with the outgoing map at the last hop (C5). */
-  readonly lastOutgoingPropInstances: number;
-  /** Distinct prop glTF assets disposed with the outgoing map at the last hop (C5). */
-  readonly lastOutgoingPropAssets: number;
-  /** Authored lights disposed with the outgoing map at the last hop (C6). */
-  readonly lastOutgoingLights: number;
   /** Current session inventory counts (display-only; C4). */
   readonly inventory: Readonly<Record<string, number>>;
   /** Current session stat values (display-only; C4). */
@@ -274,12 +263,7 @@ export function createDebugPanel(t: I18n['t'], options: DebugPanelOptions): Debu
       litTiles: false,
       backend: '',
       frameTimeMs: 0,
-      hopsCompleted: 0,
-      lastOutgoingNarrativeSprites: 0,
-      lastOutgoingFloorTextureKeys: 0,
-      lastOutgoingPropInstances: 0,
-      lastOutgoingPropAssets: 0,
-      lastOutgoingLights: 0,
+      ...createHopStats(),
       inventory: {},
       stats: {},
       clockMinutes: 0,
