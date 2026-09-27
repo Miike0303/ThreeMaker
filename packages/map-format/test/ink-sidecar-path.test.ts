@@ -26,6 +26,7 @@ describe('isSafeStoryId / inkSidecarRelativePath', () => {
     );
     expect(inkSidecarRelativePath('maps/map-a.tmmap.json', 'guard')).toBe('maps/map-a.guard.ink');
     expect(inkSidecarRelativePath('current.tmmap.json', 'intro')).toBe('current.intro.ink');
+    expect(inkSidecarRelativePath('maps/town', 'intro')).toBe('maps/town.intro.ink');
   });
 
   it('throws on unsafe story ids before path join', () => {
