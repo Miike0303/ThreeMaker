@@ -317,6 +317,47 @@ describe('buildChunks', () => {
     expect(chunks[0]?.tiles[0]?.elevation).toBe('object');
   });
 
+  it('classifies an impassable C-sheet tile as "object" elevation', () => {
+    const layer0 = new Array(16).fill(0);
+    layer0[0] = 257; // sheet C, local index 1.
+    const map = makeMap({
+      layers: {
+        tileLayers: [layer0, new Array(16).fill(0), new Array(16).fill(0), new Array(16).fill(0)],
+        shadows: new Array(16).fill(0),
+        regions: new Array(16).fill(0),
+      },
+    });
+    const flags = new Array(8192).fill(0);
+    flags[257] = 0x1;
+
+    const chunks = buildChunks(
+      map,
+      makeTileset({ flags }),
+      { ...SHEET_SIZES, C: { width: 768, height: 768 } },
+      16,
+    );
+
+    expect(chunks[0]?.tiles[0]?.elevation).toBe('object');
+  });
+
+  it('classifies a tile blocked only to the right as "object" elevation', () => {
+    const layer0 = new Array(16).fill(0);
+    layer0[0] = 3;
+    const map = makeMap({
+      layers: {
+        tileLayers: [layer0, new Array(16).fill(0), new Array(16).fill(0), new Array(16).fill(0)],
+        shadows: new Array(16).fill(0),
+        regions: new Array(16).fill(0),
+      },
+    });
+    const flags = new Array(8192).fill(0);
+    flags[3] = 0x4; // impassableRight only.
+
+    const chunks = buildChunks(map, makeTileset({ flags }), SHEET_SIZES, 16);
+
+    expect(chunks[0]?.tiles[0]?.elevation).toBe('object');
+  });
+
   it('keeps a passable (no impassable bits) object-sheet tile as "ground" elevation (decals/rugs stay flat)', () => {
     const layer0 = new Array(16).fill(0);
     layer0[0] = 1; // sheet B, no flags set in the default makeTileset().

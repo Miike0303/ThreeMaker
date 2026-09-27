@@ -74,4 +74,8 @@ describe('dayNightAmbientFactor (C7 WU-02)', () => {
     expect(dayNightAmbientFactor(1439)).toBeCloseTo(dayNightAmbientFactor(0), 5);
     expect(dayNightAmbientFactor(1439)).toBeCloseTo(0.35);
   });
+
+  it('wraps negative minutes to the matching time of day', () => {
+    expect(dayNightAmbientFactor(-720)).toBeCloseTo(1);
+  });
 });

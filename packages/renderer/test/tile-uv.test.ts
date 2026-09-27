@@ -89,6 +89,12 @@ describe('computeTileUv', () => {
     expect(result?.quads[0]?.v1).toBeCloseTo(1 - (48 + INSET) / 768);
   });
 
+  it('keeps lower A5 rows within the sheet height', () => {
+    const result = computeTileUv(1536 + 8 * 9, { A5: { width: 384, height: 768 } });
+
+    expect(result?.quads[0]?.v1).toBeCloseTo(1 - (432 + INSET) / 768);
+  });
+
   it('maps an autotile id to 4 quarter-tile UV quads, not 1 repeated rect', () => {
     // Tile id 2816 is the first A2 autotile id (global kind 16, local kind 0,
     // shape 0). See autotile-tables.test.ts for the pixel-origin derivation:
