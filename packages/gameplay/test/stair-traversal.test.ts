@@ -146,6 +146,35 @@ describe('StairTraversal (descent, bidirectional reverse)', () => {
 });
 
 describe('StairTraversal (speed)', () => {
+  it('holds position when speed is explicitly zero', () => {
+    const traversal = new StairTraversal({
+      waypoints: [
+        { x: 0, y: 0, floor: 0 },
+        { x: 4, y: 0, floor: 0 },
+      ],
+      floors: FLOORS,
+      speed: 0,
+      heightUnit: HEIGHT_UNIT,
+    });
+
+    expect(traversal.update(10)).toEqual({ x: 0, y: 0, worldY: 0, done: false });
+  });
+
+  it('does not reverse progress for a negative frame delta', () => {
+    const traversal = new StairTraversal({
+      waypoints: [
+        { x: 0, y: 0, floor: 0 },
+        { x: 4, y: 0, floor: 0 },
+      ],
+      floors: FLOORS,
+      speed: SPEED,
+      heightUnit: HEIGHT_UNIT,
+    });
+
+    const before = traversal.update(0.5);
+    expect(traversal.update(-0.25)).toEqual(before);
+  });
+
   it('uses Euclidean distance to time diagonal segments', () => {
     const traversal = new StairTraversal({
       waypoints: [
@@ -205,6 +234,19 @@ describe('StairTraversal (speed)', () => {
     expect(almostDone.done).toBe(false);
     const done = traversal.update(0.02);
     expect(done.done).toBe(true);
+  });
+});
+
+describe('StairTraversal (waypoints)', () => {
+  it('rejects a path with only one waypoint', () => {
+    expect(
+      () =>
+        new StairTraversal({
+          waypoints: [{ x: 0, y: 0, floor: 0 }],
+          floors: FLOORS,
+          heightUnit: HEIGHT_UNIT,
+        }),
+    ).toThrow(/at least 2 waypoints/);
   });
 });
 

@@ -21,6 +21,12 @@ describe('ElevationField', () => {
     expect(field.heightAt(-1, 1)).toBe(0);
   });
 
+  it('returns 0 when the right edge would otherwise index the next row', () => {
+    const field = new ElevationField(buildMap(2, 2, {}, [0, 0, 3, 0]));
+
+    expect(field.heightAt(2, 0)).toBe(0);
+  });
+
   it('rampDirAt is undefined for every cell with no ramp semantics resolved (default)', () => {
     const map = buildMap(2, 2, {}, [0, 1, 1, 0]);
     const field = new ElevationField(map);
