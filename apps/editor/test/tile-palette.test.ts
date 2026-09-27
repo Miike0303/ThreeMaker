@@ -150,6 +150,48 @@ describe('computePaletteColumns', () => {
 });
 
 describe('TilePalette', () => {
+  it('labels the swatch grid with its visible sheet label', () => {
+    const markup = renderToStaticMarkup(
+      createElement(TilePalette, {
+        label: 'B palette',
+        sheet: 'B',
+        imageUrl: 'sheet.png',
+        pixelSize: { width: 96, height: 48 },
+        tilePixelSize: 48,
+        selectedTileId: -1,
+        onSelect: () => {},
+        tileAriaLabel: (tileId: number) => `tile ${tileId}`,
+      }),
+    );
+    const labelId = markup.match(/<p id="([^"]+)" class="tile-palette-label">B palette<\/p>/)?.[1];
+
+    expect(labelId).toBeDefined();
+    expect(markup).toContain(`<div class="tile-palette" role="group" aria-labelledby="${labelId}"`);
+  });
+
+  it('uses different label ids for palettes rendered in one tree', () => {
+    const palette = (label: string) =>
+      createElement(TilePalette, {
+        label,
+        sheet: 'B',
+        imageUrl: 'sheet.png',
+        pixelSize: { width: 96, height: 48 },
+        tilePixelSize: 48,
+        selectedTileId: -1,
+        onSelect: () => {},
+        tileAriaLabel: (tileId: number) => `tile ${tileId}`,
+      });
+    const markup = renderToStaticMarkup(
+      createElement('div', null, palette('B palette'), palette('C palette')),
+    );
+    const labelIds = [...markup.matchAll(/<p id="([^"]+)" class="tile-palette-label">/g)].map(
+      (match) => match[1],
+    );
+
+    expect(labelIds).toHaveLength(2);
+    expect(labelIds[0]).not.toBe(labelIds[1]);
+  });
+
   it('exposes only the selected tile as pressed to assistive technology', () => {
     const cells = computePaletteCells('B', { width: 96, height: 48 }, 48);
     const selected = cells[1]?.tileId ?? -1;

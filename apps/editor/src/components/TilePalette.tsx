@@ -11,6 +11,7 @@
 import type { TileSheetId } from '@threemaker/importer-rpgm';
 import type { SheetPixelSize } from '@threemaker/renderer';
 import { TILE_SIZE_PX } from '@threemaker/renderer';
+import { useId } from 'react';
 import { computePaletteCells, computePaletteColumns } from '../tile-palette.js';
 
 export interface TilePaletteProps {
@@ -38,6 +39,7 @@ export function TilePalette({
   onSelect,
   tileAriaLabel,
 }: TilePaletteProps) {
+  const labelId = useId();
   const cells = computePaletteCells(sheet, pixelSize, tilePixelSize);
   const cols = computePaletteColumns(sheet, pixelSize, tilePixelSize);
   const backgroundWidth = (pixelSize.width / tilePixelSize) * THUMBNAIL_PX;
@@ -45,9 +47,14 @@ export function TilePalette({
 
   return (
     <div className="tile-palette-group">
-      <p className="tile-palette-label">{label}</p>
+      <p id={labelId} className="tile-palette-label">
+        {label}
+      </p>
+      {/* biome-ignore lint/a11y/useSemanticElements: The tile palette requires group semantics. */}
       <div
         className="tile-palette"
+        role="group"
+        aria-labelledby={labelId}
         style={{ gridTemplateColumns: `repeat(${cols}, ${THUMBNAIL_PX}px)` }}
       >
         {cells.map((cell) => (
