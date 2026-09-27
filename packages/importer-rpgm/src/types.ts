@@ -79,6 +79,8 @@ export interface RpgmMap {
   /** Numeric map id, e.g. `21` for `Map021.json`. `null` if parsed without a known id. */
   readonly id: number | null;
   readonly displayName: string;
+  /** Map name from `MapInfos.json`, as shown in the editor. */
+  readonly editorName?: string;
   readonly width: number;
   readonly height: number;
   readonly tilesetId: number;

@@ -108,6 +108,18 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it.each([
+    ['', 'Town', 'Town'],
+    ['Harbor', 'Town', 'Harbor'],
+    ['', undefined, ''],
+  ])('chooses document name from display/editor name (%s, %s)', (displayName, editorName, name) => {
+    const map = buildSyntheticMap({ displayName, editorName });
+
+    const doc = convertRpgmMap(map, buildSyntheticTileset());
+
+    expect(doc.name).toBe(name);
+  });
+
   it('maps tile/shadow/region layers 1:1 into a single floor at baseElevation 0', () => {
     const map = buildSyntheticMap();
     const tileset = buildSyntheticTileset();

@@ -90,7 +90,12 @@ export function convertRpgmMap(
     format: MAP_FORMAT_MAGIC,
     version: CURRENT_MAP_FORMAT_VERSION,
     id,
-    name: map.displayName,
+    name:
+      map.displayName.trim().length > 0
+        ? map.displayName
+        : map.editorName?.trim().length
+          ? map.editorName
+          : '',
     width: map.width,
     height: map.height,
     tileset: {

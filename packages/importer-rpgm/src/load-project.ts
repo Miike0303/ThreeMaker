@@ -56,6 +56,7 @@ export async function loadProject(dir: string): Promise<RpgmProject> {
 
   const mapInfos = parseMapInfos(mapInfosJson);
   const tilesets = parseTilesets(tilesetsJson);
+  const editorNames = new Map(mapInfos.map((mapInfo) => [mapInfo.id, mapInfo.name]));
 
   const entries = await readdir(dataDir);
   const maps = new Map<number, RpgmMap>();
@@ -71,7 +72,9 @@ export async function loadProject(dir: string): Promise<RpgmProject> {
       );
     }
     const mapJson = await readJson(join(dataDir, entry));
-    maps.set(id, parseMap(mapJson, id));
+    const map = parseMap(mapJson, id);
+    const editorName = editorNames.get(id);
+    maps.set(id, editorName !== undefined && editorName.length > 0 ? { ...map, editorName } : map);
     mapFileById.set(id, entry);
   }
 

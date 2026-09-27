@@ -73,6 +73,8 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     const project = await loadProject(workDir);
 
     expect(project.maps.size).toBe(2);
+    expect(project.maps.get(1)?.editorName).toBe('Map001');
+    expect(project.maps.get(1)?.displayName).toBe('');
   });
 });
 
