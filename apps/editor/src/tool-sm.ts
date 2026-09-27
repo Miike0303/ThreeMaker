@@ -138,7 +138,7 @@ export interface ToolSMStrokingState {
   readonly layer: 0 | 1 | 2 | 3;
   readonly startX: number;
   readonly startY: number;
-  /** Every distinct point the stroke has passed over, in order, start included. */
+  /** Every distinct point the stroke has passed over, in order, start included; box tools retain only the first and latest points. */
   readonly points: readonly TilePoint[];
 }
 
@@ -157,12 +157,16 @@ export function beginStroke(
   return { status: 'stroking', tool, layer, startX: point.x, startY: point.y, points: [point] };
 }
 
-/** stroking -> stroking, appending a point (deduping an exact repeat of the last point). No-op while idle -- pointer moves before a pointerdown don't affect anything. */
+/** stroking -> stroking, deduping an exact repeat of the last point. Brush and other tools retain full history; box tools retain only the first and latest points. No-op while idle -- pointer moves before a pointerdown don't affect anything. */
 export function continueStroke(state: ToolSMState, point: TilePoint): ToolSMState {
   if (state.status !== 'stroking') return state;
   const last = state.points[state.points.length - 1];
   if (last && last.x === point.x && last.y === point.y) return state;
-  return { ...state, points: [...state.points, point] };
+  const points =
+    state.tool === 'box-fill' || state.tool === 'room-box'
+      ? [state.points[0] ?? point, point]
+      : [...state.points, point];
+  return { ...state, points };
 }
 
 /** stroking -> idle ("pointerup commits" in the design). Idle if called while already idle. */

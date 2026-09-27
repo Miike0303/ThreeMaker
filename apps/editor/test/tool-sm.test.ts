@@ -155,6 +155,42 @@ describe('ToolSM idle -> stroking -> idle', () => {
     expect(state).toMatchObject({ points: [{ x: 0, y: 0 }] });
   });
 
+  const assertCompactBoxHistory = (tool: 'box-fill' | 'room-box') => {
+    let state = beginStroke(TOOL_SM_IDLE, tool, 0, { x: 10, y: 20 });
+    const priorStates = [state];
+    const priorPointSnapshots = [state.points.map((point) => ({ ...point }))];
+    const intermediateStates = [];
+
+    for (let move = 1; move <= 1_000; move += 1) {
+      state = continueStroke(state, { x: 10 + move, y: 20 - move });
+      intermediateStates.push(state);
+      priorStates.push(state);
+      priorPointSnapshots.push(state.points.map((point) => ({ ...point })));
+    }
+
+    const pointCountSum = intermediateStates.reduce(
+      (sum, current) => sum + current.points.length,
+      0,
+    );
+    expect(pointCountSum).toBeLessThanOrEqual(2_000);
+    expect(state.points).toEqual([
+      { x: 10, y: 20 },
+      { x: 1_010, y: -980 },
+    ]);
+
+    for (let index = 0; index < priorStates.length; index += 1) {
+      expect(priorStates[index].points).toEqual(priorPointSnapshots[index]);
+    }
+  };
+
+  it('box-fill retains only the first and latest points across a long drag', () => {
+    assertCompactBoxHistory('box-fill');
+  });
+
+  it('room-box retains only the first and latest points across a long drag', () => {
+    assertCompactBoxHistory('room-box');
+  });
+
   it('continueStroke is a no-op while idle', () => {
     expect(continueStroke(TOOL_SM_IDLE, { x: 1, y: 1 })).toBe(TOOL_SM_IDLE);
   });
