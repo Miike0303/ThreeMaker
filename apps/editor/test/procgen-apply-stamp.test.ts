@@ -3,6 +3,61 @@ import { createBlankMapDocument } from '../src/map-compose.js';
 import { applyDungeonStampToMapDocument } from '../src/procgen/apply-stamp.js';
 import { pickMainRoomSpawn, stampSimpleDungeon } from '../src/procgen/dungeon-stamp.js';
 
+function twoFloorSemanticFixture(
+  currentClass: 'window' | 'wall',
+  floor0TileId: number,
+  floor1TileId: number,
+) {
+  const blank = createBlankMapDocument({
+    id: 'stamp-cross-floor-semantic',
+    name: 'Cross-floor semantics',
+    width: 16,
+    height: 16,
+    slots: {},
+    flags: new Array(8192).fill(0),
+  });
+  const ground = blank.floors[0];
+  if (!ground) throw new Error('fixture has no ground floor');
+  const floor0Tiles = structuredClone(ground.layers.tiles) as [
+    number[],
+    number[],
+    number[],
+    number[],
+  ];
+  const floor1Tiles = structuredClone(ground.layers.tiles) as [
+    number[],
+    number[],
+    number[],
+    number[],
+  ];
+  floor0Tiles[0][0] = floor0TileId;
+  floor1Tiles[3][1] = floor1TileId;
+  const doc = {
+    ...blank,
+    floors: [
+      { ...ground, layers: { ...ground.layers, tiles: floor0Tiles } },
+      {
+        ...ground,
+        id: 'floor-1',
+        baseElevation: 1,
+        layers: { ...ground.layers, tiles: floor1Tiles },
+      },
+    ],
+    tileset: {
+      ...blank.tileset,
+      semantics: { '4352': { class: currentClass } },
+    },
+  };
+  const stamp = stampSimpleDungeon({
+    width: 16,
+    height: 16,
+    seed: 3,
+    groundTileId: 2816,
+    wallTileId: 4352,
+  });
+  return { doc, stamp };
+}
+
 describe('applyDungeonStampToMapDocument', () => {
   it('throws when a stamp layer is smaller than the map', () => {
     const doc = createBlankMapDocument({
@@ -156,6 +211,35 @@ describe('applyDungeonStampToMapDocument', () => {
     expect(next.tileset.semantics['99']).toEqual({ class: 'furniture' });
     // Ground id is not forced to wall.
     expect(next.tileset.semantics['2816']).toBeUndefined();
+  });
+
+  it('rejects reclassing a tile used on another floor without mutating the document', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('window', 4352, 0);
+    const before = structuredClone(doc);
+
+    expect(() => applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 })).toThrow(
+      /tile 4352.*window.*wall.*floor-0/,
+    );
+    expect(doc).toEqual(before);
+  });
+
+  it('reclasses a tile used only on the target floor', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('window', 0, 4352);
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 });
+
+    expect(next.tileset.semantics['4352']).toEqual({ class: 'wall' });
+    expect(next.floors[1]?.layers.tiles[2]).toEqual(stamp.layers[2]);
+  });
+
+  it('stamps a tile used on another floor with the same semantic class', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('wall', 4352, 0);
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 });
+
+    expect(next.tileset.semantics['4352']).toEqual({ class: 'wall' });
+    expect(next.floors[0]?.layers.tiles[0]?.[0]).toBe(4352);
+    expect(next.floors[1]?.layers.tiles[2]).toEqual(stamp.layers[2]);
   });
 
   it('tags stamped mid-layer door tiles with semantic class door', () => {
@@ -342,7 +426,8 @@ describe('applyDungeonStampToMapDocument', () => {
       slots: {},
       flags: new Array(8192).fill(0),
     });
-    const ground = blank.floors[0]!;
+    const ground = blank.floors[0];
+    if (!ground) throw new Error('fixture has no ground floor');
     const size = blank.width * blank.height;
     // Marker tile on floor-0 so we can prove it survives stamping floor-1.
     const floor0Tiles = ground.layers.tiles.map((layer, li) => {
@@ -464,6 +549,8 @@ describe('applyDungeonStampToMapDocument', () => {
       flags: new Array(8192).fill(0),
     });
     const size = blank.width * blank.height;
+    const ground = blank.floors[0];
+    if (!ground) throw new Error('fixture has no ground floor');
     const floor1 = {
       id: 'floor-1',
       baseElevation: 1,
@@ -480,7 +567,7 @@ describe('applyDungeonStampToMapDocument', () => {
     };
     const doc = {
       ...blank,
-      floors: [blank.floors[0]!, floor1],
+      floors: [ground, floor1],
       rooms: [
         {
           id: 'ground-hall',
@@ -544,10 +631,12 @@ describe('applyDungeonStampToMapDocument', () => {
       flags: new Array(8192).fill(0),
     });
     const size = blank.width * blank.height;
+    const ground = blank.floors[0];
+    if (!ground) throw new Error('fixture has no ground floor');
     const doc = {
       ...blank,
       floors: [
-        blank.floors[0]!,
+        ground,
         {
           id: 'floor-1',
           baseElevation: 1,

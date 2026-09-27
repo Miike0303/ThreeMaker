@@ -2,7 +2,7 @@
  * Apply a dungeon stamp onto a target floor of a MapDocument (pure).
  * Default target is floor index 0 (ground); multi-floor maps pass active index.
  */
-import type { MapDocument } from '@threemaker/map-format';
+import type { MapDocument, SemanticClass } from '@threemaker/map-format';
 import { assignSemanticClass } from '../semantic-store.js';
 import { type DungeonStampResult, pickMainRoomSpawn } from './dungeon-stamp.js';
 import {
@@ -71,6 +71,27 @@ function uniqueNonZeroIds(layer: readonly number[]): Set<number> {
   return ids;
 }
 
+function assertNoCrossFloorSemanticConflict(
+  doc: MapDocument,
+  targetFloorIndex: number,
+  tileIds: ReadonlySet<number>,
+  nextClass: SemanticClass,
+): void {
+  for (const tileId of tileIds) {
+    if (tileId === 0) continue;
+    const currentClass = doc.tileset.semantics[String(tileId)]?.class;
+    if (!currentClass || currentClass === 'none' || currentClass === nextClass) continue;
+    for (const [floorIndex, floor] of doc.floors.entries()) {
+      if (floorIndex === targetFloorIndex) continue;
+      if (floor.layers.tiles.some((layer) => layer.includes(tileId))) {
+        throw new Error(
+          `Cannot reclass tile ${tileId} from ${currentClass} to ${nextClass}: used on floor ${floor.id}`,
+        );
+      }
+    }
+  }
+}
+
 export function applyDungeonStampToMapDocument(
   doc: MapDocument,
   stamp: DungeonStampResult,
@@ -126,6 +147,9 @@ export function applyDungeonStampToMapDocument(
     if (id === 0 || doorIds.has(id)) continue;
     furnitureIds.add(id);
   }
+  assertNoCrossFloorSemanticConflict(doc, targetFloorIndex, wallIds, 'wall');
+  assertNoCrossFloorSemanticConflict(doc, targetFloorIndex, doorIds, 'door');
+  assertNoCrossFloorSemanticConflict(doc, targetFloorIndex, furnitureIds, 'furniture');
   let nextSemantics = assignSemanticClass(doc.tileset.semantics, wallIds, 'wall');
   nextSemantics = assignSemanticClass(nextSemantics, doorIds, 'door');
   nextSemantics = assignSemanticClass(nextSemantics, furnitureIds, 'furniture');
