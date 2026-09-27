@@ -47,6 +47,18 @@ describe('readRpgmSystemStart', () => {
     expect(readRpgmSystemStart(gameDir)).toEqual({ mapId: 9, x: 2, y: 2 });
   });
 
+  it('finds System.json under a `www/data` subdirectory (deployed MV layout)', () => {
+    const dataDir = join(gameDir, 'www', 'data');
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(
+      join(dataDir, 'System.json'),
+      JSON.stringify({ startMapId: 12, startX: 4, startY: 6 }),
+      'utf8',
+    );
+
+    expect(readRpgmSystemStart(gameDir)).toEqual({ mapId: 12, x: 4, y: 6 });
+  });
+
   it('returns undefined when no System.json exists under any candidate directory', () => {
     expect(readRpgmSystemStart(gameDir)).toBeUndefined();
   });

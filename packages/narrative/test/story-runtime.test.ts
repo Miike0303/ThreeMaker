@@ -139,6 +139,19 @@ The choices are ready.
     expect(world.has('quest_seen')).toBe(false);
   });
 
+  it('returns a false fallback for an unset world key', () => {
+    const world = new WorldState();
+    const story = compileInk(`EXTERNAL world_get(key, fallback)
+{world_get("switch", false)}
+-> END
+`);
+
+    bindStoryToWorld(story, { storyId: 'demo', world });
+
+    expect(runToEnd(story).trim()).toBe('false');
+    expect(world.has('switch')).toBe(false);
+  });
+
   it('returns a present false value instead of the fallback', () => {
     const world = new WorldState();
     world.set('flag', false);

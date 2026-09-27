@@ -56,6 +56,12 @@ describe('activeActionsFromGamepad', () => {
     expect(activeActionsFromGamepad(snap({ axes: [0.4, -0.85, 0, 0] }))).toEqual([Actions.MoveUp]);
   });
 
+  it('prefers the horizontal axis when left-stick diagonal magnitudes tie', () => {
+    expect(activeActionsFromGamepad(snap({ axes: [0.6, -0.6, 0, 0] }))).toEqual([
+      Actions.MoveRight,
+    ]);
+  });
+
   it('ignores stick motion inside the deadzone', () => {
     const justUnder = DEFAULT_GAMEPAD_DEADZONE - 0.01;
     expect(activeActionsFromGamepad(snap({ axes: [justUnder, justUnder, 0, 0] }))).toEqual([]);
