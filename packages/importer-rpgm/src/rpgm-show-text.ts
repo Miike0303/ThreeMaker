@@ -2,30 +2,33 @@
  * RPG Maker MV/MZ Show Text, Show Scrolling Text, Control Switches, Control
  * Variables, and Transfer Player events → map triggers.
  *
- * For each non-null event, only the last page is considered. It is imported
- * when that page is unconditional, its trigger is action-button (0 →
- * `interact`) or player-touch (1 → `enter`), and its list contains only Show
+ * For each non-null event, pages below the highest unconditional page are
+ * unreachable. Every reachable page must have only supported switch
+ * conditions, the same action-button (0 → `interact`) or player-touch (1 →
+ * `enter`) trigger, and a convertible command list. The highest-index page
+ * whose switch conditions hold supplies the commands. Lists may contain Show
  * Text (101 header, 401 lines), Show Scrolling Text (105 header, 405 lines),
  * Control Switches (121), Control Variables (122) that Set an integer
  * constant, an optional terminal direct-coordinate Transfer Player (201),
  * comments (108/408), and end-of-list terminators (0). Comments emit nothing.
  * A 105 with no 405 lines emits nothing. Switch and variable ids must be
  * integers ≥ 1, with start ≤ end and at most 100 ids. Any other variable
- * operation or operand, unsupported command, conditional last page, or list
- * that yields no commands skips the event. Malformed entries are skipped.
+ * operation or operand, unsupported command, or unsupported page condition
+ * skips the whole event. Empty final scripts and scripts over 500 commands
+ * (including nested commands) are skipped. Malformed entries are skipped.
  */
 
 import type { MapEventScripts, TriggerDocument } from '@threemaker/map-format';
 import type { RpgmEvent } from './types.js';
 
-const PAGE_CONDITION_FLAGS = [
+const UNSUPPORTED_PAGE_CONDITION_FLAGS = [
   'actorValid',
   'itemValid',
   'selfSwitchValid',
-  'switch1Valid',
-  'switch2Valid',
   'variableValid',
 ] as const;
+
+const MAX_EVENT_COMMANDS = 500;
 
 /** Inclusive id span of one Control Switches / Control Variables command. */
 const MAX_ASSIGNMENT_IDS = 100;
@@ -50,7 +53,18 @@ type SetWorldVarCommand = {
   readonly value: boolean | number;
 };
 
-type ImportedCommand = ShowTextCommand | TransferMapCommand | SetWorldVarCommand;
+type ConditionalCommand = {
+  readonly type: 'conditional';
+  readonly if: { readonly key: string; readonly op: 'eq'; readonly value: true };
+  readonly then: readonly ImportedCommand[];
+  readonly else?: readonly ImportedCommand[];
+};
+
+type ImportedCommand =
+  | ShowTextCommand
+  | TransferMapCommand
+  | SetWorldVarCommand
+  | ConditionalCommand;
 
 type PendingDialogue = {
   /** 105/405 scrolling text has no speaker; 101/401 Show Text may. */
@@ -93,12 +107,47 @@ function importShowTextEvent(
   if (typeof eventId !== 'number' || !Number.isInteger(eventId)) return null;
   if (!isTileCoord(x, width) || !isTileCoord(y, height)) return null;
   if (!Array.isArray(entry.pages) || entry.pages.length === 0) return null;
-  const page = entry.pages[entry.pages.length - 1];
-  if (!isRecord(page) || !isUnconditional(page.conditions)) return null;
-  const on = triggerKind(page.trigger);
-  if (on === null) return null;
-  const commands = showTextCommands(page.list, transferMapFile);
-  if (commands === null || commands.length === 0) return null;
+  let firstReachablePage = 0;
+  for (let index = entry.pages.length - 1; index >= 0; index--) {
+    const page = entry.pages[index];
+    if (isRecord(page) && isUnconditional(page.conditions)) {
+      firstReachablePage = index;
+      break;
+    }
+  }
+  let on: TriggerDocument['on'] | null = null;
+  let commands: readonly ImportedCommand[] = [];
+  let commandCount = 0;
+  for (const page of entry.pages.slice(firstReachablePage)) {
+    if (!isRecord(page)) return null;
+    const switchIds = pageSwitchIds(page.conditions);
+    const pageOn = triggerKind(page.trigger);
+    const pageCommands = showTextCommands(page.list, transferMapFile);
+    if (switchIds === null || pageOn === null || (on !== null && pageOn !== on)) return null;
+    if (pageCommands === null) return null;
+    on = pageOn;
+    if (switchIds.length === 0) {
+      commands = pageCommands;
+      commandCount = pageCommands.length;
+    } else {
+      const fallback = commands;
+      const fallbackCount = commandCount;
+      for (let index = switchIds.length - 1; index >= 0; index--) {
+        const then = index === switchIds.length - 1 ? pageCommands : commands;
+        const thenCount = index === switchIds.length - 1 ? pageCommands.length : commandCount;
+        commands = [
+          {
+            type: 'conditional',
+            if: { key: `rpgm.switch.${switchIds[index]}`, op: 'eq', value: true },
+            then,
+            ...(fallback.length > 0 ? { else: fallback } : {}),
+          },
+        ];
+        commandCount = 1 + thenCount + (fallback.length > 0 ? fallbackCount : 0);
+      }
+    }
+  }
+  if (on === null || commands.length === 0 || commandCount > MAX_EVENT_COMMANDS) return null;
   const id = `rpgm-event-${eventId}`;
   return {
     trigger: { id, x, y, floor: floorId, on, event: id },
@@ -114,10 +163,41 @@ function isTileCoord(value: unknown, limit: number): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < limit;
 }
 
-/** Unconditional when every present page-condition flag is `false`. */
+/** Every present RPG Maker page-condition flag must be false. */
 function isUnconditional(conditions: unknown): boolean {
   if (!isRecord(conditions)) return false;
-  return PAGE_CONDITION_FLAGS.every((flag) => !(flag in conditions) || conditions[flag] === false);
+  return (
+    UNSUPPORTED_PAGE_CONDITION_FLAGS.every(
+      (flag) => conditions[flag] === undefined || conditions[flag] === false,
+    ) &&
+    (conditions.switch1Valid === undefined || conditions.switch1Valid === false) &&
+    (conditions.switch2Valid === undefined || conditions.switch2Valid === false)
+  );
+}
+
+/** Active switch ids in RPG Maker's first, then second condition order. */
+function pageSwitchIds(conditions: unknown): number[] | null {
+  if (!isRecord(conditions)) return null;
+  if (
+    UNSUPPORTED_PAGE_CONDITION_FLAGS.some(
+      (flag) => conditions[flag] !== undefined && conditions[flag] !== false,
+    )
+  ) {
+    return null;
+  }
+  const ids: number[] = [];
+  for (const [flag, idKey] of [
+    ['switch1Valid', 'switch1Id'],
+    ['switch2Valid', 'switch2Id'],
+  ] as const) {
+    if (conditions[flag] === true) {
+      if (!isAssignmentId(conditions[idKey])) return null;
+      ids.push(conditions[idKey]);
+    } else if (conditions[flag] !== undefined && conditions[flag] !== false) {
+      return null;
+    }
+  }
+  return ids;
 }
 
 function triggerKind(trigger: unknown): TriggerDocument['on'] | null {

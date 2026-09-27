@@ -55,7 +55,9 @@ export interface RpgmEventPage {
     readonly itemValid?: boolean;
     readonly selfSwitchValid?: boolean;
     readonly switch1Valid?: boolean;
+    readonly switch1Id?: number;
     readonly switch2Valid?: boolean;
+    readonly switch2Id?: number;
     readonly variableValid?: boolean;
   };
   readonly trigger: number;

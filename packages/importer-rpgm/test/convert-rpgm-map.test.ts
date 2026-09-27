@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noThenProperty: EventCommand requires the schema field named "then".
 import {
   CURRENT_MAP_FORMAT_VERSION,
   MAP_FORMAT_MAGIC,
@@ -545,23 +546,267 @@ describe('convertRpgmMap', () => {
     expect(doc.events).toEqual({});
   });
 
-  it('skips an event whose last page is conditional even when an earlier page is pure text', () => {
-    const text = showTextPage(0, ['Hello'], 'Elder');
-    const conditional = showTextPage(0, ['Hello'], 'Elder', {
-      ...CLEAR_CONDITIONS,
-      switch1Valid: true,
-    });
-    const doc = convertRpgmMap(
-      buildSyntheticMap({
-        width: 4,
-        height: 4,
-        events: [placedEvent(conditional, [text, conditional])],
-      }),
-      buildSyntheticTileset(),
-    );
+  describe('switch-conditioned event pages', () => {
+    function convertPages(pages: readonly RpgmEventPage[]) {
+      const first = pages[0];
+      if (first === undefined) throw new Error('Expected at least one event page');
+      const doc = convertRpgmMap(
+        buildSyntheticMap({
+          width: 4,
+          height: 4,
+          events: [placedEvent(first, pages)],
+        }),
+        buildSyntheticTileset(),
+      );
+      const roundTrip = parseMapDocument(JSON.parse(serializeMapDocument(doc)));
+      expect(roundTrip.triggers).toEqual(doc.triggers);
+      expect(roundTrip.events).toEqual(doc.events);
+      return doc;
+    }
 
-    expect(doc.triggers).toEqual([]);
-    expect(doc.events).toEqual({});
+    const dialogue = (line: string) => ({
+      type: 'showDialogue',
+      source: { kind: 'text', lines: [line] },
+    });
+
+    it('uses the highest matching switch page and falls back to the first page', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Hello']),
+        showTextPage(0, ['Welcome back'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: 3,
+        }),
+      ]);
+
+      expect(doc.triggers).toHaveLength(1);
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'conditional',
+          if: { key: 'rpgm.switch.3', op: 'eq', value: true },
+          then: [dialogue('Welcome back')],
+          else: [dialogue('Hello')],
+        },
+      ]);
+    });
+
+    it('omits the fallback when only a conditional page exists', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Welcome'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: 1,
+        }),
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'conditional',
+          if: { key: 'rpgm.switch.1', op: 'eq', value: true },
+          then: [dialogue('Welcome')],
+        },
+      ]);
+    });
+
+    it('lets an empty matching page suppress commands from lower pages', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Hello']),
+        {
+          conditions: { ...CLEAR_CONDITIONS, switch1Valid: true, switch1Id: 1 },
+          trigger: 0,
+          list: [{ code: 0, indent: 0, parameters: [] }],
+        },
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'conditional',
+          if: { key: 'rpgm.switch.1', op: 'eq', value: true },
+          then: [],
+          else: [dialogue('Hello')],
+        },
+      ]);
+    });
+
+    it('requires both switches on a two-switch page', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Hello']),
+        showTextPage(0, ['Welcome'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: 1,
+          switch2Valid: true,
+          switch2Id: 2,
+        }),
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'conditional',
+          if: { key: 'rpgm.switch.1', op: 'eq', value: true },
+          then: [
+            {
+              type: 'conditional',
+              if: { key: 'rpgm.switch.2', op: 'eq', value: true },
+              then: [dialogue('Welcome')],
+              else: [dialogue('Hello')],
+            },
+          ],
+          else: [dialogue('Hello')],
+        },
+      ]);
+    });
+
+    it('skips the event when any page has an unsupported condition', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Hello']),
+        showTextPage(0, ['Welcome'], undefined, {
+          ...CLEAR_CONDITIONS,
+          variableValid: true,
+        }),
+      ]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it.each([undefined, 0, 1.5])('skips an active switch without a valid id (%s)', (id) => {
+      const doc = convertPages([
+        showTextPage(0, ['Hello']),
+        showTextPage(0, ['Welcome'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: id,
+        }),
+      ]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('skips the event when page trigger kinds differ', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Hello']),
+        showTextPage(1, ['Welcome'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: 1,
+        }),
+      ]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('skips the event when a reachable page contains an unsupported command', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Hello'], undefined, CLEAR_CONDITIONS, [
+          { code: 355, indent: 0, parameters: ['unsupportedScript()'] },
+        ]),
+        showTextPage(0, ['Welcome'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: 1,
+        }),
+      ]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('ignores an unsupported command below the highest unconditional page', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Earlier'], undefined, CLEAR_CONDITIONS, [
+          { code: 355, indent: 0, parameters: ['unsupportedScript()'] },
+        ]),
+        showTextPage(1, ['Hi']),
+      ]);
+
+      expect(doc.triggers).toEqual([
+        {
+          id: 'rpgm-event-1',
+          x: 2,
+          y: 3,
+          floor: 'floor-0',
+          on: 'enter',
+          event: 'rpgm-event-1',
+        },
+      ]);
+      expect(doc.events['rpgm-event-1']).toEqual([dialogue('Hi')]);
+    });
+
+    it('ignores conditional pages below the highest unconditional page', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Base']),
+        showTextPage(0, ['X'], undefined, {
+          ...CLEAR_CONDITIONS,
+          variableValid: true,
+        }),
+        showTextPage(0, ['Top']),
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([dialogue('Top')]);
+    });
+
+    it('uses an unconditional page above a conditional page', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Conditional'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: 1,
+        }),
+        showTextPage(0, ['Always']),
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([dialogue('Always')]);
+    });
+
+    it('skips an event when expanded commands exceed 500', () => {
+      const assignments = Array.from({ length: 6 }, () => ({
+        code: 121,
+        indent: 0,
+        parameters: [1, 100, 0],
+      }));
+      const doc = convertPages([{ conditions: CLEAR_CONDITIONS, trigger: 0, list: assignments }]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('counts commands in both branches of nested switch conditions', () => {
+      const assignments = [
+        [1, 100],
+        [101, 200],
+        [201, 250],
+      ].map(([start, end]) => ({ code: 121, indent: 0, parameters: [start, end, 0] }));
+      const doc = convertPages([
+        { conditions: CLEAR_CONDITIONS, trigger: 0, list: assignments },
+        showTextPage(0, ['Welcome'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: 1,
+          switch2Valid: true,
+          switch2Id: 2,
+        }),
+      ]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('keeps a small top page when it overrides an oversized lower page', () => {
+      const assignments = Array.from({ length: 6 }, () => ({
+        code: 121,
+        indent: 0,
+        parameters: [1, 100, 0],
+      }));
+      const doc = convertPages([
+        { conditions: CLEAR_CONDITIONS, trigger: 0, list: assignments },
+        showTextPage(0, ['Always']),
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([dialogue('Always')]);
+    });
   });
 
   it('skips autorun Show Text pages', () => {
