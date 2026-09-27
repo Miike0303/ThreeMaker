@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { pickMainRoomSpawn, stampSimpleDungeon } from '../src/procgen/dungeon-stamp.js';
 
@@ -5,6 +6,35 @@ const GROUND = 2816;
 const WALL = 4352;
 
 describe('stampSimpleDungeon', () => {
+  it('carves more ground at corridor width 2 than width 1', () => {
+    const options = {
+      width: 24,
+      height: 18,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+    };
+    const narrow = stampSimpleDungeon({ ...options, corridorWidth: 1 });
+    const wide = stampSimpleDungeon({ ...options, corridorWidth: 2 });
+    expect(wide.layers).not.toEqual(narrow.layers);
+    expect(wide.layers[0].filter((id) => id === GROUND).length).toBeGreaterThan(
+      narrow.layers[0].filter((id) => id === GROUND).length,
+    );
+  });
+
+  it('preserves the exact width-3 stamp from the symmetric span', () => {
+    const stamp = stampSimpleDungeon({
+      width: 24,
+      height: 18,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      corridorWidth: 3,
+    });
+    const hash = createHash('sha256').update(JSON.stringify(stamp)).digest('hex');
+    expect(hash).toBe('284dba98e98e45a37f769f325374d9a64ed7f9936ee38c47daf02ae6f270b383');
+  });
+
   it('is deterministic for the same seed', () => {
     const a = stampSimpleDungeon({
       width: 24,

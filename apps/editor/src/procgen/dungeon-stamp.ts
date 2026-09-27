@@ -240,7 +240,9 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
   if (groundTileId === 0 || wallTileId === 0) {
     throw new Error('groundTileId and wallTileId must be non-zero tile ids');
   }
-  const corridorHalf = Math.max(0, Math.floor((Math.max(1, corridorWidth) - 1) / 2));
+  const corridorSize = Math.max(1, corridorWidth);
+  const corridorLo = Math.floor((corridorSize - 1) / 2);
+  const corridorHi = corridorSize - 1 - corridorLo;
   const border = tightBorder ? 2 : 1;
 
   const rand = mulberry32(seed);
@@ -282,8 +284,8 @@ export function stampSimpleDungeon(options: DungeonStampOptions): DungeonStampRe
   }
 
   const carveDisk = (cx: number, cy: number) => {
-    for (let dy = -corridorHalf; dy <= corridorHalf; dy++) {
-      for (let dx = -corridorHalf; dx <= corridorHalf; dx++) {
+    for (let dy = -corridorLo; dy <= corridorHi; dy++) {
+      for (let dx = -corridorLo; dx <= corridorHi; dx++) {
         const xx = cx + dx;
         const yy = cy + dy;
         if (xx < border || yy < border || xx >= width - border || yy >= height - border) continue;
