@@ -174,7 +174,7 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
       speakerEl.textContent = '';
       textEl.textContent = `${t('dialogue.error')}: ${message}`;
       choicesEl.replaceChildren();
-      hintEl.textContent = formatDialogueHint(false, t);
+      hintEl.textContent = '';
     },
     hide() {
       overlay.style.display = 'none';

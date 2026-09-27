@@ -165,8 +165,8 @@ describe('createDialogueOverlay', () => {
   function overlayParts() {
     vi.stubGlobal('document', { createElement: () => fakeElement() });
     const overlay = createDialogueOverlay(createI18n(LOCALES, 'en').t);
-    const [speaker, text, choices] = (overlay.element as unknown as FakeElement).children;
-    return { overlay, speaker, text, choices };
+    const [speaker, text, choices, hint] = (overlay.element as unknown as FakeElement).children;
+    return { overlay, speaker, text, choices, hint };
   }
 
   it('does not carry the previous speaker and line into a conversation that opens with choices', () => {
@@ -205,6 +205,16 @@ describe('createDialogueOverlay', () => {
     overlay.showLine('Alice', 'Next line');
 
     expect(choices?.children).toHaveLength(0);
+  });
+
+  it('clears the advance hint on errors and restores it for the next dialogue line', () => {
+    const { overlay, hint } = overlayParts();
+
+    overlay.showError('x');
+    expect(hint?.textContent).toBe('');
+
+    overlay.showLine('Alice', 'Back to talking');
+    expect(hint?.textContent).toBe('E / Enter / Space to continue');
   });
 
   it('marks exactly the highlighted choice as current for assistive technology', () => {
