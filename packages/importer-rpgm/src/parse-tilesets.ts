@@ -15,6 +15,7 @@ export function parseTilesets(json: unknown): RpgmTileset[] {
   }
 
   const tilesets: RpgmTileset[] = [];
+  const seenIds = new Set<number>();
   for (const entry of json) {
     if (entry === null || entry === undefined) continue;
     if (typeof entry !== 'object') {
@@ -27,8 +28,14 @@ export function parseTilesets(json: unknown): RpgmTileset[] {
         `Invalid Tilesets.json entry: missing "id"/"name" in ${JSON.stringify(entry).slice(0, 200)}`,
       );
     }
-    if (!Array.isArray(flags) || !flags.every((value) => typeof value === 'number')) {
-      throw new Error(`Invalid Tilesets.json entry ${id}: "flags" must be an array of numbers.`);
+    if (seenIds.has(id)) {
+      throw new Error(`Invalid Tilesets.json: duplicate tileset id ${id}.`);
+    }
+    seenIds.add(id);
+    if (!Array.isArray(flags) || !flags.every((value) => Number.isInteger(value) && value >= 0)) {
+      throw new Error(
+        `Invalid Tilesets.json entry ${id}: "flags" must be an array of non-negative integers.`,
+      );
     }
     if (!Array.isArray(tilesetNames) || tilesetNames.length !== SHEET_NAME_ORDER.length) {
       throw new Error(
