@@ -126,6 +126,7 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
         // Host pointer layer reads this (no DOM logic in @threemaker/input).
         li.dataset.choiceIndex = String(index);
         li.classList.toggle('dialogue-choice-highlighted', index === highlightedIndex);
+        li.setAttribute('aria-current', String(index === highlightedIndex));
         li.textContent = `${index + 1}. ${option}`;
         return li;
       }),
@@ -151,6 +152,7 @@ export function createDialogueOverlay(t: I18n['t']): DialogueOverlay {
     setHighlightedIndex(index) {
       Array.from(choicesEl.children).forEach((child, childIndex) => {
         child.classList.toggle('dialogue-choice-highlighted', childIndex === index);
+        child.setAttribute('aria-current', String(childIndex === index));
       });
     },
     showError(message) {

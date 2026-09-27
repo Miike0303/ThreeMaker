@@ -117,11 +117,18 @@ type FakeElement = {
   };
   append(...nodes: FakeElement[]): void;
   replaceChildren(...nodes: FakeElement[]): void;
+  setAttribute(name: string, value: string): void;
+  getAttribute(name: string): string | null;
 };
 
 function fakeElement(): FakeElement {
   const classes = new Set<string>();
+  const attributes = new Map<string, string>();
   const element: FakeElement = {
+    setAttribute: (name, value) => {
+      attributes.set(name, value);
+    },
+    getAttribute: (name) => attributes.get(name) ?? null,
     className: '',
     textContent: '',
     style: { display: '' },
@@ -172,5 +179,19 @@ describe('createDialogueOverlay', () => {
 
     expect(speaker?.textContent).toBe('Alice');
     expect(text?.textContent).toBe('Pick one');
+  });
+
+  it('marks exactly the highlighted choice as current for assistive technology', () => {
+    const { overlay, choices } = overlayParts();
+    const current = () => choices?.children.map((row) => row.getAttribute('aria-current'));
+
+    overlay.showChoices(['Yes', 'No'], 0);
+    expect(current()).toEqual(['true', 'false']);
+
+    overlay.setHighlightedIndex(1);
+    expect(current()).toEqual(['false', 'true']);
+
+    overlay.showChoices(['A', 'B', 'C'], 2);
+    expect(current()).toEqual(['false', 'false', 'true']);
   });
 });
