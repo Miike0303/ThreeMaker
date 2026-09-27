@@ -168,6 +168,23 @@ describe('snapshotFromGamepads', () => {
     });
   });
 
+  it('picks the first connected pad when multiple pads are present', () => {
+    const snapshot = snapshotFromGamepads([
+      {
+        axes: [0.1, -0.2],
+        buttons: [{ pressed: true }],
+      },
+      {
+        axes: [-0.8, 0.9],
+        buttons: [{ pressed: false }],
+      },
+    ]);
+    expect(snapshot).toEqual({
+      axes: [0.1, -0.2],
+      buttons: [true],
+    });
+  });
+
   it('returns null when no pad is present', () => {
     expect(snapshotFromGamepads([])).toBeNull();
     expect(snapshotFromGamepads([null, null])).toBeNull();

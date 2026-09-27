@@ -171,6 +171,11 @@ Hi
     const source = '=== start ===\n"see http://x" -> other\n';
     expect(listInkEdges(source)).toEqual([{ from: 'start', to: 'other' }]);
   });
+
+  it('keeps scanning after an escaped quote before // inside a string', () => {
+    const source = '=== start ===\n"say \\"// still dialogue" -> target\n';
+    expect(listInkEdges(source)).toEqual([{ from: 'start', to: 'target' }]);
+  });
 });
 
 describe('buildInkGraphModel / setInkNodePosition', () => {
