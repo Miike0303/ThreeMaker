@@ -4,6 +4,26 @@ import { applyDungeonStampToMapDocument } from '../src/procgen/apply-stamp.js';
 import { pickMainRoomSpawn, stampSimpleDungeon } from '../src/procgen/dungeon-stamp.js';
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('throws when a stamp layer is smaller than the map', () => {
+    const doc = createBlankMapDocument({
+      id: 'stamp-short-layer',
+      name: 'Short layer',
+      width: 17,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 1,
+      groundTileId: 2816,
+      wallTileId: 4352,
+    });
+
+    expect(() => applyDungeonStampToMapDocument(doc, stamp)).toThrow(/stamp layer length/);
+  });
+
   it('writes stamp layers onto floor 0 without changing map size', () => {
     const doc = createBlankMapDocument({
       id: 'stamp-apply',

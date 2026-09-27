@@ -158,6 +158,10 @@ describe('list / sidecar / rename / delete plans', () => {
     ]);
   });
 
+  it('does not plan moves when the map name is unchanged', () => {
+    expect(planRenameMapFiles('town', 'town', entries)).toEqual([]);
+  });
+
   it('refuses a rename that would overwrite another saved map', () => {
     expect(() => planRenameMapFiles('current', 'town', entries)).toThrow(/already exists/i);
   });

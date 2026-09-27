@@ -51,6 +51,16 @@ describe('community-settings', () => {
     expect(loadCommunitySettings(memoryStorage())).toEqual(DEFAULT_COMMUNITY_SETTINGS);
   });
 
+  it('defaults imported assets to false when an older record omits the setting', () => {
+    const storage = memoryStorage({
+      'threemaker-maker-studio:community': JSON.stringify({ shareOnSave: true }),
+    });
+    expect(loadCommunitySettings(storage)).toEqual({
+      shareOnSave: true,
+      allowImportedAssets: false,
+    });
+  });
+
   it('round-trips through storage', () => {
     const storage = memoryStorage();
     saveCommunitySettings({ shareOnSave: false, allowImportedAssets: true }, storage);
