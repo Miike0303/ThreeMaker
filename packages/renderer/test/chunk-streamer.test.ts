@@ -70,6 +70,15 @@ describe('ChunkStreamer', () => {
     expect(diff.toDispose).toHaveLength(0);
   });
 
+  it('defaults dispose radius to one chunk beyond the build radius', () => {
+    const streamer = new ChunkStreamer({ ...GIANT, buildRadius: 2 });
+    streamer.update(256, 256);
+
+    const diff = streamer.update(272, 256); // one chunk east
+
+    expect(diff.toDispose).toHaveLength(0);
+  });
+
   it('builds the new leading edge when crossing a chunk boundary but keeps the trailing edge (hysteresis)', () => {
     const streamer = new ChunkStreamer({ ...GIANT, buildRadius: 2, disposeRadius: 3 });
     streamer.update(256, 256); // chunk (16, 16); live columns 14..18

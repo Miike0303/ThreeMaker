@@ -126,6 +126,15 @@ describe('deriveRampCells', () => {
     expect(deriveRampCells(layers, semantics, width, height)).toEqual([{ x: 0, y: 0 }]);
   });
 
+  it('finds a ramp on a higher layer above an ordinary ground tile', () => {
+    const width = 1;
+    const height = 1;
+    const layers = [[5], [7], EMPTY_LAYER(1), EMPTY_LAYER(1)] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+
+    expect(deriveRampCells(layers, semantics, width, height)).toEqual([{ x: 0, y: 0 }]);
+  });
+
   it('scans row-major (y ascending, then x ascending)', () => {
     const width = 2;
     const height = 2;

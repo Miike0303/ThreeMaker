@@ -27,6 +27,16 @@ describe('createBlankMapDocument', () => {
     expect(validateCurrentVersionShape(doc)).toEqual(doc);
   });
 
+  it('allocates an independent array for every tile, shadow, and region layer', () => {
+    const doc = createBlankMapDocument(BLANK_OPTIONS);
+    const layers = doc.floors[0]?.layers;
+    expect(layers).toBeDefined();
+    if (layers === undefined) throw new Error('Blank document is missing its first floor.');
+
+    const layerArrays = [...layers.tiles, layers.shadows, layers.regions];
+    expect(new Set(layerArrays).size).toBe(layerArrays.length);
+  });
+
   it('round-trips through parseMapDocument', () => {
     const doc = createBlankMapDocument(BLANK_OPTIONS);
     const parsed = parseMapDocument(JSON.parse(serializeMapDocument(doc)));
