@@ -35,6 +35,16 @@ describe('orderMapInfosByTree', () => {
     expect(infos.map((info) => info.id)).toEqual([12, 10, 11]);
   });
 
+  it('orders equal-order siblings by ascending id', () => {
+    const infos = orderMapInfosByTree([
+      { id: 10, name: 'Parent', parentId: 0, order: 0 },
+      { id: 12, name: 'Child 12', parentId: 10, order: 1 },
+      { id: 11, name: 'Child 11', parentId: 10, order: 1 },
+    ]);
+
+    expect(infos.map((info) => info.id)).toEqual([10, 11, 12]);
+  });
+
   it('appends an orphan and a 2-cycle by id', () => {
     const infos = orderMapInfosByTree([
       { id: 10, name: 'Ten', parentId: 0, order: 1 },

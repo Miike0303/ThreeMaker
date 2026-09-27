@@ -102,6 +102,29 @@ describe('loadProject — data folder layouts', () => {
     expect(project.tilesets).toHaveLength(1);
     expect(project.tilesets[0]?.name).toBe('Outside');
   });
+
+  it('prefers <root>/data when both data folder layouts exist', async () => {
+    const dataDir = join(workDir, 'data');
+    const deployedDataDir = join(workDir, 'www', 'data');
+    mkdirSync(dataDir, { recursive: true });
+    mkdirSync(deployedDataDir, { recursive: true });
+    writeFileSync(
+      join(dataDir, 'MapInfos.json'),
+      JSON.stringify([null, { id: 1, name: 'Project Data', parentId: 0, order: 1 }]),
+      'utf8',
+    );
+    writeFileSync(
+      join(deployedDataDir, 'MapInfos.json'),
+      JSON.stringify([null, { id: 1, name: 'Deployed Data', parentId: 0, order: 1 }]),
+      'utf8',
+    );
+    writeFileSync(join(dataDir, 'Tilesets.json'), JSON.stringify(TILESETS_JSON), 'utf8');
+    writeFileSync(join(deployedDataDir, 'Tilesets.json'), JSON.stringify(TILESETS_JSON), 'utf8');
+
+    const project = await loadProject(workDir);
+
+    expect(project.mapInfos[0]?.name).toBe('Project Data');
+  });
 });
 
 describe('loadProject — map info order', () => {

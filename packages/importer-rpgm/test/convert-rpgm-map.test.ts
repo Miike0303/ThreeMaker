@@ -929,6 +929,18 @@ describe('convertRpgmMap', () => {
       expect(doc.events).toEqual({});
     });
 
+    it('imports an event with exactly 500 expanded commands', () => {
+      const assignments = Array.from({ length: 5 }, (_, index) => ({
+        code: 121,
+        indent: 0,
+        parameters: [index * 100 + 1, (index + 1) * 100, 0],
+      }));
+      const doc = convertPages([{ conditions: CLEAR_CONDITIONS, trigger: 0, list: assignments }]);
+
+      expect(doc.triggers).toHaveLength(1);
+      expect(doc.events['rpgm-event-1']).toHaveLength(500);
+    });
+
     it('counts commands in both branches of nested switch conditions', () => {
       const assignments = [
         [1, 100],
