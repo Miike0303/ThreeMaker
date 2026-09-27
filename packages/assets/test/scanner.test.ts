@@ -138,6 +138,21 @@ describe('scanGames — folder-agnostic MV/MZ auto-detect', () => {
   });
 });
 
+describe('scanGames — asset extensions are matched case-insensitively', () => {
+  it('includes image assets with uppercase extensions', () => {
+    const gameDir = join(workDir, 'uppercase-image-extension');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    const charactersDir = join(gameDir, 'img', 'characters');
+    mkdirSync(charactersDir, { recursive: true });
+    writeFileSync(join(charactersDir, 'Actor1.PNG'), 'fake-plain-png');
+
+    const result = scanGames(workDir, { maxDepth: 12 });
+    const game = result.games.find((candidate) => candidate.rootPath === gameDir);
+
+    expect(game?.imageAssets).toContain('characters/Actor1.PNG');
+  });
+});
+
 describe('scanGames — encryption flags model ground truth, not derived from key parseability', () => {
   it('reflects hasEncryptedImages=false even when a parseable key is present', () => {
     const gameDir = join(workDir, 'flagged-false-with-key');

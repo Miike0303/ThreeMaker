@@ -74,4 +74,14 @@ describe('readRpgmSystemStart', () => {
 
     expect(readRpgmSystemStart(gameDir)).toBeUndefined();
   });
+
+  it('returns undefined when startMapId is a string and coordinates are numbers', () => {
+    writeFileSync(
+      join(gameDir, 'System.json'),
+      JSON.stringify({ startMapId: '3', startX: 5, startY: 7 }),
+      'utf8',
+    );
+
+    expect(readRpgmSystemStart(gameDir)).toBeUndefined();
+  });
 });

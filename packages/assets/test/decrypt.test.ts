@@ -237,6 +237,18 @@ describe('decryptRpgmv', () => {
     expect(Array.from(decrypted)).toEqual(Array.from(plain));
   });
 
+  it('accepts the lowest MP3 raw frame-sync byte, 0xe0', () => {
+    const plain = concat(
+      new Uint8Array([0xff, 0xe0, 0x90, 0x64]),
+      new TextEncoder().encode('synthetic-mp3-frame-body'),
+    );
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+
+    const decrypted = decryptRpgmv(encrypted, KEY_BYTES);
+
+    expect(Array.from(decrypted)).toEqual(Array.from(plain));
+  });
+
   it('still throws DecryptError(magic-mismatch) for a RIFF chunk that is neither WEBP nor WAVE', () => {
     const plain = concat(
       new TextEncoder().encode('RIFF'),
