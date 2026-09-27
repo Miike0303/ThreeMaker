@@ -55,6 +55,7 @@ export function TilePalette({
             key={cell.tileId}
             type="button"
             aria-label={tileAriaLabel(cell.tileId)}
+            aria-pressed={cell.tileId === selectedTileId}
             className={
               cell.tileId === selectedTileId
                 ? 'tile-palette-cell tile-palette-cell-selected'

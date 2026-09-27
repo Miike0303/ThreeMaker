@@ -1,4 +1,7 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { TilePalette } from '../src/components/TilePalette.js';
 import {
   computeAutotileKindCount,
   computePaletteCells,
@@ -143,5 +146,28 @@ describe('computePaletteColumns', () => {
 
   it('is always 8 for autotile sheets (kinds per row)', () => {
     expect(computePaletteColumns('A2', { width: 768, height: 768 })).toBe(8);
+  });
+});
+
+describe('TilePalette', () => {
+  it('exposes only the selected tile as pressed to assistive technology', () => {
+    const cells = computePaletteCells('B', { width: 96, height: 48 }, 48);
+    const selected = cells[1]?.tileId ?? -1;
+    const markup = renderToStaticMarkup(
+      createElement(TilePalette, {
+        label: 'B palette',
+        sheet: 'B',
+        imageUrl: 'sheet.png',
+        pixelSize: { width: 96, height: 48 },
+        tilePixelSize: 48,
+        selectedTileId: selected,
+        onSelect: () => {},
+        tileAriaLabel: (tileId: number) => `tile ${tileId}`,
+      }),
+    );
+
+    expect(markup.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(markup.match(/aria-pressed="false"/g)).toHaveLength(cells.length - 1);
+    expect(markup).toContain(`aria-label="tile ${selected}" aria-pressed="true"`);
   });
 });
