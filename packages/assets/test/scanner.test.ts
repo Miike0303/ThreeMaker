@@ -64,6 +64,15 @@ const ENCRYPTED_SYSTEM_JSON = {
 };
 
 describe('scanGames — depth/cycle guard (modeled on the LoQOO self-nested folder case)', () => {
+  it('includes a game at exactly maxDepth', () => {
+    const gameDir = join(workDir, 'one', 'two');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+
+    const result = scanGames(workDir, { maxDepth: 2 });
+
+    expect(result.games.map((game) => game.rootPath)).toContain(gameDir);
+  });
+
   it('abandons a runaway branch once it exceeds maxDepth, without descending forever', () => {
     // Build a chain of plain nested folders (no System.json anywhere) well
     // beyond a small maxDepth — mirrors LoQOO's real `output/output/...`
@@ -154,6 +163,19 @@ describe('scanGames — asset extensions are matched case-insensitively', () => 
 });
 
 describe('scanGames — encryption flags model ground truth, not derived from key parseability', () => {
+  it('treats a non-boolean hasEncryptedImages value as false', () => {
+    const gameDir = join(workDir, 'string-image-flag');
+    writeSystemJson(join(gameDir, 'data'), {
+      gameTitle: 'String image flag',
+      hasEncryptedImages: 'false',
+    });
+
+    const result = scanGames(workDir, { maxDepth: 12 });
+    const game = result.games.find((candidate) => candidate.rootPath === gameDir);
+
+    expect(game?.hasEncryptedImages).toBe(false);
+  });
+
   it('reflects hasEncryptedImages=false even when a parseable key is present', () => {
     const gameDir = join(workDir, 'flagged-false-with-key');
     writeSystemJson(join(gameDir, 'data'), {

@@ -29,6 +29,16 @@ describe('readLeadActorSheet', () => {
     expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor1', characterIndex: 0 });
   });
 
+  it('uses the first defined actor when actor 1 is missing', () => {
+    writeActors([
+      null,
+      null,
+      { id: 2, name: 'Actor2', characterName: 'Actor2', characterIndex: 1 },
+    ]);
+
+    expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor2', characterIndex: 1 });
+  });
+
   it('uses the first starting party member instead of the first actor', () => {
     writeActors([
       null,
@@ -47,6 +57,17 @@ describe('readLeadActorSheet', () => {
       { id: 2, name: 'Sidekick', characterName: 'Actor2', characterIndex: 1 },
     ]);
     writeFileSync(join(gameDir, 'System.json'), JSON.stringify({ partyMembers: [99] }), 'utf8');
+
+    expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor1', characterIndex: 0 });
+  });
+
+  it('keeps the first actor as fallback when System.json is malformed', () => {
+    writeActors([
+      null,
+      { id: 1, name: 'Hero', characterName: 'Actor1', characterIndex: 0 },
+      { id: 2, name: 'Sidekick', characterName: 'Actor2', characterIndex: 1 },
+    ]);
+    writeFileSync(join(gameDir, 'System.json'), 'not valid json', 'utf8');
 
     expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor1', characterIndex: 0 });
   });

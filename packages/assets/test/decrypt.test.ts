@@ -50,6 +50,10 @@ describe('parseEncryptionKey', () => {
     expect(key).toEqual(KEY_BYTES);
   });
 
+  it('parses uppercase hexadecimal encryption keys', () => {
+    expect(parseEncryptionKey({ encryptionKey: KEY_HEX.toUpperCase() })).toEqual(KEY_BYTES);
+  });
+
   it('parses a different key into different bytes (triangulation)', () => {
     const otherHex = '00112233445566778899aabbccddeeff'.slice(0, 32);
     const key = parseEncryptionKey({ encryptionKey: otherHex });
