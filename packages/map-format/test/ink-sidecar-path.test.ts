@@ -15,6 +15,7 @@ describe('isSafeStoryId / inkSidecarRelativePath', () => {
     expect(isSafeStoryId('A-b')).toBe(true);
     expect(isSafeStoryId('')).toBe(false);
     expect(isSafeStoryId('../evil')).toBe(false);
+    expect(isSafeStoryId('act/intro')).toBe(false);
     expect(isSafeStoryId('has.dot')).toBe(false);
     expect(isSafeStoryId('has space')).toBe(false);
   });
@@ -31,5 +32,6 @@ describe('isSafeStoryId / inkSidecarRelativePath', () => {
 
   it('throws on unsafe story ids before path join', () => {
     expect(() => inkSidecarRelativePath('m.tmmap.json', '../x')).toThrow(/story id/i);
+    expect(() => inkSidecarRelativePath('m.tmmap.json', 'act/intro')).toThrow(/story id/i);
   });
 });

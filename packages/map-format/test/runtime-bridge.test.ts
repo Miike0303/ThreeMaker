@@ -189,6 +189,14 @@ describe('deriveRampCells', () => {
 });
 
 describe('syncRampCells', () => {
+  it('preserves existing ramp cells when no cells are dirty', () => {
+    const previous = [{ x: 1, y: 0 }];
+    const layers = [EMPTY_LAYER(2), EMPTY_LAYER(2), EMPTY_LAYER(2), EMPTY_LAYER(2)] as const;
+    const semantics: SemanticOverrides = {};
+
+    expect(syncRampCells(previous, layers, semantics, 2, [])).toBe(previous);
+  });
+
   it('matches a full derive when every cell is marked dirty', () => {
     const width = 3;
     const height = 2;

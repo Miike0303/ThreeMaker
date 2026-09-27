@@ -186,4 +186,23 @@ describe('command stack (undo/redo, cap 100)', () => {
     // The oldest entries were dropped: the first surviving entry paints value 10, not 0.
     expect(stack.undoStack[0]?.cells[0]?.after).toBe(10);
   });
+
+  it('keeps the undo stack cap at 100 commands', () => {
+    expect(COMMAND_STACK_CAP).toBe(100);
+  });
+
+  it('keeps 100 commands in the redo stack', () => {
+    let stack = EMPTY_COMMAND_STACK;
+    for (let i = 0; i < 100; i++) {
+      stack = pushCommand(stack, makeDiff(i));
+    }
+
+    for (let i = 0; i < 100; i++) {
+      const result = undoCommand(stack);
+      if (!result) throw new Error('unreachable');
+      stack = result.state;
+    }
+
+    expect(stack.redoStack).toHaveLength(100);
+  });
 });
