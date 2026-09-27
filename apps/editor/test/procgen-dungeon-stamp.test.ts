@@ -6,6 +6,23 @@ const GROUND = 2816;
 const WALL = 4352;
 
 describe('stampSimpleDungeon', () => {
+  it('keeps row zero empty when tightBorder is enabled', () => {
+    const stamp = stampSimpleDungeon({
+      width: 24,
+      height: 20,
+      seed: 3,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 1,
+      minRoomSize: 5,
+      maxRoomSize: 9,
+      tightBorder: true,
+    });
+
+    expect(stamp.layers[0].slice(0, 24).every((id) => id === 0)).toBe(true);
+    expect(stamp.layers[2].slice(0, 24).every((id) => id === 0)).toBe(true);
+  });
+
   it('carves more ground at corridor width 2 than width 1', () => {
     const options = {
       width: 24,

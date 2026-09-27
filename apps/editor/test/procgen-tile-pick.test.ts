@@ -145,6 +145,23 @@ describe('resolveDungeonTileIds', () => {
     expect(r.doorTileId).toBe(77);
   });
 
+  it('excludes the ground tile when choosing a door from semantics', () => {
+    const r = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: {
+        '1': { class: 'door' },
+        '5': { class: 'wall' },
+        '77': { class: 'door' },
+      },
+    });
+
+    expect(r.doorTileId).toBe(77);
+  });
+
   it('prefers majority door/furniture on mid layer over first semantic id (WU-PROC-20)', () => {
     expect(
       majorityClassedTileId(

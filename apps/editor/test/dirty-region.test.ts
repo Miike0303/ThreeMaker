@@ -213,6 +213,17 @@ describe('computeDirtyChunkKeys (full pipeline)', () => {
     expect(keys.has('1,0')).toBe(true);
   });
 
+  it('a dirty region crossing a y chunk edge dirties both chunks', () => {
+    const width = 64;
+    const height = 64;
+    const map = makeMap(width, height, new Array(width * height).fill(1));
+    const tileset = makeTileset();
+    const keys = computeDirtyChunkKeys([{ x: 8, y: 15 }], map, tileset, 16);
+
+    expect(keys.has('0,0')).toBe(true);
+    expect(keys.has('0,1')).toBe(true);
+  });
+
   it('a full-map fill dirties every chunk', () => {
     const width = 64;
     const height = 64;
