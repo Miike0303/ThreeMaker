@@ -12,6 +12,17 @@ describe('Node', () => {
     expect(parent.children).toContain(child);
   });
 
+  it('keeps siblings in the order they were attached', () => {
+    const parent = new Node('parent');
+    const first = new Node('first');
+    const second = new Node('second');
+
+    parent.addChild(first);
+    parent.addChild(second);
+
+    expect(parent.children).toEqual([first, second]);
+  });
+
   it('removeChild clears the parent reference and removes it from children', () => {
     const parent = new Node('parent');
     const child = new Node('child');

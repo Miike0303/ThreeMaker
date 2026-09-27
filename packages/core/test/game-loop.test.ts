@@ -54,6 +54,30 @@ describe('GameLoop (variable timestep)', () => {
     expect(onTick).toHaveBeenCalledWith(0.25);
   });
 
+  it('uses a 0.25 second clamp by default', () => {
+    const clock = new FakeClock();
+    const onTick = vi.fn();
+    const loop = new GameLoop({ clock, onTick });
+    loop.start();
+
+    clock.advance(5);
+    loop.tick();
+
+    expect(onTick).toHaveBeenCalledWith(0.25);
+  });
+
+  it('clamps a backward clock reading to zero elapsed time', () => {
+    const clock = new FakeClock();
+    const onTick = vi.fn();
+    const loop = new GameLoop({ clock, onTick });
+    loop.start();
+
+    clock.advance(-0.5);
+    loop.tick();
+
+    expect(onTick).toHaveBeenCalledWith(0);
+  });
+
   it('stop() halts ticking until start() is called again', () => {
     const clock = new FakeClock();
     const onTick = vi.fn();

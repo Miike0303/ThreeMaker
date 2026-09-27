@@ -66,6 +66,10 @@ describe('parseVolume / parseFadeMs', () => {
   it('rejects a negative fade', () => {
     expect(() => parseFadeMs(-1, 'x')).toThrow(/non-negative/);
   });
+
+  it('accepts a fractional fade duration', () => {
+    expect(parseFadeMs(0.5, 'x')).toBe(0.5);
+  });
 });
 
 describe('createAudioCommandPlugins', () => {
@@ -85,6 +89,15 @@ describe('createAudioCommandPlugins', () => {
     expect(
       registry.get('playSound')?.run({ type: 'playSound', path: 'se/hit.ogg' }, {} as never),
     ).toBe('continue');
+  });
+
+  it('omits playSound volume when it is not authored', () => {
+    const parsed = parseEventScript(
+      script({ type: 'playSound', path: 'se/hit.ogg' }),
+      registryFor(),
+    );
+
+    expect(parsed.intro).toStrictEqual([{ type: 'playSound', path: 'se/hit.ogg' }]);
   });
 
   it('forwards playSound to a handler when provided', () => {
