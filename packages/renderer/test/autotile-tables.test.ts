@@ -112,6 +112,33 @@ describe('computeAutotileQuarterOrigins', () => {
     ]);
   });
 
+  it('moves A1 deep water to its third surface frame at animation frame 2', () => {
+    expect(computeAutotileQuarterOrigins(2048, 'A1', 2)).toEqual([
+      { x: 240, y: 96 },
+      { x: 216, y: 96 },
+      { x: 240, y: 72 },
+      { x: 216, y: 72 },
+    ]);
+  });
+
+  it('places the second A1 water kind three tile rows below the first', () => {
+    expect(computeAutotileQuarterOrigins(2096, 'A1')).toEqual([
+      { x: 48, y: 240 },
+      { x: 24, y: 240 },
+      { x: 48, y: 216 },
+      { x: 24, y: 216 },
+    ]);
+  });
+
+  it('places the third A1 water kind six tile columns from the sheet origin', () => {
+    expect(computeAutotileQuarterOrigins(2144, 'A1')).toEqual([
+      { x: 336, y: 96 },
+      { x: 312, y: 96 },
+      { x: 336, y: 72 },
+      { x: 312, y: 72 },
+    ]);
+  });
+
   it('A1 even non-special kind (kind 4) picks FLOOR_AUTOTILE_TABLE via the tx/ty formula', () => {
     // tileId = 2048 + 4*48 = 2240. tx=4, ty=0. bx=floor(4/4)*8=8, by=0*6+(2%2)*3=0.
     const origins = computeAutotileQuarterOrigins(2240, 'A1');
@@ -132,6 +159,15 @@ describe('computeAutotileQuarterOrigins', () => {
       { x: 696, y: 0 },
       { x: 720, y: 24 },
       { x: 696, y: 24 },
+    ]);
+  });
+
+  it('moves an A1 waterfall to its third animation row at frame 2', () => {
+    expect(computeAutotileQuarterOrigins(2288, 'A1', 2)).toEqual([
+      { x: 720, y: 96 },
+      { x: 696, y: 96 },
+      { x: 720, y: 120 },
+      { x: 696, y: 120 },
     ]);
   });
 

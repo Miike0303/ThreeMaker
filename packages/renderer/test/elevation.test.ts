@@ -6,6 +6,7 @@ import {
   computeCliffEdges,
   computeOpenEdges,
   computeWallTileKeys,
+  isObjectSheet,
   isWallSheet,
   tileKey,
 } from '../src/geometry/elevation.js';
@@ -25,6 +26,12 @@ describe('isWallSheet', () => {
     expect(isWallSheet('A2')).toBe(false);
     expect(isWallSheet('A5')).toBe(false);
     expect(isWallSheet('B')).toBe(false);
+  });
+});
+
+describe('isObjectSheet', () => {
+  it('treats D-sheet decorations as standing objects', () => {
+    expect(isObjectSheet('D')).toBe(true);
   });
 });
 

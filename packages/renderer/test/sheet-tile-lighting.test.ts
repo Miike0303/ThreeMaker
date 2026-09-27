@@ -78,4 +78,8 @@ describe('dayNightAmbientFactor (C7 WU-02)', () => {
   it('wraps negative minutes to the matching time of day', () => {
     expect(dayNightAmbientFactor(-720)).toBeCloseTo(1);
   });
+
+  it('uses the completed minute before advancing the dawn ramp', () => {
+    expect(dayNightAmbientFactor(419.9)).toBe(dayNightAmbientFactor(419));
+  });
 });

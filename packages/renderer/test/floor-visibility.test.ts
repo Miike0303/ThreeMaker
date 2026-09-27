@@ -41,6 +41,10 @@ describe('WindowedFloorPolicy', () => {
     expect(policy.visibleFloors(3, 3)).toEqual([2]);
   });
 
+  it('omits the floor below when it is also past the upper boundary', () => {
+    expect(policy.visibleFloors(4, 3)).toEqual([]);
+  });
+
   it('is swappable behind the FloorVisibilityPolicy interface (change 3 substitutes an occlusion policy)', () => {
     const showEverything: FloorVisibilityPolicy = {
       visibleFloors: (_current, floorCount) => Array.from({ length: floorCount }, (_, i) => i),

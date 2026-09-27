@@ -79,6 +79,12 @@ describe('computeTileUv', () => {
     expect(result?.quads[0]?.v1).toBeCloseTo(1 - INSET / 768);
   });
 
+  it('keeps the last tile of the left B block on its bottom row', () => {
+    const quad = computeTileUv(127, GRID_SHEET_SIZES)?.quads[0];
+    expect(quad?.u0).toBeCloseTo((336 + INSET) / 768);
+    expect(quad?.v1).toBeCloseTo(1 - (720 + INSET) / 768);
+  });
+
   it('maps A5 tiles onto its single 8-wide block', () => {
     // A5 ids start at 1536; local index 9 = col 1, row 1 of the 8x16 sheet.
     const result = computeTileUv(1536 + 9, { A5: { width: 384, height: 768 } });

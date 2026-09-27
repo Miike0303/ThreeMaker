@@ -72,6 +72,10 @@ describe('generateSyntheticMap', () => {
     expect(() => generateSyntheticMap({ width: 2.5, height: 4 })).toThrow(/width/);
   });
 
+  it('rejects a fractional map height before allocating tile layers', () => {
+    expect(() => generateSyntheticMap({ width: 4, height: 2.5 })).toThrow(/height/);
+  });
+
   it('honors a zero clear radius outside the spawn row', () => {
     const map = generateSyntheticMap({ width: 9, height: 9, wallDensity: 1, clearRadius: 0 });
 
@@ -98,5 +102,28 @@ describe('generateSyntheticMap', () => {
 
     expect(eastOfWall).toBeGreaterThanOrEqual(0);
     expect(map.layers.shadows[eastOfWall]).toBe(5);
+  });
+
+  it('does not carry a wall shadow across a row boundary', () => {
+    const map = generateSyntheticMap({
+      width: 16,
+      height: 16,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+    const ground = map.layers.tileLayers[0];
+    const rowStartsAfterWall = Array.from(
+      { length: map.height - 1 },
+      (_, row) => (row + 1) * 16,
+    ).filter(
+      (index) =>
+        ground[index - 1] === ROSELIAM_DUNGEON_WALL_TILE_ID &&
+        ground[index] === ROSELIAM_DUNGEON_GROUND_TILE_ID,
+    );
+
+    expect(rowStartsAfterWall.length).toBeGreaterThan(0);
+    for (const index of rowStartsAfterWall) expect(map.layers.shadows[index]).toBe(0);
   });
 });

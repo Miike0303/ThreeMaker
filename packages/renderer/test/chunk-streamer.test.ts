@@ -15,6 +15,18 @@ describe('ChunkStreamer', () => {
     expect(() => new ChunkStreamer({ ...GIANT, chunkSize: 0 })).toThrow(/chunkSize/);
   });
 
+  it('accepts a positive fractional chunk size', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 1.5,
+      mapWidth: 3,
+      mapHeight: 2,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(2, 0).toBuild).toEqual(['1,0']);
+  });
+
   it('rejects a negative build radius', () => {
     expect(() => new ChunkStreamer({ ...GIANT, buildRadius: -1 })).toThrow(/buildRadius/);
   });
@@ -70,6 +82,18 @@ describe('ChunkStreamer', () => {
     });
 
     expect(streamer.update(15.5, 0).toBuild).toEqual(['0,0']);
+  });
+
+  it('keeps a fractional Y focus inside its current chunk until the boundary is crossed', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 16,
+      mapHeight: 32,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(0, 15.5).toBuild).toEqual(['0,0']);
   });
 
   it('returns an empty diff while the focus stays inside the same chunk', () => {
