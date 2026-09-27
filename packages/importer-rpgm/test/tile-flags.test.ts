@@ -58,4 +58,10 @@ describe('decodeTileFlags', () => {
     expect(flags.isUpperLayer).toBe(true);
     expect(flags.impassableDown).toBe(false);
   });
+
+  it('returns one frozen object per distinct bitfield', () => {
+    expect(decodeTileFlags(0x10)).toBe(decodeTileFlags(0x10));
+    expect(decodeTileFlags(0x10)).not.toBe(decodeTileFlags(0));
+    expect(Object.isFrozen(decodeTileFlags(0x21))).toBe(true);
+  });
 });

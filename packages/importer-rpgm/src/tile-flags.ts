@@ -36,8 +36,13 @@ const FLAG_DAMAGE_FLOOR = 0x100;
 const TERRAIN_TAG_SHIFT = 12;
 const TERRAIN_TAG_MASK = 0xf;
 
+// ponytail: the cache is unbounded but keyed by flag values (at most 65,536 distinct 16-bit values), so there is no eviction.
+const decodedFlagsCache = new Map<number, TileFlags>();
+
 export function decodeTileFlags(flags: number): TileFlags {
-  return {
+  const cached = decodedFlagsCache.get(flags);
+  if (cached !== undefined) return cached;
+  const decoded: TileFlags = {
     impassableDown: (flags & FLAG_IMPASSABLE_DOWN) !== 0,
     impassableLeft: (flags & FLAG_IMPASSABLE_LEFT) !== 0,
     impassableRight: (flags & FLAG_IMPASSABLE_RIGHT) !== 0,
@@ -49,4 +54,7 @@ export function decodeTileFlags(flags: number): TileFlags {
     isDamageFloor: (flags & FLAG_DAMAGE_FLOOR) !== 0,
     terrainTag: (flags >> TERRAIN_TAG_SHIFT) & TERRAIN_TAG_MASK,
   };
+  Object.freeze(decoded);
+  decodedFlagsCache.set(flags, decoded);
+  return decoded;
 }
