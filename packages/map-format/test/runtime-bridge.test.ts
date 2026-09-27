@@ -15,6 +15,68 @@ import type { SemanticOverrides } from '../src/schema.js';
 const EMPTY_LAYER = (size: number) => new Array(size).fill(0);
 
 describe('deriveRampCells', () => {
+  it('does not read tile layers when semantics contain no ramps', () => {
+    const width = 16;
+    const height = 16;
+    const size = width * height;
+    const indexReads = { count: 0 };
+    const instrument = (raw: number[]): number[] =>
+      new Proxy(raw, {
+        get(target, prop, receiver) {
+          if (typeof prop === 'string' && /^[0-9]+$/.test(prop)) indexReads.count += 1;
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+    const layers = [
+      instrument(new Array(size).fill(7)),
+      instrument(new Array(size).fill(0)),
+      instrument(new Array(size).fill(0)),
+      instrument(new Array(size).fill(0)),
+    ] as const;
+
+    expect(deriveRampCells(layers, { '7': { class: 'wall' } }, width, height)).toEqual([]);
+    expect(indexReads.count).toBe(0);
+  });
+
+  it('does not read tile layers when semantics are empty', () => {
+    const width = 16;
+    const height = 16;
+    const size = width * height;
+    const indexReads = { count: 0 };
+    const instrument = (raw: number[]): number[] =>
+      new Proxy(raw, {
+        get(target, prop, receiver) {
+          if (typeof prop === 'string' && /^[0-9]+$/.test(prop)) indexReads.count += 1;
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+    const layers = [
+      instrument(new Array(size).fill(7)),
+      instrument(new Array(size).fill(0)),
+      instrument(new Array(size).fill(0)),
+      instrument(new Array(size).fill(0)),
+    ] as const;
+
+    expect(deriveRampCells(layers, {}, width, height)).toEqual([]);
+    expect(indexReads.count).toBe(0);
+  });
+
+  it('keeps exact ramp cells and row-major order when ramps exist', () => {
+    const width = 4;
+    const height = 3;
+    const size = width * height;
+    const layer0 = new Array(size).fill(0);
+    layer0[0 * width + 3] = 7;
+    layer0[2 * width + 1] = 7;
+    const layers = [layer0, EMPTY_LAYER(size), EMPTY_LAYER(size), EMPTY_LAYER(size)] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp', rampDirection: 'east' } };
+
+    expect(deriveRampCells(layers, semantics, width, height)).toEqual([
+      { x: 3, y: 0, rampDirection: 'east' },
+      { x: 1, y: 2, rampDirection: 'east' },
+    ]);
+  });
+
   it('returns nothing when no tile id is ramp-classed', () => {
     const width = 2;
     const height = 1;

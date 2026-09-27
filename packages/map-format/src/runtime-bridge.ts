@@ -30,7 +30,8 @@ export interface RampCellInput {
  * contributes nothing. Row-major iteration (y ascending, then x ascending)
  * is part of this function's contract -- callers may rely on the emitted
  * order. Lifted byte-for-byte from `apps/editor/src/ramp-glyph.ts`'s
- * `computeRampGlyphCells` loop (its `rampCells` build step).
+ * `computeRampGlyphCells` loop (its `rampCells` build step). Returns early
+ * without scanning tile layers when no semantic entry is ramp-classed.
  */
 export function deriveRampCells(
   layers: readonly [TileLayerData, TileLayerData, TileLayerData, TileLayerData],
@@ -38,6 +39,8 @@ export function deriveRampCells(
   width: number,
   height: number,
 ): readonly RampCellInput[] {
+  if (!Object.values(semantics).some((entry) => entry?.class === 'ramp')) return [];
+
   const rampCells: RampCellInput[] = [];
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
