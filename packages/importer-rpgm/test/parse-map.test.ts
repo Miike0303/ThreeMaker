@@ -47,6 +47,21 @@ describe('parseMap', () => {
     expect(() => parseMap(json)).toThrow(/width\*height\*6/);
   });
 
+  it.each([
+    ['fractional width', { width: 1.5, height: 1, data: [0, 0, 0, 0, 0, 0] }],
+    ['negative height', { width: 1, height: -1, data: [] }],
+    ['infinite width', { width: Infinity, height: 1, data: [] }],
+    ['fractional cell', { width: 1, height: 1, data: [0, 0, 0, 0, 0, 1.5] }],
+    ['negative cell', { width: 1, height: 1, data: [0, 0, 0, 0, 0, -1] }],
+    ['non-finite cell', { width: 1, height: 1, data: [0, 0, 0, 0, 0, NaN] }],
+  ])('rejects malformed grid numbers: %s', (_caseName, values) => {
+    expect(() => parseMap({ ...values, tilesetId: 1 })).toThrow(/Invalid Map JSON/);
+  });
+
+  it('accepts non-negative safe integer dimensions and cells', () => {
+    expect(() => parseMap(makeMapJson(1, 1, () => 0))).not.toThrow();
+  });
+
   it('throws on non-object input', () => {
     expect(() => parseMap(null)).toThrow();
     expect(() => parseMap('nope')).toThrow();

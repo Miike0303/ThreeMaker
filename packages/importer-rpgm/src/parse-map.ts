@@ -42,11 +42,20 @@ export function parseMap(json: unknown, id: number | null = null): RpgmMap {
   if (typeof width !== 'number' || typeof height !== 'number') {
     throw new Error('Invalid Map JSON: "width" and "height" must be numbers.');
   }
+  if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0) {
+    throw new Error('Invalid Map JSON: "width" and "height" must be positive safe integers.');
+  }
+  if (!Number.isSafeInteger(width * height * LOGICAL_LAYER_COUNT)) {
+    throw new Error('Invalid Map JSON: "width"*"height"*6 must be a safe integer.');
+  }
   if (typeof tilesetId !== 'number') {
     throw new Error('Invalid Map JSON: "tilesetId" must be a number.');
   }
   if (!Array.isArray(data) || !data.every((value) => typeof value === 'number')) {
     throw new Error('Invalid Map JSON: "data" must be an array of numbers.');
+  }
+  if (!data.every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    throw new Error('Invalid Map JSON: "data" must contain non-negative safe integers.');
   }
 
   const expectedLength = width * height * LOGICAL_LAYER_COUNT;
