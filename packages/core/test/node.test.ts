@@ -23,6 +23,18 @@ describe('Node', () => {
     expect(parent.children).not.toContain(child);
   });
 
+  it('removeChild leaves existing children attached when the target is absent', () => {
+    const parent = new Node('parent');
+    const child = new Node('child');
+    const absentChild = new Node('absent');
+    parent.addChild(child);
+
+    parent.removeChild(absentChild);
+
+    expect(parent.children).toContain(child);
+    expect(child.parent).toBe(parent);
+  });
+
   it('removeFromParent detaches the node from its current parent', () => {
     const parent = new Node('parent');
     const child = new Node('child');
@@ -32,6 +44,16 @@ describe('Node', () => {
 
     expect(child.parent).toBeNull();
     expect(parent.children).toHaveLength(0);
+  });
+
+  it('removeFromParent is safe to call again after detaching', () => {
+    const parent = new Node('parent');
+    const child = new Node('child');
+    parent.addChild(child);
+
+    child.removeFromParent();
+
+    expect(() => child.removeFromParent()).not.toThrow();
   });
 
   it('reparenting a child removes it from the previous parent', () => {

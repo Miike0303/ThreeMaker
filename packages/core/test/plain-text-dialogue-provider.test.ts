@@ -12,6 +12,14 @@ describe('PlainTextDialogueProvider', () => {
     expect(provider.next()).toEqual({ kind: 'end' });
   });
 
+  it('preserves an empty line between dialogue lines', () => {
+    const provider = new PlainTextDialogueProvider();
+    provider.open({ kind: 'text', lines: ['', 'Next'] });
+
+    expect(provider.next()).toEqual({ kind: 'line', text: '' });
+    expect(provider.next()).toEqual({ kind: 'line', text: 'Next' });
+  });
+
   it('keeps reporting end after the last line on further next() calls', () => {
     const provider = new PlainTextDialogueProvider();
     provider.open({ kind: 'text', lines: ['Only line.'] });
