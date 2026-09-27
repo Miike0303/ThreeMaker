@@ -146,6 +146,20 @@ describe('StairTraversal (descent, bidirectional reverse)', () => {
 });
 
 describe('StairTraversal (speed)', () => {
+  it('uses Euclidean distance to time diagonal segments', () => {
+    const traversal = new StairTraversal({
+      waypoints: [
+        { x: 0, y: 0, floor: 0 },
+        { x: 3, y: 4, floor: 0 },
+      ],
+      floors: FLOORS,
+      speed: 5,
+      heightUnit: HEIGHT_UNIT,
+    });
+
+    expect(traversal.update(0.5)).toEqual({ x: 1.5, y: 2, worldY: 0, done: false });
+  });
+
   it('a faster speed reaches the same progress point sooner', () => {
     const waypoints = [
       { x: 0, y: 0, floor: 0 },

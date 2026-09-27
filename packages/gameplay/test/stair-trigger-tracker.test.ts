@@ -11,6 +11,12 @@ const LINK: StairLinkDefinition = {
 };
 
 describe('StairTriggerTracker — shouldTrigger (entry, forward)', () => {
+  it('does not trigger when the entry coordinates are on another floor', () => {
+    const tracker = new StairTriggerTracker({ floor: 1, x: 0, y: 0 });
+
+    expect(tracker.shouldTrigger({ floor: 1, x: 2, y: 2 }, [LINK])).toBeUndefined();
+  });
+
   it('fires once when the player steps onto the entry waypoint', () => {
     const tracker = new StairTriggerTracker({ floor: 0, x: 0, y: 0 });
 

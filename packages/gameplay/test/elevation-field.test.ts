@@ -14,6 +14,13 @@ describe('ElevationField', () => {
     expect(field.heightAt(-1, 0)).toBe(0);
   });
 
+  it('returns 0 when an out-of-bounds x coordinate would otherwise index the previous row', () => {
+    const map = buildMap(3, 2, {}, [0, 0, 3, 0, 0, 0]);
+    const field = new ElevationField(map);
+
+    expect(field.heightAt(-1, 1)).toBe(0);
+  });
+
   it('rampDirAt is undefined for every cell with no ramp semantics resolved (default)', () => {
     const map = buildMap(2, 2, {}, [0, 1, 1, 0]);
     const field = new ElevationField(map);
