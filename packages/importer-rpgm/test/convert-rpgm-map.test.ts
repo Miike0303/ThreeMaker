@@ -108,6 +108,27 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('skips a negative event trigger mode', () => {
+    const event = { ...placedEvent(showTextPage(-1, ['Hello'])), x: 1, y: 1 };
+    const doc = convertRpgmMap(buildSyntheticMap({ events: [event] }), buildSyntheticTileset());
+    expect(doc.triggers).toEqual([]);
+  });
+
+  it('skips an event placed at the exclusive map width boundary', () => {
+    const event = { ...placedEvent(showTextPage(0, ['Hello'])), x: 3, y: 1 };
+    const doc = convertRpgmMap(buildSyntheticMap({ events: [event] }), buildSyntheticTileset());
+    expect(doc.triggers).toEqual([]);
+  });
+
+  it('skips an event page with a negative command code', () => {
+    const page = showTextPage(0, ['Hello'], undefined, CLEAR_CONDITIONS, [
+      { code: -1, indent: 0, parameters: [] },
+    ]);
+    const event = { ...placedEvent(page), x: 1, y: 1 };
+    const doc = convertRpgmMap(buildSyntheticMap({ events: [event] }), buildSyntheticTileset());
+    expect(doc.triggers).toEqual([]);
+  });
+
   it.each([
     ['', 'Town', 'Town'],
     ['Harbor', 'Town', 'Harbor'],

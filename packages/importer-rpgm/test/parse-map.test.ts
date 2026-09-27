@@ -79,4 +79,9 @@ describe('parseMap', () => {
     const map = parseMap(makeMapJson(1, 1, () => 0));
     expect(map.events).toBeUndefined();
   });
+
+  it('defaults a missing scroll type to no scrolling', () => {
+    const { scrollType: _scrollType, ...json } = makeMapJson(1, 1, () => 0);
+    expect(parseMap(json).scrollType).toBe(0);
+  });
 });

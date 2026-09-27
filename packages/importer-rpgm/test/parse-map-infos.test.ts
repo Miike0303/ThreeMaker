@@ -22,6 +22,12 @@ describe('parseMapInfos', () => {
   it('throws when a required field is missing or has the wrong type', () => {
     expect(() => parseMapInfos([{ id: '1', name: 'Town', parentId: 0, order: 1 }])).toThrow();
   });
+
+  it('skips undefined slots in a sparse map info list', () => {
+    expect(parseMapInfos([undefined, { id: 1, name: 'Town', parentId: 0, order: 1 }])).toEqual([
+      { id: 1, name: 'Town', parentId: 0, order: 1 },
+    ]);
+  });
 });
 
 describe('orderMapInfosByTree', () => {

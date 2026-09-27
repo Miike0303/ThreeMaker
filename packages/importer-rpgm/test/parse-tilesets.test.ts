@@ -95,4 +95,12 @@ describe('parseTilesets', () => {
       ]),
     ).toThrow(/duplicate tileset id 1/);
   });
+
+  it('skips undefined slots in a sparse tileset list', () => {
+    const tilesets = parseTilesets([
+      undefined,
+      { id: 1, name: 'Town', flags: makeFlags(), tilesetNames: new Array(9).fill('') },
+    ]);
+    expect(tilesets.map((tileset) => tileset.id)).toEqual([1]);
+  });
 });
