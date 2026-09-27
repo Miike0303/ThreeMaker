@@ -56,6 +56,12 @@ describe('validateMapName', () => {
     expect(validateMapName('NUL')).toBe('reserved');
     expect(validateMapName('COM1')).toBe('reserved');
     expect(validateMapName('lpt9')).toBe('reserved');
+    expect(validateMapName('CON.foo')).toBe('reserved');
+    expect(validateMapName('lpt1.backup')).toBe('reserved');
+    expect(validateMapName('Nul.x')).toBe('reserved');
+    expect(validateMapName('CONSOLE')).toBeNull();
+    expect(validateMapName('console-room')).toBeNull();
+    expect(validateMapName('Auxiliary')).toBeNull();
     expect(validateMapName('a<b')).toBe('invalid-chars');
     expect(validateMapName('a:b')).toBe('absolute');
     expect(validateMapName('a|b')).toBe('invalid-chars');

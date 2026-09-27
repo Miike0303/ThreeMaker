@@ -34,7 +34,7 @@ export function shouldConfirmPlaytestDualWrite(input: {
   return input.openMapName !== legacy && input.savedMapNames.includes(legacy);
 }
 
-const WINDOWS_RESERVED = /^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$/i;
+const WINDOWS_RESERVED = /^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\..*)?$/i;
 const ILLEGAL_FILENAME_CHARS = /[<>:"|?*]/;
 
 function hasControlChar(name: string): boolean {
