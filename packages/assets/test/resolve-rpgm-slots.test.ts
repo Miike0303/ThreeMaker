@@ -48,6 +48,18 @@ describe('resolveRpgmSlotsFromCatalog', () => {
     return sha256;
   }
 
+  function seedA1Sheet() {
+    const gameId = seedGame(gameRoot);
+    const tilesetId = catalog.upsertTileset({
+      gameId,
+      rpgmId: 1,
+      name: 'Outside',
+      flags: JSON.stringify(new Array(8192).fill(0)),
+    });
+    const shaA1 = seedSheet(gameId, tilesetId, 'A1', 'img/tilesets/Outside_A1.png');
+    return { gameId, tilesetId, shaA1 };
+  }
+
   it('resolves every cataloged sheet slot into a SlotComposition keyed by sha256', () => {
     const gameId = seedGame(gameRoot);
     const tilesetId = catalog.upsertTileset({
@@ -68,16 +80,29 @@ describe('resolveRpgmSlotsFromCatalog', () => {
   });
 
   it('matches the game directory case-insensitively (Windows filesystems are case-insensitive)', () => {
-    const gameId = seedGame(gameRoot);
-    const tilesetId = catalog.upsertTileset({
-      gameId,
-      rpgmId: 1,
-      name: 'Outside',
-      flags: JSON.stringify(new Array(8192).fill(0)),
-    });
-    const shaA1 = seedSheet(gameId, tilesetId, 'A1', 'img/tilesets/Outside_A1.png');
+    const { gameId, tilesetId, shaA1 } = seedA1Sheet();
 
     const slots = resolveRpgmSlotsFromCatalog(catalog, gameRoot.toUpperCase(), 1);
+
+    expect(slots).toEqual({
+      A1: { object: shaA1, sourceTilesetId: tilesetId, sourceGameId: gameId },
+    });
+  });
+
+  it('matches a cataloged game when given its data directory', () => {
+    const { gameId, tilesetId, shaA1 } = seedA1Sheet();
+
+    const slots = resolveRpgmSlotsFromCatalog(catalog, join(gameRoot, 'data'), 1);
+
+    expect(slots).toEqual({
+      A1: { object: shaA1, sourceTilesetId: tilesetId, sourceGameId: gameId },
+    });
+  });
+
+  it('matches a cataloged game when given its www/data directory', () => {
+    const { gameId, tilesetId, shaA1 } = seedA1Sheet();
+
+    const slots = resolveRpgmSlotsFromCatalog(catalog, join(gameRoot, 'www', 'data'), 1);
 
     expect(slots).toEqual({
       A1: { object: shaA1, sourceTilesetId: tilesetId, sourceGameId: gameId },

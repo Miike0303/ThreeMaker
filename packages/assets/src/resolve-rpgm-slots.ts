@@ -1,7 +1,7 @@
 // Resolves one RPGM tileset's sheet slots into map-format v3's
 // `SlotComposition`, for the `convert-rpgm` CLI's optional `--store` catalog
 // lookup. Pure database read -- never mutates the catalog.
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import type { SlotComposition, SlotSource, TileSheetSlot } from '@threemaker/map-format';
 import type { Catalog } from './catalog.js';
 
@@ -23,10 +23,24 @@ export function resolveRpgmSlotsFromCatalog(
   gameDir: string,
   rpgmTilesetId: number,
 ): SlotComposition {
-  const normalizedGameDir = resolve(gameDir).toLowerCase();
-  const game = catalog
-    .listGames()
-    .find((candidate) => resolve(candidate.rootPath).toLowerCase() === normalizedGameDir);
+  const resolvedGameDir = resolve(gameDir);
+  const normalizedGameDir = resolvedGameDir.toLowerCase();
+  const slashNormalizedGameDir = normalizedGameDir.replace(/\\/g, '/');
+  const candidateRoots = [normalizedGameDir];
+  if (slashNormalizedGameDir.endsWith('/data')) {
+    candidateRoots.push(resolve(dirname(resolvedGameDir)).toLowerCase());
+  }
+  if (slashNormalizedGameDir.endsWith('/www/data')) {
+    candidateRoots.push(resolve(dirname(dirname(resolvedGameDir))).toLowerCase());
+  }
+
+  const games = catalog.listGames();
+  const game =
+    games.find((candidate) => resolve(candidate.rootPath).toLowerCase() === normalizedGameDir) ??
+    candidateRoots
+      .slice(1)
+      .map((root) => games.find((candidate) => resolve(candidate.rootPath).toLowerCase() === root))
+      .find((candidate) => candidate !== undefined);
   if (!game) return {};
 
   const tilesetSummary = catalog
