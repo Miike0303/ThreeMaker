@@ -193,3 +193,44 @@ describe('StairTraversal (speed)', () => {
     expect(done.done).toBe(true);
   });
 });
+
+describe('StairTraversal (elevated terrain, non-unit height scale)', () => {
+  it('pins waypoint heights to (baseElevation + surfaceHeight) * heightUnit, including the linear midpoint', () => {
+    // Region id N in 1-7 is surface height N (MV3D). Both waypoints sit on
+    // cell (1, 0), which is flat, so surfaceHeightAt is that region id.
+    const heightUnit = 2;
+    const lower = {
+      baseElevation: 1,
+      elevation: new ElevationField(buildMap(3, 1, {}, [0, 2, 0])),
+    };
+    const upper = {
+      baseElevation: 5,
+      elevation: new ElevationField(buildMap(3, 1, {}, [0, 3, 0])),
+    };
+    const traversal = new StairTraversal({
+      waypoints: [
+        { x: 1, y: 0, floor: 0 },
+        { x: 1, y: 0, floor: 1 },
+      ],
+      floors: [lower, upper],
+      speed: SPEED,
+      heightUnit,
+    });
+
+    // start: (1 + 2) * 2 = 6
+    // landing: (5 + 3) * 2 = 16
+    // Same cell: nominal length 1. Midpoint is 0.5 tiles at 4 tiles/s
+    // (dt 0.125s). Linear: 6 + (16 - 6) * 0.5 = 11.
+    const start = traversal.update(0);
+    expect(start.worldY).toBe(6);
+    expect(start.done).toBe(false);
+
+    const mid = traversal.update(0.125);
+    expect(mid.worldY).toBe(11);
+    expect(mid.done).toBe(false);
+
+    const end = traversal.update(1);
+    expect(end.worldY).toBe(16);
+    expect(end.done).toBe(true);
+  });
+});

@@ -9,8 +9,33 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeTextFileAtomic } from '../src/atomic-text-write.js';
+
+const failureState = vi.hoisted(() => ({
+  error: Object.assign(new Error('no space left on device'), { code: 'ENOSPC' }),
+  failTempWrite: false,
+}));
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  const originalWriteFileSync = actual.writeFileSync;
+
+  return {
+    ...actual,
+    writeFileSync: (...args: Parameters<typeof originalWriteFileSync>) => {
+      const [path, data] = args;
+      if (failureState.failTempWrite && typeof path === 'string' && path.includes('.tmp-')) {
+        const partial =
+          typeof data === 'string' ? data.slice(0, Math.max(1, Math.floor(data.length / 2))) : data;
+        originalWriteFileSync(path, partial, 'utf8');
+        throw failureState.error;
+      }
+
+      return originalWriteFileSync(...args);
+    },
+  };
+});
 
 describe('writeTextFileAtomic', () => {
   let directory: string;
@@ -20,6 +45,7 @@ describe('writeTextFileAtomic', () => {
   });
 
   afterEach(() => {
+    failureState.failTempWrite = false;
     rmSync(directory, { recursive: true, force: true });
   });
 
@@ -54,6 +80,23 @@ describe('writeTextFileAtomic', () => {
     expect(statSync(path).isDirectory()).toBe(true);
     expect(readdirSync(path)).toEqual(['existing.txt']);
     expect(readFileSync(existingFile, 'utf8')).toBe('preserved content');
+    expect(readdirSync(directory)).toEqual(['map.tmmap.json']);
+  });
+
+  it('preserves the destination when writing the temporary file fails', () => {
+    const path = join(directory, 'map.tmmap.json');
+    const seed = Buffer.from([0x00, 0x7f, 0xff, 0x10, 0x0a]);
+    writeFileSync(path, seed);
+    failureState.failTempWrite = true;
+    let thrown: unknown;
+    try {
+      writeTextFileAtomic(path, 'replacement content');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(failureState.error);
+    expect(readFileSync(path)).toEqual(seed);
     expect(readdirSync(directory)).toEqual(['map.tmmap.json']);
   });
 });
