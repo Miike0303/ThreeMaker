@@ -100,10 +100,9 @@ export function parseInkNodeLayouts(source: string): readonly InkNodeLayout[] {
 }
 
 /**
- * Replaces the leading layout-comment block with a stable-sorted write of
- * `layouts`, preserving the remaining source body. Non-layout leading
- * comments that sit inside the old layout region are dropped (layout owns
- * the preamble); body after the first non-layout content is kept.
+ * Replaces leading layout comments with a stable-sorted write of `layouts`.
+ * Preserves other leading comments in order and leaves the source after the
+ * first non-comment line untouched.
  */
 export function applyInkNodeLayouts(source: string, layouts: readonly InkNodeLayout[]): string {
   const body = stripLeadingLayoutBlock(source);
@@ -122,15 +121,14 @@ function formatCoord(n: number): string {
 }
 
 /**
- * Drop a leading run of blank lines and `@tm-node` comments (and any other
- * full-line `//` comments that appear before the first non-comment content,
- * only while we are still in the preamble). Once a non-comment line appears,
- * the rest is body — including later layout comments (treated as body noise).
+ * Remove layout comments and blank lines from the leading comment preamble.
+ * Keep other comments in their original order. Once a non-comment line appears,
+ * leave it and everything after it untouched, including later layout comments.
  */
 function stripLeadingLayoutBlock(source: string): string {
   const lines = source.split(/\r?\n/);
   let i = 0;
-  let sawLayout = false;
+  const comments: string[] = [];
   while (i < lines.length) {
     const line = lines[i] ?? '';
     const trimmed = line.trim();
@@ -139,19 +137,17 @@ function stripLeadingLayoutBlock(source: string): string {
       continue;
     }
     if (LAYOUT_LINE.test(line)) {
-      sawLayout = true;
       i += 1;
       continue;
     }
-    // Other // comments only strip when we already saw a layout line in this
-    // preamble (so a pure story with author comments at the top is preserved).
-    if (sawLayout && trimmed.startsWith('//')) {
+    if (trimmed.startsWith('//')) {
+      comments.push(line);
       i += 1;
       continue;
     }
     break;
   }
-  return lines.slice(i).join('\n');
+  return [...comments, ...lines.slice(i)].join('\n');
 }
 
 /**

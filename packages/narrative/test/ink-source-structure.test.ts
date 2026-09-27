@@ -98,6 +98,26 @@ B
     const next = applyInkNodeLayouts(body, [{ knot: 'start', x: 0, y: 0 }]);
     expect(next).toBe('// @tm-node start x=0 y=0\n\n=== start ===\nHi\n');
   });
+
+  it('preserves leading comments in order and is idempotent', () => {
+    const source = `// Before layout.
+// @tm-node start x=0 y=0
+// Keep this note.
+
+// Another note.
+=== start ===
+Hi`;
+    const layouts = [{ knot: 'start', x: 40, y: 60 }];
+    const once = applyInkNodeLayouts(source, layouts);
+    expect(once).toBe(`// @tm-node start x=40 y=60
+
+// Before layout.
+// Keep this note.
+// Another note.
+=== start ===
+Hi`);
+    expect(applyInkNodeLayouts(once, layouts)).toBe(once);
+  });
 });
 
 describe('listInkEdges (lossy visual hops)', () => {
@@ -191,6 +211,13 @@ describe('buildInkGraphModel / setInkNodePosition', () => {
       { knot: 'start', x: 0, y: 0 },
     ]);
     expect(listInkKnots(next)).toEqual(['start', 'mid']);
+  });
+
+  it('setInkNodePosition keeps an author note after a layout line exactly once', () => {
+    const source = '// @tm-node start x=0 y=0\n// Keep this note.\n=== start ===\nHi';
+    const next = setInkNodePosition(source, 'start', 40, 60);
+    expect(next).toBe('// @tm-node start x=40 y=60\n\n// Keep this note.\n=== start ===\nHi');
+    expect(next.match(/\/\/ Keep this note\./g)).toHaveLength(1);
   });
 
   it('setInkNodePosition invents defaults for other knots when none stored', () => {
