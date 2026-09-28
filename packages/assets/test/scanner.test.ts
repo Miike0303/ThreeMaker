@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -137,6 +137,45 @@ describe('scanGames — depth/cycle guard (modeled on the LoQOO self-nested fold
 
     const cycleErrors = result.errors.filter((e) => e.code === 'cycle-detected');
     expect(cycleErrors.length).toBeGreaterThan(0);
+  });
+
+  it('discovers a game only once through multiple junction aliases', () => {
+    const gameDir = join(workDir, 'game');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    symlinkSync(gameDir, join(workDir, 'game-alias-a'), 'junction');
+    symlinkSync(gameDir, join(workDir, 'game-alias-b'), 'junction');
+
+    const result = scanGames(workDir);
+
+    expect(result.games).toHaveLength(1);
+    expect(result.errors.map((error) => error.code)).toEqual(['cycle-detected', 'cycle-detected']);
+  });
+
+  it('names the offending branch in a depth-limit diagnostic', () => {
+    const branch = join(workDir, 'too-deep');
+    mkdirSync(branch);
+
+    expect(scanGames(workDir, { maxDepth: 0 }).errors).toEqual([
+      {
+        path: branch,
+        code: 'depth-exceeded',
+        message: `Max scan depth (0) exceeded at "${branch}" — abandoning this branch.`,
+      },
+    ]);
+  });
+
+  it('includes the resolved target in a junction-cycle diagnostic', () => {
+    const junction = join(workDir, 'loop-back');
+    symlinkSync(workDir, junction, 'junction');
+    const target = realpathSync(workDir);
+
+    expect(scanGames(workDir).errors).toEqual([
+      {
+        path: junction,
+        code: 'cycle-detected',
+        message: `Cycle detected at "${junction}" (real path "${target}" already visited) — abandoning this branch.`,
+      },
+    ]);
   });
 
   it('ignores a dangling directory junction without reporting a scan error', () => {
@@ -397,6 +436,13 @@ describe('scanGames — game title normalization', () => {
     const result = scanGames(workDir);
 
     expect(result.games[0]?.systemTitle).toBe('My Game');
+  });
+
+  it('uses no displayed title when gameTitle is not a string', () => {
+    const gameDir = join(workDir, 'numeric-title');
+    writeSystemJson(join(gameDir, 'data'), { gameTitle: 42 });
+
+    expect(scanGames(workDir).games[0]?.systemTitle).toBeNull();
   });
 
   it('uses no displayed title when gameTitle contains only whitespace', () => {

@@ -80,6 +80,10 @@ describe('parseEncryptionKey', () => {
     expect(parseEncryptionKey({ encryptionKey: `${KEY_HEX.slice(0, 31)}g` })).toBeNull();
   });
 
+  it('rejects an encryption key containing uppercase G', () => {
+    expect(parseEncryptionKey({ encryptionKey: `${KEY_HEX.slice(0, 31)}G` })).toBeNull();
+  });
+
   it('rejects a valid-looking encryption key on a later line', () => {
     expect(parseEncryptionKey({ encryptionKey: `invalid\n${KEY_HEX}` })).toBeNull();
   });
@@ -181,6 +185,30 @@ describe('decryptRpgmv', () => {
     expect(() => decryptRpgmv(encrypted, longKey)).toThrowError(
       expect.objectContaining({ code: 'bad-key' }),
     );
+  });
+
+  it('reports the supplied key length when rejecting a short key', () => {
+    const plain = concat(new Uint8Array(PNG_MAGIC), new Uint8Array(8));
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+    const shortKey = KEY_BYTES.subarray(0, 15);
+
+    expect(() => decryptRpgmv(encrypted, shortKey)).toThrowError(
+      expect.objectContaining({
+        code: 'bad-key',
+        message: 'Encryption key must be 16 bytes, got 15.',
+      }),
+    );
+  });
+
+  it('identifies truncated assets as DecryptError in diagnostic text', () => {
+    let error: unknown;
+    try {
+      decryptRpgmv(new Uint8Array(0), KEY_BYTES);
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(String(error)).toBe('DecryptError: Encrypted asset is too short (0 bytes).');
   });
 
   it('throws DecryptError(magic-mismatch) when decrypted output matches no known magic', () => {
