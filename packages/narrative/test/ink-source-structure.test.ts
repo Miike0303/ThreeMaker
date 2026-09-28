@@ -406,3 +406,19 @@ it('orders undeclared graph nodes by their first divert', () => {
 
   expect(model.nodes.map((node) => node.knot)).toEqual(['start', 'first', 'second']);
 });
+
+it('rejects a layout whose X coordinate overflows to infinity', () => {
+  const overflowing = '9'.repeat(309);
+
+  expect(parseInkNodeLayouts(`// @tm-node start x=${overflowing} y=1\n`)).toEqual([]);
+});
+
+it('rejects a layout whose Y coordinate overflows to infinity', () => {
+  const overflowing = '9'.repeat(309);
+
+  expect(parseInkNodeLayouts(`// @tm-node start x=1 y=${overflowing}\n`)).toEqual([]);
+});
+
+it('rejects a layout comment without an X coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node start x= y=1\n')).toEqual([]);
+});
