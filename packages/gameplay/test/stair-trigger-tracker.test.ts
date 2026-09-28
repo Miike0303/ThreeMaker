@@ -67,6 +67,22 @@ describe('StairTriggerTracker — shouldTrigger (entry, forward)', () => {
 });
 
 describe('StairTriggerTracker — shouldTrigger (landing, reversed/bidirectional)', () => {
+  it('uses the final waypoint as the landing on a path with a turn', () => {
+    const link: StairLinkDefinition = {
+      bidirectional: true,
+      waypoints: [
+        { x: 2, y: 2, floor: 0 },
+        { x: 3, y: 2, floor: 0 },
+        { x: 4, y: 2, floor: 1 },
+      ],
+    };
+    const tracker = new StairTriggerTracker({ floor: 1, x: 0, y: 0 });
+
+    expect(tracker.shouldTrigger({ floor: 1, x: 4, y: 2 }, [link])).toEqual(
+      [...link.waypoints].reverse(),
+    );
+  });
+
   it('fires when the player reaches the same coordinates on a different floor', () => {
     const tracker = new StairTriggerTracker({ floor: 1, x: 2, y: 2 });
 
