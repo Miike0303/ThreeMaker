@@ -335,3 +335,29 @@ it('uses stored layout for a dotted knot name', () => {
 it('lists dotted knot names without truncating them', () => {
   expect(listInkKnots('=== chapter.next ===\n')).toEqual(['chapter.next']);
 });
+
+it('recognizes an indented knot header', () => {
+  expect(listInkKnots('  === alcove ===\n')).toEqual(['alcove']);
+});
+
+it('accepts a fractional horizontal layout coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node alcove x=-10.5 y=2\n')).toEqual([
+    { knot: 'alcove', x: -10.5, y: 2 },
+  ]);
+});
+
+it('accepts a negative vertical layout coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node alcove x=4 y=-2.5\n')).toEqual([
+    { knot: 'alcove', x: 4, y: -2.5 },
+  ]);
+});
+
+it('recognizes an indented layout comment', () => {
+  expect(parseInkNodeLayouts('  // @tm-node alcove x=4 y=2\n')).toEqual([
+    { knot: 'alcove', x: 4, y: 2 },
+  ]);
+});
+
+it('finds a divert without whitespace after its arrow', () => {
+  expect(listInkEdges('=== start ===\n->END\n')).toEqual([{ from: 'start', to: 'END' }]);
+});

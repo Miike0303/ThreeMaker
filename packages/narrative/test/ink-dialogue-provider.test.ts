@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DialogueSource } from '@threemaker/core';
+import type { Story } from 'inkjs';
 import { describe, expect, it } from 'vitest';
 import { compileInk } from '../src/compile.js';
 import { InkDialogueProvider } from '../src/ink-dialogue-provider.js';
@@ -155,4 +156,18 @@ it('accepts whitespace around the speaker tag key', () => {
   provider.open({ kind: 'ink', storyId: 'inline' });
 
   expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello.' });
+});
+
+it('removes a trailing CRLF from a dialogue line', () => {
+  const story = {
+    canContinue: true,
+    Continue: () => 'Hello\r\n',
+    currentTags: [],
+    currentChoices: [],
+  } as unknown as Story;
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', text: 'Hello' });
 });
