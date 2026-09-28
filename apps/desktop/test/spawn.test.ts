@@ -97,6 +97,28 @@ describe('findSpawnTile', () => {
     expect(findSpawnTile(grid, 1, 1)).toEqual({ x: 0, y: 0 });
   });
 
+  it('rejects a candidate exactly beyond the right map edge', () => {
+    const grid: StandabilityQuery = {
+      width: 2,
+      height: 2,
+      isStandable: () => true,
+      isGoodSpawnCandidate: (x, y) => x === 2 && y === 0,
+    };
+
+    expect(() => findSpawnTile(grid, 1, 0)).toThrow(/no standable tile/i);
+  });
+
+  it('rejects a candidate exactly below the bottom map edge', () => {
+    const grid: StandabilityQuery = {
+      width: 2,
+      height: 2,
+      isStandable: () => true,
+      isGoodSpawnCandidate: (x, y) => x === 0 && y === 2,
+    };
+
+    expect(() => findSpawnTile(grid, 0, 1)).toThrow(/no standable tile/i);
+  });
+
   it('throws when the entire map has no standable tile', () => {
     const grid = fakeGrid(['##', '##']);
     expect(() => findSpawnTile(grid, 0, 0)).toThrow(/no standable tile/i);
@@ -135,5 +157,12 @@ describe('resolveInitialSpawn', () => {
   it('falls back to floor 0 when no spawn was authored at all', () => {
     const result = resolveInitialSpawn([floor0, floor1], undefined, 1, 1);
     expect(result).toEqual({ x: 1, y: 1, floorIndex: 0 });
+  });
+
+  it('uses the horizontal fallback origin independently of its vertical origin', () => {
+    const floor = fakeGrid(['...', '...', '...']);
+    const result = resolveInitialSpawn([floor], { x: 9, y: 9, floorIndex: 0 }, 2, 0);
+
+    expect(result).toEqual({ x: 2, y: 0, floorIndex: 0 });
   });
 });

@@ -125,6 +125,7 @@ type FakeElement = {
     add(name: string): void;
     remove(name: string): void;
     toggle(name: string, on?: boolean): void;
+    contains(name: string): boolean;
   };
   append(...nodes: FakeElement[]): void;
   replaceChildren(...nodes: FakeElement[]): void;
@@ -153,6 +154,7 @@ function fakeElement(): FakeElement {
       add: (name) => classes.add(name),
       remove: (name) => classes.delete(name),
       toggle: (name, on) => ((on ?? !classes.has(name)) ? classes.add(name) : classes.delete(name)),
+      contains: (name) => classes.has(name),
     },
     append: (...nodes) => element.children.push(...nodes),
     replaceChildren: (...nodes) => {
@@ -286,5 +288,35 @@ describe('createDialogueOverlay', () => {
     overlay.hide();
     expect(role()).toBeNull();
     expect(element.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('makes an error visible when no dialogue is active', () => {
+    const { overlay } = overlayParts();
+    const element = overlay.element as unknown as FakeElement;
+
+    overlay.showError('Could not save.');
+
+    expect(element.style.display).toBe('');
+  });
+
+  it('reopens the overlay when a new line follows a hidden conversation', () => {
+    const { overlay } = overlayParts();
+    const element = overlay.element as unknown as FakeElement;
+
+    overlay.hide();
+    overlay.showLine('Alice', 'Hello again.');
+
+    expect(element.style.display).toBe('');
+  });
+
+  it('moves the visible choice highlight with arrow navigation', () => {
+    const { overlay, choices } = overlayParts();
+    overlay.showChoices(['Yes', 'No'], 0);
+
+    overlay.setHighlightedIndex(1);
+
+    expect(
+      choices?.children.map((choice) => choice.classList.contains('dialogue-choice-highlighted')),
+    ).toEqual([false, true]);
   });
 });

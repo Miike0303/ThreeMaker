@@ -301,6 +301,26 @@ describe('translateMapDocument', () => {
     expect(result.spawn).toEqual({ x: 5, y: 5, floorIndex: 0 });
   });
 
+  it('preserves an authored spawn x coordinate distinct from y', () => {
+    const doc = buildDevDemoEquivalentDocument();
+    const result = translateMapDocument({
+      ...doc,
+      spawn: { x: 4, y: 9, floor: 'floor-0' },
+    });
+
+    expect(result.spawn).toEqual({ x: 4, y: 9, floorIndex: 0 });
+  });
+
+  it('preserves an authored spawn y coordinate distinct from x', () => {
+    const doc = buildDevDemoEquivalentDocument();
+    const result = translateMapDocument({
+      ...doc,
+      spawn: { x: 9, y: 4, floor: 'floor-0' },
+    });
+
+    expect(result.spawn).toEqual({ x: 9, y: 4, floorIndex: 0 });
+  });
+
   it("resolves spawn to undefined when the document authors none (findSpawnTile fallback is the caller's job)", () => {
     const doc = buildDevDemoEquivalentDocument();
     const { spawn: _omit, ...withoutSpawn } = doc;

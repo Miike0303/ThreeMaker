@@ -207,6 +207,7 @@ describe('debug panel collapsed-state persistence', () => {
 type FakeNode = {
   readonly tag: string;
   textContent: string;
+  readonly children: FakeNode[];
   readonly attributes: Map<string, string>;
   readonly listeners: Map<string, () => void>;
   readonly classList: { toggle(name: string, on?: boolean): void };
@@ -220,6 +221,7 @@ function fakeNode(tag: string): FakeNode {
   const node: FakeNode = {
     tag,
     textContent: '',
+    children: [],
     attributes: new Map(),
     listeners: new Map(),
     classList: { toggle: () => {} },
@@ -229,8 +231,12 @@ function fakeNode(tag: string): FakeNode {
     addEventListener: (type, listener) => {
       node.listeners.set(type, listener);
     },
-    append: () => {},
-    appendChild: () => {},
+    append: (...nodes) => {
+      node.children.push(...(nodes as FakeNode[]));
+    },
+    appendChild: (child) => {
+      node.children.push(child as FakeNode);
+    },
   };
   return node;
 }
@@ -330,5 +336,27 @@ describe('debug panel toggle accessibility', () => {
     panel.setNoclipActive(false);
 
     expect(indicator?.textContent).toBe('debug.noclipOff');
+  });
+
+  it('refreshes the map value in its own row when the snapshot changes', () => {
+    const created: FakeNode[] = [];
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => {
+        const node = fakeNode(tag);
+        created.push(node);
+        return node;
+      },
+    });
+    const panel = createDebugPanel(createI18n(LOCALES, 'en').t, {
+      devMode: false,
+      collapsedStorage: { getItem: () => null, setItem: () => {} },
+    });
+
+    panel.update(SNAPSHOT);
+
+    const mapRow = created.find(
+      (node) => node.className === 'debug-panel-row' && node.children[0]?.textContent === 'Map',
+    );
+    expect(mapRow?.children[1]?.textContent).toBe('Map007');
   });
 });

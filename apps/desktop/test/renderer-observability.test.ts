@@ -19,6 +19,11 @@ describe('mapRendererBackendName', () => {
     expect(mapRendererBackendName(new WebGLBackend())).toBe('webgl2');
   });
 
+  it('recognizes a WebGL backend constructor with mixed casing', () => {
+    class WebglBackend {}
+    expect(mapRendererBackendName(new WebglBackend())).toBe('webgl2');
+  });
+
   it('falls back to isWebGLBackend / isWebGPUBackend flags', () => {
     expect(mapRendererBackendName({ isWebGLBackend: true })).toBe('webgl2');
     expect(mapRendererBackendName({ isWebGPUBackend: true })).toBe('webgpu');

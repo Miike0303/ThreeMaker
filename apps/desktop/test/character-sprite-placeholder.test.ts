@@ -94,4 +94,13 @@ describe('buildPlaceholderCharacterTexture', () => {
 
     expect(Array.from(image.data.slice(0, 4))).toEqual([0, 170, 0, 255]);
   });
+
+  it('fills the full width of a facing frame without transparent stripes', () => {
+    const texture = buildPlaceholderCharacterTexture();
+    const image = texture.image as { width: number; data: Uint8Array };
+    const x = FRAME_PIXEL_SIZE - 1;
+    const pixel = x * 4;
+
+    expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([0, 170, 0, 255]);
+  });
 });

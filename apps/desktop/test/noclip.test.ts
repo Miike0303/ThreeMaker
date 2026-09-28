@@ -29,6 +29,14 @@ describe('withNoclip', () => {
     expect(canMove).toHaveBeenCalledWith(1, 2, 'up');
   });
 
+  it('passes the requested direction to the normal movement check', () => {
+    const canMove = vi.fn((_x: number, _y: number, direction: string) => direction === 'right');
+    const wrapped = withNoclip(() => false, { isStandable: () => true }, canMove);
+
+    expect(wrapped(3, 4, 'right')).toBe(true);
+    expect(canMove).toHaveBeenCalledWith(3, 4, 'right');
+  });
+
   it('blocks a move when noclip is inactive, the wrapped canMove refuses, and the current tile is itself standable (normal block stands)', () => {
     const canMove = vi.fn(() => false);
     const grid = { isStandable: vi.fn(() => true) };
