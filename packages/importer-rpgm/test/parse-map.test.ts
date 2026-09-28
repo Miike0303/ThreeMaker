@@ -13,6 +13,22 @@ function makeMapJson(width: number, height: number, fill: (z: number, i: number)
 }
 
 describe('parseMap', () => {
+  it('reports a negative width as a dimension error before checking data length', () => {
+    const json = { width: -1, height: 1, tilesetId: 1, data: [] };
+
+    expect(() => parseMap(json)).toThrow(
+      new Error('Invalid Map JSON: "width" and "height" must be positive safe integers.'),
+    );
+  });
+
+  it('reports a negative height as a dimension error before checking data length', () => {
+    const json = { width: 1, height: -1, tilesetId: 1, data: [] };
+
+    expect(() => parseMap(json)).toThrow(
+      new Error('Invalid Map JSON: "width" and "height" must be positive safe integers.'),
+    );
+  });
+
   it('reports six-layer overflow for tall maps with safe dimensions', () => {
     const json = { width: 1, height: Number.MAX_SAFE_INTEGER, tilesetId: 1, data: [] };
 

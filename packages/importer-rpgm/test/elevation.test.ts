@@ -103,6 +103,30 @@ describe('computeHeightGrid', () => {
 });
 
 describe('computeRampGrid', () => {
+  it('writes an explicit ramp override to its own column', () => {
+    const ctx: HeightGridContext = {
+      heightGrid: new Uint8Array([2, 2, 1, 2, 2, 2, 2, 2, 2]),
+      mapWidth: 3,
+      mapHeight: 3,
+    };
+
+    const rampGrid = computeRampGrid(ctx, [{ x: 2, y: 1, rampDirection: 'north' }]);
+
+    expect(Array.from(rampGrid)).toEqual([0, 0, 0, 0, 0, 1, 0, 0, 0]);
+  });
+
+  it('writes an explicit ramp override using the map width as the row stride', () => {
+    const ctx: HeightGridContext = {
+      heightGrid: new Uint8Array([2, 2, 2, 2, 2, 1]),
+      mapWidth: 3,
+      mapHeight: 2,
+    };
+
+    const rampGrid = computeRampGrid(ctx, [{ x: 1, y: 1, rampDirection: 'east' }]);
+
+    expect(Array.from(rampGrid)).toEqual([0, 0, 0, 0, 3, 0]);
+  });
+
   it('keeps multi-level ramps inert when console is unavailable', () => {
     const ctx: HeightGridContext = {
       heightGrid: new Uint8Array([3]),

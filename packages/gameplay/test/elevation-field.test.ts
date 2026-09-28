@@ -115,3 +115,10 @@ it('reads elevation on the last row of a tall map', () => {
 
   expect(field.heightAt(0, 2)).toBe(3);
 });
+
+it('reads a ramp direction when the row differs from the column', () => {
+  const regions = [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1];
+  const field = new ElevationField(buildMap(4, 3, {}, regions), [{ x: 2, y: 1 }]);
+
+  expect(field.rampDirAt(2, 1)).toBe('west');
+});
