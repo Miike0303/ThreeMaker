@@ -24,6 +24,39 @@ const AUTOTILE_SHEET_SIZES: SheetPixelSizes = {
 const INSET = 1;
 
 describe('computeTileUv', () => {
+  it('wraps columns before a mostly present partial tile', () => {
+    const quad = computeTileUv(1, { B: { width: 80, height: 48 } })?.quads[0];
+
+    expect(quad).toEqual({
+      u0: 1 / 80,
+      u1: 47 / 80,
+      v0: 1 - 47 / 48,
+      v1: 1 - 1 / 48,
+    });
+  });
+
+  it('wraps rows before a mostly present partial tile', () => {
+    const quad = computeTileUv(8, { B: { width: 48, height: 80 } })?.quads[0];
+
+    expect(quad).toEqual({
+      u0: 1 / 48,
+      u1: 47 / 48,
+      v0: 1 - 47 / 80,
+      v1: 1 - 1 / 80,
+    });
+  });
+
+  it('starts the right B block at row zero on a taller sheet', () => {
+    const quad = computeTileUv(128, { B: { width: 768, height: 1536 } })?.quads[0];
+
+    expect(quad).toEqual({
+      u0: 385 / 768,
+      u1: 431 / 768,
+      v0: 1 - 47 / 1536,
+      v1: 1 - 1 / 1536,
+    });
+  });
+
   it('resolves A4 tile IDs into four autotile quarter UVs', () => {
     const result = computeTileUv(5888, { A4: { width: 768, height: 720 } });
     expect(result?.sheet).toBe('A4');

@@ -48,6 +48,14 @@ describe('autotile lookup tables', () => {
 });
 
 describe('computeAutotileQuarterOrigins', () => {
+  it('caps the left edge for waterfall shape 1', () => {
+    expect(computeAutotileQuarterOrigins(2289, 'A1')).toEqual([
+      { x: 672, y: 0 },
+      { x: 696, y: 0 },
+      { x: 672, y: 24 },
+      { x: 696, y: 24 },
+    ]);
+  });
   it('uses the upper-left inner corner for floor shape 1', () => {
     expect(computeAutotileQuarterOrigins(2817, 'A2')).toEqual([
       { x: 48, y: 0 },

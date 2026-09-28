@@ -72,6 +72,65 @@ function positionGraph(layer: WeatherLayerInspect): unknown {
   return (layer.mesh.material as THREE.SpriteNodeMaterial).positionNode;
 }
 
+function graphNode(root: unknown): GraphNodeShape {
+  if (!root || typeof root !== 'object') throw new Error('Expected a shader node');
+  const node = root as GraphNodeShape;
+  return node.node === undefined ? node : graphNode(node.node);
+}
+
+function findGraphNode(root: unknown, matches: (node: GraphNodeShape) => boolean): GraphNodeShape {
+  let found: GraphNodeShape | undefined;
+  graphContains(root, (node) => {
+    if (!matches(node)) return false;
+    found = node;
+    return true;
+  });
+  if (!found) throw new Error('Expected shader operation was not found');
+  return found;
+}
+
+// Sample scalar shader arithmetic with explicit inputs, without creating a GPU device.
+function evaluateScalarGraph(root: unknown, inputs: ReadonlyMap<GraphNodeShape, number>): number {
+  const node = graphNode(root);
+  const input = inputs.get(node);
+  if (input !== undefined) return input;
+  if (typeof node.value === 'number') return node.value;
+  const a = evaluateScalarGraph(node.aNode, inputs);
+  if (node.method === 'sin') return Math.sin(a);
+  const b = evaluateScalarGraph(node.bNode, inputs);
+  switch (node.op ?? node.method) {
+    case '+':
+      return a + b;
+    case '-':
+      return a - b;
+    case '*':
+      return a * b;
+    case '/':
+      return a / b;
+    case 'max':
+      return Math.max(a, b);
+    default:
+      throw new Error('Unsupported scalar shader operation');
+  }
+}
+
+function particleOffsetGraph(layer: WeatherLayerInspect): GraphNodeShape {
+  return graphNode(graphNode(positionGraph(layer)).bNode);
+}
+
+function localParticleAxes(layer: WeatherLayerInspect): readonly unknown[] {
+  const local = graphNode(particleOffsetGraph(layer).aNode);
+  if (!Array.isArray(local.nodes) || local.nodes.length !== 3) {
+    throw new Error('Expected three local particle coordinates');
+  }
+  return local.nodes;
+}
+
+function sampleSpread(spread: unknown, fraction: number): number {
+  const centered = graphNode(graphNode(spread).aNode);
+  return evaluateScalarGraph(spread, new Map([[graphNode(centered.aNode), fraction]]));
+}
+
 describe('createWeatherLayer structure', () => {
   it('adds one mesh with instance count equal to particleCount (default 3000)', () => {
     const { scene, layer } = createInspect();
@@ -142,6 +201,76 @@ describe('createWeatherLayer structure', () => {
 });
 
 describe('particle position graph', () => {
+  it('spans thirty world units horizontally before lateral drift', () => {
+    const { layer } = createInspect(4);
+    const spread = graphNode(localParticleAxes(layer)[0]).aNode;
+    expect(sampleSpread(spread, 0.75) - sampleSpread(spread, 0.25)).toBe(15);
+    layer.dispose();
+  });
+
+  it('spans thirty world units in depth', () => {
+    const { layer } = createInspect(4);
+    const spread = localParticleAxes(layer)[2];
+    expect(sampleSpread(spread, 0.75) - sampleSpread(spread, 0.25)).toBe(15);
+    layer.dispose();
+  });
+
+  it('centers horizontal samples on the camera before lateral drift', () => {
+    const { layer } = createInspect(4);
+    const spread = graphNode(localParticleAxes(layer)[0]).aNode;
+    expect(sampleSpread(spread, 0.5)).toBe(0);
+    layer.dispose();
+  });
+
+  it('centers wrapped vertical samples on the camera', () => {
+    const { layer } = createInspect(4);
+    expect(sampleSpread(localParticleAxes(layer)[1], 0.5)).toBe(0);
+    layer.dispose();
+  });
+
+  it('centers depth samples on the camera', () => {
+    const { layer } = createInspect(4);
+    expect(sampleSpread(localParticleAxes(layer)[2], 0.5)).toBe(0);
+    layer.dispose();
+  });
+
+  it('leaves particles outside the keepout radius at their sampled distance', () => {
+    const { layer } = createInspect(4);
+    const scale = particleOffsetGraph(layer).bNode;
+    const length = findGraphNode(scale, (node) => node.method === 'length');
+    expect(evaluateScalarGraph(scale, new Map([[length, 10]])) * 10).toBe(10);
+    layer.dispose();
+  });
+
+  it('keeps the particle scale finite at zero camera distance', () => {
+    const { layer } = createInspect(4);
+    const scale = particleOffsetGraph(layer).bNode;
+    const length = findGraphNode(scale, (node) => node.method === 'length');
+    expect(Number.isFinite(evaluateScalarGraph(scale, new Map([[length, 0]])))).toBe(true);
+    layer.dispose();
+  });
+
+  it('completes lateral drift at the configured slow angular speed', () => {
+    const { layer } = createInspect(4);
+    const wave = findGraphNode(positionGraph(layer), (node) => node.method === 'sin');
+    const angle = graphNode(wave.aNode);
+    const clock = graphNode(graphNode(angle.aNode).aNode);
+    const phase = graphNode(angle.bNode);
+    const sampleAt = (seconds: number): number =>
+      evaluateScalarGraph(
+        wave,
+        new Map([
+          [clock, seconds],
+          [phase, 0],
+        ]),
+      );
+    const period = (2 * Math.PI) / 0.7;
+    expect(sampleAt(period / 4)).toBeCloseTo(1, 8);
+    expect(sampleAt(period / 2)).toBeCloseTo(0, 8);
+    expect(sampleAt(period)).toBeCloseTo(0, 8);
+    layer.dispose();
+  });
+
   it('adds the camera center to each particle offset', () => {
     const { layer } = createInspect(4);
     const root = positionGraph(layer) as { node?: { op?: string; aNode?: unknown } };

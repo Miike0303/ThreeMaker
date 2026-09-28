@@ -174,6 +174,63 @@ describe('buildChunks elevation (region-derived height)', () => {
 });
 
 describe('buildChunks star-tile stacking (MV3D "tileoffset" fix)', () => {
+  it('anchors star tiles on A3 wall bases', () => {
+    const map = makeMap({
+      width: 1,
+      height: 2,
+      layers: {
+        tileLayers: [
+          [2, 4352],
+          [0, 0],
+          [0, 0],
+          [0, 0],
+        ],
+        shadows: [0, 0],
+        regions: [0, 3],
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), {
+      ...SHEET_SIZES,
+      A3: { width: 768, height: 384 },
+    });
+    const star = chunks[0]?.tiles.find((tile) => tile.tileY === 0);
+
+    expect(star?.starStack).toEqual({
+      baseTileY: 1,
+      level: 0,
+      baseHeight: 3,
+      baseIsWall: true,
+    });
+  });
+
+  it('stops a star stack at a base with missing tile flags', () => {
+    const map = makeMap({
+      width: 1,
+      height: 2,
+      layers: {
+        tileLayers: [
+          [2, 3],
+          [0, 0],
+          [0, 0],
+          [0, 0],
+        ],
+        shadows: [0, 0],
+        regions: [0, 3],
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset({ flags: [0, 0, 0x10] }), SHEET_SIZES);
+    const star = chunks[0]?.tiles.find((tile) => tile.tileY === 0);
+
+    expect(star?.starStack).toEqual({
+      baseTileY: 1,
+      level: 0,
+      baseHeight: 3,
+      baseIsWall: false,
+    });
+  });
+
   it('keeps scanning for star markers after an earlier layer marks the cell as a wall', () => {
     const map = makeMap({
       width: 1,
@@ -324,6 +381,30 @@ describe('buildChunks star-tile stacking (MV3D "tileoffset" fix)', () => {
 });
 
 describe('buildChunks', () => {
+  it('orders northern chunks first when a southern chunk is discovered earlier', () => {
+    const map = makeMap({
+      width: 1,
+      height: 3,
+      layers: {
+        tileLayers: [
+          [0, 0, 1],
+          [1, 0, 0],
+          [0, 0, 0],
+          [0, 0, 0],
+        ],
+        shadows: [0, 0, 0],
+        regions: [0, 0, 0],
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 2);
+
+    expect(chunks.map(({ chunkX, chunkY }) => [chunkX, chunkY])).toEqual([
+      [0, 0],
+      [0, 1],
+    ]);
+  });
+
   it('does not invent tiles beyond a truncated tile layer', () => {
     const map = makeMap({
       width: 2,
