@@ -1,3 +1,4 @@
+import { createAuthoringCommandRegistry } from '@threemaker/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   clearMigrations,
@@ -89,6 +90,13 @@ function makeV1DocInput(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('parseMapDocument', () => {
+  it('passes the authoring command registry to event validation', () => {
+    const command = { type: 'playSound', path: 'se/hit.ogg' };
+    const input = makeValidDocInput({ events: { hit: [command] } });
+
+    expect(parseMapDocument(input, createAuthoringCommandRegistry()).events.hit).toEqual([command]);
+  });
+
   afterEach(() => {
     // `clearMigrations()` wipes EVERY registered migration, including the
     // real built-in ones registered at module load -- restore them so later
@@ -404,6 +412,10 @@ describe('parseMapDocument', () => {
 
   it('leaves a null v4 tileset for schema validation', () => {
     expect(migrateV4ToV5({ tileset: null }).tileset).toBeNull();
+  });
+
+  it('leaves an absent v4 tileset absent for schema validation', () => {
+    expect(migrateV4ToV5({}).tileset).toBeUndefined();
   });
 
   it('rejects a null narrative field on a v3 document', () => {
