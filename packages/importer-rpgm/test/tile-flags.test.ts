@@ -2,6 +2,38 @@ import { describe, expect, it } from 'vitest';
 import { decodeTileFlags } from '../src/tile-flags.js';
 
 describe('decodeTileFlags', () => {
+  it('keeps rightward passage open when only upward passage is blocked', () => {
+    expect(decodeTileFlags(0x8)).toMatchObject({ impassableUp: true, impassableRight: false });
+  });
+
+  it('keeps leftward passage open when only upward passage is blocked', () => {
+    expect(decodeTileFlags(0x8)).toMatchObject({ impassableUp: true, impassableLeft: false });
+  });
+
+  it('keeps downward passage open when only upward passage is blocked', () => {
+    expect(decodeTileFlags(0x8)).toMatchObject({ impassableUp: true, impassableDown: false });
+  });
+
+  it('does not mark a downward-blocked tile as a damage floor', () => {
+    expect(decodeTileFlags(0x1)).toMatchObject({ impassableDown: true, isDamageFloor: false });
+  });
+
+  it('does not mark a downward-blocked tile as a counter', () => {
+    expect(decodeTileFlags(0x1)).toMatchObject({ impassableDown: true, isCounter: false });
+  });
+
+  it('does not mark a downward-blocked tile as a bush', () => {
+    expect(decodeTileFlags(0x1)).toMatchObject({ impassableDown: true, isBush: false });
+  });
+
+  it('does not mark a downward-blocked tile as a ladder', () => {
+    expect(decodeTileFlags(0x1)).toMatchObject({ impassableDown: true, isLadder: false });
+  });
+
+  it('keeps ladder-only tiles on the ground layer', () => {
+    expect(decodeTileFlags(0x20)).toMatchObject({ isLadder: true, isUpperLayer: false });
+  });
+
   it('does not mark a ladder-only tile as a bush', () => {
     expect(decodeTileFlags(0x20)).toMatchObject({ isLadder: true, isBush: false });
   });
