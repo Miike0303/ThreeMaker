@@ -64,6 +64,15 @@ const ENCRYPTED_SYSTEM_JSON = {
 };
 
 describe('scanGames — depth/cycle guard (modeled on the LoQOO self-nested folder case)', () => {
+  it('honors an explicit zero maximum depth', () => {
+    writeSystemJson(join(workDir, 'nested-game', 'data'), VALID_SYSTEM_JSON);
+
+    const result = scanGames(workDir, { maxDepth: 0 });
+
+    expect(result.games).toHaveLength(0);
+    expect(result.errors.some((error) => error.code === 'depth-exceeded')).toBe(true);
+  });
+
   it('uses a default maximum depth of 12', () => {
     let gameDir = workDir;
     for (let depth = 0; depth < 13; depth++) gameDir = join(gameDir, 'nested');

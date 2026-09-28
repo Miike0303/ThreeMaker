@@ -97,4 +97,24 @@ describe('readRpgmSystemStart', () => {
 
     expect(readRpgmSystemStart(gameDir)).toBeUndefined();
   });
+
+  it('returns undefined when startX is missing but startY is present', () => {
+    writeFileSync(
+      join(gameDir, 'System.json'),
+      JSON.stringify({ startMapId: 3, startY: 7 }),
+      'utf8',
+    );
+
+    expect(readRpgmSystemStart(gameDir)).toBeUndefined();
+  });
+
+  it('returns undefined when startY is missing but startX is present', () => {
+    writeFileSync(
+      join(gameDir, 'System.json'),
+      JSON.stringify({ startMapId: 3, startX: 5 }),
+      'utf8',
+    );
+
+    expect(readRpgmSystemStart(gameDir)).toBeUndefined();
+  });
 });

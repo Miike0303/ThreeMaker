@@ -89,6 +89,15 @@ describe('readLeadActorSheet', () => {
     expect(readLeadActorSheet(gameDir)).toBeUndefined();
   });
 
+  it('allows a dollar sign inside a standard character sheet name', () => {
+    writeActors([null, { characterName: 'Actor$Variant', characterIndex: 0 }]);
+
+    expect(readLeadActorSheet(gameDir)).toEqual({
+      characterName: 'Actor$Variant',
+      characterIndex: 0,
+    });
+  });
+
   it('returns undefined when the first actor has no characterName', () => {
     writeActors([null, { id: 1, name: 'Hero', characterName: '', characterIndex: 0 }]);
 

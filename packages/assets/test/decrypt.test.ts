@@ -71,6 +71,10 @@ describe('parseEncryptionKey', () => {
   it('rejects an encryption key with extra hexadecimal digits', () => {
     expect(parseEncryptionKey({ encryptionKey: `${KEY_HEX}ff` })).toBeNull();
   });
+
+  it('rejects an encryption key with only 31 hexadecimal digits', () => {
+    expect(parseEncryptionKey({ encryptionKey: KEY_HEX.slice(0, 31) })).toBeNull();
+  });
 });
 
 describe('decryptRpgmv', () => {
@@ -123,6 +127,16 @@ describe('decryptRpgmv', () => {
       expect(err).toBeInstanceOf(DecryptError);
       expect((err as DecryptError).code).toBe('bad-header');
     }
+  });
+
+  it('rejects an RPGMV header with a corrupt fifth magic byte', () => {
+    const plain = concat(new Uint8Array(PNG_MAGIC), new Uint8Array(8));
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+    encrypted[4] = 0;
+
+    expect(() => decryptRpgmv(encrypted, KEY_BYTES)).toThrowError(
+      expect.objectContaining({ code: 'bad-header' }),
+    );
   });
 
   it('throws DecryptError(truncated) when data is shorter than header+xor block', () => {
@@ -184,6 +198,15 @@ describe('decryptRpgmv', () => {
     const decrypted = decryptRpgmv(encrypted, KEY_BYTES);
 
     expect(Array.from(decrypted)).toEqual(Array.from(plain));
+  });
+
+  it('rejects a JPEG start marker with a corrupt third byte', () => {
+    const plain = concat(new Uint8Array([0xff, 0xd8, 0x00]), new Uint8Array(13));
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+
+    expect(() => decryptRpgmv(encrypted, KEY_BYTES)).toThrowError(
+      expect.objectContaining({ code: 'magic-mismatch' }),
+    );
   });
 
   it('decrypts a GIF renamed .png_ back to its original bytes (real games ship GIF under the PNG extension)', () => {
