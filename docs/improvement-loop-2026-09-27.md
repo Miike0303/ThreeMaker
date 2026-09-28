@@ -7,8 +7,8 @@ had not modified. Claude orchestrated and verified; Codex (and, early on, Cursor
 
 | | Before (`da29112`) | After (`master`) |
 |---|---|---|
-| Commits on `master` | — | **+157** (104 test, 26 fix, 12 feat, 8 refactor, 5 perf, 1 style, 1 chore) |
-| Branch-only test suite | 2777 tests | **3453 tests** |
+| Commits on `master` | — | **+166** (112 test, 26 fix, 12 feat, 8 refactor, 5 perf, 1 style, 1 chore) |
+| Branch-only test suite | 2777 tests | **3493 tests** |
 | Lint on the branch | 0 errors / 36 warnings | 0 errors / 30 warnings |
 | CI (`master` and `main`) | green | green on every push |
 
@@ -45,7 +45,7 @@ code and confirms the new test turns red.
 
 ## Tests
 
-676 new tests in the branch suite (2777 → 3453), most pinning "mutation survivors": rules where a one-token change (flipped comparison, dropped
+716 new tests in the branch suite (2777 → 3493), most pinning "mutation survivors": rules where a one-token change (flipped comparison, dropped
 guard, swapped operand) left every existing test green. Each was re-verified by re-applying the mutation.
 
 ## Rejected, blocked, pending
