@@ -6,6 +6,28 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('leaves synthetic maps without a source map id', () => {
+    expect(generateSyntheticMap({ width: 3, height: 5 }).id).toBeNull();
+  });
+
+  it('names a rectangular map with its width before its height', () => {
+    expect(generateSyntheticMap({ width: 3, height: 5 }).displayName).toBe('Synthetic 3x5');
+  });
+
+  it('places a wall when the seeded first roll is one step below the density', () => {
+    const density = 1015568749 / 2 ** 32;
+    const map = generateSyntheticMap({
+      width: 5,
+      height: 5,
+      seed: 1,
+      wallDensity: density,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0][0]).toBe(ROSELIAM_DUNGEON_WALL_TILE_ID);
+  });
+
   it('rejects a zero map height before allocating tile layers', () => {
     expect(() => generateSyntheticMap({ width: 3, height: 0 })).toThrow(/height/);
   });

@@ -44,6 +44,17 @@ describe('isObjectSheet', () => {
 });
 
 describe('computeCliffEdges', () => {
+  it('does not create cliffs for a missing own-height sample', () => {
+    expect(computeCliffEdges(new Uint8Array([3]), 2, 1, 1, 0)).toEqual([]);
+  });
+
+  it('treats a missing in-bounds neighbor-height sample as ground', () => {
+    expect(computeCliffEdges(new Uint8Array([3]), 2, 1, 0, 0)).toContainEqual({
+      edge: 'east',
+      neighborHeight: 0,
+    });
+  });
+
   it('returns no edges for a ground-level (height 0) tile', () => {
     const grid = new Uint8Array([0, 0, 0, 0]);
     expect(computeCliffEdges(grid, 2, 2, 0, 0)).toEqual([]);

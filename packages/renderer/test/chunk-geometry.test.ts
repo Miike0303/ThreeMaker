@@ -41,6 +41,48 @@ function makeMap(overrides: Partial<RpgmMap> = {}): RpgmMap {
 }
 
 describe('buildChunks elevation (region-derived height)', () => {
+  it('keeps tiles beyond a truncated region layer at ground level', () => {
+    const map = makeMap({
+      width: 2,
+      height: 1,
+      layers: {
+        tileLayers: [
+          [1, 1],
+          [0, 0],
+          [0, 0],
+          [0, 0],
+        ],
+        shadows: [0, 0],
+        regions: [3],
+      },
+    });
+
+    const tiles = buildChunks(map, makeTileset(), SHEET_SIZES)[0]?.tiles;
+
+    expect(tiles).toHaveLength(2);
+    expect(tiles?.map((tile) => tile.height ?? 0)).toEqual([3, 0]);
+  });
+
+  it('does not duplicate cliff faces on an elevated ground overlay', () => {
+    const map = makeMap({
+      width: 1,
+      height: 1,
+      layers: {
+        tileLayers: [[1], [1], [0], [0]],
+        shadows: [0],
+        regions: [3],
+      },
+    });
+
+    const tiles = buildChunks(map, makeTileset(), SHEET_SIZES)[0]?.tiles;
+    const floor = tiles?.find((tile) => tile.layerIndex === 0);
+    const overlay = tiles?.find((tile) => tile.layerIndex === 1);
+
+    expect(floor?.cliffEdges).toHaveLength(4);
+    expect(overlay).toMatchObject({ elevation: 'ground', height: 3 });
+    expect(overlay).not.toHaveProperty('cliffEdges');
+  });
+
   it('omits height from a ground-level tile (region 0) but reports it for an elevated one', () => {
     const width = 2;
     const height = 1;
@@ -282,6 +324,73 @@ describe('buildChunks star-tile stacking (MV3D "tileoffset" fix)', () => {
 });
 
 describe('buildChunks', () => {
+  it('does not invent tiles beyond a truncated tile layer', () => {
+    const map = makeMap({
+      width: 2,
+      height: 1,
+      layers: {
+        tileLayers: [[1], [0, 0], [0, 0], [0, 0]],
+        shadows: [0, 0],
+        regions: [0, 0],
+      },
+    });
+
+    const tiles = buildChunks(map, makeTileset(), SHEET_SIZES).flatMap((chunk) => chunk.tiles);
+
+    expect(tiles).toHaveLength(1);
+    expect(tiles[0]).toMatchObject({ tileX: 0, tileY: 0, layerIndex: 0, sheet: 'B' });
+  });
+
+  it('does not invent shadows beyond a truncated shadow layer', () => {
+    const map = makeMap({
+      width: 2,
+      height: 1,
+      layers: {
+        tileLayers: [
+          [1, 1],
+          [0, 0],
+          [0, 0],
+          [0, 0],
+        ],
+        shadows: [5],
+        regions: [0, 0],
+      },
+    });
+
+    const shadows = buildChunks(map, makeTileset(), SHEET_SIZES).flatMap(
+      (chunk) => chunk.shadows ?? [],
+    );
+
+    expect(shadows).toEqual([{ tileX: 0, tileY: 0, mask: 5 }]);
+  });
+
+  it('uses the supplied HD tile size when building chunk UVs', () => {
+    const map = makeMap({
+      width: 1,
+      height: 1,
+      layers: {
+        tileLayers: [[1], [0], [0], [0]],
+        shadows: [0],
+        regions: [0],
+      },
+    });
+
+    const chunks = buildChunks(
+      map,
+      makeTileset(),
+      { B: { width: 1536, height: 1536 } },
+      16,
+      undefined,
+      undefined,
+      96,
+    );
+
+    // Tile 1 spans pixels 96..192 by 0..96, with a two-pixel inset at 96px.
+    expect(chunks[0]?.tiles[0]?.quads).toEqual([
+      { u0: 98 / 1536, u1: 190 / 1536, v0: 1 - 94 / 1536, v1: 1 - 2 / 1536 },
+    ]);
+  });
+
   it('renders later tiles in a row after skipping an unloaded sheet', () => {
     const map = makeMap({
       width: 2,
@@ -726,6 +835,31 @@ describe('buildChunks', () => {
 });
 
 describe('buildChunks ramp grid (Slice 2a plumbing)', () => {
+  it('does not duplicate a floor ramp on a ground overlay', () => {
+    const map = makeMap({
+      width: 1,
+      height: 2,
+      layers: {
+        tileLayers: [
+          [1, 1],
+          [1, 0],
+          [0, 0],
+          [0, 0],
+        ],
+        shadows: [0, 0],
+        regions: [3, 2],
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16, undefined, [{ x: 0, y: 0 }]);
+    const floor = chunks[0]?.tiles.find((tile) => tile.tileY === 0 && tile.layerIndex === 0);
+    const overlay = chunks[0]?.tiles.find((tile) => tile.layerIndex === 1);
+
+    expect(floor?.ramp).toEqual({ direction: 'south', highHeight: 3, lowHeight: 2 });
+    expect(overlay).toMatchObject({ tileY: 0, elevation: 'ground', height: 3 });
+    expect(overlay).not.toHaveProperty('ramp');
+  });
+
   it('attaches a ramp descriptor to a layer-0 ground tile whose cell is a resolved ramp candidate', () => {
     // 1x2 column: (0,0) height 3 with a unique lower neighbor south at
     // height 2 -- computeRampGrid resolves this as a 'south' ramp (the only

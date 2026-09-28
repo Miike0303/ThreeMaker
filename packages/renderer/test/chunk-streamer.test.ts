@@ -11,6 +11,30 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('keeps one fallback chunk for an empty map width', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 1,
+      mapWidth: 0,
+      mapHeight: 1,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(0, 0).toBuild).toEqual(['0,0']);
+  });
+
+  it('keeps one fallback chunk for an empty map height', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 1,
+      mapWidth: 1,
+      mapHeight: 0,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(0, 0).toBuild).toEqual(['0,0']);
+  });
+
   it('rejects an infinite chunk size even with finite map dimensions', () => {
     expect(() => new ChunkStreamer({ ...GIANT, chunkSize: Number.POSITIVE_INFINITY })).toThrow(
       /chunkSize/,
