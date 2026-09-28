@@ -47,6 +47,22 @@ describe('parseMap', () => {
     expect(() => parseMap(json)).toThrow(/width\*height\*6/);
   });
 
+  it('mutation pin: rejects extra cells after all six layers', () => {
+    const json = makeMapJson(1, 1, () => 0);
+    json.data.push(0);
+    expect(() => parseMap(json)).toThrow(/data.*length/);
+  });
+
+  it('mutation pin: rejects a zero-width map', () => {
+    expect(() => parseMap(makeMapJson(0, 1, () => 0))).toThrow(/positive safe integers/);
+  });
+
+  it('mutation pin: rejects dimensions whose combined layer count is unsafe', () => {
+    expect(() =>
+      parseMap({ width: Number.MAX_SAFE_INTEGER, height: 1, tilesetId: 1, data: [] }),
+    ).toThrow(/must be a safe integer/);
+  });
+
   it.each([
     ['fractional width', { width: 1.5, height: 1, data: [0, 0, 0, 0, 0, 0] }],
     ['negative height', { width: 1, height: -1, data: [] }],

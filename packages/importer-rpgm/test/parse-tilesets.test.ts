@@ -67,6 +67,14 @@ describe('parseTilesets', () => {
     ).toThrow();
   });
 
+  it('mutation pin: rejects a non-string sheet name among valid names', () => {
+    const tilesetNames = new Array(9).fill('');
+    tilesetNames[8] = 42;
+    expect(() =>
+      parseTilesets([{ id: 1, name: 'Town', flags: makeFlags(), tilesetNames }]),
+    ).toThrow(/contain only strings/);
+  });
+
   it('rejects tilesetNames with an extra sheet slot', () => {
     expect(() =>
       parseTilesets([

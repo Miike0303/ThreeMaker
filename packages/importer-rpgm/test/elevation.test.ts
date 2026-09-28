@@ -450,6 +450,17 @@ describe('profilesEqual', () => {
 });
 
 describe('surfaceHeightAt', () => {
+  it('mutation pin: clamps a sample before the west edge to the ramp start', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2]),
+      rampGrid: new Uint8Array([3]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(surfaceHeightAt(ctx, -0.25, 0.5)).toBe(2);
+  });
+
   it('clamps a sample beyond the east edge to the ramp endpoint', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([2]),

@@ -93,6 +93,20 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect(project.maps.get(1)?.displayName).toBe('');
   });
 
+  it('mutation pin: keeps a one-character editor name on a loaded map', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json']);
+    writeFileSync(
+      join(dataDir, 'MapInfos.json'),
+      JSON.stringify([null, { id: 1, name: 'A', parentId: 0, order: 1 }]),
+      'utf8',
+    );
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.get(1)?.editorName).toBe('A');
+  });
+
   it('ignores a map filename with a trailing extension', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json.bak']);

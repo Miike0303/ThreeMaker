@@ -141,6 +141,11 @@ describe('convertRpgmMap', () => {
     expect(doc.name).toBe(name);
   });
 
+  it('mutation pin: keeps a one-character display name over the editor name', () => {
+    const map = buildSyntheticMap({ displayName: 'A', editorName: 'Town' });
+    expect(convertRpgmMap(map, buildSyntheticTileset()).name).toBe('A');
+  });
+
   it('maps tile/shadow/region layers 1:1 into a single floor at baseElevation 0', () => {
     const map = buildSyntheticMap();
     const tileset = buildSyntheticTileset();

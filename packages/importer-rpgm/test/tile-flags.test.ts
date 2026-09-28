@@ -42,6 +42,10 @@ describe('decodeTileFlags', () => {
     expect(decodeTileFlags(0xf << 12).terrainTag).toBe(15);
   });
 
+  it('mutation pin: excludes bit 16 from the terrain tag', () => {
+    expect(decodeTileFlags(0x10000).terrainTag).toBe(0);
+  });
+
   it('decodes a real-world all-impassable value (1551) from the Roseliam Tilesets.json', () => {
     // 1551 = 0x60F: bits 0-3 set (impassable on all 4 sides), star bit clear.
     const flags = decodeTileFlags(1551);
