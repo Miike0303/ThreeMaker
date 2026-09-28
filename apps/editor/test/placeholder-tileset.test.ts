@@ -21,6 +21,16 @@ import {
 } from '../src/placeholder-tileset.js';
 
 describe('buildPlaceholderTextures', () => {
+  it('encodes a palette image that spans multiple stored deflate blocks', () => {
+    const rgba = new Uint8Array(128 * 128 * 4).fill(255);
+    const png = encodeRgbaPng(128, 128, rgba);
+    const idatLength = new DataView(png.buffer, png.byteOffset).getUint32(33);
+    const decoded = inflateSync(png.subarray(41, 41 + idatLength));
+    const expected = Buffer.alloc(513 * 128, 255);
+    for (let row = 0; row < 128; row++) expected[row * 513] = 0;
+    expect(decoded).toEqual(expected);
+  });
+
   it('marks the final PNG deflate block so a palette image can be decoded', () => {
     const rgba = new Uint8Array([10, 20, 30, 255, 40, 50, 60, 255]);
     const png = encodeRgbaPng(2, 1, rgba);

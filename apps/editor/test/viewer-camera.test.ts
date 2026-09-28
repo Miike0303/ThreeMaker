@@ -21,6 +21,11 @@ describe('computeOverviewCameraDistance', () => {
 });
 
 describe('computeOverviewCameraPose', () => {
+  it('clamps a horizontal overview to a one-degree tilt', () => {
+    const pose = computeOverviewCameraPose(4, 9, 0, 10);
+    expect(pose.position.y).toBeCloseTo(0.1745240644, 8);
+  });
+
   it('looks straight at the map center', () => {
     const pose = computeOverviewCameraPose(10, 20, 40, 15);
     expect(pose.lookAt).toEqual({ x: 10, y: 0, z: 20 });

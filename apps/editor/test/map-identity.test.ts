@@ -27,6 +27,10 @@ import {
 } from '../src/map-identity.js';
 
 describe('validateMapName', () => {
+  it('rejects DEL inside a map filename', () => {
+    expect(validateMapName('Town\u007fSquare')).toBe('invalid-chars');
+  });
+
   it('accepts a map name at the exact length limit', () => {
     expect(validateMapName('x'.repeat(MAP_NAME_MAX_LENGTH))).toBeNull();
   });

@@ -43,6 +43,16 @@ const sampleJob = (id: string, at = '2026-08-08T00:00:00.000Z'): CommunityShareE
 });
 
 describe('community-settings', () => {
+  it('defaults a missing share-on-save preference to enabled', () => {
+    const storage = memoryStorage({
+      'threemaker-maker-studio:community': JSON.stringify({ allowImportedAssets: true }),
+    });
+    expect(loadCommunitySettings(storage)).toEqual({
+      shareOnSave: true,
+      allowImportedAssets: true,
+    });
+  });
+
   it('ignores an empty slot when classifying imported sheet provenance', () => {
     expect(
       licenseTagFromSlots({

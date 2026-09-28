@@ -129,6 +129,10 @@ describe('computePaletteCells - autotile sheets (A1-A4)', () => {
 });
 
 describe('computeAutotileKindCount', () => {
+  it('omits the incomplete second row of autotile kinds', () => {
+    expect(computeAutotileKindCount('A2', { width: 768, height: 287 })).toBe(8);
+  });
+
   it('keeps all 48 A4 kinds available on a tall sheet', () => {
     expect(computeAutotileKindCount('A4', { width: 768, height: 720 })).toBe(48);
   });

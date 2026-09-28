@@ -39,6 +39,15 @@ describe('clampTileIndex', () => {
 });
 
 describe('clampRoomRect', () => {
+  it('floors a fractional room x origin before placing the room', () => {
+    expect(clampRoomRect({ x: 1.9, y: 2, width: 1, height: 1 }, 5, 5)).toEqual({
+      x: 1,
+      y: 2,
+      width: 1,
+      height: 1,
+    });
+  });
+
   it('keeps a room on a one-tile map', () => {
     expect(clampRoomRect({ x: 0, y: 0, width: 1, height: 1 }, 1, 1)).toEqual({
       x: 0,
