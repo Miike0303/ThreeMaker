@@ -246,6 +246,13 @@ describe('scanGames — asset extensions are matched case-insensitively', () => 
 });
 
 describe('scanGames — encryption flags model ground truth, not derived from key parseability', () => {
+  it('mutation pin: ignores a numeric encryption flag', () => {
+    const gameDir = join(workDir, 'numeric-image-flag');
+    writeSystemJson(join(gameDir, 'data'), { hasEncryptedImages: 1 });
+
+    expect(scanGames(workDir).games[0]?.hasEncryptedImages).toBe(false);
+  });
+
   it('treats a non-boolean hasEncryptedImages value as false', () => {
     const gameDir = join(workDir, 'string-image-flag');
     writeSystemJson(join(gameDir, 'data'), {

@@ -171,6 +171,32 @@ describe('readLeadActorSheet', () => {
     expect(readLeadActorSheet(gameDir)).toBeUndefined();
   });
 
+  it('mutation pin: does not use later actors when the first Actors.json is not an array', () => {
+    writeFileSync(join(gameDir, 'Actors.json'), '{}', 'utf8');
+    const dataDir = join(gameDir, 'data');
+    mkdirSync(dataDir);
+    writeFileSync(
+      join(dataDir, 'Actors.json'),
+      JSON.stringify([null, { characterName: 'LaterHero', characterIndex: 1 }]),
+      'utf8',
+    );
+
+    expect(readLeadActorSheet(gameDir)).toBeUndefined();
+  });
+
+  it('mutation pin: does not use later actors when the first actor lacks an index', () => {
+    writeActors([null, { characterName: 'IncompleteHero' }]);
+    const dataDir = join(gameDir, 'data');
+    mkdirSync(dataDir);
+    writeFileSync(
+      join(dataDir, 'Actors.json'),
+      JSON.stringify([null, { characterName: 'LaterHero', characterIndex: 1 }]),
+      'utf8',
+    );
+
+    expect(readLeadActorSheet(gameDir)).toBeUndefined();
+  });
+
   it('tolerates a UTF-8 BOM before the JSON payload', () => {
     writeFileSync(
       join(gameDir, 'Actors.json'),
