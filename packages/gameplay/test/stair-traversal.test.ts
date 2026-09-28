@@ -248,6 +248,21 @@ describe('StairTraversal (waypoints)', () => {
         }),
     ).toThrow(/at least 2 waypoints/);
   });
+
+  it('stays on the first leg before a shorter second leg begins', () => {
+    const traversal = new StairTraversal({
+      waypoints: [
+        { x: 0, y: 0, floor: 0 },
+        { x: 4, y: 0, floor: 0 },
+        { x: 4, y: 1, floor: 0 },
+      ],
+      floors: FLOORS,
+      speed: SPEED,
+      heightUnit: HEIGHT_UNIT,
+    });
+
+    expect(traversal.update(0.5)).toEqual({ x: 2, y: 0, worldY: 0, done: false });
+  });
 });
 
 describe('StairTraversal (elevated terrain, non-unit height scale)', () => {

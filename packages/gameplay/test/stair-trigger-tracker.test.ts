@@ -11,6 +11,19 @@ const LINK: StairLinkDefinition = {
 };
 
 describe('StairTriggerTracker — shouldTrigger (entry, forward)', () => {
+  it('distinguishes tiles whose coordinates have the same digits', () => {
+    const link: StairLinkDefinition = {
+      bidirectional: false,
+      waypoints: [
+        { floor: 0, x: 12, y: 3 },
+        { floor: 1, x: 12, y: 3 },
+      ],
+    };
+    const tracker = new StairTriggerTracker({ floor: 0, x: 1, y: 23 });
+
+    expect(tracker.shouldTrigger({ floor: 0, x: 12, y: 3 }, [link])).toEqual(link.waypoints);
+  });
+
   it('does not trigger when the entry coordinates are on another floor', () => {
     const tracker = new StairTriggerTracker({ floor: 1, x: 0, y: 0 });
 

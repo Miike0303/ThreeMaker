@@ -7,6 +7,16 @@ function trigger(overrides: Partial<TriggerDefinition> = {}): TriggerDefinition 
 }
 
 describe('TriggerIndex — on-enter', () => {
+  it('indexes distinct tiles whose coordinates have the same digits separately', () => {
+    const index = new TriggerIndex([
+      trigger({ id: 'first', x: 1, y: 23, event: 'first-event' }),
+      trigger({ id: 'second', x: 12, y: 3, event: 'second-event' }),
+    ]);
+
+    expect(index.enter(0, 1, 23)).toEqual(['first-event']);
+    expect(index.enter(0, 12, 3)).toEqual(['second-event']);
+  });
+
   it('fires once when the player moves onto the trigger tile', () => {
     const index = new TriggerIndex([trigger()], { x: 0, y: 0, floor: 0 });
 
