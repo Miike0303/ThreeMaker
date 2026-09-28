@@ -39,6 +39,15 @@ describe('buildPlaceholderTextures', () => {
     );
   });
 
+  it('rejects a texture whose image has no height before creating a palette URL', () => {
+    const texture = { image: { data: new Uint8Array(4), width: 1 } } as unknown as Parameters<
+      typeof textureSheetToObjectUrl
+    >[0];
+    expect(() => textureSheetToObjectUrl(texture)).toThrow(
+      'textureSheetToObjectUrl: expected DataTexture with RGBA image.data',
+    );
+  });
+
   it('rejects a truncated RGBA buffer before encoding a palette image', () => {
     expect(() => encodeRgbaPng(1, 1, new Uint8Array([10, 20, 30]))).toThrow(
       'encodeRgbaPng: rgba buffer shorter than width*height*4',

@@ -62,6 +62,10 @@ describe('community-settings', () => {
     ).toBe('import-rpgm');
   });
 
+  it('ignores catalog provenance on a slot with an empty object hash', () => {
+    expect(licenseTagFromSlots({ A: { object: '', sourceGameId: 1 } })).toBe('user-owned');
+  });
+
   it('truncates a fractional map version in a queued share payload', () => {
     expect(
       maybeEnqueueCommunityShare(DEFAULT_COMMUNITY_SETTINGS, {
@@ -73,6 +77,18 @@ describe('community-settings', () => {
         now: () => '2026-08-08T00:00:00.000Z',
       })?.version,
     ).toBe(2);
+  });
+
+  it('truncates a negative fractional map version toward zero when enqueuing', () => {
+    expect(
+      maybeEnqueueCommunityShare(DEFAULT_COMMUNITY_SETTINGS, {
+        mapId: 'map-1',
+        mapName: 'Map',
+        tileObjectShas: [],
+        usesOnlyImportedAssets: false,
+        version: -1.9,
+      })?.version,
+    ).toBe(-1);
   });
 
   it('defaults a non-finite share payload version to zero', () => {
@@ -361,6 +377,12 @@ describe('community share offline queue', () => {
     expect(queue[0]?.mapId).toBe(String(COMMUNITY_SHARE_QUEUE_MAX + 4));
   });
 
+  it('retains at most twenty offline share jobs', () => {
+    const storage = memoryStorage();
+    for (let i = 0; i < 21; i++) pushCommunityShareQueue(sampleJob(String(i)), storage);
+    expect(loadCommunityShareQueue(storage)).toHaveLength(20);
+  });
+
   it('ignores corrupt queue storage', () => {
     const storage = memoryStorage({ 'threemaker-maker-studio:community-queue': 'not-json' });
     expect(loadCommunityShareQueue(storage)).toEqual([]);
@@ -448,6 +470,22 @@ describe('community share offline queue', () => {
     });
   });
 
+  it('rejects an imported queue job with a non-string map name', () => {
+    const invalid = { ...sampleJob('valid'), mapName: 42 };
+    expect(parseCommunityShareQueueJson(JSON.stringify([invalid]))).toEqual({
+      ok: false,
+      reason: 'no-valid-jobs',
+    });
+  });
+
+  it('rejects an imported queue job with a non-string timestamp', () => {
+    const invalid = { ...sampleJob('valid'), at: 42 };
+    expect(parseCommunityShareQueueJson(JSON.stringify([invalid]))).toEqual({
+      ok: false,
+      reason: 'no-valid-jobs',
+    });
+  });
+
   it('rejects an imported queue job with a non-string tile hash among valid hashes', () => {
     const invalid = { ...sampleJob('mixed-hashes'), tileObjectShas: ['a'.repeat(64), 42] };
     expect(parseCommunityShareQueueJson(JSON.stringify([invalid]))).toEqual({
@@ -488,6 +526,12 @@ describe('community share offline queue', () => {
       ok: true,
       jobs: [{ ...job, version: 2 }],
     });
+  });
+
+  it('truncates a negative fractional version toward zero when importing', () => {
+    const job = { ...sampleJob('negative-version'), version: -1.9 };
+    const result = parseCommunityShareQueueJson(JSON.stringify([job]));
+    expect(result.ok && result.jobs[0]?.version).toBe(-1);
   });
 
   it('replaceCommunityShareQueue overwrites storage with filtered jobs', () => {
