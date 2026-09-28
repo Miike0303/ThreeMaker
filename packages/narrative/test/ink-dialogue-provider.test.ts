@@ -279,3 +279,26 @@ it('identifies advancing as the operation attempted before opening a story', () 
 
   expect(() => provider.next()).toThrow('InkDialogueProvider: next() called before open().');
 });
+
+it('preserves an explicitly empty speaker name', () => {
+  const story = compileInk('Hello. # speaker:\n-> END\n');
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', speaker: '', text: 'Hello.' });
+});
+
+it('preserves dialogue spaces before the final newline', () => {
+  const story = {
+    canContinue: true,
+    Continue: () => 'Wait...  \n',
+    currentTags: [],
+    currentChoices: [],
+  } as unknown as Story;
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', text: 'Wait...  ' });
+});

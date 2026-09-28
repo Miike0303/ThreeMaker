@@ -24,6 +24,19 @@ const AUTOTILE_SHEET_SIZES: SheetPixelSizes = {
 const INSET = 1;
 
 describe('computeTileUv', () => {
+  it('resolves A3 tile IDs into four autotile quarter UVs', () => {
+    const result = computeTileUv(4352, { A3: { width: 768, height: 384 } });
+
+    expect(result?.sheet).toBe('A3');
+    expect(result?.quads).toHaveLength(4);
+  });
+
+  it('uses the first animation frame for static A1 water UVs', () => {
+    const quad = computeTileUv(2048, AUTOTILE_SHEET_SIZES)?.quads[0];
+
+    expect(((quad?.u0 ?? NaN) + (quad?.u1 ?? NaN)) / 2).toBeCloseTo(60 / 768, 10);
+  });
+
   it('returns null for tile IDs outside every known sheet range', () => {
     expect(computeTileUv(8192, GRID_SHEET_SIZES)).toBeNull();
   });

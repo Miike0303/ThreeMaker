@@ -62,3 +62,11 @@ it('keeps quick save and quick load as one-shot actions', () => {
 it('resolves the persisted move-down identifier to downward movement', () => {
   expect(directionFromMoveAction('move.down')).toBe('down');
 });
+
+it('resolves the persisted move-left identifier to leftward movement', () => {
+  expect(directionFromMoveAction('move.left')).toBe('left');
+});
+
+it('resolves the persisted move-right identifier to rightward movement', () => {
+  expect(directionFromMoveAction('move.right')).toBe('right');
+});

@@ -145,6 +145,19 @@ function sampleParticleSeed(axis: unknown, instance: number): number {
 }
 
 describe('createWeatherLayer structure', () => {
+  it('accepts frozen dependencies when the particle count is omitted', () => {
+    const scene = makeScene();
+    const deps = Object.freeze({ scene });
+    const layer = createWeatherLayer(deps);
+    try {
+      expect(layer.particleCount).toBeGreaterThan(0);
+      expect(scene.children).toHaveLength(1);
+      expect(deps).not.toHaveProperty('particleCount');
+    } finally {
+      layer.dispose();
+    }
+  });
+
   it('adds one mesh with instance count equal to particleCount (default 3000)', () => {
     const { scene, layer } = createInspect();
     expect(scene.children).toContain(layer.mesh);

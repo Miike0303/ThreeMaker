@@ -44,6 +44,18 @@ describe('isObjectSheet', () => {
 });
 
 describe('computeCliffEdges', () => {
+  it('keeps the east neighbor inside a wide plateau', () => {
+    const grid = new Uint8Array(6).fill(2);
+
+    expect(computeCliffEdges(grid, 3, 2, 1, 0)).toEqual([{ edge: 'north', neighborHeight: 0 }]);
+  });
+
+  it('keeps the south neighbor inside a tall plateau', () => {
+    const grid = new Uint8Array(6).fill(2);
+
+    expect(computeCliffEdges(grid, 2, 3, 0, 1)).toEqual([{ edge: 'west', neighborHeight: 0 }]);
+  });
+
   it('does not create cliffs for a missing own-height sample', () => {
     expect(computeCliffEdges(new Uint8Array([3]), 2, 1, 1, 0)).toEqual([]);
   });

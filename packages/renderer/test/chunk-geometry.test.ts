@@ -832,6 +832,12 @@ describe('buildChunks', () => {
     expect(chunks).toEqual([]);
   });
 
+  it('reports the rejected chunk size in the validation error', () => {
+    expect(() => buildChunks(makeMap(), makeTileset(), SHEET_SIZES, -7)).toThrow(
+      'chunkSize must be a positive number, got -7.',
+    );
+  });
+
   it('throws for a non-positive chunk size', () => {
     expect(() => buildChunks(makeMap(), makeTileset(), SHEET_SIZES, 0)).toThrow();
     expect(() => buildChunks(makeMap(), makeTileset(), SHEET_SIZES, -4)).toThrow();
@@ -1139,6 +1145,27 @@ describe('buildChunks ramp grid (Slice 2a plumbing)', () => {
 });
 
 describe('buildChunks onlyChunks (property: onlyChunks output === full output filtered to those keys)', () => {
+  it('rebuilds southern chunks on maps taller than they are wide', () => {
+    const map = makeMap({
+      width: 1,
+      height: 3,
+      layers: {
+        tileLayers: [
+          [1, 1, 1],
+          [0, 0, 0],
+          [0, 0, 0],
+          [0, 0, 0],
+        ],
+        shadows: [0, 0, 0],
+        regions: [0, 0, 0],
+      },
+    });
+
+    expect(buildChunks(map, makeTileset(), SHEET_SIZES, 1, new Set(['0,2']))).toMatchObject([
+      { chunkX: 0, chunkY: 2, tiles: [{ tileX: 0, tileY: 2, sheet: 'B' }] },
+    ]);
+  });
+
   function makePlateauMap(): RpgmMap {
     const width = 12;
     const height = 12;
