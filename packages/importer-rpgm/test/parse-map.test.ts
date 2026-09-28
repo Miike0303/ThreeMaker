@@ -57,6 +57,10 @@ describe('parseMap', () => {
     expect(() => parseMap(makeMapJson(0, 1, () => 0))).toThrow(/positive safe integers/);
   });
 
+  it('rejects a zero-height map', () => {
+    expect(() => parseMap(makeMapJson(1, 0, () => 0))).toThrow(/positive safe integers/);
+  });
+
   it('mutation pin: rejects dimensions whose combined layer count is unsafe', () => {
     expect(() =>
       parseMap({ width: Number.MAX_SAFE_INTEGER, height: 1, tilesetId: 1, data: [] }),
@@ -95,6 +99,13 @@ describe('parseMap', () => {
     const map = parseMap(json, 7);
 
     expect(map.events).toEqual([null, event]);
+  });
+
+  it('drops undefined event slots while preserving null and object slots', () => {
+    const event = { id: 7, name: 'Elder', x: 0, y: 0, pages: [] };
+    const json = { ...makeMapJson(1, 1, () => 0), events: [undefined, null, event] };
+
+    expect(parseMap(json).events).toEqual([null, event]);
   });
 
   it('leaves events undefined when the map JSON has no events array', () => {

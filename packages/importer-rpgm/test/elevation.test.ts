@@ -450,6 +450,39 @@ describe('profilesEqual', () => {
 });
 
 describe('surfaceHeightAt', () => {
+  it('samples the current row before crossing its south edge', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2, 1]),
+      rampGrid: new Uint8Array([2, 0]),
+      mapWidth: 1,
+      mapHeight: 2,
+    };
+
+    expect(surfaceHeightAt(ctx, 0.5, 0.5)).toBe(1.5);
+  });
+
+  it('clamps a sample before the north edge to the first row', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2, 1]),
+      rampGrid: new Uint8Array([2, 0]),
+      mapWidth: 1,
+      mapHeight: 2,
+    };
+
+    expect(surfaceHeightAt(ctx, 0.5, -0.25)).toBe(2);
+  });
+
+  it('interpolates within a ramp below the first row using its local y position', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([0, 2]),
+      rampGrid: new Uint8Array([0, 2]),
+      mapWidth: 1,
+      mapHeight: 2,
+    };
+
+    expect(surfaceHeightAt(ctx, 0.5, 1.25)).toBe(1.75);
+  });
+
   it('mutation pin: clamps a sample before the west edge to the ramp start', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([2]),

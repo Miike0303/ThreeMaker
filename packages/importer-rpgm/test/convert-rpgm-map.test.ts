@@ -146,6 +146,16 @@ describe('convertRpgmMap', () => {
     expect(convertRpgmMap(map, buildSyntheticTileset()).name).toBe('A');
   });
 
+  it('uses the editor name when the display name contains only spaces', () => {
+    const map = buildSyntheticMap({ displayName: '   ', editorName: 'Town' });
+    expect(convertRpgmMap(map, buildSyntheticTileset()).name).toBe('Town');
+  });
+
+  it('uses an empty document name when the editor name contains only spaces', () => {
+    const map = buildSyntheticMap({ displayName: '', editorName: '   ' });
+    expect(convertRpgmMap(map, buildSyntheticTileset()).name).toBe('');
+  });
+
   it('maps tile/shadow/region layers 1:1 into a single floor at baseElevation 0', () => {
     const map = buildSyntheticMap();
     const tileset = buildSyntheticTileset();

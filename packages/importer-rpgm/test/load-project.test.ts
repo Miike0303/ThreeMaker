@@ -93,6 +93,15 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect(project.maps.get(1)?.displayName).toBe('');
   });
 
+  it('loads a map whose filename has a four-digit id', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map1000.json']);
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.get(1000)?.id).toBe(1000);
+  });
+
   it('mutation pin: keeps a one-character editor name on a loaded map', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json']);
