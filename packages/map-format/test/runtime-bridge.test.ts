@@ -15,6 +15,18 @@ import type { SemanticOverrides } from '../src/schema.js';
 const EMPTY_LAYER = (size: number) => new Array(size).fill(0);
 
 describe('deriveRampCells', () => {
+  it('treats missing tile entries as empty cells', () => {
+    const layers = [
+      new Array<number>(1),
+      new Array<number>(1),
+      new Array<number>(1),
+      new Array<number>(1),
+    ] as const;
+    const semantics: SemanticOverrides = { '1': { class: 'ramp' } };
+
+    expect(deriveRampCells(layers, semantics, 1, 1)).toEqual([]);
+  });
+
   it('does not read tile layers when semantics contain no ramps', () => {
     const width = 16;
     const height = 16;
@@ -195,6 +207,21 @@ describe('deriveRampCells', () => {
 });
 
 describe('syncRampCells', () => {
+  it('restores row order when dirty cells arrive from different rows out of order', () => {
+    const layers = [[0, 0, 7, 7, 0, 0], EMPTY_LAYER(6), EMPTY_LAYER(6), EMPTY_LAYER(6)] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+
+    expect(
+      syncRampCells([], layers, semantics, 3, [
+        { x: 0, y: 1 },
+        { x: 2, y: 0 },
+      ]),
+    ).toEqual([
+      { x: 2, y: 0 },
+      { x: 0, y: 1 },
+    ]);
+  });
+
   it('restores left-to-right order for dirty ramp cells on the same row', () => {
     const layers = [[7, 0, 7], EMPTY_LAYER(3), EMPTY_LAYER(3), EMPTY_LAYER(3)] as const;
     const semantics: SemanticOverrides = { '7': { class: 'ramp' } };

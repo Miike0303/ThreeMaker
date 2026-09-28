@@ -111,6 +111,18 @@ describe('command stack (undo/redo, cap 100)', () => {
     return { layer: 0, cells: [{ x: 0, y: 0, before: 0, after }] };
   }
 
+  it('keeps earlier undo history when redoing the latest command', () => {
+    let stack = EMPTY_COMMAND_STACK;
+    for (const value of [1, 2, 3]) stack = pushCommand(stack, makeDiff(value));
+
+    const undone = undoCommand(stack);
+    if (!undone) throw new Error('Expected a command to undo.');
+    const redone = redoCommand(undone.state);
+    if (!redone) throw new Error('Expected a command to redo.');
+
+    expect(redone.state.undoStack.map((diff) => diff.cells[0]?.after)).toEqual([1, 2, 3]);
+  });
+
   it('undo sequence: paint 5 tiles then undo 3 -> map reflects state after the first 2 paints', () => {
     let stack = EMPTY_COMMAND_STACK;
     let layers = makeLayers(1, 1);

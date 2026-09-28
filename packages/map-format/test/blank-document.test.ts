@@ -17,6 +17,14 @@ const BLANK_OPTIONS = {
 } as const;
 
 describe('createBlankMapDocument', () => {
+  it('preserves the supplied display name independently of the map id', () => {
+    expect(createBlankMapDocument(BLANK_OPTIONS).name).toBe('Blank Test');
+  });
+
+  it('starts a new map at zero base elevation', () => {
+    expect(createBlankMapDocument(BLANK_OPTIONS).floors[0]?.baseElevation).toBe(0);
+  });
+
   it('returns a valid current-version document with empty narrative ports', () => {
     const doc = createBlankMapDocument(BLANK_OPTIONS);
     expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);

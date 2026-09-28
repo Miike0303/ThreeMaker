@@ -9,6 +9,20 @@ import {
 } from '../src/ink-sidecar-path.js';
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('accepts Z at the upper edge of the uppercase story-id range', () => {
+    expect(isSafeStoryId('chapterZ')).toBe(true);
+  });
+
+  it('accepts z at the upper edge of the lowercase story-id range', () => {
+    expect(isSafeStoryId('chapterz')).toBe(true);
+  });
+
+  it('keeps a suffix embedded in the map path instead of stripping its tail', () => {
+    expect(inkSidecarRelativePath('maps/town.tmmap.json.backup', 'intro')).toBe(
+      'maps/town.tmmap.json.backup.intro.ink',
+    );
+  });
+
   it('accepts only path-safe story ids', () => {
     expect(isSafeStoryId('elder')).toBe(true);
     expect(isSafeStoryId('gate_01')).toBe(true);

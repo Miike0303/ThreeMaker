@@ -135,6 +135,12 @@ describe('parseMapDocument', () => {
     ).toThrow('"version" must be an integer.');
   });
 
+  it('classifies a future integer version beyond the safe integer range as unsupported', () => {
+    expect(() =>
+      parseMapDocument(makeValidDocInput({ version: Number.MAX_SAFE_INTEGER + 1 })),
+    ).toThrow('is newer than the current supported version');
+  });
+
   it('rejects an older version with no registered migration', () => {
     clearMigrations();
     expect(() => parseMapDocument(makeValidDocInput({ version: 0 }))).toThrow(MapFormatError);
@@ -400,5 +406,11 @@ describe('parseMapDocument', () => {
 
   it('rejects a null lights field on a v5 document', () => {
     expect(() => migrateV5ToV6({ lights: null })).toThrow(MapFormatError);
+  });
+
+  it('names lightMap once when multiple v5 floors already carry it', () => {
+    expect(() =>
+      migrateV5ToV6({ floors: [{ lightMap: 'first' }, { lightMap: 'second' }] }),
+    ).toThrow('already carries v6 content ("lightMap").');
   });
 });
