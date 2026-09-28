@@ -45,6 +45,10 @@ describe('parseAudioPath', () => {
     expect(() => parseAudioPath('c:\\Windows\\win.ini', 'x')).toThrow(/not absolute/);
   });
 
+  it('rejects a lowercase D drive path', () => {
+    expect(() => parseAudioPath('d:\\Games\\music.ogg', 'x')).toThrow(/not absolute/);
+  });
+
   it('rejects an empty path', () => {
     expect(() => parseAudioPath('', 'x')).toThrow(/non-empty string/);
   });
@@ -71,8 +75,16 @@ describe('parseVolume / parseFadeMs', () => {
     expect(() => parseVolume(-0.01, 'x')).toThrow(/between 0 and 1/);
   });
 
+  it('rejects a volume slightly below zero', () => {
+    expect(() => parseVolume(-0.001, 'x')).toThrow(/between 0 and 1/);
+  });
+
   it('rejects a volume just above full gain', () => {
     expect(() => parseVolume(1.02, 'x')).toThrow(/between 0 and 1/);
+  });
+
+  it('rejects a volume slightly above full gain', () => {
+    expect(() => parseVolume(1.005, 'x')).toThrow(/between 0 and 1/);
   });
 
   it.each([-0.1, 1.1, Number.NaN, '0.5'])('rejects volume %p', (value) => {
@@ -97,6 +109,10 @@ describe('parseVolume / parseFadeMs', () => {
 
   it('rejects a slightly negative fade duration', () => {
     expect(() => parseFadeMs(-0.001, 'x')).toThrow(/non-negative/);
+  });
+
+  it('rejects a tiny negative fade duration', () => {
+    expect(() => parseFadeMs(-0.0001, 'x')).toThrow(/non-negative/);
   });
 
   it('accepts a zero-length fade', () => {
