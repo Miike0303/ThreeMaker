@@ -145,4 +145,28 @@ describe('buildPlaceholderCharacterTexture', () => {
 
     expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([0, 170, 0, 255]);
   });
+
+  it('fills lower character blocks through the bottom edge', () => {
+    const texture = buildPlaceholderCharacterTexture();
+    try {
+      const image = texture.image as { width: number; height: number; data: Uint8Array };
+      const pixel = (image.height - 1) * image.width * 4;
+
+      expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([128, 128, 128, 255]);
+    } finally {
+      texture.dispose();
+    }
+  });
+
+  it('fills unused character columns through the right edge', () => {
+    const texture = buildPlaceholderCharacterTexture();
+    try {
+      const image = texture.image as { width: number; data: Uint8Array };
+      const pixel = (image.width - 1) * 4;
+
+      expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([128, 128, 128, 255]);
+    } finally {
+      texture.dispose();
+    }
+  });
 });

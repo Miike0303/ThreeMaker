@@ -370,6 +370,30 @@ describe('createDialogueOverlay', () => {
     ).toEqual([false, true]);
   });
 
+  it('leaves later choices unhighlighted after navigating to a middle option', () => {
+    const { overlay, choices } = overlayParts();
+    overlay.showChoices(['Accept', 'Decline', 'Later'], 0);
+
+    overlay.setHighlightedIndex(1);
+
+    expect(
+      choices?.children.map((choice) => choice.classList.contains('dialogue-choice-highlighted')),
+    ).toEqual([false, true, false]);
+  });
+
+  it('marks only the middle choice as current after navigation', () => {
+    const { overlay, choices } = overlayParts();
+    overlay.showChoices(['Accept', 'Decline', 'Later'], 0);
+
+    overlay.setHighlightedIndex(1);
+
+    expect(choices?.children.map((choice) => choice.getAttribute('aria-current'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ]);
+  });
+
   it('marks script failures with error styling', () => {
     const { overlay } = overlayParts();
     const element = overlay.element as unknown as FakeElement;

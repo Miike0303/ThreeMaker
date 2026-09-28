@@ -383,6 +383,13 @@ describe('debug panel toggle accessibility', () => {
     expect(weatherRow?.children[1]?.textContent).toBe('clear');
   });
 
+  it('starts with an unlit light readout before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const lightRow = created.find((node) => node.children[0]?.textContent === 'Lights');
+
+    expect(lightRow?.children[1]?.textContent).toBe('0');
+  });
+
   it('shows noclip as on while the shortcut is active', () => {
     const created: FakeNode[] = [];
     vi.stubGlobal('document', {
