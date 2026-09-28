@@ -319,3 +319,18 @@ describe('StairTraversal (elevated terrain, non-unit height scale)', () => {
     expect(end.done).toBe(true);
   });
 });
+
+it('starts stairs at the interpolated ramp surface', () => {
+  const elevation = new ElevationField(buildMap(3, 3, {}, [1, 1, 1, 0, 1, 1, 1, 1, 1]), [
+    { x: 1, y: 1 },
+  ]);
+  const traversal = new StairTraversal({
+    waypoints: [
+      { x: 1, y: 1, floor: 0 },
+      { x: 1, y: 1, floor: 1 },
+    ],
+    floors: [{ baseElevation: 2, elevation }, FLOOR_1],
+    heightUnit: 2,
+  });
+  expect(traversal.update(0).worldY).toBe(4);
+});

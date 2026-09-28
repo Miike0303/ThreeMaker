@@ -644,3 +644,11 @@ it('parses a Y coordinate after multiple separating whitespace characters', () =
 it('recognizes a knot header with multiple spaces before its author comment', () => {
   expect(listInkKnots('=== entry === \t // Author note.\n')).toEqual(['entry']);
 });
+
+it('preserves the story body after a line with an inline comment', () => {
+  const source =
+    'Opening. // Keep this inline note.\n\n// @tm-node start x=1 y=2\n=== start ===\nWelcome.\n';
+  expect(applyInkNodeLayouts(source, [{ knot: 'start', x: 17, y: 29 }])).toBe(
+    `// @tm-node start x=17 y=29\n\n${source}`,
+  );
+});

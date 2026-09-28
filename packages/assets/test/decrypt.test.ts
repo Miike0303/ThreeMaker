@@ -68,6 +68,10 @@ describe('parseEncryptionKey', () => {
     expect(parseEncryptionKey(null)).toBeNull();
   });
 
+  it('rejects an encryption key with a single extra hexadecimal digit', () => {
+    expect(parseEncryptionKey({ encryptionKey: '0123456789abcdef0123456789abcdef0' })).toBeNull();
+  });
+
   it('rejects an encryption key with extra hexadecimal digits', () => {
     expect(parseEncryptionKey({ encryptionKey: `${KEY_HEX}ff` })).toBeNull();
   });

@@ -251,3 +251,25 @@ it('trims leading whitespace from the speaker tag key', () => {
 
   expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello' });
 });
+
+it('continues past empty story output to the next dialogue line', () => {
+  const output = [null, '', 'Welcome.\n'];
+  let cursor = 0;
+  const story = {
+    get canContinue() {
+      return cursor < output.length;
+    },
+    Continue: () => output[cursor++] ?? null,
+    currentTags: [],
+    currentChoices: [],
+  } as unknown as Story;
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+  provider.open({ kind: 'ink', storyId: 'inline' });
+  expect(provider.next()).toEqual({ kind: 'line', text: 'Welcome.' });
+  expect(provider.next()).toEqual({ kind: 'end' });
+});
+
+it('identifies choosing as the operation attempted before opening a story', () => {
+  const provider = new InkDialogueProvider(new Map());
+  expect(() => provider.choose(0)).toThrow('InkDialogueProvider: choose() called before open().');
+});
