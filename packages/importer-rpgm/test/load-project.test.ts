@@ -82,6 +82,13 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     await expect(loadProject(workDir)).rejects.toThrow(/Map1\.json/);
   });
 
+  it('rejects duplicate map IDs beyond the first map', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map007.json', 'Map7.json']);
+
+    await expect(loadProject(workDir)).rejects.toThrow(/Duplicate RPG Maker map id 7/);
+  });
+
   it('loads Map001.json and Map002.json as distinct maps', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json', 'Map002.json']);

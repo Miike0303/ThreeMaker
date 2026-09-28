@@ -103,6 +103,34 @@ describe('computeHeightGrid', () => {
 });
 
 describe('computeRampGrid', () => {
+  it('keeps multi-level ramps inert when console is unavailable', () => {
+    const ctx: HeightGridContext = {
+      heightGrid: new Uint8Array([3]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+    vi.stubGlobal('console', undefined);
+    try {
+      expect(Array.from(computeRampGrid(ctx, [{ x: 0, y: 0 }]))).toEqual([0]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps multi-level ramps inert when console.warn is unavailable', () => {
+    const ctx: HeightGridContext = {
+      heightGrid: new Uint8Array([3]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+    vi.stubGlobal('console', {});
+    try {
+      expect(Array.from(computeRampGrid(ctx, [{ x: 0, y: 0 }]))).toEqual([0]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('does not warn about multi-level drops after resolving an automatic ramp', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const ctx: HeightGridContext = {

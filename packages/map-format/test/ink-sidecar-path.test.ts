@@ -14,6 +14,12 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('identifies the unsafe story id in the sidecar-path error', () => {
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'act/intro')).toThrow(
+      'Ink story id "act/intro" is not path-safe',
+    );
+  });
+
   it('rejects a story id containing a line break before deriving its sidecar path', () => {
     const storyId = 'intro\nsecret';
 

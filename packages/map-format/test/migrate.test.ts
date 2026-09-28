@@ -90,6 +90,12 @@ function makeV1DocInput(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('parseMapDocument', () => {
+  it('names the rejected format value in a bad-magic diagnostic', () => {
+    const input = makeValidDocInput({ format: 'wrong-format' });
+
+    expect(() => parseMapDocument(input)).toThrow('got "wrong-format".');
+  });
+
   it('reports the unsupported-version code for a missing migration', () => {
     clearMigrations();
 

@@ -6,6 +6,34 @@ function makeFlags(): number[] {
 }
 
 describe('parseTilesets', () => {
+  it('identifies a later tileset when its flags are invalid', () => {
+    const valid = { id: 1, name: 'Town', flags: [0], tilesetNames: new Array(9).fill('') };
+    const malformed = { ...valid, id: 7, name: 'Dungeon', flags: [0, -1] };
+
+    expect(() => parseTilesets([valid, malformed])).toThrow(
+      new Error(
+        'Invalid Tilesets.json entry 7: "flags" must be an array of non-negative integers.',
+      ),
+    );
+  });
+
+  it('identifies a later tileset when its sheet count is invalid', () => {
+    const valid = { id: 1, name: 'Town', flags: [0], tilesetNames: new Array(9).fill('') };
+    const malformed = { ...valid, id: 7, name: 'Dungeon', tilesetNames: new Array(8).fill('') };
+
+    expect(() => parseTilesets([valid, malformed])).toThrow(
+      new Error('Invalid Tilesets.json entry 7: "tilesetNames" must have exactly 9 entries.'),
+    );
+  });
+
+  it('rejects a repeated tileset ID after a different ID', () => {
+    const tileset = { id: 7, name: 'Dungeon', flags: [0], tilesetNames: new Array(9).fill('') };
+
+    expect(() =>
+      parseTilesets([{ ...tileset, id: 1, name: 'Town' }, tileset, { ...tileset, name: 'Cave' }]),
+    ).toThrow(/duplicate tileset id 7/);
+  });
+
   it('identifies Tilesets.json when the top-level value is not an array', () => {
     expect(() => parseTilesets({})).toThrow(new Error('Invalid Tilesets.json: expected an array.'));
   });

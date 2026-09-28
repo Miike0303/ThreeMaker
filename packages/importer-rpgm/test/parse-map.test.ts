@@ -13,6 +13,14 @@ function makeMapJson(width: number, height: number, fill: (z: number, i: number)
 }
 
 describe('parseMap', () => {
+  it('reports six-layer overflow for tall maps with safe dimensions', () => {
+    const json = { width: 1, height: Number.MAX_SAFE_INTEGER, tilesetId: 1, data: [] };
+
+    expect(() => parseMap(json)).toThrow(
+      new Error('Invalid Map JSON: "width"*"height"*6 must be a safe integer.'),
+    );
+  });
+
   it('reports the actual type of primitive map input', () => {
     expect(() => parseMap(false)).toThrow(
       new Error('Invalid Map JSON: expected an object, got boolean.'),
