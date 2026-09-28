@@ -6,6 +6,15 @@ function makeFlags(): number[] {
 }
 
 describe('parseTilesets', () => {
+  it('limits invalid tileset previews to exactly 200 JSON characters', () => {
+    const entry = { id: 'invalid', name: 'x'.repeat(250) };
+    const preview = `{"id":"invalid","name":"${'x'.repeat(176)}`;
+
+    expect(() => parseTilesets([entry])).toThrow(
+      new Error(`Invalid Tilesets.json entry: missing "id"/"name" in ${preview}`),
+    );
+  });
+
   it('reports non-array flags as invalid tileset flags', () => {
     const tileset = {
       id: 1,

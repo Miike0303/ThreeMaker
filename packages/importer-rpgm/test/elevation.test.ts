@@ -361,6 +361,83 @@ describe('computeRampGrid', () => {
 });
 
 describe('edgeProfileAt', () => {
+  it('keeps the northwest corner low on an off-diagonal west ramp', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),
+      rampGrid: new Uint8Array([0, 0, 0, 0, 0, 4]),
+      mapWidth: 3,
+      mapHeight: 2,
+    };
+
+    expect(edgeProfileAt(ctx, 2, 1, 'north')).toEqual([2, 3]);
+  });
+
+  it('keeps the northwest corner high on an off-diagonal south ramp', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([0, 3]),
+      rampGrid: new Uint8Array([0, 2]),
+      mapWidth: 2,
+      mapHeight: 1,
+    };
+
+    expect(edgeProfileAt(ctx, 1, 0, 'north')).toEqual([3, 3]);
+  });
+
+  it('keeps the northeast corner low on an off-diagonal north ramp', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),
+      rampGrid: new Uint8Array([0, 0, 0, 0, 0, 1]),
+      mapWidth: 3,
+      mapHeight: 2,
+    };
+
+    expect(edgeProfileAt(ctx, 2, 1, 'north')).toEqual([2, 2]);
+  });
+
+  it('keeps the southwest corner low on an off-diagonal west ramp', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),
+      rampGrid: new Uint8Array([0, 0, 0, 0, 0, 4]),
+      mapWidth: 3,
+      mapHeight: 2,
+    };
+
+    expect(edgeProfileAt(ctx, 2, 1, 'south')).toEqual([2, 3]);
+  });
+
+  it('keeps the southwest corner high on an off-diagonal north ramp', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([0, 3]),
+      rampGrid: new Uint8Array([0, 1]),
+      mapWidth: 1,
+      mapHeight: 2,
+    };
+
+    expect(edgeProfileAt(ctx, 0, 1, 'south')).toEqual([3, 3]);
+  });
+
+  it('keeps the southeast corner low on an off-diagonal south ramp', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),
+      rampGrid: new Uint8Array([0, 0, 0, 0, 0, 2]),
+      mapWidth: 3,
+      mapHeight: 2,
+    };
+
+    expect(edgeProfileAt(ctx, 2, 1, 'south')).toEqual([2, 2]);
+  });
+
+  it('returns ground west of a later row instead of reading the previous row', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2, 7, 4, 5]),
+      rampGrid: new Uint8Array([0, 0, 0, 0]),
+      mapWidth: 2,
+      mapHeight: 2,
+    };
+
+    expect(edgeProfileAt(ctx, -1, 1, 'east')).toEqual([0, 0]);
+  });
+
   it('slopes the east edge of a north ramp at an off-diagonal cell', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),
