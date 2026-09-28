@@ -469,3 +469,40 @@ it('requires whitespace between the layout marker and knot name', () => {
 it('ignores a knot header without closing equals signs', () => {
   expect(listInkKnots('=== unfinished\n=== finished ===\n')).toEqual(['finished']);
 });
+
+it('keeps graph edges distinct when concatenated endpoint names collide', () => {
+  const source = '=== a ===\n-> bc\n=== ab ===\n-> c\n';
+
+  expect(listInkEdges(source)).toEqual([
+    { from: 'a', to: 'bc' },
+    { from: 'ab', to: 'c' },
+  ]);
+});
+
+it('rejects punctuation as the first character of a knot name', () => {
+  expect(listInkKnots('=== [draft ===\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('rejects punctuation as the first character of a layout knot name', () => {
+  expect(parseInkNodeLayouts('// @tm-node [draft x=1 y=2\n')).toEqual([]);
+});
+
+it('rejects punctuation as the first character of a divert target', () => {
+  expect(listInkEdges('=== start ===\n-> [draft\n-> visible\n')).toEqual([
+    { from: 'start', to: 'visible' },
+  ]);
+});
+
+it('rejects a vertical layout coordinate with a trailing decimal point', () => {
+  expect(parseInkNodeLayouts('// @tm-node start x=1 y=2.\n')).toEqual([]);
+});
+
+it('ignores a knot header without opening equals signs', () => {
+  expect(listInkKnots('unfinished ===\n=== finished ===\n')).toEqual(['finished']);
+});
+
+it('keeps digits inside dotted divert target names', () => {
+  expect(listInkEdges('=== start ===\n-> chapter2.ending3\n')).toEqual([
+    { from: 'start', to: 'chapter2.ending3' },
+  ]);
+});

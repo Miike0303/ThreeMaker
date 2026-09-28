@@ -314,6 +314,20 @@ describe('createAudioCommandPlugins', () => {
     expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { loop: true });
   });
 
+  it.each([
+    'volume',
+    'fadeMs',
+    'loop',
+  ])('omits unauthored playBgm %s from handler options', (option) => {
+    const playBgm = vi.fn();
+    const registry = registryFor({ playBgm });
+
+    registry.get('playBgm')?.run({ type: 'playBgm', path: 'bgm/town.ogg' }, {} as never);
+
+    expect(playBgm).toHaveBeenCalledTimes(1);
+    expect(playBgm.mock.calls[0]?.[1]).not.toHaveProperty(option);
+  });
+
   it('rejects a non-boolean loop', () => {
     const registry = registryFor();
     expect(() =>
@@ -334,6 +348,12 @@ describe('createAudioCommandPlugins', () => {
     const registry = registryFor();
     const parsed = parseEventScript(script({ type: 'stopBgm' }), registry);
     expect(parsed.intro).toEqual([{ type: 'stopBgm' }]);
+  });
+
+  it('omits stopBgm fadeMs when it is not authored', () => {
+    const parsed = parseEventScript(script({ type: 'stopBgm' }), registryFor());
+
+    expect(parsed.intro).toStrictEqual([{ type: 'stopBgm' }]);
   });
 
   it('accepts a stopBgm fade longer than one millisecond', () => {

@@ -104,6 +104,17 @@ describe('Node', () => {
     expect(child.parent).toBe(parent);
   });
 
+  it('chains removal of an absent child on the parent', () => {
+    const parent = new Node('parent');
+    const absentChild = new Node('absent');
+    const nextChild = new Node('next');
+
+    parent.removeChild(absentChild).addChild(nextChild);
+
+    expect(parent.children).toEqual([nextChild]);
+    expect(nextChild.parent).toBe(parent);
+  });
+
   it('removeFromParent detaches the node from its current parent', () => {
     const parent = new Node('parent');
     const child = new Node('child');
