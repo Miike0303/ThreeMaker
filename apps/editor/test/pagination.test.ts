@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { computePageRange } from '../src/pagination.js';
 
 describe('computePageRange', () => {
+  it('shows no catalog rows when the page size is negative', () => {
+    expect(computePageRange(1, -1, 42)).toEqual({
+      start: 0,
+      end: 0,
+      hasPrev: true,
+      hasNext: false,
+    });
+  });
+
   it('shows no catalog rows when the total is negative', () => {
     expect(computePageRange(1, 100, -1)).toEqual({
       start: 0,

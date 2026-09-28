@@ -365,6 +365,25 @@ describe('licenseTagFromSlots (WU-COMM-07)', () => {
 });
 
 describe('community share offline queue', () => {
+  it('keeps a newer save when a removal uses an older timestamp for the same map', () => {
+    const storage = memoryStorage();
+    const current = sampleJob('town', '2026-09-28T02:00:00.000Z');
+    pushCommunityShareQueue(current, storage);
+
+    expect(removeCommunityShareQueueJob('town', '2026-09-28T01:00:00.000Z', storage)).toEqual([
+      current,
+    ]);
+    expect(loadCommunityShareQueue(storage)).toEqual([current]);
+  });
+
+  it('caps a pasted share queue at twenty jobs while preserving input order', () => {
+    const jobs = Array.from({ length: 21 }, (_, index) => sampleJob(`import-${index}`));
+    expect(parseCommunityShareQueueJson(JSON.stringify(jobs))).toEqual({
+      ok: true,
+      jobs: jobs.slice(0, 20),
+    });
+  });
+
   it('clears queued jobs through removeItem without removing community preferences', () => {
     const queueKey = 'threemaker-maker-studio:community-queue';
     const settingsKey = 'threemaker-maker-studio:community';

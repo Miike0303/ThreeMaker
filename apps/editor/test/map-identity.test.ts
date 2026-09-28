@@ -27,6 +27,14 @@ import {
 } from '../src/map-identity.js';
 
 describe('validateMapName', () => {
+  it('rejects COM0 at the lower reserved device boundary', () => {
+    expect(validateMapName('COM0')).toBe('reserved');
+  });
+
+  it('rejects a colon inside a map name beyond the drive-letter position', () => {
+    expect(validateMapName('Town:Square')).toBe('invalid-chars');
+  });
+
   it('rejects COM9 at the upper reserved device boundary', () => {
     expect(validateMapName('COM9')).toBe('reserved');
   });
@@ -256,6 +264,10 @@ describe('list / sidecar / rename / delete plans', () => {
 });
 
 describe('filename case folding', () => {
+  it('detects a saved map collision after trimming both ends of the candidate', () => {
+    expect(collidingSavedMapName('  TOWN  ', ['alpha', 'town'])).toBe('town');
+  });
+
   it('compares map file names by ASCII case-fold, not locale collation', () => {
     expect(foldMapFileName('TOWN.tmmap.json')).toBe('town.tmmap.json');
     expect(mapFileNamesEqual('town.tmmap.json', 'TOWN.tmmap.json')).toBe(true);

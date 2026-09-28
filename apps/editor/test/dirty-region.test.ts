@@ -155,6 +155,10 @@ describe('expandDirtyRectNorthThroughStars', () => {
 });
 
 describe('dirtyRectToChunkKeys', () => {
+  it('returns no chunks for a zero-height rectangle inside a chunk', () => {
+    expect([...dirtyRectToChunkKeys({ xStart: 1, yStart: 7, xEnd: 2, yEnd: 7 }, 16)]).toEqual([]);
+  });
+
   it('does not dirty the next chunk row when a rectangle ends at its boundary', () => {
     expect([...dirtyRectToChunkKeys({ xStart: 0, yStart: 0, xEnd: 1, yEnd: 16 }, 16)]).toEqual([
       '0,0',
@@ -184,6 +188,21 @@ describe('dirtyRectToChunkKeys', () => {
 });
 
 describe('computeDirtyChunkKeys (full pipeline)', () => {
+  it('keeps northern star chunks dirty when a stroke moves north in one column', () => {
+    const layer = new Array(32 * 32).fill(1);
+    for (let y = 0; y < 16; y++) layer[y * 32 + 8] = 2;
+    const keys = computeDirtyChunkKeys(
+      [
+        { x: 8, y: 20 },
+        { x: 8, y: 17 },
+      ],
+      makeMap(32, 32, layer),
+      makeTileset(),
+      16,
+    );
+    expect([...keys].sort()).toEqual(['0,0', '0,1']);
+  });
+
   it('keeps northern star chunks dirty when the stroke continues south in one column', () => {
     const layer = new Array(32 * 32).fill(1);
     for (let y = 0; y < 16; y++) layer[y * 32 + 8] = 2;
