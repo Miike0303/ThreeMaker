@@ -6,6 +6,79 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('keeps a wall roll equal to the density on the floor', () => {
+    const firstRoll = 1015568748 / 2 ** 32;
+    const map = generateSyntheticMap({
+      width: 5,
+      height: 5,
+      seed: 1,
+      wallDensity: firstRoll,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0][0]).toBe(3968);
+  });
+
+  it('leaves a floor tile undecorated when its decor roll equals the density', () => {
+    const firstDecorRoll = 1586005467 / 2 ** 32;
+    const map = generateSyntheticMap({
+      width: 5,
+      height: 5,
+      seed: 1,
+      wallDensity: 0,
+      decorDensity: firstDecorRoll,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[2][0]).toBe(0);
+  });
+
+  it('keeps the seeded wall layout stable at the first tile', () => {
+    const map = generateSyntheticMap({
+      width: 5,
+      height: 5,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0][0]).toBe(6335);
+  });
+
+  it('uses the Dungeon tileset by default', () => {
+    expect(generateSyntheticMap({ width: 1, height: 1 }).tilesetId).toBe(4);
+  });
+
+  it('uses the Dungeon decoration tile on decorated cells', () => {
+    const map = generateSyntheticMap({
+      width: 3,
+      height: 3,
+      wallDensity: 0,
+      decorDensity: 1,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[2][0]).toBe(69);
+  });
+
+  it('keeps synthetic maps non-looping', () => {
+    expect(generateSyntheticMap({ width: 1, height: 1 }).scrollType).toBe(0);
+  });
+
+  it('uses the Dungeon wall tile for a guaranteed wall', () => {
+    const map = generateSyntheticMap({ width: 3, height: 3, wallDensity: 1, clearRadius: 0 });
+
+    expect(map.layers.tileLayers[0][0]).toBe(6335);
+  });
+
+  it('uses the Dungeon ground tile in the spawn clearing', () => {
+    const map = generateSyntheticMap({ width: 1, height: 1 });
+
+    expect(map.layers.tileLayers[0][0]).toBe(3968);
+  });
+
   it('pins the default decoration density', () => {
     const defaultMap = generateSyntheticMap({ width: 128, height: 128, seed: 19 });
     const explicitMap = generateSyntheticMap({

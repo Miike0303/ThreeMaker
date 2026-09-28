@@ -48,6 +48,60 @@ describe('autotile lookup tables', () => {
 });
 
 describe('computeAutotileQuarterOrigins', () => {
+  it('advances the second A1 water kind to its second surface frame', () => {
+    expect(computeAutotileQuarterOrigins(2096, 'A1', 1)).toEqual([
+      { x: 144, y: 240 },
+      { x: 120, y: 240 },
+      { x: 144, y: 216 },
+      { x: 120, y: 216 },
+    ]);
+  });
+
+  it('starts the second A1 kind row six tile rows down', () => {
+    expect(computeAutotileQuarterOrigins(2432, 'A1')).toEqual([
+      { x: 48, y: 384 },
+      { x: 24, y: 384 },
+      { x: 48, y: 360 },
+      { x: 24, y: 360 },
+    ]);
+  });
+
+  it('animates ordinary even A1 kinds within their own water block', () => {
+    expect(computeAutotileQuarterOrigins(2240, 'A1', 1)).toEqual([
+      { x: 528, y: 96 },
+      { x: 504, y: 96 },
+      { x: 528, y: 72 },
+      { x: 504, y: 72 },
+    ]);
+  });
+
+  it('advances adjacent A4 kinds by two tile columns', () => {
+    expect(computeAutotileQuarterOrigins(5936, 'A4')).toEqual([
+      { x: 144, y: 96 },
+      { x: 120, y: 96 },
+      { x: 144, y: 72 },
+      { x: 120, y: 72 },
+    ]);
+  });
+
+  it('starts the next A4 roof row after a five-tile roof and wall pair', () => {
+    expect(computeAutotileQuarterOrigins(6656, 'A4')).toEqual([
+      { x: 48, y: 336 },
+      { x: 24, y: 336 },
+      { x: 48, y: 312 },
+      { x: 24, y: 312 },
+    ]);
+  });
+
+  it('repeats the A1 water surface cycle after four frames', () => {
+    expect(computeAutotileQuarterOrigins(2048, 'A1', 5)).toEqual([
+      { x: 144, y: 96 },
+      { x: 120, y: 96 },
+      { x: 144, y: 72 },
+      { x: 120, y: 72 },
+    ]);
+  });
+
   it('A2 kind 0 shape 0 (first A2 autotile id, tile 2816): resolves bx=0,by=0 against FLOOR_AUTOTILE_TABLE[0]', () => {
     const origins = computeAutotileQuarterOrigins(2816, 'A2');
     expect(origins).toEqual([

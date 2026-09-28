@@ -24,6 +24,18 @@ const AUTOTILE_SHEET_SIZES: SheetPixelSizes = {
 const INSET = 1;
 
 describe('computeTileUv', () => {
+  it('keeps one UV column when the sheet is narrower than one tile', () => {
+    const quad = computeTileUv(1, { B: { width: 24, height: 768 } })?.quads[0];
+    expect(quad?.u0).toBeCloseTo(1 / 24);
+    expect(quad?.u1).toBeCloseTo(47 / 24);
+  });
+
+  it('keeps one UV row when the sheet is shorter than one tile', () => {
+    const quad = computeTileUv(8, { B: { width: 384, height: 24 } })?.quads[0];
+    expect(quad?.v0).toBeCloseTo(1 - 47 / 24);
+    expect(quad?.v1).toBeCloseTo(1 - 1 / 24);
+  });
+
   it('returns null for tile id 0 (empty tile)', () => {
     expect(computeTileUv(0, GRID_SHEET_SIZES)).toBeNull();
   });

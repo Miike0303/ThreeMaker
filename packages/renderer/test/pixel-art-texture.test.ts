@@ -3,6 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { configurePixelArtTexture, loadSheetTexture } from '../src/scene/pixel-art-texture.js';
 
 describe('configurePixelArtTexture', () => {
+  it('defaults mipmapped textures to one anisotropy sample when no maximum is supplied', () => {
+    const texture = new THREE.Texture();
+    texture.anisotropy = 8;
+
+    configurePixelArtTexture(texture, { mipmaps: true });
+
+    expect(texture.anisotropy).toBe(1);
+  });
+
   it('defaults to the crisp sprite configuration: nearest filter, no mipmaps, no anisotropy', () => {
     const texture = new THREE.Texture();
 
@@ -67,6 +76,21 @@ describe('configurePixelArtTexture', () => {
 });
 
 describe('loadSheetTexture', () => {
+  it('wraps loader error events in an Error with the event diagnostic', async () => {
+    const failure = new Event('error');
+    vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation(
+      (_url, _onLoad, _onProgress, onError) => {
+        onError?.(failure);
+        return new THREE.Texture();
+      },
+    );
+
+    const resultPromise = loadSheetTexture('/missing-sheet.png');
+
+    await expect(resultPromise).rejects.toBeInstanceOf(Error);
+    await expect(resultPromise).rejects.toHaveProperty('message', String(failure));
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

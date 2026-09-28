@@ -21,6 +21,25 @@ function makeChunk(chunkX: number, chunkY: number, sheet: 'B' | 'C'): ChunkBuild
 }
 
 describe('TilemapScene', () => {
+  it('disposes the shadow overlay material exactly once', () => {
+    const chunk: ChunkBuildData = {
+      chunkX: 0,
+      chunkY: 0,
+      tiles: [],
+      shadows: [{ tileX: 0, tileY: 0, mask: 1 }],
+    };
+    const scene = new TilemapScene([chunk], {});
+    const shadowMesh = scene.group.children[0]?.children.find((child) =>
+      child.name.endsWith('-shadow'),
+    ) as THREE.Mesh;
+    const dispose = vi.spyOn(shadowMesh.material as THREE.Material, 'dispose');
+
+    scene.dispose();
+    scene.dispose();
+
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it('forwards texture filtering options to its sheet textures', () => {
     const texture = new THREE.Texture();
     const scene = new TilemapScene(

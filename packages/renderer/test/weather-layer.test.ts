@@ -87,6 +87,14 @@ describe('createWeatherLayer structure', () => {
     );
     layer.dispose();
   });
+  it('mutation pin: connects the tint uniform to particle color', () => {
+    const { layer } = createInspect(8);
+    const colorNode = (layer.mesh.material as THREE.SpriteNodeMaterial).colorNode;
+    expect((colorNode as unknown as { node: { nodes: unknown[] } }).node.nodes[0]).toBe(
+      layer.uniforms.tint,
+    );
+    layer.dispose();
+  });
   it('starts invisible (clear default)', () => {
     const { layer } = createInspect(8);
     expect(layer.mesh.visible).toBe(false);
@@ -127,6 +135,22 @@ describe('setMode', () => {
     expect(layer.uniforms.tint.value.getHex()).toBe(rain.tint);
   });
 
+  it('mutation pin: renders rain as narrow vertical streaks', () => {
+    const { layer } = createInspect(8);
+    layer.setMode('rain');
+    expect(layer.uniforms.scale.value.y).toBeGreaterThan(layer.uniforms.scale.value.x * 10);
+    layer.dispose();
+  });
+
+  it('mutation pin: keeps rain drift much smaller than snow drift', () => {
+    const { layer } = createInspect(8);
+    layer.setMode('rain');
+    const rainDrift = layer.uniforms.driftAmplitude.value;
+    layer.setMode('snow');
+    expect(rainDrift).toBeLessThan(layer.uniforms.driftAmplitude.value * 0.1);
+    layer.dispose();
+  });
+
   it('applies snow look preset uniforms', () => {
     const { layer } = createInspect(8);
     layer.setMode('snow');
@@ -137,6 +161,20 @@ describe('setMode', () => {
     expect(layer.uniforms.scale.value.y).toBe(snow.scaleY);
     expect(layer.uniforms.opacity.value).toBe(snow.opacity);
     expect(layer.uniforms.tint.value.getHex()).toBe(snow.tint);
+  });
+
+  it('mutation pin: renders snow as square flakes', () => {
+    const { layer } = createInspect(8);
+    layer.setMode('snow');
+    expect(layer.uniforms.scale.value.x).toBe(layer.uniforms.scale.value.y);
+    layer.dispose();
+  });
+
+  it('mutation pin: keeps snowflakes translucent', () => {
+    const { layer } = createInspect(8);
+    layer.setMode('snow');
+    expect(layer.uniforms.opacity.value).toBeLessThan(1);
+    layer.dispose();
   });
 
   it('switching rain → snow updates uniforms (same mesh, single graph)', () => {
