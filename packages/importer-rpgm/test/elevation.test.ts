@@ -361,6 +361,28 @@ describe('computeRampGrid', () => {
 });
 
 describe('edgeProfileAt', () => {
+  it('slopes the north edge of an east ramp at an off-diagonal cell', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),
+      rampGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),
+      mapWidth: 3,
+      mapHeight: 2,
+    };
+
+    expect(edgeProfileAt(ctx, 2, 1, 'north')).toEqual([3, 2]);
+  });
+
+  it('slopes the south edge of an east ramp at an off-diagonal cell', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),
+      rampGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),
+      mapWidth: 3,
+      mapHeight: 2,
+    };
+
+    expect(edgeProfileAt(ctx, 2, 1, 'south')).toEqual([3, 2]);
+  });
+
   it('uses ground for a missing in-bounds edge height', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array(),
@@ -571,6 +593,14 @@ describe('EdgeProfile symmetry (canonical corner ordering) across neighboring ce
 });
 
 describe('profilesEqual', () => {
+  it('rejects an edge match when only the first corner is lower', () => {
+    expect(profilesEqual([1, 2], [2, 2])).toBe(false);
+  });
+
+  it('rejects an edge match when only the second corner is higher', () => {
+    expect(profilesEqual([2, 3], [2, 2])).toBe(false);
+  });
+
   it('rejects an edge match when only the first corner is higher', () => {
     expect(profilesEqual([3, 2], [2, 2])).toBe(false);
   });
@@ -587,6 +617,17 @@ describe('profilesEqual', () => {
 });
 
 describe('surfaceHeightAt', () => {
+  it('samples a north ramp at an off-diagonal cell using its row coordinate', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),
+      rampGrid: new Uint8Array([0, 0, 0, 0, 0, 1]),
+      mapWidth: 3,
+      mapHeight: 2,
+    };
+
+    expect(surfaceHeightAt(ctx, 2.5, 1.25)).toBe(2.25);
+  });
+
   it('keeps the surface flat when its ramp code is missing', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([3]),

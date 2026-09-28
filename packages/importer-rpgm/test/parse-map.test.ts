@@ -13,6 +13,22 @@ function makeMapJson(width: number, height: number, fill: (z: number, i: number)
 }
 
 describe('parseMap', () => {
+  it('reports the map object validation error for null input', () => {
+    expect(() => parseMap(null)).toThrow('Invalid Map JSON: expected an object, got object.');
+  });
+
+  it('reports the dimension type error when only width is nonnumeric', () => {
+    const json = { ...makeMapJson(1, 1, () => 0), width: '1' };
+
+    expect(() => parseMap(json)).toThrow('Invalid Map JSON: "width" and "height" must be numbers.');
+  });
+
+  it('reports the data type error for a string cell among numeric cells', () => {
+    const json = { ...makeMapJson(1, 1, () => 0), data: [0, 0, 0, 0, 0, '0'] };
+
+    expect(() => parseMap(json)).toThrow('Invalid Map JSON: "data" must be an array of numbers.');
+  });
+
   it('reports a validation error for non-array tile data', () => {
     const json = { ...makeMapJson(1, 1, () => 0), data: '000000' };
 
