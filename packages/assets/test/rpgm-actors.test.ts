@@ -105,6 +105,40 @@ describe('readLeadActorSheet', () => {
     expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor1', characterIndex: 0 });
   });
 
+  it('keeps the first actor when partyMembers is an object with a numeric key', () => {
+    writeActors([
+      null,
+      { characterName: 'FallbackHero', characterIndex: 1 },
+      { characterName: 'OtherHero', characterIndex: 3 },
+    ]);
+    writeFileSync(join(gameDir, 'System.json'), JSON.stringify({ partyMembers: { 0: 2 } }), 'utf8');
+
+    expect(readLeadActorSheet(gameDir)).toEqual({
+      characterName: 'FallbackHero',
+      characterIndex: 1,
+    });
+  });
+
+  it('keeps the first actor when the selected leader entry is an array', () => {
+    writeActors([null, { characterName: 'FallbackHero', characterIndex: 1 }, []]);
+    writeFileSync(join(gameDir, 'System.json'), JSON.stringify({ partyMembers: [2] }), 'utf8');
+
+    expect(readLeadActorSheet(gameDir)).toEqual({
+      characterName: 'FallbackHero',
+      characterIndex: 1,
+    });
+  });
+
+  it('keeps the first actor when the selected leader entry is null', () => {
+    writeActors([null, { characterName: 'FallbackHero', characterIndex: 1 }, null]);
+    writeFileSync(join(gameDir, 'System.json'), JSON.stringify({ partyMembers: [2] }), 'utf8');
+
+    expect(readLeadActorSheet(gameDir)).toEqual({
+      characterName: 'FallbackHero',
+      characterIndex: 1,
+    });
+  });
+
   it('keeps the first actor as fallback when System.json is malformed', () => {
     writeActors([
       null,

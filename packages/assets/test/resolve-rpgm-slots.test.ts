@@ -172,4 +172,10 @@ describe('resolveRpgmSlotsFromCatalog', () => {
 
     expect(resolveRpgmSlotsFromCatalog(catalog, join(gameRoot, 'database'), 1)).toEqual({});
   });
+
+  it('does not treat www/database as the deployed MV data directory', () => {
+    seedA1Sheet();
+
+    expect(resolveRpgmSlotsFromCatalog(catalog, join(gameRoot, 'www', 'database'), 1)).toEqual({});
+  });
 });

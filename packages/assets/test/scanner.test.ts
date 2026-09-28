@@ -84,6 +84,17 @@ describe('scanGames — depth/cycle guard (modeled on the LoQOO self-nested fold
     expect(result.errors.some((error) => error.code === 'depth-exceeded')).toBe(true);
   });
 
+  it('discovers a game at depth 12 with the default scan budget', () => {
+    let gameDir = workDir;
+    for (let depth = 0; depth < 12; depth++) gameDir = join(gameDir, 'nested');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+
+    const result = scanGames(workDir);
+
+    expect(result.games.map((game) => game.rootPath)).toEqual([gameDir]);
+    expect(result.errors).toEqual([]);
+  });
+
   it('includes a game at exactly maxDepth', () => {
     const gameDir = join(workDir, 'one', 'two');
     writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
@@ -537,6 +548,23 @@ describe('scanGames — asset and metadata boundaries', () => {
         imageAssets: [],
         audioAssets: [],
       },
+    ]);
+  });
+
+  it('excludes audio folders beyond the requested asset depth', () => {
+    const gameDir = join(workDir, 'limited-audio-depth');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    const musicDir = join(gameDir, 'audio', 'bgm');
+    const variantsDir = join(musicDir, 'variants');
+    mkdirSync(variantsDir, { recursive: true });
+    writeFileSync(join(musicDir, 'Included.ogg'), 'included-audio');
+    writeFileSync(join(variantsDir, 'Excluded.ogg'), 'excluded-audio');
+
+    const result = scanGames(workDir, { maxDepth: 1 });
+
+    expect(result.games[0]?.audioAssets).toEqual(['bgm/Included.ogg']);
+    expect(result.errors).toEqual([
+      expect.objectContaining({ path: variantsDir, code: 'depth-exceeded' }),
     ]);
   });
 });

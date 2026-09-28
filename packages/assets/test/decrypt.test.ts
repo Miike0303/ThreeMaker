@@ -75,6 +75,10 @@ describe('parseEncryptionKey', () => {
   it('rejects an encryption key with only 31 hexadecimal digits', () => {
     expect(parseEncryptionKey({ encryptionKey: KEY_HEX.slice(0, 31) })).toBeNull();
   });
+
+  it('rejects a 32-character encryption key containing g', () => {
+    expect(parseEncryptionKey({ encryptionKey: `${KEY_HEX.slice(0, 31)}g` })).toBeNull();
+  });
 });
 
 describe('decryptRpgmv', () => {
