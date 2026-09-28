@@ -413,3 +413,16 @@ describe('computeDirtyChunkKeys (full pipeline)', () => {
     expect([...diagonalKeys].sort()).toEqual([...perCellUnion(diagonal)].sort());
   });
 });
+
+it('clamps a bottom-edge stroke to the height of a wide map', () => {
+  expect(computeDirtyTileRect([{ x: 8, y: 15 }], 32, 16)).toEqual({
+    xStart: 7,
+    yStart: 14,
+    xEnd: 10,
+    yEnd: 16,
+  });
+});
+
+it('returns no chunks for reversed horizontal bounds within one chunk', () => {
+  expect([...dirtyRectToChunkKeys({ xStart: 8, yStart: 1, xEnd: 7, yEnd: 2 }, 16)]).toEqual([]);
+});

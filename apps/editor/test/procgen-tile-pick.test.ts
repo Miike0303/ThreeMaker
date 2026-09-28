@@ -44,6 +44,53 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('falls back when the mid-layer furniture majority equals the selected door', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [333, 333, 200],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      doorTileOverride: 333,
+      semantics: { '200': { class: 'furniture' }, '333': { class: 'furniture' } },
+    });
+
+    expect(tiles.doorTileId).toBe(333);
+    expect(tiles.furnitureTileId).toBe(200);
+  });
+
+  it('falls back when the mid-layer door majority equals the selected wall', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [80, 80, 77],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      wallTileOverride: 80,
+      semantics: { '77': { class: 'door' }, '80': { class: 'door' } },
+    });
+
+    expect(tiles.wallTileId).toBe(80);
+    expect(tiles.doorTileId).toBe(77);
+  });
+
+  it('falls back when the furniture override equals the ground tile', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      furnitureTileOverride: 1,
+      semantics: { '200': { class: 'furniture' } },
+    });
+
+    expect(tiles.groundTileId).toBe(1);
+    expect(tiles.furnitureTileId).toBe(200);
+  });
+
   it('uses the ground tile when no nonzero wall fallback is available', () => {
     expect(
       resolveDungeonTileIds({

@@ -62,6 +62,10 @@ describe('furniture density percent round-trip', () => {
 });
 
 describe('pushProcgenSeedHistory', () => {
+  it('rounds a fractional seed history limit down', () => {
+    expect(pushProcgenSeedHistory([30, 20, 10], 40, 2.9)).toEqual([40, 30]);
+  });
+
   it('prepends newest and caps length', () => {
     let h: readonly number[] = [];
     h = pushProcgenSeedHistory(h, 1);

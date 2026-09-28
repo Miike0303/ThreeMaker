@@ -679,3 +679,39 @@ describe('describeCommunityShareStatus', () => {
     ).toEqual({ kind: 'queued', queueLength: 2, lastMapName: 'Map z' });
   });
 });
+
+it('caps an oversized persisted share queue without reordering its jobs', () => {
+  const jobs = Array.from({ length: 21 }, (_, index) => sampleJob(`stored-${index}`));
+  const storage = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify(jobs),
+  });
+  expect(loadCommunityShareQueue(storage)).toEqual(jobs.slice(0, 20));
+});
+
+it('caps replacement jobs before returning and persisting the share queue', () => {
+  const jobs = Array.from({ length: 21 }, (_, index) => sampleJob(`replacement-${index}`));
+  const storage = memoryStorage();
+  expect(replaceCommunityShareQueue(jobs, storage)).toEqual(jobs.slice(0, 20));
+  expect(JSON.parse(storage.getItem('threemaker-maker-studio:community-queue') ?? 'null')).toEqual(
+    jobs.slice(0, 20),
+  );
+});
+
+it('drops malformed persisted queue entries while preserving valid jobs', () => {
+  const job = sampleJob('valid-stored-job');
+  const storage = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify([null, job, { mapId: 42 }]),
+  });
+  expect(loadCommunityShareQueue(storage)).toEqual([job]);
+});
+
+it('leaves a missing queue job alone when storage writes are unavailable', () => {
+  const job = sampleJob('remaining');
+  const storage = {
+    ...memoryStorage({ 'threemaker-maker-studio:community-queue': JSON.stringify([job]) }),
+    setItem: () => {
+      throw new Error('Storage writes are unavailable');
+    },
+  };
+  expect(removeCommunityShareQueueJob('missing', job.at, storage)).toEqual([job]);
+});

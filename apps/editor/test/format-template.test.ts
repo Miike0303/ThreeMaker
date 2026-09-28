@@ -44,3 +44,7 @@ describe('formatTemplate', () => {
     );
   });
 });
+
+it('substitutes a placeholder containing uppercase identifier characters', () => {
+  expect(formatTemplate('Tile {TileId}', { TileId: 42 })).toBe('Tile 42');
+});

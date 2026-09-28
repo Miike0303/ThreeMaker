@@ -33,6 +33,18 @@ describe('pickAdjacentFloorIndex', () => {
 });
 
 describe('roomLandingTile', () => {
+  it('clamps a room landing beyond the east edge to the last column', () => {
+    const rooms = [
+      {
+        id: 'clipped-room',
+        floor: 'floor-0',
+        rects: [{ x: 9, y: 1, width: 4, height: 4 }],
+      },
+    ];
+
+    expect(roomLandingTile(rooms, 'floor-0', 10, 8)).toEqual({ x: 9, y: 3 });
+  });
+
   it('uses the center tile of an odd-sized map when the landing floor has no rooms', () => {
     expect(roomLandingTile([], 'floor-1', 9, 7)).toEqual({ x: 4, y: 3 });
   });
@@ -182,6 +194,18 @@ describe('mergeStampStairLinks', () => {
 });
 
 describe('countStampStairLinks (WU-PROC-19)', () => {
+  it('does not count authored stair ids containing the generated prefix', () => {
+    const authored = stampStairLinkBetween(
+      'floor-0',
+      { x: 1, y: 1 },
+      'floor-1',
+      { x: 2, y: 2 },
+      { id: 'hand-stamp-stair-annex' },
+    );
+
+    expect(countStampStairLinks([authored])).toBe(0);
+  });
+
   it('counts only stamp-prefixed stair ids', () => {
     const stamp = stampStairLinkBetween('floor-1', { x: 1, y: 1 }, 'floor-0', { x: 2, y: 2 });
     const authored = {

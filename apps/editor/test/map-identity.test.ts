@@ -322,3 +322,7 @@ describe('shouldConfirmPlaytestDualWrite', () => {
     ).toBe(false);
   });
 });
+
+it('accepts a multi-digit LPT map name outside the reserved device range', () => {
+  expect(validateMapName('LPT10')).toBeNull();
+});

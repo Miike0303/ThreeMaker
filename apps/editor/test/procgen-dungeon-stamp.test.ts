@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  findDoorOpenings,
   pickMainRoomSpawn,
   scatterFurnitureInRooms,
   stampSimpleDungeon,
@@ -183,6 +184,14 @@ describe('stampSimpleDungeon', () => {
 });
 
 describe('scatterFurnitureInRooms', () => {
+  it('ignores furniture interior cells beyond the right map edge', () => {
+    const mid = new Array<number>(16).fill(0);
+    const count = scatterFurnitureInRooms([{ x: 2, y: 0, w: 4, h: 3 }], mid, 4, 4, 9, 1, () => 0);
+
+    expect(count).toBe(1);
+    expect(mid).toEqual([0, 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
   it('leaves a room cell empty when the random draw equals density', () => {
     const mid = new Array(9).fill(0);
     const count = scatterFurnitureInRooms(
@@ -251,6 +260,14 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('does not wrap an east-edge door neighbor into the next row', () => {
+    const walkable = new Uint8Array(16);
+    walkable[7] = 1;
+    walkable[8] = 1;
+
+    expect(findDoorOpenings([{ x: 3, y: 1, w: 1, h: 1 }], walkable, 4, 4)).toEqual([]);
+  });
+
   const DOOR = 5001;
 
   it('reports door openings on room edges where corridors leave', () => {
