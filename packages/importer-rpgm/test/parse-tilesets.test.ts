@@ -6,6 +6,27 @@ function makeFlags(): number[] {
 }
 
 describe('parseTilesets', () => {
+  it('reports non-array flags as invalid tileset flags', () => {
+    const tileset = {
+      id: 1,
+      name: 'Town',
+      flags: '0',
+      tilesetNames: new Array(9).fill(''),
+    };
+
+    expect(() => parseTilesets([tileset])).toThrow(
+      'Invalid Tilesets.json entry 1: "flags" must be an array of non-negative integers.',
+    );
+  });
+
+  it('reports non-array sheet names as an invalid sheet list', () => {
+    const tileset = { id: 1, name: 'Town', flags: [0], tilesetNames: '123456789' };
+
+    expect(() => parseTilesets([tileset])).toThrow(
+      'Invalid Tilesets.json entry 1: "tilesetNames" must have exactly 9 entries.',
+    );
+  });
+
   it('keeps missing sheet names empty in a sparse sheet list', () => {
     const tilesetNames = new Array<string>(9);
     tilesetNames[0] = 'Town_A1';

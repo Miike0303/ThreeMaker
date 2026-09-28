@@ -13,6 +13,22 @@ function makeMapJson(width: number, height: number, fill: (z: number, i: number)
 }
 
 describe('parseMap', () => {
+  it('reports unsafe width as a dimension error', () => {
+    const json = { ...makeMapJson(1, 1, () => 0), width: Number.MAX_SAFE_INTEGER + 1 };
+
+    expect(() => parseMap(json)).toThrow(
+      'Invalid Map JSON: "width" and "height" must be positive safe integers.',
+    );
+  });
+
+  it('reports unsafe height as a dimension error', () => {
+    const json = { ...makeMapJson(1, 1, () => 0), height: Number.MAX_SAFE_INTEGER + 1 };
+
+    expect(() => parseMap(json)).toThrow(
+      'Invalid Map JSON: "width" and "height" must be positive safe integers.',
+    );
+  });
+
   it('reports the map object validation error for null input', () => {
     expect(() => parseMap(null)).toThrow('Invalid Map JSON: expected an object, got object.');
   });
