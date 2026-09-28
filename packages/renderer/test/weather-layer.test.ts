@@ -74,6 +74,19 @@ describe('createWeatherLayer structure', () => {
     expect((layer.mesh.material as THREE.SpriteNodeMaterial).sizeAttenuation).toBe(true);
     layer.dispose();
   });
+  it('connects the scale uniform to particle size', () => {
+    const { layer } = createInspect(8);
+    expect((layer.mesh.material as THREE.SpriteNodeMaterial).scaleNode).toBe(layer.uniforms.scale);
+    layer.dispose();
+  });
+  it('connects the opacity uniform to particle alpha', () => {
+    const { layer } = createInspect(8);
+    const colorNode = (layer.mesh.material as THREE.SpriteNodeMaterial).colorNode;
+    expect((colorNode as unknown as { node: { nodes: unknown[] } }).node.nodes[1]).toBe(
+      layer.uniforms.opacity,
+    );
+    layer.dispose();
+  });
   it('starts invisible (clear default)', () => {
     const { layer } = createInspect(8);
     expect(layer.mesh.visible).toBe(false);
@@ -135,6 +148,13 @@ describe('setMode', () => {
     expect(layer.uniforms.fallSpeed.value).toBe(WEATHER_LOOK_PRESETS.snow.fallSpeed);
     expect(layer.uniforms.fallSpeed.value).not.toBe(WEATHER_LOOK_PRESETS.rain.fallSpeed);
   });
+
+  it('ignores mode changes after disposal', () => {
+    const { layer } = createInspect(8);
+    layer.dispose();
+    layer.setMode('rain');
+    expect(layer.particlesVisible).toBe(false);
+  });
 });
 
 describe('followCamera', () => {
@@ -144,6 +164,14 @@ describe('followCamera', () => {
     expect(layer.uniforms.volumeCenter.value.x).toBe(3);
     expect(layer.uniforms.volumeCenter.value.y).toBe(4);
     expect(layer.uniforms.volumeCenter.value.z).toBe(5);
+  });
+
+  it('stops following the camera after disposal', () => {
+    const { layer } = createInspect(4);
+    layer.followCamera(new THREE.Vector3(3, 4, 5));
+    layer.dispose();
+    layer.followCamera(new THREE.Vector3(8, 9, 10));
+    expect(layer.uniforms.volumeCenter.value.toArray()).toEqual([3, 4, 5]);
   });
 });
 
@@ -156,5 +184,15 @@ describe('dispose', () => {
     expect(() => layer.dispose()).not.toThrow();
     layer.dispose();
     expect(scene.children).not.toContain(layer.mesh);
+  });
+
+  it('releases the particle material', () => {
+    const { layer } = createInspect(4);
+    let disposeCalls = 0;
+    layer.mesh.material.addEventListener('dispose', () => {
+      disposeCalls++;
+    });
+    layer.dispose();
+    expect(disposeCalls).toBe(1);
   });
 });

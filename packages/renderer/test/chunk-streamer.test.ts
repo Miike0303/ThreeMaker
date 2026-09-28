@@ -11,6 +11,30 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('pins the default build radius at two chunks', () => {
+    const streamer = new ChunkStreamer({ chunkSize: 16, mapWidth: 80, mapHeight: 80 });
+
+    expect(streamer.update(32, 32).toBuild).toHaveLength(25);
+  });
+
+  it('pins rejection of a fractional build radius', () => {
+    expect(() => new ChunkStreamer({ ...GIANT, buildRadius: 0.5, disposeRadius: 1 })).toThrow(
+      /buildRadius/,
+    );
+  });
+
+  it('pins an out-of-bounds Y focus to the final one-tile chunk', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 16,
+      mapHeight: 33,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(0, 99).toBuild).toEqual(['0,2']);
+  });
+
   it('rejects a non-positive chunk size', () => {
     expect(() => new ChunkStreamer({ ...GIANT, chunkSize: 0 })).toThrow(/chunkSize/);
   });

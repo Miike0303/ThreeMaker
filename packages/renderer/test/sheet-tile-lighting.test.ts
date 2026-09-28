@@ -90,4 +90,9 @@ describe('dayNightAmbientFactor (C7 WU-02)', () => {
   it('rounds negative fractional minutes down before wrapping the day', () => {
     expect(dayNightAmbientFactor(-1020.1)).toBe(dayNightAmbientFactor(419));
   });
+
+  it('uses night brightness for non-finite clock values', () => {
+    expect(dayNightAmbientFactor(Number.NaN)).toBe(0.35);
+    expect(dayNightAmbientFactor(Number.POSITIVE_INFINITY)).toBe(0.35);
+  });
 });

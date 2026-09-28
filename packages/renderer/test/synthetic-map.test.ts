@@ -6,6 +6,37 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('pins the default decoration density', () => {
+    const defaultMap = generateSyntheticMap({ width: 128, height: 128, seed: 19 });
+    const explicitMap = generateSyntheticMap({
+      width: 128,
+      height: 128,
+      seed: 19,
+      decorDensity: 0.02,
+    });
+
+    expect(defaultMap.layers.tileLayers[2]).toEqual(explicitMap.layers.tileLayers[2]);
+  });
+
+  it('pins the default clear radius at three tiles', () => {
+    const map = generateSyntheticMap({ width: 9, height: 9, wallDensity: 1 });
+
+    expect(map.layers.tileLayers[0][1 * 9 + 1]).toBe(ROSELIAM_DUNGEON_GROUND_TILE_ID);
+  });
+
+  it('pins zero shadow on a wall east of another wall', () => {
+    const map = generateSyntheticMap({
+      width: 5,
+      height: 5,
+      wallDensity: 1,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0][0]).toBe(ROSELIAM_DUNGEON_WALL_TILE_ID);
+    expect(map.layers.tileLayers[0][1]).toBe(ROSELIAM_DUNGEON_WALL_TILE_ID);
+    expect(map.layers.shadows[1]).toBe(0);
+  });
+
   it('produces an RpgmMap-shaped map with the requested dimensions and 6 decoded layers', () => {
     const map = generateSyntheticMap({ width: 32, height: 24, seed: 1 });
 

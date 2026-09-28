@@ -21,6 +21,55 @@ function makeChunk(chunkX: number, chunkY: number, sheet: 'B' | 'C'): ChunkBuild
 }
 
 describe('TilemapScene', () => {
+  it('forwards texture filtering options to its sheet textures', () => {
+    const texture = new THREE.Texture();
+    const scene = new TilemapScene(
+      [makeChunk(0, 0, 'B')],
+      { B: texture },
+      {
+        textureOptions: { mipmaps: true, maxAnisotropy: 4 },
+      },
+    );
+
+    expect(texture.minFilter).toBe(THREE.LinearMipmapLinearFilter);
+    expect(texture.generateMipmaps).toBe(true);
+    expect(texture.anisotropy).toBe(4);
+    scene.dispose();
+  });
+
+  it('forwards lightmap settings to its sheet material', () => {
+    const lightMap = new THREE.Texture();
+    const scene = new TilemapScene(
+      [makeChunk(0, 0, 'B')],
+      { B: new THREE.Texture() },
+      {
+        lighting: { lightMap, lightMapIntensity: 0.35 },
+      },
+    );
+
+    const mesh = scene.group.children[0]?.children[0] as THREE.Mesh;
+    const material = mesh.material as THREE.MeshBasicMaterial;
+    expect(material.lightMap).toBe(lightMap);
+    expect(material.lightMapIntensity).toBeCloseTo(0.35);
+    scene.dispose();
+  });
+
+  it('forwards tile scale to chunk geometry', () => {
+    const scene = new TilemapScene(
+      [makeChunk(0, 0, 'B')],
+      { B: new THREE.Texture() },
+      {
+        tileWorldSize: 3,
+      },
+    );
+
+    const mesh = scene.group.children[0]?.children[0] as THREE.Mesh;
+    const positions = mesh.geometry.getAttribute('position');
+    const maxX = Math.max(...Array.from({ length: positions.count }, (_, i) => positions.getX(i)));
+    expect(maxX).toBeCloseTo(3);
+    scene.dispose();
+  });
+
   it('builds one child group per chunk, added to a single root group', () => {
     const chunks = [makeChunk(0, 0, 'B'), makeChunk(1, 0, 'B')];
     const textures = { B: new THREE.Texture() };

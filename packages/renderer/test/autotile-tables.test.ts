@@ -112,6 +112,15 @@ describe('computeAutotileQuarterOrigins', () => {
     ]);
   });
 
+  it('uses the second A1 water surface frame at animation frame 1', () => {
+    expect(computeAutotileQuarterOrigins(2048, 'A1', 1)).toEqual([
+      { x: 144, y: 96 },
+      { x: 120, y: 96 },
+      { x: 144, y: 72 },
+      { x: 120, y: 72 },
+    ]);
+  });
+
   it('moves A1 deep water to its third surface frame at animation frame 2', () => {
     expect(computeAutotileQuarterOrigins(2048, 'A1', 2)).toEqual([
       { x: 240, y: 96 },

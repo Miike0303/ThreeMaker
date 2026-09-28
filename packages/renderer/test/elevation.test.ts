@@ -73,6 +73,13 @@ describe('computeCliffEdges', () => {
     for (const edge of edges) expect(edge.neighborHeight).toBe(0);
   });
 
+  it('does not read the next row as an east neighbor at the map edge', () => {
+    const grid = new Uint8Array([0, 2, 2, 0]);
+    const edges = computeCliffEdges(grid, 2, 2, 1, 0);
+
+    expect(edges).toContainEqual({ edge: 'east', neighborHeight: 0 });
+  });
+
   it.skipIf(skipWithoutFixture(MZ_PROJECT1_FIXTURE_DIR))(
     'reproduces the real mz-project1 fixture hill: the peak has cliffs only where the terrace is lower',
     async () => {
