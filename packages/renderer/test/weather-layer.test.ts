@@ -3,6 +3,7 @@
  * Node-graph internals are live-smoke territory — these tests cover pure knobs
  * and object structure only (same precedent as hd2d-pipeline).
  */
+import { instanceIndex, time } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
 import {
@@ -201,6 +202,69 @@ describe('createWeatherLayer structure', () => {
 });
 
 describe('particle position graph', () => {
+  it('pushes particles inside the keepout sphere out to its boundary', () => {
+    const { layer } = createInspect(4);
+    try {
+      const offset = particleOffsetGraph(layer);
+      const local = graphNode(offset.aNode);
+      const length = findGraphNode(offset.bNode, (node) => node.method === 'length');
+      // On a unit radial axis, the scaled coordinate is the camera distance.
+      const inputs = new Map([
+        [local, 1],
+        [length, 1],
+      ]);
+
+      expect(evaluateScalarGraph(offset, inputs)).toBe(2);
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('animates particle fall with the frame clock', () => {
+    const { layer } = createInspect(4);
+    try {
+      layer.setMode('rain');
+      const fall = findGraphNode(
+        positionGraph(layer),
+        (node) => node.bNode === layer.uniforms.fallSpeed,
+      );
+      const inputs = new Map([
+        [graphNode(time), 0],
+        [graphNode(instanceIndex), 7],
+      ]);
+
+      expect(evaluateScalarGraph(fall, inputs)).toBe(0);
+      inputs.set(graphNode(time), 0.5);
+      expect(evaluateScalarGraph(fall, inputs)).toBe(layer.uniforms.fallSpeed.value / 2);
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('animates lateral drift with the frame clock', () => {
+    const { layer } = createInspect(4);
+    try {
+      layer.setMode('snow');
+      const drift = graphNode(localParticleAxes(layer)[0]).bNode;
+      const wave = findGraphNode(drift, (node) => node.method === 'sin');
+      const phase = graphNode(graphNode(wave.aNode).bNode);
+      const inputs = new Map([
+        [graphNode(time), 0],
+        [graphNode(instanceIndex), 0],
+        [phase, 0],
+      ]);
+
+      expect(evaluateScalarGraph(drift, inputs)).toBe(0);
+      inputs.set(graphNode(time), Math.PI / (2 * 0.7));
+      expect(evaluateScalarGraph(drift, inputs)).toBeCloseTo(
+        layer.uniforms.driftAmplitude.value,
+        10,
+      );
+    } finally {
+      layer.dispose();
+    }
+  });
+
   it('scales fall displacement by elapsed time and precipitation speed', () => {
     const { layer } = createInspect(4);
     const fall = findGraphNode(

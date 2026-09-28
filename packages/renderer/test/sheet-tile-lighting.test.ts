@@ -55,6 +55,22 @@ describe('baseSceneLightSetup (ambient parity)', () => {
 });
 
 describe('dayNightAmbientFactor (C7 WU-02)', () => {
+  it('starts brightening on the first minute after 05:00', () => {
+    expect(dayNightAmbientFactor(301)).toBeCloseTo(0.35 + 0.65 / 120, 10);
+  });
+
+  it('keeps the final dawn minute below full daylight', () => {
+    expect(dayNightAmbientFactor(419)).toBeCloseTo(1 - 0.65 / 120, 10);
+  });
+
+  it('starts dimming on the first minute after 18:00', () => {
+    expect(dayNightAmbientFactor(1081)).toBeCloseTo(1 - 0.65 / 240, 10);
+  });
+
+  it('keeps the final dusk minute above night brightness', () => {
+    expect(dayNightAmbientFactor(1319)).toBeCloseTo(0.35 + 0.65 / 240, 10);
+  });
+
   it('hits exact control-point values', () => {
     expect(dayNightAmbientFactor(300)).toBeCloseTo(0.35); // 05:00
     expect(dayNightAmbientFactor(420)).toBeCloseTo(1.0); // 07:00

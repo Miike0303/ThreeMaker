@@ -76,6 +76,13 @@ describe('computeCameraPose: top-down mode', () => {
 });
 
 describe('computeCameraPose: first-person mode', () => {
+  it('keeps first-person eye height above an elevated floor', () => {
+    const pose = computeCameraPose('first-person', BASE_PARAMS, { ...TARGET, y: 6 });
+
+    expect(pose.position.y).toBeCloseTo(6.8, 10);
+    expect(pose.lookAt.y).toBeCloseTo(6.8, 10);
+  });
+
   it('uses the configured field of view independently of tilt', () => {
     const pose = computeCameraPose('first-person', { ...BASE_PARAMS, fovDeg: 57 }, TARGET);
     expect(pose.fovDeg).toBe(57);

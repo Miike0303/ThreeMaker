@@ -48,6 +48,78 @@ describe('autotile lookup tables', () => {
 });
 
 describe('computeAutotileQuarterOrigins', () => {
+  it('caps the left edge for floor shape 16', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 16, 'A2')).toEqual([
+      { x: 0, y: 96 },
+      { x: 24, y: 96 },
+      { x: 0, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('caps the top edge for floor shape 20', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 20, 'A2')).toEqual([
+      { x: 48, y: 48 },
+      { x: 24, y: 48 },
+      { x: 48, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('caps the right edge for floor shape 24', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 24, 'A2')).toEqual([
+      { x: 48, y: 96 },
+      { x: 72, y: 96 },
+      { x: 48, y: 72 },
+      { x: 72, y: 72 },
+    ]);
+  });
+
+  it('caps the bottom edge for floor shape 28', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 28, 'A2')).toEqual([
+      { x: 48, y: 96 },
+      { x: 24, y: 96 },
+      { x: 48, y: 120 },
+      { x: 24, y: 120 },
+    ]);
+  });
+
+  it('caps the top-left corner for wall shape 3', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 3, 'A3')).toEqual([
+      { x: 0, y: 0 },
+      { x: 24, y: 0 },
+      { x: 0, y: 24 },
+      { x: 24, y: 24 },
+    ]);
+  });
+
+  it('caps the top-right corner for wall shape 6', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 6, 'A3')).toEqual([
+      { x: 48, y: 0 },
+      { x: 72, y: 0 },
+      { x: 48, y: 24 },
+      { x: 72, y: 24 },
+    ]);
+  });
+
+  it('selects the right cap for waterfall shape 2', () => {
+    expect(computeAutotileQuarterOrigins(2288 + 2, 'A1')).toEqual([
+      { x: 720, y: 0 },
+      { x: 744, y: 0 },
+      { x: 720, y: 24 },
+      { x: 696, y: 24 },
+    ]);
+  });
+
+  it('selects both cap columns for waterfall shape 3', () => {
+    expect(computeAutotileQuarterOrigins(2288 + 3, 'A1')).toEqual([
+      { x: 672, y: 0 },
+      { x: 744, y: 0 },
+      { x: 672, y: 24 },
+      { x: 696, y: 24 },
+    ]);
+  });
+
   it('caps the left edge for waterfall shape 1', () => {
     expect(computeAutotileQuarterOrigins(2289, 'A1')).toEqual([
       { x: 672, y: 0 },
