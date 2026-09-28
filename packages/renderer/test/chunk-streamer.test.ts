@@ -11,6 +11,46 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('honors an explicit zero disposal radius when crossing a chunk boundary', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 48,
+      mapHeight: 16,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+    streamer.update(0, 0);
+
+    expect(streamer.update(16, 0)).toEqual({ toBuild: ['1,0'], toDispose: ['0,0'] });
+    expect([...streamer.liveKeys]).toEqual(['1,0']);
+  });
+
+  it('tracks the previous focus row independently of its column', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 48,
+      mapHeight: 48,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+    streamer.update(16, 0);
+
+    expect(streamer.update(16, 16).toBuild).toEqual(['1,1']);
+  });
+
+  it('tracks the previous focus column independently of its row', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 48,
+      mapHeight: 48,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+    streamer.update(0, 16);
+
+    expect(streamer.update(16, 16).toBuild).toEqual(['1,1']);
+  });
+
   it('rejects a finite negative chunk size', () => {
     expect(() => new ChunkStreamer({ ...GIANT, chunkSize: -16 })).toThrow(
       'chunkSize must be a positive number, got -16.',

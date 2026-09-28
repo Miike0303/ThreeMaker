@@ -48,6 +48,60 @@ describe('autotile lookup tables', () => {
 });
 
 describe('computeAutotileQuarterOrigins', () => {
+  it('caps both sides of a vertical floor strip for shape 32', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 32, 'A2')).toEqual([
+      { x: 0, y: 96 },
+      { x: 72, y: 96 },
+      { x: 0, y: 72 },
+      { x: 72, y: 72 },
+    ]);
+  });
+
+  it('caps both ends of a horizontal floor strip for shape 33', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 33, 'A2')).toEqual([
+      { x: 48, y: 48 },
+      { x: 24, y: 48 },
+      { x: 48, y: 120 },
+      { x: 24, y: 120 },
+    ]);
+  });
+
+  it('caps the top-left outside floor corner for shape 34', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 34, 'A2')).toEqual([
+      { x: 0, y: 48 },
+      { x: 24, y: 48 },
+      { x: 0, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('caps the top-right outside floor corner for shape 36', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 36, 'A2')).toEqual([
+      { x: 48, y: 48 },
+      { x: 72, y: 48 },
+      { x: 48, y: 72 },
+      { x: 72, y: 72 },
+    ]);
+  });
+
+  it('caps the bottom-right outside floor corner for shape 38', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 38, 'A2')).toEqual([
+      { x: 48, y: 96 },
+      { x: 72, y: 96 },
+      { x: 48, y: 120 },
+      { x: 72, y: 120 },
+    ]);
+  });
+
+  it('caps the bottom-left outside floor corner for shape 40', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 40, 'A2')).toEqual([
+      { x: 0, y: 96 },
+      { x: 24, y: 96 },
+      { x: 0, y: 120 },
+      { x: 24, y: 120 },
+    ]);
+  });
+
   it('caps the left edge for floor shape 16', () => {
     expect(computeAutotileQuarterOrigins(2816 + 16, 'A2')).toEqual([
       { x: 0, y: 96 },

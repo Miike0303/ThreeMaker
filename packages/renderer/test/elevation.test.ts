@@ -127,6 +127,13 @@ describe('computeCliffEdges', () => {
 });
 
 describe('computeOpenEdges', () => {
+  it('culls only the shared north-south faces between vertically adjacent walls', () => {
+    const occupied = new Set([tileKey(4, 5), tileKey(4, 6)]);
+
+    expect(computeOpenEdges(occupied, 4, 6)).toEqual(['south', 'east', 'west']);
+    expect(computeOpenEdges(occupied, 4, 5)).toEqual(['north', 'east', 'west']);
+  });
+
   it('reports all 4 edges open for an isolated occupant', () => {
     const occupied = new Set([tileKey(5, 5)]);
     const edges = computeOpenEdges(occupied, 5, 5);

@@ -6,6 +6,74 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('centers the spawn clearing horizontally on a rectangular map', () => {
+    const map = generateSyntheticMap({
+      width: 9,
+      height: 5,
+      wallDensity: 1,
+      decorDensity: 0,
+      clearRadius: 1,
+    });
+
+    expect(map.layers.tileLayers[0][1 * 9 + 4]).toBe(ROSELIAM_DUNGEON_GROUND_TILE_ID);
+  });
+
+  it('centers the walkable corridor on the height of a rectangular map', () => {
+    const map = generateSyntheticMap({
+      width: 9,
+      height: 5,
+      wallDensity: 1,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0].slice(2 * 9, 3 * 9)).toEqual(
+      Array(9).fill(ROSELIAM_DUNGEON_GROUND_TILE_ID),
+    );
+  });
+
+  it('populates the far east column of a wide map', () => {
+    const map = generateSyntheticMap({
+      width: 9,
+      height: 5,
+      wallDensity: 1,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0][8]).toBe(ROSELIAM_DUNGEON_WALL_TILE_ID);
+  });
+
+  it('paints wall shadows in the far east column of a wide map', () => {
+    const map = generateSyntheticMap({
+      width: 16,
+      height: 8,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0][14]).toBe(ROSELIAM_DUNGEON_WALL_TILE_ID);
+    expect(map.layers.tileLayers[0][15]).toBe(ROSELIAM_DUNGEON_GROUND_TILE_ID);
+    expect(map.layers.shadows[15]).toBe(5);
+  });
+
+  it('paints wall shadows in the last row of a tall map', () => {
+    const map = generateSyntheticMap({
+      width: 8,
+      height: 16,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0][15 * 8]).toBe(ROSELIAM_DUNGEON_WALL_TILE_ID);
+    expect(map.layers.tileLayers[0][15 * 8 + 1]).toBe(ROSELIAM_DUNGEON_GROUND_TILE_ID);
+    expect(map.layers.shadows[15 * 8 + 1]).toBe(5);
+  });
+
   it('leaves synthetic maps without a source map id', () => {
     expect(generateSyntheticMap({ width: 3, height: 5 }).id).toBeNull();
   });

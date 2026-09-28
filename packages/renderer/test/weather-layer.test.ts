@@ -47,6 +47,7 @@ type GraphNodeShape = {
   readonly aNode?: unknown;
   readonly bNode?: unknown;
   readonly cNode?: unknown;
+  readonly rawInputs?: readonly unknown[];
   readonly op?: string;
   readonly method?: string;
   readonly value?: unknown;
@@ -132,6 +133,17 @@ function sampleSpread(spread: unknown, fraction: number): number {
   return evaluateScalarGraph(spread, new Map([[graphNode(centered.aNode), fraction]]));
 }
 
+function sampleParticleSeed(axis: unknown, instance: number): number {
+  const sample = findGraphNode(axis, (node) => Array.isArray(node.rawInputs));
+  return evaluateScalarGraph(
+    sample.rawInputs?.[0],
+    new Map([
+      [graphNode(instanceIndex), instance],
+      [graphNode(time), 0],
+    ]),
+  );
+}
+
 describe('createWeatherLayer structure', () => {
   it('adds one mesh with instance count equal to particleCount (default 3000)', () => {
     const { scene, layer } = createInspect();
@@ -202,6 +214,48 @@ describe('createWeatherLayer structure', () => {
 });
 
 describe('particle position graph', () => {
+  it('keeps particle seeds distinct at the same frame time', () => {
+    const { layer } = createInspect(4);
+    try {
+      const [horizontal] = localParticleAxes(layer);
+      const seeds = [0, 1, 2, 3].map((instance) => sampleParticleSeed(horizontal, instance));
+
+      expect(new Set(seeds).size).toBe(4);
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('decorrelates vertical particle samples from horizontal samples', () => {
+    const { layer } = createInspect(4);
+    try {
+      const [horizontal, vertical] = localParticleAxes(layer);
+
+      for (const instance of [0, 1, 2, 3]) {
+        expect(sampleParticleSeed(vertical, instance)).not.toBe(
+          sampleParticleSeed(horizontal, instance),
+        );
+      }
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('decorrelates depth particle samples from vertical samples', () => {
+    const { layer } = createInspect(4);
+    try {
+      const [, vertical, depth] = localParticleAxes(layer);
+
+      for (const instance of [0, 1, 2, 3]) {
+        expect(sampleParticleSeed(depth, instance)).not.toBe(
+          sampleParticleSeed(vertical, instance),
+        );
+      }
+    } finally {
+      layer.dispose();
+    }
+  });
+
   it('pushes particles inside the keepout sphere out to its boundary', () => {
     const { layer } = createInspect(4);
     try {
@@ -462,6 +516,62 @@ describe('particle position graph', () => {
 });
 
 describe('setMode', () => {
+  it('keeps rain visible through a positive particle opacity', () => {
+    const { layer } = createInspect(4);
+    try {
+      layer.setMode('rain');
+
+      expect(layer.uniforms.opacity.value).toBeGreaterThan(0);
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('gives rain streaks a positive world-space width', () => {
+    const { layer } = createInspect(4);
+    try {
+      layer.setMode('rain');
+
+      expect(layer.uniforms.scale.value.x).toBeGreaterThan(0);
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('keeps lateral motion enabled for rain', () => {
+    const { layer } = createInspect(4);
+    try {
+      layer.setMode('rain');
+
+      expect(layer.uniforms.driftAmplitude.value).toBeGreaterThan(0);
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('keeps snowfall moving downward', () => {
+    const { layer } = createInspect(4);
+    try {
+      layer.setMode('snow');
+
+      expect(layer.uniforms.fallSpeed.value).toBeGreaterThan(0);
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('keeps the red and green channels in the pale rain tint', () => {
+    const { layer } = createInspect(4);
+    try {
+      layer.setMode('rain');
+
+      expect(layer.uniforms.tint.value.r).toBeGreaterThan(0.4);
+      expect(layer.uniforms.tint.value.g).toBeGreaterThan(0.4);
+    } finally {
+      layer.dispose();
+    }
+  });
+
   it('renders snowflakes more opaque than rain streaks', () => {
     const { layer } = createInspect(8);
     layer.setMode('rain');

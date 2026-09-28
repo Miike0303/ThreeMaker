@@ -24,6 +24,17 @@ const AUTOTILE_SHEET_SIZES: SheetPixelSizes = {
 const INSET = 1;
 
 describe('computeTileUv', () => {
+  it('wraps reserved A5 indices to the first block on a three-column sheet', () => {
+    const quad = computeTileUv(1536 + 256, { A5: { width: 144, height: 48 } })?.quads[0];
+
+    expect(quad).toEqual({
+      u0: 1 / 144,
+      u1: 47 / 144,
+      v0: 1 - 47 / 48,
+      v1: 1 - 1 / 48,
+    });
+  });
+
   it('wraps columns before a mostly present partial tile', () => {
     const quad = computeTileUv(1, { B: { width: 80, height: 48 } })?.quads[0];
 
