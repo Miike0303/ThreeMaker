@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { Actions, directionFromMoveAction, isMoveAction } from '../src/types.js';
+import { Actions, directionFromMoveAction, HOLD_ACTIONS, isMoveAction } from '../src/types.js';
 
 describe('isMoveAction', () => {
+  it('rejects inherited object property names as move actions', () => {
+    expect(isMoveAction('toString')).toBe(false);
+  });
+
   it('is true only for the four move.* actions', () => {
     expect(isMoveAction(Actions.MoveUp)).toBe(true);
     expect(isMoveAction(Actions.MoveDown)).toBe(true);
@@ -12,6 +16,10 @@ describe('isMoveAction', () => {
     expect(isMoveAction('move.diagonal')).toBe(false);
     expect(isMoveAction('other')).toBe(false);
   });
+});
+
+it('keeps move down active until key release', () => {
+  expect(HOLD_ACTIONS.has(Actions.MoveDown)).toBe(true);
 });
 
 it('keeps quick save distinct from quick load', () => {

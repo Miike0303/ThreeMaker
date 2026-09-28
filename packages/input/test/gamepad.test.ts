@@ -196,6 +196,12 @@ describe('createGamepadTracker', () => {
 });
 
 describe('snapshotFromGamepads', () => {
+  it('skips an undefined gamepad slot before a connected pad', () => {
+    expect(
+      snapshotFromGamepads([undefined, { axes: [0.4, 0], buttons: [{ pressed: true }] }]),
+    ).toEqual({ axes: [0.4, 0], buttons: [true] });
+  });
+
   it('picks the first non-null pad and copies axes + pressed flags', () => {
     const snapshot = snapshotFromGamepads([
       null,
