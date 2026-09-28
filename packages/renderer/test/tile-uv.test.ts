@@ -24,6 +24,10 @@ const AUTOTILE_SHEET_SIZES: SheetPixelSizes = {
 const INSET = 1;
 
 describe('computeTileUv', () => {
+  it('returns null for tile IDs outside every known sheet range', () => {
+    expect(computeTileUv(8192, GRID_SHEET_SIZES)).toBeNull();
+  });
+
   it('wraps reserved A5 indices to the first block on a three-column sheet', () => {
     const quad = computeTileUv(1536 + 256, { A5: { width: 144, height: 48 } })?.quads[0];
 

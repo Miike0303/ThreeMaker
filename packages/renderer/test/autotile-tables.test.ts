@@ -48,6 +48,69 @@ describe('autotile lookup tables', () => {
 });
 
 describe('computeAutotileQuarterOrigins', () => {
+  it('caps the top of a vertical floor strip for shape 42', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 42, 'A2')).toEqual([
+      { x: 0, y: 48 },
+      { x: 72, y: 48 },
+      { x: 0, y: 72 },
+      { x: 72, y: 72 },
+    ]);
+  });
+
+  it('caps the left of a horizontal floor strip for shape 43', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 43, 'A2')).toEqual([
+      { x: 0, y: 48 },
+      { x: 24, y: 48 },
+      { x: 0, y: 120 },
+      { x: 24, y: 120 },
+    ]);
+  });
+
+  it('caps the bottom of a vertical floor strip for shape 44', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 44, 'A2')).toEqual([
+      { x: 0, y: 96 },
+      { x: 72, y: 96 },
+      { x: 0, y: 120 },
+      { x: 72, y: 120 },
+    ]);
+  });
+
+  it('caps the right of a horizontal floor strip for shape 45', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 45, 'A2')).toEqual([
+      { x: 48, y: 48 },
+      { x: 72, y: 48 },
+      { x: 48, y: 120 },
+      { x: 72, y: 120 },
+    ]);
+  });
+
+  it('caps both sides of a vertical wall strip for shape 5', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 5, 'A3')).toEqual([
+      { x: 0, y: 48 },
+      { x: 72, y: 48 },
+      { x: 0, y: 24 },
+      { x: 72, y: 24 },
+    ]);
+  });
+
+  it('caps both ends of a horizontal wall strip for shape 10', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 10, 'A3')).toEqual([
+      { x: 48, y: 0 },
+      { x: 24, y: 0 },
+      { x: 48, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('caps every side of an isolated wall for shape 15', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 15, 'A3')).toEqual([
+      { x: 0, y: 0 },
+      { x: 72, y: 0 },
+      { x: 0, y: 72 },
+      { x: 72, y: 72 },
+    ]);
+  });
+
   it('caps both sides of a vertical floor strip for shape 32', () => {
     expect(computeAutotileQuarterOrigins(2816 + 32, 'A2')).toEqual([
       { x: 0, y: 96 },

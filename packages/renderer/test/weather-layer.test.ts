@@ -214,6 +214,69 @@ describe('createWeatherLayer structure', () => {
 });
 
 describe('particle position graph', () => {
+  it('decorrelates depth samples from horizontal samples', () => {
+    const { layer } = createInspect(4);
+    try {
+      const [horizontal, , depth] = localParticleAxes(layer);
+
+      for (const instance of [0, 1, 2, 3]) {
+        expect(sampleParticleSeed(depth, instance)).not.toBe(
+          sampleParticleSeed(horizontal, instance),
+        );
+      }
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('assigns distinct drift phases to different particles', () => {
+    const { layer } = createInspect(4);
+    try {
+      const drift = graphNode(localParticleAxes(layer)[0]).bNode;
+      const phases = [0, 1, 2, 3].map((instance) => sampleParticleSeed(drift, instance));
+
+      expect(new Set(phases).size).toBe(4);
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('decorrelates drift phases from horizontal particle positions', () => {
+    const { layer } = createInspect(4);
+    try {
+      const [horizontal] = localParticleAxes(layer);
+      const drift = graphNode(horizontal).bNode;
+
+      for (const instance of [0, 1, 2, 3]) {
+        expect(sampleParticleSeed(drift, instance)).not.toBe(
+          sampleParticleSeed(horizontal, instance),
+        );
+      }
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('preserves horizontal spread when lateral drift crosses zero', () => {
+    const { layer } = createInspect(4);
+    try {
+      layer.setMode('snow');
+      const [horizontal] = localParticleAxes(layer);
+      const sample = findGraphNode(horizontal, (node) => Array.isArray(node.rawInputs));
+      const wave = findGraphNode(horizontal, (node) => node.method === 'sin');
+      const inputs = new Map([
+        [graphNode(sample), 0.25],
+        [graphNode(wave), 0],
+      ]);
+
+      expect(evaluateScalarGraph(horizontal, inputs)).toBeLessThan(0);
+      inputs.set(graphNode(sample), 0.75);
+      expect(evaluateScalarGraph(horizontal, inputs)).toBeGreaterThan(0);
+    } finally {
+      layer.dispose();
+    }
+  });
+
   it('keeps particle seeds distinct at the same frame time', () => {
     const { layer } = createInspect(4);
     try {

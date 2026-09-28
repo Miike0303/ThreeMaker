@@ -13,6 +13,27 @@ import { clampRange } from '../src/runtime/clamp.js';
 const BASE_PARAMS = { tiltDeg: 40, distance: 10, fovDeg: 45 };
 const TARGET = { x: 3, y: 0, z: 5, facing: 'down' as const };
 
+describe('computeCameraPose: adjustable boom distance', () => {
+  it('scales boom height with the requested camera distance', () => {
+    for (const mode of ['hd2d', 'top-down'] as const) {
+      const target = { ...TARGET, y: 6 };
+      const near = computeCameraPose(mode, { ...BASE_PARAMS, distance: 4 }, target);
+      const far = computeCameraPose(mode, { ...BASE_PARAMS, distance: 12 }, target);
+
+      expect(far.position.y - target.y).toBeCloseTo(3 * (near.position.y - target.y), 10);
+    }
+  });
+
+  it('scales boom depth with the requested camera distance', () => {
+    for (const mode of ['hd2d', 'top-down'] as const) {
+      const near = computeCameraPose(mode, { ...BASE_PARAMS, distance: 4 }, TARGET);
+      const far = computeCameraPose(mode, { ...BASE_PARAMS, distance: 12 }, TARGET);
+
+      expect(far.position.z - TARGET.z).toBeCloseTo(3 * (near.position.z - TARGET.z), 10);
+    }
+  });
+});
+
 describe('computeCameraPose: hd2d mode', () => {
   it('raises boom cameras with the active floor', () => {
     for (const mode of ['hd2d', 'top-down'] as const) {
