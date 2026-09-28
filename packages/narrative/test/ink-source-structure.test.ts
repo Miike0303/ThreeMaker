@@ -290,6 +290,13 @@ describe('buildInkGraphModel / setInkNodePosition', () => {
     expect(layouts.find((l) => l.knot === 'start')).toEqual({ knot: 'start', x: 5, y: 6 });
     expect(layouts.find((l) => l.knot === 'mid')).toBeDefined();
   });
+
+  it('setInkNodePosition records a position for an undeclared knot', () => {
+    const source = '=== start ===\nHello.\n';
+    const next = setInkNodePosition(source, 'future', 12, 34);
+
+    expect(parseInkNodeLayouts(next)).toContainEqual({ knot: 'future', x: 12, y: 34 });
+  });
 });
 
 it('collects both conditional divert targets on one line', () => {

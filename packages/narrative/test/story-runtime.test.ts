@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WorldState } from '@threemaker/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { compileInk } from '../src/compile.js';
 import { bindStoryToWorld } from '../src/story-runtime.js';
 
@@ -101,6 +101,20 @@ The choices are ready.
 
     expect(output).toContain('The world says: sunny');
     expect(world.get('greeting_seen')).toBe(true);
+  });
+
+  it('calls world_set only once when Ink looks ahead across a line', () => {
+    const world = new WorldState();
+    const set = vi.spyOn(world, 'set');
+    const story = compileInk(
+      'EXTERNAL world_set(key, value)\nBefore.\n~ world_set("flag", true)\nAfter.\n-> END\n',
+    );
+
+    bindStoryToWorld(story, { storyId: 'demo', world });
+    runToEnd(story);
+
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(world.get('flag')).toBe(true);
   });
 
   it('mirrors an observed ink variable into world-state at key ink.{storyId}.{var}', () => {
