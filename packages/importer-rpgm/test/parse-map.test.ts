@@ -13,6 +13,27 @@ function makeMapJson(width: number, height: number, fill: (z: number, i: number)
 }
 
 describe('parseMap', () => {
+  it('omits the events property when no events array is supplied', () => {
+    const map = parseMap(makeMapJson(1, 1, () => 0));
+
+    expect(map).not.toHaveProperty('events');
+  });
+
+  it('reports the full expected cell count for an incomplete multilayer map', () => {
+    const json = makeMapJson(2, 3, () => 0);
+    json.data.pop();
+
+    expect(() => parseMap(json)).toThrow(
+      new Error('Invalid Map JSON: "data" length 35 does not match width*height*6 (36).'),
+    );
+  });
+
+  it('reports the dimension type error when only height is nonnumeric', () => {
+    const json = { ...makeMapJson(1, 1, () => 0), height: '1' };
+
+    expect(() => parseMap(json)).toThrow('Invalid Map JSON: "width" and "height" must be numbers.');
+  });
+
   it('reports unsafe width as a dimension error', () => {
     const json = { ...makeMapJson(1, 1, () => 0), width: Number.MAX_SAFE_INTEGER + 1 };
 

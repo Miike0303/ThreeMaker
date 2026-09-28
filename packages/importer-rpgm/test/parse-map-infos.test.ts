@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { orderMapInfosByTree, parseMapInfos } from '../src/parse-map-infos.js';
 
 describe('parseMapInfos', () => {
+  it('reports the object type error for a primitive map info entry', () => {
+    expect(() => parseMapInfos([7])).toThrow(
+      new Error('Invalid MapInfos.json entry: expected an object, got number.'),
+    );
+  });
+
   it('parses a well-formed MapInfos.json array, skipping the null placeholder at index 0', () => {
     const infos = parseMapInfos([
       null,
@@ -43,6 +49,15 @@ describe('parseMapInfos', () => {
 });
 
 describe('orderMapInfosByTree', () => {
+  it('keeps a reachable cycle out of the unvisited map fallback', () => {
+    const infos = orderMapInfosByTree([
+      { id: 0, name: 'Root cycle', parentId: 0, order: 0 },
+      { id: 1, name: 'Child', parentId: 0, order: 1 },
+    ]);
+
+    expect(infos.map((info) => info.id)).toEqual([0, 1]);
+  });
+
   it('lists roots by order, then each parent before its children', () => {
     const infos = orderMapInfosByTree([
       { id: 10, name: 'Ten', parentId: 0, order: 1 },

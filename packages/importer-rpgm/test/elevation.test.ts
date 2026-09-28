@@ -103,6 +103,27 @@ describe('computeHeightGrid', () => {
 });
 
 describe('computeRampGrid', () => {
+  it('reports the ramp height in a multi-level warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const heightGrid = new Uint8Array(9).fill(4);
+    heightGrid[1] = 1;
+
+    computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, [{ x: 1, y: 1 }]);
+
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('at height 4 '));
+  });
+
+  it('identifies an off-diagonal ramp cell in a multi-level warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const heightGrid = new Uint8Array(6).fill(3);
+
+    computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 2 }, [{ x: 2, y: 0 }]);
+
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ramp cell (2, 0)'));
+  });
+
   it('keeps a missing ramp height inert at ground level', () => {
     const ctx: HeightGridContext = {
       heightGrid: new Uint8Array(),

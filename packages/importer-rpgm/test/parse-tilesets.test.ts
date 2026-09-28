@@ -6,6 +6,12 @@ function makeFlags(): number[] {
 }
 
 describe('parseTilesets', () => {
+  it('reports the object type error for a primitive tileset entry', () => {
+    expect(() => parseTilesets([false])).toThrow(
+      new Error('Invalid Tilesets.json entry: expected an object, got boolean.'),
+    );
+  });
+
   it('limits invalid tileset previews to exactly 200 JSON characters', () => {
     const entry = { id: 'invalid', name: 'x'.repeat(250) };
     const preview = `{"id":"invalid","name":"${'x'.repeat(176)}`;
