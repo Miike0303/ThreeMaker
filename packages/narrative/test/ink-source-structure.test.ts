@@ -14,6 +14,10 @@ import {
 } from '../src/ink-source-structure.js';
 
 describe('listInkKnots', () => {
+  it('recognizes a knot header followed by an author comment', () => {
+    expect(listInkKnots('=== opening === // author note\n')).toEqual(['opening']);
+  });
+
   it('deduplicates a repeated knot name across header spacing', () => {
     expect(listInkKnots('=== Start ===\n===Start===\n')).toEqual(['Start']);
   });
@@ -48,6 +52,10 @@ Bye
 });
 
 describe('parseInkNodeLayouts / applyInkNodeLayouts', () => {
+  it('rejects a layout comment without a Y coordinate', () => {
+    expect(parseInkNodeLayouts('// @tm-node opening x=12 y=\n')).toEqual([]);
+  });
+
   it('writes one newline after a layout header when source is empty', () => {
     expect(applyInkNodeLayouts('', [{ knot: 'start', x: 0, y: 0 }])).toBe(
       '// @tm-node start x=0 y=0\n',
