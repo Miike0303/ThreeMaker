@@ -5,6 +5,15 @@ import { computeRampGlyphCells, RAMP_DIRECTION_ARROW } from '../src/ramp-glyph.j
 const EMPTY_LAYER = (size: number) => new Array(size).fill(0);
 
 describe('computeRampGlyphCells', () => {
+  it('resolves a ramp on the second row of a rectangular map', () => {
+    const layers = [[0, 0, 0, 0, 7, 0], EMPTY_LAYER(6), EMPTY_LAYER(6), EMPTY_LAYER(6)] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp', rampDirection: 'east' } };
+
+    expect(computeRampGlyphCells(layers, [0, 0, 0, 0, 1, 0], semantics, 3, 2)).toEqual([
+      { x: 1, y: 1, direction: 'east' },
+    ]);
+  });
+
   it('returns nothing when no tile id is ramp-classed', () => {
     const width = 2;
     const height = 1;

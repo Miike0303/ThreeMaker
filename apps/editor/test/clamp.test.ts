@@ -19,6 +19,10 @@ describe('clampRange', () => {
 });
 
 describe('clampTileIndex', () => {
+  it('returns tile zero for a negative index on an empty map', () => {
+    expect(clampTileIndex(-3, 0)).toBe(0);
+  });
+
   it('returns tile zero when the map size is infinite', () => {
     expect(clampTileIndex(2, Number.POSITIVE_INFINITY)).toBe(0);
   });
@@ -43,6 +47,18 @@ describe('clampTileIndex', () => {
 });
 
 describe('clampRoomRect', () => {
+  it('rejects an infinite room width even when the height is finite', () => {
+    expect(
+      clampRoomRect({ x: 1, y: 1, width: Number.POSITIVE_INFINITY, height: 2 }, 5, 5),
+    ).toBeUndefined();
+  });
+
+  it('rejects an infinite room height even when the width is finite', () => {
+    expect(
+      clampRoomRect({ x: 1, y: 1, width: 2, height: Number.POSITIVE_INFINITY }, 5, 5),
+    ).toBeUndefined();
+  });
+
   it('rejects an infinite map height even when the width is finite', () => {
     expect(
       clampRoomRect({ x: 0, y: 0, width: 2, height: 2 }, 5, Number.POSITIVE_INFINITY),

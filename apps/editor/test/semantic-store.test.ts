@@ -7,6 +7,10 @@ import {
 } from '../src/semantic-store.js';
 
 describe('resolveTouchedTileIds', () => {
+  it('ignores a touched cell missing from the tile layer', () => {
+    expect(resolveTouchedTileIds([{ x: 0, y: 1 }], [7, 8], 2)).toEqual(new Set());
+  });
+
   it('collects every distinct non-empty tile id under the given cells', () => {
     const layer = [7, 0, 7, 9];
     const ids = resolveTouchedTileIds(

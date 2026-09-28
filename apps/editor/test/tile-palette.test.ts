@@ -160,6 +160,10 @@ describe('computePaletteCells - autotile sheets (A1-A4)', () => {
 });
 
 describe('computeAutotileKindCount', () => {
+  it('keeps one autotile row selectable when the image is shorter than a kind row', () => {
+    expect(computeAutotileKindCount('A2', { width: 768, height: 143 })).toBe(8);
+  });
+
   it('exposes both A3 kind rows when the sheet is four tiles tall', () => {
     expect(computeAutotileKindCount('A3', { width: 768, height: 192 })).toBe(16);
   });

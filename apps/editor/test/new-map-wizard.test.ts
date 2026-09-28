@@ -11,6 +11,10 @@ import {
 } from '../src/new-map-wizard.js';
 
 describe('new map wizard', () => {
+  it('rejects dimension text with a numeric prefix followed by units', () => {
+    expect(normalizeMapDimension('24tiles')).toBeNull();
+  });
+
   it('rejects an invalid height when the name and width are valid', () => {
     expect(validateNewMapDraft({ name: 'Castle', width: 20, height: '7' })).toEqual({
       valid: false,

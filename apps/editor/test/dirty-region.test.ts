@@ -177,6 +177,13 @@ describe('dirtyRectToChunkKeys', () => {
 });
 
 describe('computeDirtyChunkKeys (full pipeline)', () => {
+  it('dirties the east neighbor when painting the last column of a chunk', () => {
+    const map = makeMap(32, 16, new Array(32 * 16).fill(1));
+    const keys = computeDirtyChunkKeys([{ x: 15, y: 8 }], map, makeTileset(), 16);
+
+    expect([...keys].sort()).toEqual(['0,0', '1,0']);
+  });
+
   it('composes rect expansion + star expansion + chunk mapping for a single edited base tile', () => {
     const width = 32;
     const height = 32;
