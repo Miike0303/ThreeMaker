@@ -174,6 +174,39 @@ describe('buildChunks elevation (region-derived height)', () => {
 });
 
 describe('buildChunks star-tile stacking (MV3D "tileoffset" fix)', () => {
+  it('keeps scanning later columns after a cell has both star and wall markers', () => {
+    const map = makeMap({
+      width: 2,
+      height: 3,
+      layers: {
+        tileLayers: [
+          [0, 2, 4352, 0, 0, 1],
+          [0, 0, 0, 2, 0, 0],
+          [0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0],
+        ],
+        shadows: [0, 0, 0, 0, 0, 0],
+        regions: [0, 0, 0, 0, 0, 3],
+      },
+    });
+    const flags = new Array(8192).fill(0);
+    flags[2] = 0x10;
+    flags[4352] = 0x10;
+
+    const chunks = buildChunks(map, makeTileset({ flags }), {
+      ...SHEET_SIZES,
+      A3: { width: 768, height: 384 },
+    });
+    const top = chunks[0]?.tiles.find((tile) => tile.tileX === 1 && tile.tileY === 0);
+
+    expect(top?.starStack).toEqual({
+      baseTileY: 2,
+      level: 1,
+      baseHeight: 3,
+      baseIsWall: false,
+    });
+  });
+
   it('anchors star tiles on A3 wall bases', () => {
     const map = makeMap({
       width: 1,
@@ -381,6 +414,27 @@ describe('buildChunks star-tile stacking (MV3D "tileoffset" fix)', () => {
 });
 
 describe('buildChunks', () => {
+  it('rebuilds a valid chunk after ignoring a stale requested key', () => {
+    const map = makeMap({
+      width: 1,
+      height: 1,
+      layers: {
+        tileLayers: [[1], [0], [0], [0]],
+        shadows: [0],
+        regions: [0],
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16, new Set(['99,99', '0,0']));
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toMatchObject({
+      chunkX: 0,
+      chunkY: 0,
+      tiles: [{ tileX: 0, tileY: 0, sheet: 'B', elevation: 'ground' }],
+    });
+  });
+
   it('orders northern chunks first when a southern chunk is discovered earlier', () => {
     const map = makeMap({
       width: 1,

@@ -48,6 +48,60 @@ describe('autotile lookup tables', () => {
 });
 
 describe('computeAutotileQuarterOrigins', () => {
+  it('uses diagonal upper-left and lower-right inner corners for floor shape 5', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 5, 'A2')).toEqual([
+      { x: 48, y: 0 },
+      { x: 24, y: 96 },
+      { x: 48, y: 72 },
+      { x: 72, y: 24 },
+    ]);
+  });
+
+  it('uses both right inner corners for floor shape 6', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 6, 'A2')).toEqual([
+      { x: 48, y: 96 },
+      { x: 72, y: 0 },
+      { x: 48, y: 72 },
+      { x: 72, y: 24 },
+    ]);
+  });
+
+  it('uses both upper and the lower-right inner corners for floor shape 7', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 7, 'A2')).toEqual([
+      { x: 48, y: 0 },
+      { x: 72, y: 0 },
+      { x: 48, y: 72 },
+      { x: 72, y: 24 },
+    ]);
+  });
+
+  it('uses both left inner corners for floor shape 9', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 9, 'A2')).toEqual([
+      { x: 48, y: 0 },
+      { x: 24, y: 96 },
+      { x: 48, y: 24 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('uses diagonal upper-right and lower-left inner corners for floor shape 10', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 10, 'A2')).toEqual([
+      { x: 48, y: 96 },
+      { x: 72, y: 0 },
+      { x: 48, y: 24 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('uses both lower inner corners for floor shape 12', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 12, 'A2')).toEqual([
+      { x: 48, y: 96 },
+      { x: 24, y: 96 },
+      { x: 48, y: 24 },
+      { x: 72, y: 24 },
+    ]);
+  });
+
   it('caps the bottom-left outside wall corner for shape 9', () => {
     expect(computeAutotileQuarterOrigins(4352 + 9, 'A3')).toEqual([
       { x: 0, y: 48 },
