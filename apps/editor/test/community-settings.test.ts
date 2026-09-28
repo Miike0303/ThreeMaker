@@ -347,6 +347,39 @@ describe('licenseTagFromSlots (WU-COMM-07)', () => {
 });
 
 describe('community share offline queue', () => {
+  it('clears queued jobs through removeItem without removing community preferences', () => {
+    const queueKey = 'threemaker-maker-studio:community-queue';
+    const settingsKey = 'threemaker-maker-studio:community';
+    const preferences = JSON.stringify({ shareOnSave: false, allowImportedAssets: true });
+    const data = new Map([
+      [queueKey, JSON.stringify([sampleJob('queued')])],
+      [settingsKey, preferences],
+    ]);
+    const storage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        data.set(key, value);
+      },
+      removeItem: (key: string) => {
+        data.delete(key);
+      },
+    };
+
+    expect(clearCommunityShareQueue(storage)).toEqual([]);
+    expect(loadCommunityShareQueue(storage)).toEqual([]);
+    expect(storage.getItem(queueKey)).toBeNull();
+    expect(storage.getItem(settingsKey)).toBe(preferences);
+  });
+
+  it('normalizes a non-finite version before replacing and persisting the queue', () => {
+    const storage = memoryStorage();
+    const job = { ...sampleJob('invalid-version'), version: Number.POSITIVE_INFINITY };
+    const expected = { ...job, version: 0 };
+
+    expect(replaceCommunityShareQueue([job], storage)).toEqual([expected]);
+    expect(loadCommunityShareQueue(storage)).toEqual([expected]);
+  });
+
   it('removes only the first imported job when map id and timestamp are duplicated', () => {
     const storage = memoryStorage();
     const first = { ...sampleJob('duplicate'), mapName: 'First imported copy' };

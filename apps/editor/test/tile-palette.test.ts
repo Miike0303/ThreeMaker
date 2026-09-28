@@ -120,6 +120,12 @@ describe('computePaletteCells - plain sheets (B/C/D/E/A5)', () => {
 });
 
 describe('computePaletteCells - autotile sheets (A1-A4)', () => {
+  it('exposes the last A3 kind on a full four-row sheet', () => {
+    const cells = computePaletteCells('A3', { width: 768, height: 384 });
+    expect(cells).toHaveLength(32);
+    expect(cells.at(-1)?.tileId).toBe(5840);
+  });
+
   it('A2 kind 0 (shape 0, base tile 2816) crops from the same swatch origin autotile-tables.test.ts pins for that tile', () => {
     const cells = computePaletteCells('A2', { width: 768, height: 768 });
     expect(cells[0]).toEqual({ tileId: 2816, x: 24, y: 72, width: 48, height: 48 });

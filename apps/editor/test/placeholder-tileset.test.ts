@@ -1,7 +1,7 @@
 /**
  * Starter placeholder A5/B sheets + composePlaceholderMap (catalog-free paint path).
  */
-import { inflateSync } from 'node:zlib';
+import { crc32, inflateSync } from 'node:zlib';
 import { getTileSheet } from '@threemaker/importer-rpgm';
 import { describe, expect, it, vi } from 'vitest';
 import { composePlaceholderMap, toRenderableMap } from '../src/map-compose.js';
@@ -22,6 +22,20 @@ import {
 } from '../src/placeholder-tileset.js';
 
 describe('buildPlaceholderTextures', () => {
+  it('writes valid checksums for every palette PNG chunk', () => {
+    const png = encodeRgbaPng(1, 1, new Uint8Array([10, 20, 30, 128]));
+    const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
+    const chunkTypes: string[] = [];
+    for (let offset = 8; offset < png.length; ) {
+      const length = view.getUint32(offset);
+      const body = png.subarray(offset + 4, offset + 8 + length);
+      chunkTypes.push(new TextDecoder().decode(body.subarray(0, 4)));
+      expect(view.getUint32(offset + 8 + length)).toBe(crc32(body));
+      offset += length + 12;
+    }
+    expect(chunkTypes).toEqual(['IHDR', 'IDAT', 'IEND']);
+  });
+
   it('declares eight-bit RGBA pixels in the palette PNG header', () => {
     const png = encodeRgbaPng(1, 1, new Uint8Array([10, 20, 30, 128]));
     expect(Array.from(png.subarray(24, 29))).toEqual([8, 6, 0, 0, 0]);

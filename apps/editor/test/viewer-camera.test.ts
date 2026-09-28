@@ -123,6 +123,12 @@ describe('zoomPercentForDistance (WU-VIEW-02)', () => {
 });
 
 describe('panCameraTarget (WU-UX-01)', () => {
+  it('clamps vertical pan tilt to the eighty-nine-degree ground projection', () => {
+    const next = panCameraTarget({ x: 10, z: 20 }, 0, 100, 15, 600, 45, 90);
+    expect(next.x).toBe(10);
+    expect(next.z).toBeCloseTo(17.92861670642594, 10);
+  });
+
   it('keeps vertical panning finite at a horizontal camera tilt', () => {
     const next = panCameraTarget({ x: 10, z: 20 }, 0, 50, 15, 600, 45, 0);
     expect(Number.isFinite(next.z)).toBe(true);

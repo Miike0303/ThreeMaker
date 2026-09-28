@@ -43,6 +43,21 @@ describe('clampTileIndex', () => {
 });
 
 describe('clampRoomRect', () => {
+  it('rejects an infinite map height even when the width is finite', () => {
+    expect(
+      clampRoomRect({ x: 0, y: 0, width: 2, height: 2 }, 5, Number.POSITIVE_INFINITY),
+    ).toBeUndefined();
+  });
+
+  it('floors a fractional map height before clamping the room footprint', () => {
+    expect(clampRoomRect({ x: 1, y: 9, width: 2, height: 2 }, 5, 4.8)).toEqual({
+      x: 1,
+      y: 3,
+      width: 2,
+      height: 1,
+    });
+  });
+
   it('rejects an infinite map width even when the height is finite', () => {
     expect(
       clampRoomRect({ x: 0, y: 0, width: 2, height: 2 }, Number.POSITIVE_INFINITY, 5),

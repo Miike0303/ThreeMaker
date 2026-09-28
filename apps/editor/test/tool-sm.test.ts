@@ -109,6 +109,16 @@ describe('resolveEditorChord (WU-UX-03 editor chords)', () => {
 });
 
 describe('ToolSM idle -> stroking -> idle', () => {
+  it('keeps a westward brush move between distinct cells', () => {
+    const state = beginStroke(TOOL_SM_IDLE, 'brush', 0, { x: 4, y: 3 });
+    expect(continueStroke(state, { x: 3, y: 3 })).toMatchObject({
+      points: [
+        { x: 4, y: 3 },
+        { x: 3, y: 3 },
+      ],
+    });
+  });
+
   it('keeps a vertical brush move between distinct cells', () => {
     const state = beginStroke(TOOL_SM_IDLE, 'brush', 0, { x: 3, y: 4 });
     expect(continueStroke(state, { x: 3, y: 3 })).toMatchObject({
