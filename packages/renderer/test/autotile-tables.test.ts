@@ -48,6 +48,78 @@ describe('autotile lookup tables', () => {
 });
 
 describe('computeAutotileQuarterOrigins', () => {
+  it('caps the bottom-left outside wall corner for shape 9', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 9, 'A3')).toEqual([
+      { x: 0, y: 48 },
+      { x: 24, y: 48 },
+      { x: 0, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('caps the bottom-right outside wall corner for shape 12', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 12, 'A3')).toEqual([
+      { x: 48, y: 48 },
+      { x: 72, y: 48 },
+      { x: 48, y: 72 },
+      { x: 72, y: 72 },
+    ]);
+  });
+
+  it('caps the top of a vertical wall strip for shape 7', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 7, 'A3')).toEqual([
+      { x: 0, y: 0 },
+      { x: 72, y: 0 },
+      { x: 0, y: 24 },
+      { x: 72, y: 24 },
+    ]);
+  });
+
+  it('caps the left of a horizontal wall strip for shape 11', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 11, 'A3')).toEqual([
+      { x: 0, y: 0 },
+      { x: 24, y: 0 },
+      { x: 0, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('caps the bottom of a vertical wall strip for shape 13', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 13, 'A3')).toEqual([
+      { x: 0, y: 48 },
+      { x: 72, y: 48 },
+      { x: 0, y: 72 },
+      { x: 72, y: 72 },
+    ]);
+  });
+
+  it('caps the right of a horizontal wall strip for shape 14', () => {
+    expect(computeAutotileQuarterOrigins(4352 + 14, 'A3')).toEqual([
+      { x: 48, y: 0 },
+      { x: 72, y: 0 },
+      { x: 48, y: 72 },
+      { x: 72, y: 72 },
+    ]);
+  });
+
+  it('uses both upper inner corners for floor shape 3', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 3, 'A2')).toEqual([
+      { x: 48, y: 0 },
+      { x: 72, y: 0 },
+      { x: 48, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('uses all four inner corners for floor shape 15', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 15, 'A2')).toEqual([
+      { x: 48, y: 0 },
+      { x: 72, y: 0 },
+      { x: 48, y: 24 },
+      { x: 72, y: 24 },
+    ]);
+  });
+
   it('caps the top of a vertical floor strip for shape 42', () => {
     expect(computeAutotileQuarterOrigins(2816 + 42, 'A2')).toEqual([
       { x: 0, y: 48 },
