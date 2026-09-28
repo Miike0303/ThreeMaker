@@ -546,3 +546,43 @@ it('uses stored positions for knot names containing digits', () => {
 it('rejects knot names that start with a digit', () => {
   expect(listInkKnots('=== 1st_room ===\n=== entry ===\n')).toEqual(['entry']);
 });
+
+it('uses stored positions for uppercase knot names', () => {
+  const source = '// @tm-node Entry x=17 y=29\n=== Entry ===\n';
+
+  expect(buildInkGraphModel(source).nodes).toEqual([{ knot: 'Entry', x: 17, y: 29 }]);
+});
+
+it('parses a layout marker immediately after the comment delimiter', () => {
+  expect(parseInkNodeLayouts('//@tm-node entry x=4 y=7\n')).toEqual([
+    { knot: 'entry', x: 4, y: 7 },
+  ]);
+});
+
+it('uses stored positions for knot names with internal underscores', () => {
+  const source = '// @tm-node chapter_entry x=17 y=29\n=== chapter_entry ===\n';
+
+  expect(buildInkGraphModel(source).nodes).toEqual([{ knot: 'chapter_entry', x: 17, y: 29 }]);
+});
+
+it('rejects layout knot names that start with a digit', () => {
+  expect(parseInkNodeLayouts('// @tm-node 2room x=17 y=29\n')).toEqual([]);
+});
+
+it('rejects divert targets that start with a digit', () => {
+  expect(listInkEdges('=== start ===\n-> 2room\n-> room2\n')).toEqual([
+    { from: 'start', to: 'room2' },
+  ]);
+});
+
+it('keeps internal underscores in divert target names', () => {
+  expect(listInkEdges('=== start ===\n-> side_room\n')).toEqual([
+    { from: 'start', to: 'side_room' },
+  ]);
+});
+
+it('preserves multiple fractional digits in a horizontal layout coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry x=12.25 y=4\n')).toEqual([
+    { knot: 'entry', x: 12.25, y: 4 },
+  ]);
+});

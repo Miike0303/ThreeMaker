@@ -217,3 +217,16 @@ it('does not persist a case-only change to a default keyboard key', () => {
 
   expect(collectBindingOverrides(table, defaults)).toEqual([]);
 });
+
+it('loads an override using the published input bindings magic', () => {
+  const text = JSON.stringify({
+    magic: 'threemaker.input-bindings',
+    version: 1,
+    bindings: [{ action: 'interact', source: { device: 'keyboard', key: 'f' } }],
+  });
+
+  const table = bindingTableFromPersistedText(text);
+
+  expect(table.actionForKeyboardKey('f')).toBe(Actions.Interact);
+  expect(table.actionForKeyboardKey('e')).toBeUndefined();
+});
