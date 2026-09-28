@@ -6,6 +6,14 @@ function makeFlags(): number[] {
 }
 
 describe('parseTilesets', () => {
+  it('rejects a non-string tileset name even when its ID is valid', () => {
+    const tileset = { id: 1, name: false, flags: [0], tilesetNames: new Array(9).fill('') };
+
+    expect(() => parseTilesets([tileset])).toThrow(
+      'Invalid Tilesets.json entry: missing "id"/"name"',
+    );
+  });
+
   it('identifies a later tileset when its flags are invalid', () => {
     const valid = { id: 1, name: 'Town', flags: [0], tilesetNames: new Array(9).fill('') };
     const malformed = { ...valid, id: 7, name: 'Dungeon', flags: [0, -1] };

@@ -13,6 +13,15 @@ function makeMapJson(width: number, height: number, fill: (z: number, i: number)
 }
 
 describe('parseMap', () => {
+  it('reports overflow just above the safe six-layer cell-count boundary', () => {
+    const width = Math.floor(Number.MAX_SAFE_INTEGER / 6) + 1;
+    const json = { width, height: 1, tilesetId: 1, data: [] };
+
+    expect(() => parseMap(json)).toThrow(
+      new Error('Invalid Map JSON: "width"*"height"*6 must be a safe integer.'),
+    );
+  });
+
   it('reports a negative width as a dimension error before checking data length', () => {
     const json = { width: -1, height: 1, tilesetId: 1, data: [] };
 

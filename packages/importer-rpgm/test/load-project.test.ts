@@ -109,6 +109,24 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect(project.maps.get(1000)?.id).toBe(1000);
   });
 
+  it('loads a map whose filename has a five-digit ID', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map10000.json']);
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.get(10000)?.id).toBe(10000);
+  });
+
+  it('ignores a map filename with a negative ID', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map-2.json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
   it('mutation pin: keeps a one-character editor name on a loaded map', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json']);

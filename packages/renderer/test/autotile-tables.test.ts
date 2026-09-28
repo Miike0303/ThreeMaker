@@ -48,6 +48,32 @@ describe('autotile lookup tables', () => {
 });
 
 describe('computeAutotileQuarterOrigins', () => {
+  it('keeps the fifth A2 kind in its first atlas row', () => {
+    expect(computeAutotileQuarterOrigins(3008, 'A2')).toEqual([
+      { x: 432, y: 96 },
+      { x: 408, y: 96 },
+      { x: 432, y: 72 },
+      { x: 408, y: 72 },
+    ]);
+  });
+
+  it('keeps the fifth A3 kind in its first atlas row', () => {
+    expect(computeAutotileQuarterOrigins(4544, 'A3')).toEqual([
+      { x: 432, y: 48 },
+      { x: 408, y: 48 },
+      { x: 432, y: 24 },
+      { x: 408, y: 24 },
+    ]);
+  });
+
+  it('keeps the fifth A4 roof kind in its first roof row', () => {
+    expect(computeAutotileQuarterOrigins(6080, 'A4')).toEqual([
+      { x: 432, y: 96 },
+      { x: 408, y: 96 },
+      { x: 432, y: 72 },
+      { x: 408, y: 72 },
+    ]);
+  });
   it('uses both upper and the lower-left inner corners for floor shape 11', () => {
     expect(computeAutotileQuarterOrigins(2816 + 11, 'A2')).toEqual([
       { x: 48, y: 0 },
