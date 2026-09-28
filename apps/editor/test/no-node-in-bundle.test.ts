@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const EDITOR_ROOT = join(TEST_DIR, '..');
+// A full Vite build can be slow under CPU load.
+const BUILD_TIMEOUT_MS = 120_000;
 
 /**
  * Patterns that would indicate the webview entry bundle can reach Node-only
@@ -26,26 +28,30 @@ const BANNED_PATTERNS: readonly RegExp[] = [
 ];
 
 describe('editor webview bundle', () => {
-  it('contains no Node-only imports in the built entry bundle', async () => {
-    await build({
-      root: EDITOR_ROOT,
-      configFile: join(EDITOR_ROOT, 'vite.config.ts'),
-      logLevel: 'silent',
-      build: { write: true },
-    });
+  it(
+    'contains no Node-only imports in the built entry bundle',
+    async () => {
+      await build({
+        root: EDITOR_ROOT,
+        configFile: join(EDITOR_ROOT, 'vite.config.ts'),
+        logLevel: 'silent',
+        build: { write: true },
+      });
 
-    const assetsDir = join(EDITOR_ROOT, 'dist', 'assets');
-    const jsFiles = readdirSync(assetsDir).filter((name) => name.endsWith('.js'));
-    expect(jsFiles.length).toBeGreaterThan(0);
+      const assetsDir = join(EDITOR_ROOT, 'dist', 'assets');
+      const jsFiles = readdirSync(assetsDir).filter((name) => name.endsWith('.js'));
+      expect(jsFiles.length).toBeGreaterThan(0);
 
-    for (const fileName of jsFiles) {
-      const contents = readFileSync(join(assetsDir, fileName), 'utf8');
-      for (const pattern of BANNED_PATTERNS) {
-        expect(
-          pattern.test(contents),
-          `${fileName} matched banned Node-only pattern ${pattern}`,
-        ).toBe(false);
+      for (const fileName of jsFiles) {
+        const contents = readFileSync(join(assetsDir, fileName), 'utf8');
+        for (const pattern of BANNED_PATTERNS) {
+          expect(
+            pattern.test(contents),
+            `${fileName} matched banned Node-only pattern ${pattern}`,
+          ).toBe(false);
+        }
       }
-    }
-  });
+    },
+    BUILD_TIMEOUT_MS,
+  );
 });
