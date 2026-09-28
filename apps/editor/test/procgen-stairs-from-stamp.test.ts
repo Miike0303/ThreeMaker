@@ -22,6 +22,10 @@ describe('pickAdjacentFloorIndex', () => {
     expect(pickAdjacentFloorIndex(-1, 2)).toBeUndefined();
     expect(pickAdjacentFloorIndex(2, 2)).toBeUndefined();
   });
+
+  it('rejects fractional target floor indexes', () => {
+    expect(pickAdjacentFloorIndex(1.5, 3)).toBeUndefined();
+  });
 });
 
 describe('roomLandingTile', () => {
@@ -67,6 +71,17 @@ describe('stampStairLinkBetween', () => {
         { x: 5, y: 6, floor: 'floor-0' },
       ],
     });
+  });
+
+  it('honors an explicitly one-way stair link', () => {
+    const link = stampStairLinkBetween(
+      'floor-0',
+      { x: 1, y: 1 },
+      'floor-1',
+      { x: 2, y: 2 },
+      { bidirectional: false },
+    );
+    expect(link.bidirectional).toBe(false);
   });
 });
 

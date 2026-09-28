@@ -33,6 +33,10 @@ describe('procgen presets', () => {
     });
   });
 
+  it('uses a six-tile light range for the house preset', () => {
+    expect(stampRoomLightOptionsFromPreset(getProcgenPreset('house')).range).toBe(6);
+  });
+
   it('getProcgenPreset returns each id', () => {
     for (const id of ['dungeon', 'house', 'cave'] as const) {
       expect(getProcgenPreset(id).id).toBe(id);

@@ -72,4 +72,8 @@ describe('pushProcgenSeedHistory', () => {
   it('coerces seeds to uint32', () => {
     expect(pushProcgenSeedHistory([], -1)).toEqual([0xffffffff]);
   });
+
+  it('keeps the newest seed when the requested history limit is zero', () => {
+    expect(pushProcgenSeedHistory([3, 2], 1, 0)).toEqual([1]);
+  });
 });

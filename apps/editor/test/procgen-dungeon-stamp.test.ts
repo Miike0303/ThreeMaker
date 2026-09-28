@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { pickMainRoomSpawn, stampSimpleDungeon } from '../src/procgen/dungeon-stamp.js';
+import {
+  pickMainRoomSpawn,
+  scatterFurnitureInRooms,
+  stampSimpleDungeon,
+} from '../src/procgen/dungeon-stamp.js';
 
 const GROUND = 2816;
 const WALL = 4352;
@@ -129,6 +133,34 @@ describe('stampSimpleDungeon', () => {
         wallTileId: WALL,
       }),
     ).toThrow(/non-zero/);
+  });
+
+  it('accepts an eight-tile-wide map at the minimum size', () => {
+    const stamp = stampSimpleDungeon({
+      width: 8,
+      height: 8,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+    });
+    expect(stamp.layers[0]).toHaveLength(64);
+  });
+});
+
+describe('scatterFurnitureInRooms', () => {
+  it('leaves a room cell empty when the random draw equals density', () => {
+    const mid = new Array(9).fill(0);
+    const count = scatterFurnitureInRooms(
+      [{ x: 0, y: 0, w: 3, h: 3 }],
+      mid,
+      3,
+      3,
+      9,
+      0.5,
+      () => 0.5,
+    );
+    expect(count).toBe(0);
+    expect(mid[4]).toBe(0);
   });
 });
 

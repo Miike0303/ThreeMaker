@@ -75,6 +75,15 @@ describe('lightsFromDungeonRooms', () => {
   });
 });
 
+describe('lightsFromDungeonRooms zero intensity', () => {
+  it('preserves an explicit zero intensity for room lights', () => {
+    const [light] = lightsFromDungeonRooms([{ x: 0, y: 0, w: 2, h: 2 }], 'floor-0', {
+      intensity: 0,
+    });
+    expect(light?.intensity).toBe(0);
+  });
+});
+
 describe('mergeStampRoomLights', () => {
   it('replaces placed lights on the floor; keeps attached and other floors', () => {
     const existing: LightDocument[] = [

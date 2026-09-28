@@ -45,6 +45,10 @@ describe('validateMapName', () => {
     expect(validateMapName(LEGACY_MAP_NAME)).toBeNull();
   });
 
+  it('accepts Unicode characters in a map name', () => {
+    expect(validateMapName('Niño')).toBeNull();
+  });
+
   it('rejects empty, traversal, absolute, reserved, and illegal names', () => {
     expect(validateMapName('')).toBe('empty');
     expect(validateMapName('   ')).toBe('empty');
@@ -217,6 +221,10 @@ describe('filename case folding', () => {
     expect(collidingSavedMapName('TOWN', ['alpha', 'town'])).toBe('town');
     expect(collidingSavedMapName('town', ['town'])).toBe('town');
     expect(collidingSavedMapName('Castle', ['town'])).toBeUndefined();
+  });
+
+  it('detects a case-insensitive collision for a one-letter map name', () => {
+    expect(collidingSavedMapName('A', ['a'])).toBe('a');
   });
 });
 

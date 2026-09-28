@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  firstClassedTileId,
   majorityClassedTileId,
   majorityNonZeroTileId,
   resolveDungeonTileIds,
 } from '../src/procgen/tile-pick.js';
+
+describe('firstClassedTileId', () => {
+  it('ignores semantic tile ID zero when choosing a wall', () => {
+    expect(firstClassedTileId({ '0': { class: 'wall' }, '88': { class: 'wall' } }, 'wall')).toBe(
+      88,
+    );
+  });
+});
 
 describe('majorityNonZeroTileId', () => {
   it('returns undefined for empty/zero layers', () => {

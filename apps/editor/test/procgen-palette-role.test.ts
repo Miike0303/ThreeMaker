@@ -57,6 +57,17 @@ describe('selectedTileIdForRole', () => {
       }),
     ).toBe(0);
   });
+
+  it('highlights tile id 1 when selected as the wall override', () => {
+    expect(
+      selectedTileIdForRole('wall', {
+        fillTileId: 10,
+        wallOverride: 1,
+        doorOverride: 30,
+        furnitureOverride: 40,
+      }),
+    ).toBe(1);
+  });
 });
 
 describe('PROCGEN_PALETTE_ROLES', () => {
