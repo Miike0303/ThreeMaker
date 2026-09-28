@@ -85,6 +85,29 @@ describe('computeDirtyTileRect', () => {
 });
 
 describe('expandDirtyRectNorthThroughStars', () => {
+  it('expands through upper-layer stars above empty lower layers', () => {
+    const base = makeMap(2, 3, new Array(6).fill(0));
+    const map: RpgmMap = {
+      ...base,
+      layers: {
+        ...base.layers,
+        tileLayers: [
+          base.layers.tileLayers[0],
+          [2, 0, 2, 0, 0, 0],
+          base.layers.tileLayers[2],
+          base.layers.tileLayers[3],
+        ],
+      },
+    };
+    expect(
+      expandDirtyRectNorthThroughStars(
+        { xStart: 0, yStart: 2, xEnd: 1, yEnd: 3 },
+        map,
+        makeTileset(),
+      ),
+    ).toEqual({ xStart: 0, yStart: 0, xEnd: 1, yEnd: 3 });
+  });
+
   it('ignores a northern star run just outside the dirty rectangle', () => {
     const layer = new Array(12).fill(1);
     layer[2] = 2;

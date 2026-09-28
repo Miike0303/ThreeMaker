@@ -44,6 +44,36 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('uses the ground tile when no nonzero wall fallback is available', () => {
+    expect(
+      resolveDungeonTileIds({
+        fillTileId: 7,
+        groundLayer: [],
+        wallLayer: [],
+        fallbackGround: 7,
+        fallbackWall: 0,
+      }),
+    ).toEqual({ groundTileId: 7, wallTileId: 7 });
+  });
+
+  it('falls back to furniture semantics when its override is the wall tile', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [1],
+      wallLayer: [5],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      furnitureTileOverride: 5,
+      semantics: {
+        '5': { class: 'wall' },
+        '200': { class: 'furniture' },
+      },
+    });
+
+    expect(tiles.wallTileId).toBe(5);
+    expect(tiles.furnitureTileId).toBe(200);
+  });
+
   it('prefers brush fill for ground', () => {
     const r = resolveDungeonTileIds({
       fillTileId: 99,

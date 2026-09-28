@@ -123,6 +123,10 @@ describe('mergeStampRoomLights', () => {
 });
 
 describe('playerTorchLight / ensurePlayerTorch', () => {
+  it('preserves zero intensity when creating a player torch', () => {
+    expect(playerTorchLight({ intensity: 0 }).intensity).toBe(0);
+  });
+
   it('builds an attach:player torch with defaults', () => {
     expect(playerTorchLight()).toEqual({
       id: 'player-torch',

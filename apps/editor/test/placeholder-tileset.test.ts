@@ -216,6 +216,44 @@ describe('buildPlaceholderTextures', () => {
 });
 
 describe('composePlaceholderMap', () => {
+  it('preserves A5 provenance independently when stamping starter object hashes', () => {
+    const doc = composePlaceholderMap({
+      id: 'starter-a5-provenance',
+      name: 'Starter',
+      width: 2,
+      height: 2,
+    });
+    const a5 = { object: 'c'.repeat(64), sourceGameId: 10, sourceTilesetId: 20 };
+    const authored = {
+      ...doc,
+      tileset: {
+        ...doc.tileset,
+        slots: {
+          ...doc.tileset.slots,
+          A5: a5,
+          B: { object: 'd'.repeat(64), sourceGameId: 30, sourceTilesetId: 40 },
+        },
+      },
+    };
+    const stamped = stampPlaceholderSlotObjects(authored, {
+      A5: 'a'.repeat(64),
+      B: 'b'.repeat(64),
+    });
+    expect(stamped.tileset.slots.A5).toEqual({ ...a5, object: 'a'.repeat(64) });
+  });
+
+  it('rejects a starter object hash one digit shorter than SHA-256', () => {
+    const doc = composePlaceholderMap({
+      id: 'starter-short-sha',
+      name: 'Starter',
+      width: 2,
+      height: 2,
+    });
+    expect(() =>
+      stampPlaceholderSlotObjects(doc, { A5: 'a'.repeat(63), B: 'b'.repeat(64) }),
+    ).toThrow('A5/B object shas must be 64 lowercase hex chars');
+  });
+
   it('preserves B slot provenance independently when stamping starter object hashes', () => {
     const doc = composePlaceholderMap({
       id: 'starter-provenance',

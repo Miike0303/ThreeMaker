@@ -36,6 +36,13 @@ describe('isPlainSheet', () => {
 });
 
 describe('computePlainGridDimensions', () => {
+  it('caps an oversized A5 palette at thirty-two rows', () => {
+    expect(computePlainGridDimensions('A5', { width: 384, height: 33 * 48 })).toEqual({
+      cols: 8,
+      rows: 32,
+    });
+  });
+
   it('omits an incomplete second row from a plain sheet', () => {
     expect(computePlainGridDimensions('B', { width: 48, height: 95 })).toEqual({
       cols: 1,
@@ -92,6 +99,13 @@ describe('computePlainGridDimensions', () => {
 });
 
 describe('computePaletteCells - plain sheets (B/C/D/E/A5)', () => {
+  it('omits a seventeenth plain-sheet column that would repeat tile ids', () => {
+    const cells = computePaletteCells('B', { width: 17 * 48, height: 48 });
+    expect(cells.map((cell) => cell.tileId)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 128, 129, 130, 131, 132, 133, 134, 135,
+    ]);
+  });
+
   it('caps a tall E palette at its final addressable tile', () => {
     const cells = computePaletteCells('E', { width: 768, height: 1536 });
     expect(cells).toHaveLength(256);

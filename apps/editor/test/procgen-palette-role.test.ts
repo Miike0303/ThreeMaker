@@ -47,6 +47,10 @@ describe('selectedTileIdForRole', () => {
     expect(selectedTileIdForRole('furniture', state)).toBe(40);
   });
 
+  it('clears the brush highlight for a negative fill tile', () => {
+    expect(selectedTileIdForRole('brush', { ...state, fillTileId: -1 })).toBe(0);
+  });
+
   it('returns 0 when override is auto (zero)', () => {
     expect(
       selectedTileIdForRole('furniture', {

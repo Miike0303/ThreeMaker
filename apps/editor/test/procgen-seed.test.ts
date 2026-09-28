@@ -32,6 +32,9 @@ describe('randomProcgenSeed', () => {
 });
 
 describe('clampFurnitureDensity', () => {
+  it('uses the default when both density and its fallback are non-finite', () => {
+    expect(clampFurnitureDensity(Number.NaN, Number.NaN)).toBe(DEFAULT_FURNITURE_DENSITY);
+  });
   it('clamps to [0,1] and falls back on non-finite', () => {
     expect(clampFurnitureDensity(0.06)).toBe(0.06);
     expect(clampFurnitureDensity(-1)).toBe(0);

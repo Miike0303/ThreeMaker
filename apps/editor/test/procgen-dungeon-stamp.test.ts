@@ -10,6 +10,41 @@ const GROUND = 2816;
 const WALL = 4352;
 
 describe('stampSimpleDungeon', () => {
+  it('rejects a map with only one undersized dimension', () => {
+    for (const dimensions of [
+      { width: 7, height: 8 },
+      { width: 8, height: 7 },
+    ]) {
+      expect(() =>
+        stampSimpleDungeon({
+          ...dimensions,
+          seed: 1,
+          groundTileId: GROUND,
+          wallTileId: WALL,
+        }),
+      ).toThrow(/width\/height >= 8/);
+    }
+  });
+
+  it('leaves furniture empty when its tile id is the ground tile', () => {
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      furnitureTileId: GROUND,
+      furnitureDensity: 1,
+      roomCount: 1,
+      minRoomSize: 4,
+      maxRoomSize: 4,
+    });
+
+    expect(stamp.rooms).toHaveLength(1);
+    expect(stamp.furnitureCount).toBe(0);
+    expect(stamp.layers[1].every((id) => id === 0)).toBe(true);
+  });
+
   it('keeps row zero empty when tightBorder is enabled', () => {
     const stamp = stampSimpleDungeon({
       width: 24,

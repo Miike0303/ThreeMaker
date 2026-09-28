@@ -27,6 +27,14 @@ import {
 } from '../src/map-identity.js';
 
 describe('validateMapName', () => {
+  it('rejects a reserved map name surrounded by whitespace', () => {
+    expect(validateMapName('  CON  ')).toBe('reserved');
+  });
+
+  it('accepts a multi-digit COM map name outside the reserved device range', () => {
+    expect(validateMapName('COM10')).toBeNull();
+  });
+
   it('rejects LPT0 at the lower printer device boundary', () => {
     expect(validateMapName('LPT0')).toBe('reserved');
   });

@@ -33,6 +33,10 @@ describe('pickAdjacentFloorIndex', () => {
 });
 
 describe('roomLandingTile', () => {
+  it('uses the center tile of an odd-sized map when the landing floor has no rooms', () => {
+    expect(roomLandingTile([], 'floor-1', 9, 7)).toEqual({ x: 4, y: 3 });
+  });
+
   it('uses the largest room center on the floor', () => {
     const rooms = [
       {
