@@ -88,6 +88,24 @@ describe('buildPlaceholderCharacterTexture', () => {
     expect(image.data[i + 3]).toBe(255);
   });
 
+  it('keeps the left-facing placeholder frame blue', () => {
+    const texture = buildPlaceholderCharacterTexture();
+    const image = texture.image as { width: number; data: Uint8Array };
+    const pixel = DIRECTION_ROW.left * FRAME_PIXEL_SIZE * image.width * 4;
+
+    expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([0, 110, 220, 255]);
+    texture.dispose();
+  });
+
+  it('keeps the right-facing placeholder frame orange', () => {
+    const texture = buildPlaceholderCharacterTexture();
+    const image = texture.image as { width: number; data: Uint8Array };
+    const pixel = DIRECTION_ROW.right * FRAME_PIXEL_SIZE * image.width * 4;
+
+    expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([230, 140, 0, 255]);
+    texture.dispose();
+  });
+
   it('keeps the down-facing placeholder frame green', () => {
     const texture = buildPlaceholderCharacterTexture();
     const image = texture.image as { data: Uint8Array };

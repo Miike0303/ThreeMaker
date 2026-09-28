@@ -98,6 +98,15 @@ describe('formatDebugRows', () => {
     ]);
   });
 
+  it('does not mark unlit tiles as lit when light instances are present', () => {
+    const rows = formatDebugRows(
+      { ...SNAPSHOT, lightInstances: 4, litTiles: false },
+      createI18n(LOCALES, 'en').t,
+    );
+
+    expect(rows.find((row) => row.label === 'Lights')?.value).toBe('4');
+  });
+
   it('formats Lights as N when tiles are unlit, N (lit) when litTiles is true (C6 WU-04)', () => {
     const i18n = createI18n(LOCALES, 'en');
     const unlit = formatDebugRows({ ...SNAPSHOT, lightInstances: 0, litTiles: false }, i18n.t);
@@ -333,6 +342,19 @@ describe('debug panel toggle accessibility', () => {
     expect(toggle.textContent).toBe('▸');
     toggle.listeners.get('click')?.();
     expect(toggle.textContent).toBe('▾');
+  });
+
+  it('omits the map-cycle shortcut in production mode', () => {
+    const { created } = mountPanel(false, false);
+
+    expect(created.some((node) => node.textContent === 'G')).toBe(false);
+  });
+
+  it('labels F5 as the save shortcut in production mode', () => {
+    const { created } = mountPanel(false, false);
+    const saveRow = created.find((node) => node.children[1]?.textContent === 'debug.controls.save');
+
+    expect(saveRow?.children[0]?.textContent).toBe('F5');
   });
 
   it('includes the map-cycle control row in dev mode', () => {

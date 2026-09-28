@@ -80,6 +80,10 @@ describe('nextHighlightedIndex', () => {
     expect(nextHighlightedIndex(1, -1, 3)).toBe(0);
   });
 
+  it('returns zero when the option count is negative', () => {
+    expect(nextHighlightedIndex(0, 1, -2)).toBe(0);
+  });
+
   it('returns 0 defensively when there are no options', () => {
     expect(nextHighlightedIndex(0, 1, 0)).toBe(0);
   });
@@ -175,6 +179,22 @@ describe('createDialogueOverlay', () => {
     const [speaker, text, choices, hint] = (overlay.element as unknown as FakeElement).children;
     return { overlay, speaker, text, choices, hint };
   }
+
+  it('starts hidden before any dialogue or error is shown', () => {
+    const { overlay } = overlayParts();
+    const element = overlay.element as unknown as FakeElement;
+
+    expect(element.style.display).toBe('none');
+  });
+
+  it('clears the previous speaker when a script error replaces dialogue', () => {
+    const { overlay, speaker } = overlayParts();
+    overlay.showLine('Alice', 'Let me check the gate.');
+
+    overlay.showError('Could not continue the conversation.');
+
+    expect(speaker?.textContent).toBe('');
+  });
 
   it('does not carry the previous speaker and line into a conversation that opens with choices', () => {
     const { overlay, speaker, text, choices } = overlayParts();
