@@ -361,3 +361,25 @@ it('recognizes an indented layout comment', () => {
 it('finds a divert without whitespace after its arrow', () => {
   expect(listInkEdges('=== start ===\n->END\n')).toEqual([{ from: 'start', to: 'END' }]);
 });
+
+it('keeps edges from separate knots to the same target', () => {
+  expect(listInkEdges('=== start ===\n-> END\n=== retry ===\n-> END\n')).toEqual([
+    { from: 'start', to: 'END' },
+    { from: 'retry', to: 'END' },
+  ]);
+});
+
+it('wraps default graph positions at the requested column count', () => {
+  const model = buildInkGraphModel('=== first ===\n=== second ===\n=== third ===\n', {
+    columns: 2,
+  });
+
+  expect(model.nodes[2]).toEqual({ knot: 'third', x: 0, y: 100 });
+});
+
+it('uses custom graph spacing when recording a dragged knot', () => {
+  const source = '=== first ===\n=== second ===\n';
+  const updated = setInkNodePosition(source, 'first', 7, 8, { colWidth: 40 });
+
+  expect(parseInkNodeLayouts(updated)).toContainEqual({ knot: 'second', x: 40, y: 0 });
+});
