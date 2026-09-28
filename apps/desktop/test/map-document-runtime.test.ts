@@ -348,9 +348,42 @@ describe('translateMapDocument', () => {
     ]);
   });
 
+  it('names the waypoint field when its floor id cannot be resolved', () => {
+    const doc = buildDevDemoEquivalentDocument();
+    const link = doc.stairLinks[0];
+    if (!link) throw new Error('fixture must have a stair link');
+    const dangling: MapDocument = {
+      ...doc,
+      stairLinks: [
+        {
+          ...link,
+          waypoints: link.waypoints.map((waypoint, index) =>
+            index === 1 ? { ...waypoint, floor: 'missing-floor' } : waypoint,
+          ),
+        },
+      ],
+    };
+
+    expect(() => translateMapDocument(dangling)).toThrow(
+      'stairLinks[demo-stair-0-1].waypoints[].floor: no floor with id "missing-floor" in this document.',
+    );
+  });
+
   it('resolves an authored spawn to its floor index', () => {
     const result = translateMapDocument(buildDevDemoEquivalentDocument());
     expect(result.spawn).toEqual({ x: 5, y: 5, floorIndex: 0 });
+  });
+
+  it('names the spawn floor field when its floor id cannot be resolved', () => {
+    const doc = buildDevDemoEquivalentDocument();
+    const dangling: MapDocument = {
+      ...doc,
+      spawn: { x: 5, y: 5, floor: 'missing-floor' },
+    };
+
+    expect(() => translateMapDocument(dangling)).toThrow(
+      'spawn.floor: no floor with id "missing-floor" in this document.',
+    );
   });
 
   it('preserves an authored spawn x coordinate distinct from y', () => {

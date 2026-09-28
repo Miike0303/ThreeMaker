@@ -383,6 +383,62 @@ describe('debug panel toggle accessibility', () => {
     expect(weatherRow?.children[1]?.textContent).toBe('clear');
   });
 
+  it('starts with no reported renderer backend before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Backend');
+
+    expect(row?.children[1]?.textContent).toBe('');
+  });
+
+  it('starts the clock at midnight before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Clock');
+
+    expect(row?.children[1]?.textContent).toBe('00:00');
+  });
+
+  it('starts frame timing at zero before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Frame ms');
+
+    expect(row?.children[1]?.textContent).toBe('0.0');
+  });
+
+  it('starts with zero live chunks before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Chunks');
+
+    expect(row?.children[1]?.textContent).toBe('0');
+  });
+
+  it('starts with zero draw calls before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Draw calls');
+
+    expect(row?.children[1]?.textContent).toBe('0');
+  });
+
+  it('starts the tile readout at the origin before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Tile');
+
+    expect(row?.children[1]?.textContent).toBe('0, 0');
+  });
+
+  it('starts with zero NPC sprites before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'NPC sprites');
+
+    expect(row?.children[1]?.textContent).toBe('0');
+  });
+
+  it('starts with zero props before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Props');
+
+    expect(row?.children[1]?.textContent).toBe('0');
+  });
+
   it('starts with an unlit light readout before the first snapshot', () => {
     const { created } = mountPanel(false);
     const lightRow = created.find((node) => node.children[0]?.textContent === 'Lights');
