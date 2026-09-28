@@ -318,4 +318,12 @@ describe('decryptRpgmv', () => {
       expect((err as DecryptError).code).toBe('magic-mismatch');
     }
   });
+
+  it('rejects MP3 frame sync without the leading 0xff byte', () => {
+    const plain = concat(new Uint8Array([0x7f, 0xe0, 0x90, 0x64]), new Uint8Array(12));
+
+    expect(() => decryptRpgmv(encryptFixture(plain, KEY_BYTES), KEY_BYTES)).toThrowError(
+      expect.objectContaining({ code: 'magic-mismatch' }),
+    );
+  });
 });

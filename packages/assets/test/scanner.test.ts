@@ -486,3 +486,57 @@ describe('scanGames — an unreadable branch does not abort a later healthy game
     ]);
   });
 });
+
+describe('scanGames — asset and metadata boundaries', () => {
+  it('sorts root assets and nested assets by their complete relative paths', () => {
+    const gameDir = join(workDir, 'mixed-asset-paths');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    const imageDir = join(gameDir, 'img');
+    mkdirSync(join(imageDir, 'characters'), { recursive: true });
+    writeFileSync(join(imageDir, 'characters', 'Actor1.png'), 'nested-image');
+    writeFileSync(join(imageDir, 'characters.png'), 'root-image');
+
+    expect(scanGames(workDir).games[0]?.imageAssets).toEqual([
+      'characters.png',
+      'characters/Actor1.png',
+    ]);
+  });
+
+  it('excludes image folders beyond the requested asset depth', () => {
+    const gameDir = join(workDir, 'limited-image-depth');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    const charactersDir = join(gameDir, 'img', 'characters');
+    const variantsDir = join(charactersDir, 'variants');
+    mkdirSync(variantsDir, { recursive: true });
+    writeFileSync(join(charactersDir, 'Included.png'), 'included-image');
+    writeFileSync(join(variantsDir, 'Excluded.png'), 'excluded-image');
+
+    const result = scanGames(workDir, { maxDepth: 1 });
+
+    expect(result.games[0]?.imageAssets).toEqual(['characters/Included.png']);
+    expect(result.errors).toEqual([
+      expect.objectContaining({ path: variantsDir, code: 'depth-exceeded' }),
+    ]);
+  });
+
+  it('keeps games with null System.json metadata discoverable', () => {
+    const gameDir = join(workDir, 'null-system');
+    writeSystemJson(join(gameDir, 'data'), 'null');
+
+    const result = scanGames(workDir);
+
+    expect(result.errors).toEqual([]);
+    expect(result.games).toEqual([
+      {
+        rootPath: gameDir,
+        engine: 'mz',
+        systemTitle: null,
+        hasEncryptedImages: false,
+        hasEncryptedAudio: false,
+        encryptionKey: null,
+        imageAssets: [],
+        audioAssets: [],
+      },
+    ]);
+  });
+});

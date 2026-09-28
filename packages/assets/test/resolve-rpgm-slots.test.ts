@@ -133,4 +133,43 @@ describe('resolveRpgmSlotsFromCatalog', () => {
 
     expect(resolveRpgmSlotsFromCatalog(catalog, gameRoot, 0)).toEqual({});
   });
+
+  it('does not substitute a lower RPG Maker tileset ID', () => {
+    seedA1Sheet();
+
+    expect(resolveRpgmSlotsFromCatalog(catalog, gameRoot, 2)).toEqual({});
+  });
+
+  it('preserves the game ID when it differs from the tileset ID', () => {
+    seedGame(join(workDir, 'unrelated-game'));
+    const { gameId, tilesetId, shaA1 } = seedA1Sheet();
+    expect(gameId).not.toBe(tilesetId);
+
+    expect(resolveRpgmSlotsFromCatalog(catalog, gameRoot, 1)).toEqual({
+      A1: { object: shaA1, sourceTilesetId: tilesetId, sourceGameId: gameId },
+    });
+  });
+
+  it('prefers the nearest cataloged root for www/data', () => {
+    seedA1Sheet();
+    const nestedRoot = join(gameRoot, 'www');
+    const gameId = seedGame(nestedRoot);
+    const tilesetId = catalog.upsertTileset({
+      gameId,
+      rpgmId: 1,
+      name: 'Nested',
+      flags: JSON.stringify(new Array(8192).fill(0)),
+    });
+    const shaA1 = seedSheet(gameId, tilesetId, 'A1', 'img/tilesets/Nested_A1.png');
+
+    expect(resolveRpgmSlotsFromCatalog(catalog, join(nestedRoot, 'data'), 1)).toEqual({
+      A1: { object: shaA1, sourceTilesetId: tilesetId, sourceGameId: gameId },
+    });
+  });
+
+  it('does not treat a database directory as a data directory', () => {
+    seedA1Sheet();
+
+    expect(resolveRpgmSlotsFromCatalog(catalog, join(gameRoot, 'database'), 1)).toEqual({});
+  });
 });
