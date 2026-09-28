@@ -58,6 +58,13 @@ describe('ElevationField', () => {
     expect(field.rampDirAt(0, 1)).toBeUndefined();
   });
 
+  it('reads a ramp on the second row of a rectangular map', () => {
+    const regions = [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1];
+    const field = new ElevationField(buildMap(4, 3, {}, regions), [{ x: 1, y: 1 }]);
+
+    expect(field.rampDirAt(1, 1)).toBe('west');
+  });
+
   it('surfaceHeightAt is constant across a flat cell regardless of fractional position', () => {
     const regions = [2, 2];
     const map = buildMap(2, 1, {}, regions);
