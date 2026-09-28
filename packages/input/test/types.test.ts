@@ -45,3 +45,11 @@ describe('directionFromMoveAction', () => {
     expect(directionFromMoveAction(undefined)).toBeUndefined();
   });
 });
+
+it('keeps move left active until key release', () => {
+  expect(HOLD_ACTIONS.has(Actions.MoveLeft)).toBe(true);
+});
+
+it('keeps move right active until key release', () => {
+  expect(HOLD_ACTIONS.has(Actions.MoveRight)).toBe(true);
+});
