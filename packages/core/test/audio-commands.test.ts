@@ -71,6 +71,10 @@ describe('parseVolume / parseFadeMs', () => {
     expect(() => parseVolume(-0.01, 'x')).toThrow(/between 0 and 1/);
   });
 
+  it('rejects a volume just above full gain', () => {
+    expect(() => parseVolume(1.02, 'x')).toThrow(/between 0 and 1/);
+  });
+
   it.each([-0.1, 1.1, Number.NaN, '0.5'])('rejects volume %p', (value) => {
     expect(() => parseVolume(value, 'x')).toThrow(/between 0 and 1/);
   });
@@ -89,6 +93,10 @@ describe('parseVolume / parseFadeMs', () => {
 
   it('rejects a fade just below zero', () => {
     expect(() => parseFadeMs(-0.01, 'x')).toThrow(/non-negative/);
+  });
+
+  it('rejects a slightly negative fade duration', () => {
+    expect(() => parseFadeMs(-0.001, 'x')).toThrow(/non-negative/);
   });
 
   it('accepts a zero-length fade', () => {
