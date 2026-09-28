@@ -48,6 +48,78 @@ describe('autotile lookup tables', () => {
 });
 
 describe('computeAutotileQuarterOrigins', () => {
+  it('uses the upper-left inner corner for floor shape 1', () => {
+    expect(computeAutotileQuarterOrigins(2817, 'A2')).toEqual([
+      { x: 48, y: 0 },
+      { x: 24, y: 96 },
+      { x: 48, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('uses the upper-right inner corner for floor shape 2', () => {
+    expect(computeAutotileQuarterOrigins(2818, 'A2')).toEqual([
+      { x: 48, y: 96 },
+      { x: 72, y: 0 },
+      { x: 48, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('uses the lower-right inner corner for floor shape 4', () => {
+    expect(computeAutotileQuarterOrigins(2820, 'A2')).toEqual([
+      { x: 48, y: 96 },
+      { x: 24, y: 96 },
+      { x: 48, y: 72 },
+      { x: 72, y: 24 },
+    ]);
+  });
+
+  it('uses the lower-left inner corner for floor shape 8', () => {
+    expect(computeAutotileQuarterOrigins(2824, 'A2')).toEqual([
+      { x: 48, y: 96 },
+      { x: 24, y: 96 },
+      { x: 48, y: 24 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('caps the left edge for wall shape 1', () => {
+    expect(computeAutotileQuarterOrigins(4353, 'A3')).toEqual([
+      { x: 0, y: 48 },
+      { x: 24, y: 48 },
+      { x: 0, y: 24 },
+      { x: 24, y: 24 },
+    ]);
+  });
+
+  it('caps the top edge for wall shape 2', () => {
+    expect(computeAutotileQuarterOrigins(4354, 'A3')).toEqual([
+      { x: 48, y: 0 },
+      { x: 24, y: 0 },
+      { x: 48, y: 24 },
+      { x: 24, y: 24 },
+    ]);
+  });
+
+  it('caps the right edge for wall shape 4', () => {
+    expect(computeAutotileQuarterOrigins(4356, 'A3')).toEqual([
+      { x: 48, y: 48 },
+      { x: 72, y: 48 },
+      { x: 48, y: 24 },
+      { x: 72, y: 24 },
+    ]);
+  });
+
+  it('caps the bottom edge for wall shape 8', () => {
+    expect(computeAutotileQuarterOrigins(4360, 'A3')).toEqual([
+      { x: 48, y: 48 },
+      { x: 24, y: 48 },
+      { x: 48, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
   it('advances the second A1 water kind to its second surface frame', () => {
     expect(computeAutotileQuarterOrigins(2096, 'A1', 1)).toEqual([
       { x: 144, y: 240 },

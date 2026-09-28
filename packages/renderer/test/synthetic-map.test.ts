@@ -123,6 +123,24 @@ describe('generateSyntheticMap', () => {
     expect(map.layers.regions).toHaveLength(32 * 24);
   });
 
+  it('leaves tile layer 1 blank even when the ground contains walls', () => {
+    const map = generateSyntheticMap({ width: 3, height: 3, wallDensity: 1, clearRadius: 0 });
+
+    expect(map.layers.tileLayers[1]).toEqual(Array(9).fill(0));
+  });
+
+  it('leaves tile layer 3 blank even when the ground contains walls', () => {
+    const map = generateSyntheticMap({ width: 3, height: 3, wallDensity: 1, clearRadius: 0 });
+
+    expect(map.layers.tileLayers[3]).toEqual(Array(9).fill(0));
+  });
+
+  it('leaves region IDs blank even when the ground contains walls', () => {
+    const map = generateSyntheticMap({ width: 3, height: 3, wallDensity: 1, clearRadius: 0 });
+
+    expect(map.layers.regions).toEqual(Array(9).fill(0));
+  });
+
   it('is deterministic: the same seed yields the same map, different seeds differ', () => {
     const a = generateSyntheticMap({ width: 64, height: 64, seed: 42 });
     const b = generateSyntheticMap({ width: 64, height: 64, seed: 42 });

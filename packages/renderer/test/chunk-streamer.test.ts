@@ -47,6 +47,30 @@ describe('ChunkStreamer', () => {
     expect(streamer.update(99, 0).toBuild).toEqual(['0,0']);
   });
 
+  it('does not build a phantom X chunk in a one-chunk-wide map', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 16,
+      mapHeight: 32,
+      buildRadius: 1,
+      disposeRadius: 1,
+    });
+
+    expect(streamer.update(0, 16).toBuild).toEqual(['0,0', '0,1']);
+  });
+
+  it('does not build a phantom Y chunk in a one-chunk-tall map', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 32,
+      mapHeight: 16,
+      buildRadius: 1,
+      disposeRadius: 1,
+    });
+
+    expect(streamer.update(16, 0).toBuild).toEqual(['0,0', '1,0']);
+  });
+
   it('builds the final column of a map wider than it is tall', () => {
     const streamer = new ChunkStreamer({
       chunkSize: 16,
