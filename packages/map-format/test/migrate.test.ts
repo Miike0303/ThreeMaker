@@ -410,6 +410,16 @@ describe('parseMapDocument', () => {
     expect(() => migrateV3ToV4({ npcs: null })).toThrow(MapFormatError);
   });
 
+  it('classifies pre-existing v3 narrative content as malformed', () => {
+    try {
+      migrateV3ToV4({ events: {} });
+      throw new Error('Expected the migration to reject v3 narrative content.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(MapFormatError);
+      expect((error as MapFormatError).code).toBe('malformed');
+    }
+  });
+
   it('rejects a null rooms field on a v2 document', () => {
     expect(() => migrateV2ToV3({ rooms: null })).toThrow(MapFormatError);
   });

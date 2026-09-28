@@ -8,6 +8,11 @@ import {
   MAP_DOCUMENT_FILE_SUFFIX,
 } from '../src/ink-sidecar-path.js';
 
+it('rejects plus signs in story ids before deriving a sidecar path', () => {
+  expect(isSafeStoryId('act+2')).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'act+2')).toThrow(/story id/i);
+});
+
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
   it('accepts Z at the upper edge of the uppercase story-id range', () => {
     expect(isSafeStoryId('chapterZ')).toBe(true);

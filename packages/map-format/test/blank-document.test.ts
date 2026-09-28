@@ -17,6 +17,20 @@ const BLANK_OPTIONS = {
 } as const;
 
 describe('createBlankMapDocument', () => {
+  it('preserves the supplied tileset slot composition', () => {
+    const slots = { A1: { object: 'a'.repeat(64) } };
+    const doc = createBlankMapDocument({ ...BLANK_OPTIONS, slots });
+
+    expect(doc.tileset.slots).toEqual(slots);
+  });
+
+  it('preserves the supplied tileset flags', () => {
+    const flags = [0, 7, 15];
+    const doc = createBlankMapDocument({ ...BLANK_OPTIONS, flags });
+
+    expect(doc.tileset.flags).toEqual(flags);
+  });
+
   it('preserves the supplied display name independently of the map id', () => {
     expect(createBlankMapDocument(BLANK_OPTIONS).name).toBe('Blank Test');
   });
