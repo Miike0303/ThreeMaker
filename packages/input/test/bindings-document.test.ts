@@ -86,6 +86,26 @@ describe('serializeInputBindingsDocument / parseInputBindingsDocument', () => {
     ).toBe(false);
   });
 
+  it('rejects a null binding entry without throwing', () => {
+    expect(
+      parseInputBindingsDocument({
+        magic: INPUT_BINDINGS_MAGIC,
+        version: 1,
+        bindings: [null],
+      }),
+    ).toEqual({ ok: false, reason: 'invalid binding entry' });
+  });
+
+  it('rejects a null source in a binding without throwing', () => {
+    expect(
+      parseInputBindingsDocument({
+        magic: INPUT_BINDINGS_MAGIC,
+        version: 1,
+        bindings: [{ action: Actions.Interact, source: null }],
+      }),
+    ).toEqual({ ok: false, reason: 'invalid binding entry' });
+  });
+
   it('rejects a non-keyboard device source', () => {
     expect(
       parseInputBindingsDocument({

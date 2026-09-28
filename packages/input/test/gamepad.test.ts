@@ -146,6 +146,16 @@ describe('edgesBetweenActionSets', () => {
 });
 
 describe('createGamepadTracker', () => {
+  it('uses its custom deadzone when sampling stick movement', () => {
+    const tracker = createGamepadTracker({ deadzone: 0.8 });
+
+    expect(tracker.sample(snap({ axes: [0.5, 0] }))).toEqual({ active: [], edges: [] });
+    expect(tracker.sample(snap({ axes: [0.9, 0] }))).toEqual({
+      active: [Actions.MoveRight],
+      edges: [{ action: Actions.MoveRight, edge: 'pressed' }],
+    });
+  });
+
   it('tracks previous sample so only transitions produce edges', () => {
     const tracker = createGamepadTracker();
     const first = tracker.sample(snap({ buttons: { 0: true, 12: true } }));

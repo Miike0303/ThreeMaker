@@ -19,6 +19,14 @@ it('keeps quick save distinct from quick load', () => {
 });
 
 describe('directionFromMoveAction', () => {
+  it('maps the left action to the left grid direction', () => {
+    expect(directionFromMoveAction(Actions.MoveLeft)).toBe('left');
+  });
+
+  it('maps the right action to the right grid direction', () => {
+    expect(directionFromMoveAction(Actions.MoveRight)).toBe('right');
+  });
+
   it('maps the down action to the down grid direction', () => {
     expect(directionFromMoveAction(Actions.MoveDown)).toBe('down');
   });
