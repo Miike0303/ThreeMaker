@@ -43,6 +43,14 @@ const sampleJob = (id: string, at = '2026-08-08T00:00:00.000Z'): CommunityShareE
 });
 
 describe('community-settings', () => {
+  it('loads default preferences when stored community JSON is malformed', () => {
+    const storage = memoryStorage({ 'threemaker-maker-studio:community': '{' });
+    expect(loadCommunitySettings(storage)).toEqual({
+      shareOnSave: true,
+      allowImportedAssets: false,
+    });
+  });
+
   it('infers imported provenance when an allowed imported share omits its license tag', () => {
     const job = maybeEnqueueCommunityShare(
       { shareOnSave: true, allowImportedAssets: true },
@@ -227,6 +235,10 @@ describe('communityShareTileCount (WU-COMM-10)', () => {
 });
 
 describe('formatCommunityShareMapId (WU-COMM-11)', () => {
+  it('uses the default map id prefix length when a custom limit is negative', () => {
+    expect(formatCommunityShareMapId('0123456789abcdef', -1)).toBe('01234567');
+  });
+
   it('honors a one-character map id prefix limit', () => {
     expect(formatCommunityShareMapId('town-square', 1)).toBe('t');
   });

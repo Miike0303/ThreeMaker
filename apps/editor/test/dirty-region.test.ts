@@ -85,6 +85,16 @@ describe('computeDirtyTileRect', () => {
 });
 
 describe('expandDirtyRectNorthThroughStars', () => {
+  it('ignores a northern star run just outside the dirty rectangle', () => {
+    const layer = new Array(12).fill(1);
+    layer[2] = 2;
+    layer[5] = 2;
+    const rect = { xStart: 1, yStart: 2, xEnd: 2, yEnd: 4 };
+    expect(expandDirtyRectNorthThroughStars(rect, makeMap(3, 4, layer), makeTileset())).toEqual(
+      rect,
+    );
+  });
+
   it('does not extend dirty bounds through tiles without a flags entry', () => {
     const map = makeMap(2, 3, [1, 1, 1, 1, 1, 1]);
     const tileset = { ...makeTileset(), flags: [] };
@@ -155,6 +165,10 @@ describe('expandDirtyRectNorthThroughStars', () => {
 });
 
 describe('dirtyRectToChunkKeys', () => {
+  it('returns no chunks for a zero-width rectangle inside a chunk', () => {
+    expect([...dirtyRectToChunkKeys({ xStart: 7, yStart: 1, xEnd: 7, yEnd: 2 }, 16)]).toEqual([]);
+  });
+
   it('returns no chunks for a zero-height rectangle inside a chunk', () => {
     expect([...dirtyRectToChunkKeys({ xStart: 1, yStart: 7, xEnd: 2, yEnd: 7 }, 16)]).toEqual([]);
   });

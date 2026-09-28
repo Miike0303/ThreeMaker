@@ -22,6 +22,15 @@ import {
 } from '../src/placeholder-tileset.js';
 
 describe('buildPlaceholderTextures', () => {
+  it('preserves distinct source pixels on successive PNG scanlines', () => {
+    const rgba = new Uint8Array([10, 20, 30, 128, 40, 50, 60, 255]);
+    const png = encodeRgbaPng(1, 2, rgba);
+    const idatLength = new DataView(png.buffer, png.byteOffset).getUint32(33);
+    expect([...inflateSync(png.subarray(41, 41 + idatLength))]).toEqual([
+      0, 10, 20, 30, 128, 0, 40, 50, 60, 255,
+    ]);
+  });
+
   it('ignores trailing RGBA pixels beyond the requested PNG dimensions', () => {
     const rgba = new Uint8Array([10, 20, 30, 128, 40, 50, 60, 255]);
     const png = encodeRgbaPng(1, 1, rgba);

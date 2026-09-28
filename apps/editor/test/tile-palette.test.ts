@@ -92,6 +92,13 @@ describe('computePlainGridDimensions', () => {
 });
 
 describe('computePaletteCells - plain sheets (B/C/D/E/A5)', () => {
+  it('caps a tall C palette before its tile ids reach the D sheet', () => {
+    const cells = computePaletteCells('C', { width: 768, height: 1536 });
+    expect(cells).toHaveLength(256);
+    expect(cells.at(-1)?.tileId).toBe(511);
+    expect(cells.every((cell) => cell.tileId >= 256 && cell.tileId < 512)).toBe(true);
+  });
+
   it('selects the first tile of the right block without spilling into the next sheet', () => {
     const cells = computePaletteCells('B', { width: 768, height: 48 });
     expect(cells[8]).toEqual({ tileId: 128, x: 384, y: 0, width: 48, height: 48 });

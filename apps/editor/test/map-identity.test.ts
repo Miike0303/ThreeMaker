@@ -27,6 +27,10 @@ import {
 } from '../src/map-identity.js';
 
 describe('validateMapName', () => {
+  it('rejects LPT0 at the lower printer device boundary', () => {
+    expect(validateMapName('LPT0')).toBe('reserved');
+  });
+
   it('rejects COM0 at the lower reserved device boundary', () => {
     expect(validateMapName('COM0')).toBe('reserved');
   });
