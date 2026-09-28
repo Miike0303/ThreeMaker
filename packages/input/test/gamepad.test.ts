@@ -94,6 +94,12 @@ describe('activeActionsFromGamepad', () => {
     ]);
   });
 
+  it('treats the vertical axis exactly at the deadzone as active', () => {
+    expect(activeActionsFromGamepad(snap({ axes: [0, -DEFAULT_GAMEPAD_DEADZONE] }))).toEqual([
+      Actions.MoveUp,
+    ]);
+  });
+
   it('prefers d-pad over left stick when both are active', () => {
     expect(activeActionsFromGamepad(snap({ buttons: { 14: true }, axes: [0.9, 0, 0, 0] }))).toEqual(
       [Actions.MoveLeft],
