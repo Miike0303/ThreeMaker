@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { decodeTileFlags } from '../src/tile-flags.js';
 
 describe('decodeTileFlags', () => {
+  it('does not mark a bush-only tile as a ladder', () => {
+    expect(decodeTileFlags(0x40)).toMatchObject({ isBush: true, isLadder: false });
+  });
+
+  it('does not mark a counter-only tile as a damage floor', () => {
+    expect(decodeTileFlags(0x80)).toMatchObject({ isCounter: true, isDamageFloor: false });
+  });
+
+  it('does not block upward passage when only downward passage is blocked', () => {
+    expect(decodeTileFlags(0x1)).toMatchObject({ impassableDown: true, impassableUp: false });
+  });
+
   it('decodes an all-zero bitfield as fully passable, ground-layer, no terrain tag', () => {
     expect(decodeTileFlags(0)).toEqual({
       impassableDown: false,

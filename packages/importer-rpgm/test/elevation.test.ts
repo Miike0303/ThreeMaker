@@ -476,6 +476,10 @@ describe('EdgeProfile symmetry (canonical corner ordering) across neighboring ce
 });
 
 describe('profilesEqual', () => {
+  it('rejects an edge match when only the first corner is higher', () => {
+    expect(profilesEqual([3, 2], [2, 2])).toBe(false);
+  });
+
   it.each([
     [[1, 1] as const, [1, 1] as const, true],
     [[2, 1] as const, [2, 1] as const, true],
@@ -488,6 +492,28 @@ describe('profilesEqual', () => {
 });
 
 describe('surfaceHeightAt', () => {
+  it('samples the last column of a wide map using the map width', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2, 4, 6]),
+      rampGrid: new Uint8Array(3),
+      mapWidth: 3,
+      mapHeight: 1,
+    };
+
+    expect(surfaceHeightAt(ctx, 2.25, 0.5)).toBe(6);
+  });
+
+  it('interpolates an east ramp beyond the first column using its local x position', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([4, 3, 2]),
+      rampGrid: new Uint8Array([0, 3, 0]),
+      mapWidth: 3,
+      mapHeight: 1,
+    };
+
+    expect(surfaceHeightAt(ctx, 1.25, 0.5)).toBe(2.75);
+  });
+
   it('samples the current row before crossing its south edge', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([2, 1]),

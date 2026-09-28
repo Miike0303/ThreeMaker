@@ -13,6 +13,12 @@ function makeMapJson(width: number, height: number, fill: (z: number, i: number)
 }
 
 describe('parseMap', () => {
+  it('rejects a fractional height even when the total layer length is integral', () => {
+    const json = { ...makeMapJson(1, 1, () => 0), height: 1.5, data: new Array(9).fill(0) };
+
+    expect(() => parseMap(json)).toThrow(/positive safe integers/);
+  });
+
   it('parses width, height, tilesetId, and displayName', () => {
     const json = makeMapJson(2, 2, () => 0);
     const map = parseMap(json, 42);

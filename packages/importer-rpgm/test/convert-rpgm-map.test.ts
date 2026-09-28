@@ -108,6 +108,18 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('imports an event below the width boundary on a taller map', () => {
+    const event = { ...placedEvent(showTextPage(0, ['Hello'])), x: 1, y: 3 };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 2, height: 4, events: [event] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([
+      { id: 'rpgm-event-1', x: 1, y: 3, floor: 'floor-0', on: 'interact', event: 'rpgm-event-1' },
+    ]);
+  });
+
   it('skips a negative event trigger mode', () => {
     const event = { ...placedEvent(showTextPage(-1, ['Hello'])), x: 1, y: 1 };
     const doc = convertRpgmMap(buildSyntheticMap({ events: [event] }), buildSyntheticTileset());
