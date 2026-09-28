@@ -20,6 +20,17 @@ describe('Node', () => {
     expect(parent.children).toContain(child);
   });
 
+  it('chains addChild calls on the parent', () => {
+    const parent = new Node('parent');
+    const first = new Node('first');
+    const second = new Node('second');
+
+    parent.addChild(first).addChild(second);
+
+    expect(parent.children).toEqual([first, second]);
+    expect(second.parent).toBe(parent);
+  });
+
   it('keeps siblings in the order they were attached', () => {
     const parent = new Node('parent');
     const first = new Node('first');
@@ -40,6 +51,19 @@ describe('Node', () => {
 
     expect(child.parent).toBeNull();
     expect(parent.children).not.toContain(child);
+  });
+
+  it('chains removeChild calls on the parent', () => {
+    const parent = new Node('parent');
+    const first = new Node('first');
+    const second = new Node('second');
+    parent.addChild(first);
+    parent.addChild(second);
+
+    parent.removeChild(first).removeChild(second);
+
+    expect(parent.children).toEqual([]);
+    expect(second.parent).toBeNull();
   });
 
   it('removeChild keeps the next sibling attached', () => {

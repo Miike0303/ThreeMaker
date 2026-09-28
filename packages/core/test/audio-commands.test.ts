@@ -75,6 +75,10 @@ describe('parseVolume / parseFadeMs', () => {
     expect(() => parseVolume(value, 'x')).toThrow(/between 0 and 1/);
   });
 
+  it('rejects null rather than treating it as an absent fade', () => {
+    expect(() => parseFadeMs(null, 'x')).toThrow(/non-negative/);
+  });
+
   it('rejects a negative fade', () => {
     expect(() => parseFadeMs(-1, 'x')).toThrow(/non-negative/);
   });
@@ -167,6 +171,15 @@ describe('createAudioCommandPlugins', () => {
     expect(parsed.intro).toEqual([
       { type: 'playBgm', path: 'bgm/town.ogg', fadeMs: 800, loop: false },
     ]);
+  });
+
+  it('preserves an authored zero playBgm volume during parsing', () => {
+    const parsed = parseEventScript(
+      script({ type: 'playBgm', path: 'bgm/town.ogg', volume: 0 }),
+      registryFor(),
+    );
+
+    expect(parsed.intro).toStrictEqual([{ type: 'playBgm', path: 'bgm/town.ogg', volume: 0 }]);
   });
 
   it('forwards playBgm fadeMs to a handler', () => {
