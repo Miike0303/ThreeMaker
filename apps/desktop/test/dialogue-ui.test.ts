@@ -349,4 +349,43 @@ describe('createDialogueOverlay', () => {
       choices?.children.map((choice) => choice.classList.contains('dialogue-choice-highlighted')),
     ).toEqual([false, true]);
   });
+
+  it('marks script failures with error styling', () => {
+    const { overlay } = overlayParts();
+    const element = overlay.element as unknown as FakeElement;
+
+    overlay.showError('Could not load the conversation.');
+
+    expect(element.classList.contains('dialogue-overlay-error')).toBe(true);
+  });
+
+  it('removes stale choices when a script error replaces the conversation', () => {
+    const { overlay, choices } = overlayParts();
+    overlay.showChoices(['Accept', 'Decline'], 0);
+
+    overlay.showError('Could not continue the conversation.');
+
+    expect(choices?.children).toHaveLength(0);
+  });
+
+  it('hides the dialogue after the conversation closes', () => {
+    const { overlay } = overlayParts();
+    const element = overlay.element as unknown as FakeElement;
+    overlay.showLine('Alice', 'Goodbye.');
+
+    overlay.hide();
+
+    expect(element.style.display).toBe('none');
+  });
+
+  it('restores polite dialogue semantics when choices follow a script error', () => {
+    const { overlay } = overlayParts();
+    const element = overlay.element as unknown as FakeElement;
+    overlay.showError('Could not continue the conversation.');
+
+    overlay.showChoices(['Try again', 'Leave'], 0);
+
+    expect(element.getAttribute('role')).toBeNull();
+    expect(element.getAttribute('aria-live')).toBe('polite');
+  });
 });

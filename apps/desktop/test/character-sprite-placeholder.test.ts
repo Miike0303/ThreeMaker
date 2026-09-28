@@ -119,4 +119,12 @@ describe('buildPlaceholderCharacterTexture', () => {
 
     expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([128, 128, 128, 255]);
   });
+
+  it('fills the bottom edge of the down-facing placeholder frame', () => {
+    const texture = buildPlaceholderCharacterTexture();
+    const image = texture.image as { width: number; data: Uint8Array };
+    const pixel = (FRAME_PIXEL_SIZE - 1) * image.width * 4;
+
+    expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([0, 170, 0, 255]);
+  });
 });

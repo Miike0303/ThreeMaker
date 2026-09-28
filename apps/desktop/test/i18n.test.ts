@@ -72,4 +72,8 @@ describe('createI18n', () => {
     const i18n = createI18n({ fr: { name: 'Français', strings: { greeting: 'Bonjour' } } }, 'de');
     expect(i18n.locale).toBe('fr');
   });
+
+  it('rejects an empty locale registry before exposing a broken translator', () => {
+    expect(() => createI18n({})).toThrow('createI18n requires at least one locale.');
+  });
 });

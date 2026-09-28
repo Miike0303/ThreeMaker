@@ -423,4 +423,37 @@ describe('debug panel toggle accessibility', () => {
     );
     expect(mapRow?.children[1]?.textContent).toBe('Map007');
   });
+
+  it('restores the collapsed preference saved under the stable storage key', () => {
+    const storage = {
+      getItem: (key: string) => (key === 'threemaker:debugPanelCollapsed' ? 'true' : null),
+      setItem: () => {},
+    };
+
+    expect(readDebugPanelCollapsed(storage)).toBe(true);
+  });
+
+  it('restores a user-collapsed panel after recreating the overlay', () => {
+    vi.stubGlobal('document', { createElement: (tag: string) => fakeNode(tag) });
+    const store = new Map<string, string>();
+    const options = {
+      devMode: false,
+      collapsedStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          store.set(key, value);
+        },
+      },
+    };
+    const panel = createDebugPanel(createI18n(LOCALES, 'en').t, options);
+    const toggle = (panel.element as unknown as FakeNode).children[0]?.children[1];
+    if (!toggle) throw new Error('debug panel created no toggle button');
+
+    toggle.listeners.get('click')?.();
+    const restored = createDebugPanel(createI18n(LOCALES, 'en').t, options);
+
+    expect(
+      (restored.element as unknown as FakeNode).classList.contains('debug-panel-collapsed'),
+    ).toBe(true);
+  });
 });

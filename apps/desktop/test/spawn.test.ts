@@ -155,6 +155,28 @@ describe('findSpawnTile', () => {
     expect(() => findSpawnTile(grid, 1, 0)).toThrow(/no standable tile/i);
   });
 
+  it('rejects a candidate exactly beyond the left map edge', () => {
+    const grid: StandabilityQuery = {
+      width: 2,
+      height: 2,
+      isStandable: () => true,
+      isGoodSpawnCandidate: (x, y) => x === -1 && y === 0,
+    };
+
+    expect(() => findSpawnTile(grid, 0, 0)).toThrow(/no standable tile/i);
+  });
+
+  it('rejects a candidate exactly above the top map edge', () => {
+    const grid: StandabilityQuery = {
+      width: 2,
+      height: 2,
+      isStandable: () => true,
+      isGoodSpawnCandidate: (x, y) => x === 0 && y === -1,
+    };
+
+    expect(() => findSpawnTile(grid, 0, 0)).toThrow(/no standable tile/i);
+  });
+
   it('rejects a candidate exactly below the bottom map edge', () => {
     const grid: StandabilityQuery = {
       width: 2,
