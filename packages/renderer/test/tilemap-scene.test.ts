@@ -21,6 +21,18 @@ function makeChunk(chunkX: number, chunkY: number, sheet: 'B' | 'C'): ChunkBuild
 }
 
 describe('TilemapScene', () => {
+  it('keeps the default tilemap root discoverable by name in a parent scene', () => {
+    const scene = new TilemapScene([makeChunk(0, 0, 'B')], { B: new THREE.Texture() });
+    const parent = new THREE.Scene();
+    parent.add(scene.group);
+
+    try {
+      expect(parent.getObjectByName('tilemap')?.id).toBe(scene.group.id);
+    } finally {
+      scene.dispose();
+    }
+  });
+
   it('disposes the shadow overlay material exactly once', () => {
     const chunk: ChunkBuildData = {
       chunkX: 0,

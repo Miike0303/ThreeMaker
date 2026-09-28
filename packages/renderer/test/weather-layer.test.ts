@@ -135,6 +135,38 @@ describe('setMode', () => {
     expect(layer.uniforms.tint.value.getHex()).toBe(rain.tint);
   });
 
+  it('makes rain fall substantially faster than snow', () => {
+    const { layer } = createInspect(8);
+    layer.setMode('rain');
+    const rainSpeed = layer.uniforms.fallSpeed.value;
+    layer.setMode('snow');
+    expect(rainSpeed).toBeGreaterThan(layer.uniforms.fallSpeed.value * 4);
+    layer.dispose();
+  });
+
+  it('tints rain blue instead of neutral white', () => {
+    const { layer } = createInspect(8);
+    layer.setMode('rain');
+    expect(layer.uniforms.tint.value.b).toBeGreaterThan(layer.uniforms.tint.value.r);
+    layer.dispose();
+  });
+
+  it('keeps rain translucent', () => {
+    const { layer } = createInspect(8);
+    layer.setMode('rain');
+    expect(layer.uniforms.opacity.value).toBeLessThan(1);
+    layer.dispose();
+  });
+
+  it('keeps rain streaks shorter than five snowflake widths', () => {
+    const { layer } = createInspect(8);
+    layer.setMode('rain');
+    const streakLength = layer.uniforms.scale.value.y;
+    layer.setMode('snow');
+    expect(streakLength).toBeLessThan(layer.uniforms.scale.value.x * 5);
+    layer.dispose();
+  });
+
   it('mutation pin: renders rain as narrow vertical streaks', () => {
     const { layer } = createInspect(8);
     layer.setMode('rain');
@@ -161,6 +193,13 @@ describe('setMode', () => {
     expect(layer.uniforms.scale.value.y).toBe(snow.scaleY);
     expect(layer.uniforms.opacity.value).toBe(snow.opacity);
     expect(layer.uniforms.tint.value.getHex()).toBe(snow.tint);
+  });
+
+  it('renders snowflakes pure white', () => {
+    const { layer } = createInspect(8);
+    layer.setMode('snow');
+    expect(layer.uniforms.tint.value.getHex()).toBe(0xffffff);
+    layer.dispose();
   });
 
   it('mutation pin: renders snow as square flakes', () => {

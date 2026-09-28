@@ -35,6 +35,30 @@ describe('ChunkStreamer', () => {
     expect(streamer.update(0, 99).toBuild).toEqual(['0,2']);
   });
 
+  it('keeps an out-of-bounds X focus in a one-tile-wide map', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 1,
+      mapWidth: 1,
+      mapHeight: 1,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(99, 0).toBuild).toEqual(['0,0']);
+  });
+
+  it('builds the final column of a map wider than it is tall', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 64,
+      mapHeight: 16,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(63, 0).toBuild).toEqual(['3,0']);
+  });
+
   it('rejects a non-positive chunk size', () => {
     expect(() => new ChunkStreamer({ ...GIANT, chunkSize: 0 })).toThrow(/chunkSize/);
   });

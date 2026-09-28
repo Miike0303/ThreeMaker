@@ -132,6 +132,36 @@ describe('buildChunks elevation (region-derived height)', () => {
 });
 
 describe('buildChunks star-tile stacking (MV3D "tileoffset" fix)', () => {
+  it('keeps scanning for star markers after an earlier layer marks the cell as a wall', () => {
+    const map = makeMap({
+      width: 1,
+      height: 3,
+      layers: {
+        tileLayers: [
+          [2, 4352, 1],
+          [0, 2, 0],
+          [0, 0, 0],
+          [0, 0, 0],
+        ],
+        shadows: [0, 0, 0],
+        regions: [0, 0, 0],
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), {
+      ...SHEET_SIZES,
+      A3: { width: 768, height: 384 },
+    });
+    const top = chunks[0]?.tiles.find((tile) => tile.tileY === 0);
+
+    expect(top?.starStack).toEqual({
+      baseTileY: 2,
+      level: 1,
+      baseHeight: 0,
+      baseIsWall: false,
+    });
+  });
+
   it('anchors an isolated star tile one row south of it, at level 0', () => {
     // tile id 2 is the flagged star tile; id 1 is a plain ground tile.
     const width = 1;
@@ -252,6 +282,44 @@ describe('buildChunks star-tile stacking (MV3D "tileoffset" fix)', () => {
 });
 
 describe('buildChunks', () => {
+  it('renders later tiles in a row after skipping an unloaded sheet', () => {
+    const map = makeMap({
+      width: 2,
+      height: 1,
+      layers: {
+        tileLayers: [
+          [300, 1],
+          [0, 0],
+          [0, 0],
+          [0, 0],
+        ],
+        shadows: [0, 0],
+        regions: [0, 0],
+      },
+    });
+
+    const tiles = buildChunks(map, makeTileset(), SHEET_SIZES).flatMap((chunk) => chunk.tiles);
+
+    expect(tiles).toHaveLength(1);
+    expect(tiles[0]).toMatchObject({ tileX: 1, tileY: 0, sheet: 'B' });
+  });
+
+  it('keeps a tile with missing passability flags on the ground', () => {
+    const map = makeMap({
+      width: 1,
+      height: 1,
+      layers: {
+        tileLayers: [[1], [0], [0], [0]],
+        shadows: [0],
+        regions: [0],
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset({ flags: [] }), SHEET_SIZES);
+
+    expect(chunks[0]?.tiles[0]?.elevation).toBe('ground');
+  });
+
   it('returns no chunks for an all-empty map', () => {
     const chunks = buildChunks(makeMap(), makeTileset(), SHEET_SIZES);
     expect(chunks).toEqual([]);
@@ -735,6 +803,50 @@ describe('buildChunks ramp grid (Slice 2a plumbing)', () => {
 });
 
 describe('buildChunks onlyChunks (property: onlyChunks output === full output filtered to those keys)', () => {
+  function makePlateauMap(): RpgmMap {
+    const width = 12;
+    const height = 12;
+    const size = width * height;
+    return makeMap({
+      width,
+      height,
+      layers: {
+        tileLayers: [
+          new Array(size).fill(1),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+          new Array(size).fill(0),
+        ],
+        shadows: new Array(size).fill(0),
+        regions: new Array(size).fill(3),
+      },
+    });
+  }
+
+  it('preserves the elevated east neighbor outside a rebuilt chunk', () => {
+    const chunks = buildChunks(makePlateauMap(), makeTileset(), SHEET_SIZES, 4, new Set(['1,1']));
+    const tile = chunks[0]?.tiles.find((entry) => entry.tileX === 7 && entry.tileY === 5);
+
+    expect(tile?.height).toBe(3);
+    expect(tile?.cliffEdges ?? []).toEqual([]);
+  });
+
+  it('preserves the elevated west neighbor outside a rebuilt chunk', () => {
+    const chunks = buildChunks(makePlateauMap(), makeTileset(), SHEET_SIZES, 4, new Set(['1,1']));
+    const tile = chunks[0]?.tiles.find((entry) => entry.tileX === 4 && entry.tileY === 5);
+
+    expect(tile?.height).toBe(3);
+    expect(tile?.cliffEdges ?? []).toEqual([]);
+  });
+
+  it('preserves the elevated north neighbor outside a rebuilt chunk', () => {
+    const chunks = buildChunks(makePlateauMap(), makeTileset(), SHEET_SIZES, 4, new Set(['1,1']));
+    const tile = chunks[0]?.tiles.find((entry) => entry.tileX === 5 && entry.tileY === 4);
+
+    expect(tile?.height).toBe(3);
+    expect(tile?.cliffEdges ?? []).toEqual([]);
+  });
+
   const CHUNK_SIZE = 4;
 
   function makeVariedMap(width: number, height: number): RpgmMap {

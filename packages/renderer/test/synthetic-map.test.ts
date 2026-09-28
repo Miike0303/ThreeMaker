@@ -266,4 +266,28 @@ describe('generateSyntheticMap', () => {
     expect(rowStartsAfterWall.length).toBeGreaterThan(0);
     for (const index of rowStartsAfterWall) expect(map.layers.shadows[index]).toBe(0);
   });
+
+  it('paints wall shadows on the last row of a rectangular map', () => {
+    const map = generateSyntheticMap({
+      width: 16,
+      height: 8,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+    const rowStart = (map.height - 1) * map.width;
+    const eastOfWall = Array.from(
+      { length: map.width - 1 },
+      (_, offset) => rowStart + offset + 1,
+    ).find(
+      (index) =>
+        map.layers.tileLayers[0][index - 1] === ROSELIAM_DUNGEON_WALL_TILE_ID &&
+        map.layers.tileLayers[0][index] === ROSELIAM_DUNGEON_GROUND_TILE_ID,
+    );
+
+    if (eastOfWall === undefined)
+      throw new Error('Expected ground east of a wall on the last row.');
+    expect(map.layers.shadows[eastOfWall]).toBe(5);
+  });
 });
