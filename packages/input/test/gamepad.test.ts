@@ -212,3 +212,7 @@ describe('snapshotFromGamepads', () => {
     expect(snapshotFromGamepads([null, null])).toBeNull();
   });
 });
+
+it('treats absent standard buttons as unpressed', () => {
+  expect(activeActionsFromGamepad({ axes: [0, 0], buttons: [] })).toEqual([]);
+});
