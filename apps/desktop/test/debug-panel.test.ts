@@ -207,6 +207,12 @@ describe('debug panel collapsed-state persistence', () => {
     expect(readDebugPanelCollapsed(storage)).toBe(false);
   });
 
+  it('keeps the panel expanded for a stored true value with trailing whitespace', () => {
+    const storage = createFakeStorage({ [DEBUG_PANEL_COLLAPSED_STORAGE_KEY]: 'true ' });
+
+    expect(readDebugPanelCollapsed(storage)).toBe(false);
+  });
+
   it('starts expanded when reading collapsed state throws', () => {
     expect(
       readDebugPanelCollapsed({
@@ -357,6 +363,22 @@ describe('debug panel toggle accessibility', () => {
     expect(saveRow?.children[0]?.textContent).toBe('F5');
   });
 
+  it('labels F9 as the load shortcut in production mode', () => {
+    const { created } = mountPanel(false, false);
+    const loadRow = created.find((node) => node.children[1]?.textContent === 'debug.controls.load');
+
+    expect(loadRow?.children[0]?.textContent).toBe('F9');
+  });
+
+  it('labels C as the camera shortcut in production mode', () => {
+    const { created } = mountPanel(false, false);
+    const cameraRow = created.find(
+      (node) => node.children[1]?.textContent === 'debug.controls.camera',
+    );
+
+    expect(cameraRow?.children[0]?.textContent).toBe('C');
+  });
+
   it('includes the map-cycle control row in dev mode', () => {
     const { created } = mountPanel(false, true);
 
@@ -388,6 +410,41 @@ describe('debug panel toggle accessibility', () => {
     const row = created.find((node) => node.children[0]?.textContent === 'Backend');
 
     expect(row?.children[1]?.textContent).toBe('');
+  });
+
+  it('starts with no reported map before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Map');
+
+    expect(row?.children[1]?.textContent).toBe('');
+  });
+
+  it('starts with no reported camera mode before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Camera');
+
+    expect(row?.children[1]?.textContent).toBe('');
+  });
+
+  it('starts tilt at zero before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Tilt');
+
+    expect(row?.children[1]?.textContent).toBe('0°');
+  });
+
+  it('starts zoom at zero before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Zoom');
+
+    expect(row?.children[1]?.textContent).toBe('0.0');
+  });
+
+  it('starts elevation at zero before the first snapshot', () => {
+    const { created } = mountPanel(false);
+    const row = created.find((node) => node.children[0]?.textContent === 'Elevation');
+
+    expect(row?.children[1]?.textContent).toBe('0');
   });
 
   it('starts the clock at midnight before the first snapshot', () => {
