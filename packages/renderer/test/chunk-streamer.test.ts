@@ -11,6 +11,24 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('rejects an infinite chunk size even with finite map dimensions', () => {
+    expect(() => new ChunkStreamer({ ...GIANT, chunkSize: Number.POSITIVE_INFINITY })).toThrow(
+      /chunkSize/,
+    );
+  });
+
+  it('clamps a high Y focus to the only row of a one-tile map', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 1,
+      mapWidth: 1,
+      mapHeight: 1,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(0, 99).toBuild).toEqual(['0,0']);
+  });
+
   it('pins the default build radius at two chunks', () => {
     const streamer = new ChunkStreamer({ chunkSize: 16, mapWidth: 80, mapHeight: 80 });
 

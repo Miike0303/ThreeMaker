@@ -6,6 +6,55 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('rejects a zero map height before allocating tile layers', () => {
+    expect(() => generateSyntheticMap({ width: 3, height: 0 })).toThrow(/height/);
+  });
+
+  it('reports a negative map width as a dimension error', () => {
+    expect(() => generateSyntheticMap({ width: -1, height: 2 })).toThrow(
+      'width must be a positive integer, got -1.',
+    );
+  });
+
+  it('keeps tile layer 1 empty when decorations are present', () => {
+    const map = generateSyntheticMap({
+      width: 3,
+      height: 3,
+      wallDensity: 0,
+      decorDensity: 1,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[2]).toContain(69);
+    expect(map.layers.tileLayers[1]).toEqual(Array(9).fill(0));
+  });
+
+  it('keeps tile layer 3 empty when decorations are present', () => {
+    const map = generateSyntheticMap({
+      width: 3,
+      height: 3,
+      wallDensity: 0,
+      decorDensity: 1,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[2]).toContain(69);
+    expect(map.layers.tileLayers[3]).toEqual(Array(9).fill(0));
+  });
+
+  it('keeps region IDs empty when decorations are present', () => {
+    const map = generateSyntheticMap({
+      width: 3,
+      height: 3,
+      wallDensity: 0,
+      decorDensity: 1,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[2]).toContain(69);
+    expect(map.layers.regions).toEqual(Array(9).fill(0));
+  });
+
   it('keeps a wall roll equal to the density on the floor', () => {
     const firstRoll = 1015568748 / 2 ** 32;
     const map = generateSyntheticMap({

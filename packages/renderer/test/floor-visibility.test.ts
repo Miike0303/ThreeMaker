@@ -16,6 +16,10 @@ import { ROSELIAM_FIXTURE_DIR, requireFixture, skipWithoutFixture } from './fixt
 describe('WindowedFloorPolicy', () => {
   const policy = new WindowedFloorPolicy();
 
+  it('omits a current floor below ground from the window', () => {
+    expect(policy.visibleFloors(-1, 3)).toEqual([]);
+  });
+
   it('renders only floor 0 when the building has one floor', () => {
     expect(policy.visibleFloors(0, 1)).toEqual([0]);
   });

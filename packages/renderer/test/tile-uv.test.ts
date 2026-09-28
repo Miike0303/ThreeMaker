@@ -24,6 +24,12 @@ const AUTOTILE_SHEET_SIZES: SheetPixelSizes = {
 const INSET = 1;
 
 describe('computeTileUv', () => {
+  it('resolves A4 tile IDs into four autotile quarter UVs', () => {
+    const result = computeTileUv(5888, { A4: { width: 768, height: 720 } });
+    expect(result?.sheet).toBe('A4');
+    expect(result?.quads).toHaveLength(4);
+  });
+
   it('keeps one UV column when the sheet is narrower than one tile', () => {
     const quad = computeTileUv(1, { B: { width: 24, height: 768 } })?.quads[0];
     expect(quad?.u0).toBeCloseTo(1 / 24);

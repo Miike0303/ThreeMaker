@@ -37,6 +37,10 @@ describe('isObjectSheet', () => {
   it('treats E-sheet decorations as standing objects', () => {
     expect(isObjectSheet('E')).toBe(true);
   });
+
+  it('keeps A5 floor tiles out of the standing-object sheets', () => {
+    expect(isObjectSheet('A5')).toBe(false);
+  });
 });
 
 describe('computeCliffEdges', () => {

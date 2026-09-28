@@ -384,6 +384,21 @@ describe('computeAutotileQuarterOrigins', () => {
     expect(() => computeAutotileQuarterOrigins(4352 + 16, 'A3')).not.toThrow();
   });
 
+  it('uses the top-right cap quarter for A2 shape 17', () => {
+    expect(computeAutotileQuarterOrigins(2816 + 17, 'A2')).toEqual([
+      { x: 0, y: 96 },
+      { x: 72, y: 0 },
+      { x: 0, y: 72 },
+      { x: 24, y: 72 },
+    ]);
+  });
+
+  it('falls back to the first water frame for a negative A1 animation frame', () => {
+    expect(computeAutotileQuarterOrigins(2048, 'A1', -1)).toEqual(
+      computeAutotileQuarterOrigins(2048, 'A1', 0),
+    );
+  });
+
   describe('tilePixelSize (HD sheets)', () => {
     it('scales A2 kind 0 shape 0 quarter origins exactly 2× in pixels at 96px', () => {
       const at48 = computeAutotileQuarterOrigins(2816, 'A2', 0, 48);
