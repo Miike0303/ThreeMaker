@@ -85,6 +85,20 @@ describe('computeDirtyTileRect', () => {
 });
 
 describe('expandDirtyRectNorthThroughStars', () => {
+  it('ignores empty tiles even when tile zero carries a star flag', () => {
+    const map = makeMap(4, 4, new Array(16).fill(0));
+    const rect = { xStart: 1, yStart: 2, xEnd: 2, yEnd: 4 };
+
+    expect(expandDirtyRectNorthThroughStars(rect, map, makeTileset([0]))).toEqual(rect);
+  });
+
+  it('does not expand a zero-height dirty rectangle through stars', () => {
+    const map = makeMap(4, 4, new Array(16).fill(2));
+    const rect = { xStart: 1, yStart: 2, xEnd: 2, yEnd: 2 };
+
+    expect(expandDirtyRectNorthThroughStars(rect, map, makeTileset())).toEqual(rect);
+  });
+
   it('leaves the rect unchanged when there are no star tiles north of it', () => {
     const map = makeMap(4, 4, new Array(16).fill(1)); // all plain ground, no star tiles
     const tileset = makeTileset();
@@ -134,6 +148,12 @@ describe('expandDirtyRectNorthThroughStars', () => {
 });
 
 describe('dirtyRectToChunkKeys', () => {
+  it('does not dirty the next chunk row when a rectangle ends at its boundary', () => {
+    expect([...dirtyRectToChunkKeys({ xStart: 0, yStart: 0, xEnd: 1, yEnd: 16 }, 16)]).toEqual([
+      '0,0',
+    ]);
+  });
+
   it('does not include the next chunk when a rect ends exactly at its edge', () => {
     expect([...dirtyRectToChunkKeys({ xStart: 0, yStart: 0, xEnd: 16, yEnd: 1 }, 16)]).toEqual([
       '0,0',

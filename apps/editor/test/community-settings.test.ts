@@ -213,6 +213,10 @@ describe('communityShareTileCount (WU-COMM-10)', () => {
 });
 
 describe('formatCommunityShareMapId (WU-COMM-11)', () => {
+  it('honors a one-character map id prefix limit', () => {
+    expect(formatCommunityShareMapId('town-square', 1)).toBe('t');
+  });
+
   it('truncates a fractional prefix limit instead of rounding it', () => {
     expect(formatCommunityShareMapId('0123456789', 2.9)).toBe('01');
   });

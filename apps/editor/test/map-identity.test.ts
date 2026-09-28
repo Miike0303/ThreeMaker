@@ -27,6 +27,14 @@ import {
 } from '../src/map-identity.js';
 
 describe('validateMapName', () => {
+  it('rejects COM9 at the upper reserved device boundary', () => {
+    expect(validateMapName('COM9')).toBe('reserved');
+  });
+
+  it('rejects a double quote inside a map filename', () => {
+    expect(validateMapName('Town"Square')).toBe('invalid-chars');
+  });
+
   it('accepts a map name that only ends with a reserved device name', () => {
     expect(validateMapName('Falcon')).toBeNull();
   });

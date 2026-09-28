@@ -120,6 +120,12 @@ describe('computePaletteCells - plain sheets (B/C/D/E/A5)', () => {
 });
 
 describe('computePaletteCells - autotile sheets (A1-A4)', () => {
+  it('keeps the last A2 kind selectable on a full sheet', () => {
+    const cells = computePaletteCells('A2', { width: 768, height: 576 });
+    expect(cells).toHaveLength(32);
+    expect(cells.at(-1)?.tileId).toBe(4304);
+  });
+
   it('exposes the last A3 kind on a full four-row sheet', () => {
     const cells = computePaletteCells('A3', { width: 768, height: 384 });
     expect(cells).toHaveLength(32);
