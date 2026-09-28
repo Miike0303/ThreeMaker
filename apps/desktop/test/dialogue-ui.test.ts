@@ -15,6 +15,7 @@ const LOCALES = {
       'dialogue.unknownSpeaker': 'Someone',
       'dialogue.hint.advance': 'E / Enter / Space to continue',
       'dialogue.hint.choice': '1-9 or arrows + Enter to choose',
+      'dialogue.error': 'Error',
     },
   },
 };
@@ -209,6 +210,30 @@ describe('createDialogueOverlay', () => {
     overlay.showChoices(['Yes', 'No'], 0);
 
     expect(hint?.textContent).toBe('1-9 or arrows + Enter to choose');
+  });
+
+  it('numbers visible choices from one', () => {
+    const { overlay, choices } = overlayParts();
+
+    overlay.showChoices(['Yes', 'No'], 0);
+
+    expect(choices?.children.map((choice) => choice.textContent)).toEqual(['1. Yes', '2. No']);
+  });
+
+  it('assigns each choice its zero-based pointer index', () => {
+    const { overlay, choices } = overlayParts();
+
+    overlay.showChoices(['Yes', 'No'], 0);
+
+    expect(choices?.children.map((choice) => choice.dataset.choiceIndex)).toEqual(['0', '1']);
+  });
+
+  it('shows the error details after the localized error label', () => {
+    const { overlay, text } = overlayParts();
+
+    overlay.showError('Could not load.');
+
+    expect(text?.textContent).toBe('Error: Could not load.');
   });
 
   it('clears displayed choices when the next dialogue line appears', () => {

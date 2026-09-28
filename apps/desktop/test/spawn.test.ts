@@ -66,6 +66,17 @@ describe('findSpawnTile', () => {
     expect(findSpawnTile(grid, 0, 0)).toEqual({ x: 8, y: 0 });
   });
 
+  it('searches the last ring when the origin is just beyond the map edge', () => {
+    const grid: StandabilityQuery = {
+      width: 3,
+      height: 2,
+      isStandable: (x, y) => x === 2 && (y === 0 || y === 1),
+      isGoodSpawnCandidate: (x, y) => x === 2 && (y === 0 || y === 1),
+    };
+
+    expect(findSpawnTile(grid, -1, 0)).toEqual({ x: 2, y: 0 });
+  });
+
   it('rounds a fractional origin to the nearest tile', () => {
     const grid = fakeGrid(['...', '...', '...']);
     expect(findSpawnTile(grid, 1.4, 0.6)).toEqual({ x: 1, y: 1 });

@@ -138,6 +138,16 @@ describe('formatDebugRows', () => {
 
     expect(rows.find((row) => row.label === 'Inventory')?.value).toBe('{potion:1}');
   });
+
+  it('formats empty inventory and stats as compact braces', () => {
+    const rows = formatDebugRows(
+      { ...SNAPSHOT, inventory: {}, stats: {} },
+      createI18n(LOCALES, 'en').t,
+    );
+
+    expect(rows.find((row) => row.label === 'Inventory')?.value).toBe('{}');
+    expect(rows.find((row) => row.label === 'Stats')?.value).toBe('{}');
+  });
 });
 
 describe('debug panel collapsed-state persistence', () => {
@@ -299,5 +309,26 @@ describe('debug panel toggle accessibility', () => {
     panel.setNoclipActive(true);
 
     expect(indicator?.textContent).toBe('debug.noclipOn');
+  });
+
+  it('restores the noclip off indicator when the shortcut is released', () => {
+    const created: FakeNode[] = [];
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => {
+        const node = fakeNode(tag);
+        created.push(node);
+        return node;
+      },
+    });
+    const panel = createDebugPanel(createI18n(LOCALES, 'en').t, {
+      devMode: false,
+      collapsedStorage: { getItem: () => null, setItem: () => {} },
+    });
+    const indicator = created.find((node) => node.textContent === 'debug.noclipOff');
+
+    panel.setNoclipActive(true);
+    panel.setNoclipActive(false);
+
+    expect(indicator?.textContent).toBe('debug.noclipOff');
   });
 });
