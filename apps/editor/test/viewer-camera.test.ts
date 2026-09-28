@@ -119,6 +119,12 @@ describe('zoomPercentForDistance (WU-VIEW-02)', () => {
 });
 
 describe('panCameraTarget (WU-UX-01)', () => {
+  it('keeps vertical panning finite at a horizontal camera tilt', () => {
+    const next = panCameraTarget({ x: 10, z: 20 }, 0, 50, 15, 600, 45, 0);
+    expect(Number.isFinite(next.z)).toBe(true);
+    expect(next.z).toBeLessThan(20);
+  });
+
   it('keeps pan coordinates finite before the viewport has a height', () => {
     const target = panCameraTarget({ x: 0, z: 0 }, 10, 10, 10, 0, 45, 45);
     expect(Number.isFinite(target.x)).toBe(true);

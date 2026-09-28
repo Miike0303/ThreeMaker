@@ -11,6 +11,13 @@ import {
 } from '../src/new-map-wizard.js';
 
 describe('new map wizard', () => {
+  it('rejects an invalid height when the name and width are valid', () => {
+    expect(validateNewMapDraft({ name: 'Castle', width: 20, height: '7' })).toEqual({
+      valid: false,
+      errors: { name: false, width: false, height: true },
+    });
+  });
+
   it('rejects an invalid width when the name and height are valid', () => {
     expect(validateNewMapDraft({ name: 'Castle', width: '7', height: 15 })).toEqual({
       valid: false,

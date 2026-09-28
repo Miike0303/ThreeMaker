@@ -36,6 +36,13 @@ describe('isPlainSheet', () => {
 });
 
 describe('computePlainGridDimensions', () => {
+  it('omits an incomplete second row from a plain sheet', () => {
+    expect(computePlainGridDimensions('B', { width: 48, height: 95 })).toEqual({
+      cols: 1,
+      rows: 1,
+    });
+  });
+
   it('omits an incomplete second column from a plain sheet', () => {
     expect(computePlainGridDimensions('B', { width: 95, height: 48 })).toEqual({
       cols: 1,

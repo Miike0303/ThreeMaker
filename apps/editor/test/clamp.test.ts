@@ -39,6 +39,15 @@ describe('clampTileIndex', () => {
 });
 
 describe('clampRoomRect', () => {
+  it('uses the top edge when a room origin has a non-finite y coordinate', () => {
+    expect(clampRoomRect({ x: 2, y: Number.NaN, width: 2, height: 2 }, 5, 5)).toEqual({
+      x: 2,
+      y: 0,
+      width: 2,
+      height: 2,
+    });
+  });
+
   it('floors a fractional room y origin before placing the room', () => {
     expect(clampRoomRect({ x: 2, y: 1.9, width: 1, height: 1 }, 5, 5)).toEqual({
       x: 2,

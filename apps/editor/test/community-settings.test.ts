@@ -282,6 +282,14 @@ describe('usesOnlyImportedSlotSources (WU-COMM-06)', () => {
 });
 
 describe('licenseTagFromSlots (WU-COMM-07)', () => {
+  it('does not classify a non-finite tileset id as imported provenance', () => {
+    expect(
+      licenseTagFromSlots({
+        A5: { object: 'a'.repeat(64), sourceTilesetId: Number.POSITIVE_INFINITY },
+      }),
+    ).toBe('user-owned');
+  });
+
   it('does not classify a non-finite game id as imported provenance', () => {
     expect(
       licenseTagFromSlots({

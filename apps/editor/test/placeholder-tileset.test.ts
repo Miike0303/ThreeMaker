@@ -21,6 +21,10 @@ import {
 } from '../src/placeholder-tileset.js';
 
 describe('buildPlaceholderTextures', () => {
+  it('rejects a zero-width palette image before encoding', () => {
+    expect(() => encodeRgbaPng(0, 1, new Uint8Array(0))).toThrow('encodeRgbaPng: invalid size 0x1');
+  });
+
   it('rejects a truncated RGBA buffer before encoding a palette image', () => {
     expect(() => encodeRgbaPng(1, 1, new Uint8Array([10, 20, 30]))).toThrow(
       'encodeRgbaPng: rgba buffer shorter than width*height*4',
