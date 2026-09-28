@@ -153,3 +153,15 @@ describe('driveRoomFade', () => {
     expect(() => driveRoomFade(undefined, 4, 0.016)).not.toThrow();
   });
 });
+
+it('returns no room when the grid width is negative', () => {
+  const tracker = createRoomTracker([new Uint16Array([7])], -1);
+
+  expect(tracker.roomAt(0, 0, 0)).toBe(0);
+});
+
+it('does not read the preceding row for a negative tile x coordinate', () => {
+  const tracker = createRoomTracker([new Uint16Array([0, 0, 7, 0, 0, 0])], 3);
+
+  expect(tracker.roomAt(0, -1, 1)).toBe(0);
+});

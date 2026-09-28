@@ -63,3 +63,19 @@ describe('shouldForceWebGL', () => {
     expect(shouldForceWebGL('')).toBe(false);
   });
 });
+
+it('defaults to WebGPU when backend metadata is missing', () => {
+  expect(mapRendererBackendName(undefined)).toBe('webgpu');
+});
+
+it('prefers a mixed-case WebGPU constructor name over a conflicting fallback flag', () => {
+  class WebGpuBackend {
+    readonly isWebGLBackend = true;
+  }
+
+  expect(mapRendererBackendName(new WebGpuBackend())).toBe('webgpu');
+});
+
+it('ignores a numeric WebGL backend flag', () => {
+  expect(mapRendererBackendName({ isWebGLBackend: 1 })).toBe('webgpu');
+});

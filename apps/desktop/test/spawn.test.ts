@@ -244,3 +244,36 @@ describe('resolveInitialSpawn', () => {
     expect(result).toEqual({ x: 2, y: 0, floorIndex: 0 });
   });
 });
+
+it('chooses the current ring before a farther tile beside its bottom edge', () => {
+  const grid: StandabilityQuery = {
+    width: 5,
+    height: 5,
+    isStandable: () => true,
+    isGoodSpawnCandidate: (x, y) => y === 3 && (x === 2 || x === 4),
+  };
+
+  expect(findSpawnTile(grid, 2, 2)).toEqual({ x: 2, y: 3 });
+});
+
+it('starts the next ring at its top-left corner before the inner left edge can extend into it', () => {
+  const grid: StandabilityQuery = {
+    width: 5,
+    height: 5,
+    isStandable: () => true,
+    isGoodSpawnCandidate: (x, y) => y === 0 && (x === 0 || x === 1),
+  };
+
+  expect(findSpawnTile(grid, 2, 2)).toEqual({ x: 0, y: 0 });
+});
+
+it('chooses the current ring before a farther tile above its right edge', () => {
+  const grid: StandabilityQuery = {
+    width: 5,
+    height: 5,
+    isStandable: () => true,
+    isGoodSpawnCandidate: (x, y) => x === 3 && (y === 0 || y === 3),
+  };
+
+  expect(findSpawnTile(grid, 2, 2)).toEqual({ x: 3, y: 3 });
+});
