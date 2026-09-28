@@ -161,3 +161,13 @@ describe('TriggerIndex — on-interact', () => {
     expect(index.interact(0, 3, 5, 'up')).toEqual([]);
   });
 });
+
+it('keeps trigger events separate when floor and column digits collide', () => {
+  const index = new TriggerIndex([
+    trigger({ id: 'first', floor: 1, x: 23, y: 4, event: 'first-event' }),
+    trigger({ id: 'second', floor: 12, x: 3, y: 4, event: 'second-event' }),
+  ]);
+
+  expect(index.enter(1, 23, 4)).toEqual(['first-event']);
+  expect(index.enter(12, 3, 4)).toEqual(['second-event']);
+});

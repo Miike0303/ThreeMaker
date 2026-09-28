@@ -228,3 +228,12 @@ it('keeps the full speaker name without whitespace after the colon', () => {
 
   expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello.' });
 });
+
+it('ignores a weather tag when no speaker is declared', () => {
+  const story = compileInk('Hello. # weather: rainy\n-> END\n');
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', text: 'Hello.' });
+});

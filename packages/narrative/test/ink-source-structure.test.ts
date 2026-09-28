@@ -586,3 +586,23 @@ it('preserves multiple fractional digits in a horizontal layout coordinate', () 
     { knot: 'entry', x: 12.25, y: 4 },
   ]);
 });
+
+it('preserves multiple fractional digits in a vertical layout coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry x=4 y=-12.25\n')).toEqual([
+    { knot: 'entry', x: 4, y: -12.25 },
+  ]);
+});
+
+it('finds a divert after multiple whitespace characters', () => {
+  expect(listInkEdges('=== start ===\n-> \t next\n')).toEqual([{ from: 'start', to: 'next' }]);
+});
+
+it('parses layout markers with multiple whitespace characters before the knot', () => {
+  expect(parseInkNodeLayouts('// @tm-node \t entry x=4 y=7\n')).toEqual([
+    { knot: 'entry', x: 4, y: 7 },
+  ]);
+});
+
+it('rejects a single slash as a knot header comment delimiter', () => {
+  expect(listInkKnots('=== hidden === / author note\n=== visible ===\n')).toEqual(['visible']);
+});

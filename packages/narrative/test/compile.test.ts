@@ -238,3 +238,11 @@ it('preserves warning severity alongside a compilation error', () => {
     });
   }
 });
+
+it('plays a finished knot when another knot has a compiler warning', () => {
+  const story = compileInk(
+    '-> greeting\n=== draft ===\nUnfinished.\n=== greeting ===\nWelcome back.\n-> END\n',
+  );
+
+  expect(story.Continue()).toBe('Welcome back.\n');
+});
