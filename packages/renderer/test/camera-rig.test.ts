@@ -109,6 +109,10 @@ describe('clampTiltDeg', () => {
     expect(clampTiltDeg(14)).toBe(15);
   });
 
+  it('keeps the maximum HD-2D tilt at 75 degrees', () => {
+    expect(clampTiltDeg(76)).toBe(75);
+  });
+
   it('clamps within [MIN_TILT_DEG, MAX_TILT_DEG]', () => {
     expect(clampTiltDeg(0)).toBe(MIN_TILT_DEG);
     expect(clampTiltDeg(1000)).toBe(MAX_TILT_DEG);

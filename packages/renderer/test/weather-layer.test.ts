@@ -54,6 +54,13 @@ describe('createWeatherLayer structure', () => {
     expect(layer.particleCount).toBe(12);
   });
 
+  it('allows zero particles when weather visuals are disabled', () => {
+    const { layer } = createInspect(0);
+    expect(layer.mesh.count).toBe(0);
+    expect(layer.particleCount).toBe(0);
+    layer.dispose();
+  });
+
   it('keeps the camera-centered particle volume visible to the renderer', () => {
     const { layer } = createInspect(8);
     expect(layer.mesh.frustumCulled).toBe(false);

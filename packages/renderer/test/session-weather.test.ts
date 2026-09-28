@@ -7,9 +7,14 @@ import { describe, expect, it } from 'vitest';
 import {
   composeAmbientIntensity,
   parseWeatherMode,
+  WEATHER_KEY,
   weatherDimFactor,
 } from '../src/runtime/session-weather.js';
 import { baseSceneLightSetup, dayNightAmbientFactor } from '../src/runtime/sheet-tile-lighting.js';
+
+it('uses the persisted weather world-state key', () => {
+  expect(WEATHER_KEY).toBe('weather.current');
+});
 
 describe('parseWeatherMode', () => {
   it('accepts the four weather literals', () => {
