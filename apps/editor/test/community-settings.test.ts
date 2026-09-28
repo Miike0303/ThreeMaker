@@ -43,6 +43,20 @@ const sampleJob = (id: string, at = '2026-08-08T00:00:00.000Z'): CommunityShareE
 });
 
 describe('community-settings', () => {
+  it('infers imported provenance when an allowed imported share omits its license tag', () => {
+    const job = maybeEnqueueCommunityShare(
+      { shareOnSave: true, allowImportedAssets: true },
+      {
+        mapId: 'imported-map',
+        mapName: 'Imported map',
+        tileObjectShas: ['a'.repeat(64)],
+        usesOnlyImportedAssets: true,
+        now: () => '2026-09-28T00:00:00.000Z',
+      },
+    );
+    expect(job?.licenseTag).toBe('import-rpgm');
+  });
+
   it('defaults a missing share-on-save preference to enabled', () => {
     const storage = memoryStorage({
       'threemaker-maker-studio:community': JSON.stringify({ allowImportedAssets: true }),

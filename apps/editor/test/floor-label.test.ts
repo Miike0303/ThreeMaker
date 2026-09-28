@@ -18,6 +18,11 @@ function tFor(code: string) {
 }
 
 describe('resolveFloorLabel + spawn summary', () => {
+  it('numbers an unlabeled second floor from its position', () => {
+    const floors = [{ id: 'ground', label: 'Ground' }, { id: 'upper' }];
+    expect(resolveFloorLabel(floors, 'upper', tFor('en'))).toBe('Floor 2');
+  });
+
   it('uses the referenced floor label when it is not the first floor', () => {
     const floors = [
       { id: 'floor-0', label: 'Basement' },

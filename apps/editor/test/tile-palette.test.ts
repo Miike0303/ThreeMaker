@@ -120,6 +120,11 @@ describe('computePaletteCells - plain sheets (B/C/D/E/A5)', () => {
 });
 
 describe('computePaletteCells - autotile sheets (A1-A4)', () => {
+  it('scales an autotile swatch origin to the authored tile pixel size', () => {
+    const cells = computePaletteCells('A2', { width: 1536, height: 1152 }, 96);
+    expect(cells[0]).toEqual({ tileId: 2816, x: 48, y: 144, width: 96, height: 96 });
+  });
+
   it('keeps the last A2 kind selectable on a full sheet', () => {
     const cells = computePaletteCells('A2', { width: 768, height: 576 });
     expect(cells).toHaveLength(32);

@@ -87,3 +87,9 @@ it('defaults to WebGPU when the renderer backend is null', () => {
 it('uses the WebGL flag when constructor metadata is absent', () => {
   expect(mapRendererBackendName({ constructor: undefined, isWebGLBackend: true })).toBe('webgl2');
 });
+
+it('recognizes a prefixed WebGL backend constructor name', () => {
+  class CustomWebGLBackend {}
+
+  expect(mapRendererBackendName(new CustomWebGLBackend())).toBe('webgl2');
+});

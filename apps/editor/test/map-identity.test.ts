@@ -112,6 +112,10 @@ describe('validateMapName', () => {
 });
 
 describe('assertMapName / path derivation', () => {
+  it('ignores backup filenames that contain but do not end with the map suffix', () => {
+    expect(mapNameFromDocumentFileName('town.tmmap.json.bak')).toBeNull();
+  });
+
   it('trims and returns a valid name; throws InvalidMapNameError otherwise', () => {
     expect(assertMapName('  town  ')).toBe('town');
     expect(() => assertMapName('../x')).toThrow(InvalidMapNameError);

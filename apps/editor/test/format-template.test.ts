@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { formatTemplate } from '../src/format-template.js';
 
 describe('formatTemplate', () => {
+  it('substitutes a placeholder whose identifier contains a digit', () => {
+    expect(formatTemplate('Tile {tile2}', { tile2: 42 })).toBe('Tile 42');
+  });
+
   it('substitutes a placeholder whose name contains an underscore', () => {
     expect(formatTemplate('Tile {tile_id}', { tile_id: 42 })).toBe('Tile 42');
   });

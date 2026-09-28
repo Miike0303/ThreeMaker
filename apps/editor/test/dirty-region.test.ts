@@ -85,6 +85,13 @@ describe('computeDirtyTileRect', () => {
 });
 
 describe('expandDirtyRectNorthThroughStars', () => {
+  it('does not extend dirty bounds through tiles without a flags entry', () => {
+    const map = makeMap(2, 3, [1, 1, 1, 1, 1, 1]);
+    const tileset = { ...makeTileset(), flags: [] };
+    const rect = { xStart: 0, yStart: 2, xEnd: 1, yEnd: 3 };
+    expect(expandDirtyRectNorthThroughStars(rect, map, tileset)).toEqual(rect);
+  });
+
   it('ignores empty tiles even when tile zero carries a star flag', () => {
     const map = makeMap(4, 4, new Array(16).fill(0));
     const rect = { xStart: 1, yStart: 2, xEnd: 2, yEnd: 4 };
@@ -177,6 +184,21 @@ describe('dirtyRectToChunkKeys', () => {
 });
 
 describe('computeDirtyChunkKeys (full pipeline)', () => {
+  it('keeps northern star chunks dirty when the stroke continues south in one column', () => {
+    const layer = new Array(32 * 32).fill(1);
+    for (let y = 0; y < 16; y++) layer[y * 32 + 8] = 2;
+    const keys = computeDirtyChunkKeys(
+      [
+        { x: 8, y: 17 },
+        { x: 8, y: 20 },
+      ],
+      makeMap(32, 32, layer),
+      makeTileset(),
+      16,
+    );
+    expect([...keys].sort()).toEqual(['0,0', '0,1']);
+  });
+
   it('dirties the east neighbor when painting the last column of a chunk', () => {
     const map = makeMap(32, 16, new Array(32 * 16).fill(1));
     const keys = computeDirtyChunkKeys([{ x: 15, y: 8 }], map, makeTileset(), 16);

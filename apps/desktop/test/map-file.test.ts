@@ -131,4 +131,18 @@ describe('map-file (shared working-map read helper)', () => {
       baseDir: 'Home',
     });
   });
+
+  it('reads the default working map from the published current.tmmap.json path', async () => {
+    fsMocks.exists.mockResolvedValueOnce(true);
+    fsMocks.readTextFile.mockResolvedValueOnce('{"id":"current-map"}');
+
+    await expect(readMapDocumentText()).resolves.toBe('{"id":"current-map"}');
+
+    expect(fsMocks.exists).toHaveBeenCalledWith('.threemaker/maps/current.tmmap.json', {
+      baseDir: 'Home',
+    });
+    expect(fsMocks.readTextFile).toHaveBeenCalledWith('.threemaker/maps/current.tmmap.json', {
+      baseDir: 'Home',
+    });
+  });
 });
