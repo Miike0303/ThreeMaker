@@ -652,3 +652,31 @@ it('preserves the story body after a line with an inline comment', () => {
     `// @tm-node start x=17 y=29\n\n${source}`,
   );
 });
+
+it('recognizes a knot header indented with a tab', () => {
+  expect(listInkKnots('\t=== entry ===\n')).toEqual(['entry']);
+});
+
+it('recognizes a layout comment indented with a tab', () => {
+  expect(parseInkNodeLayouts('\t// @tm-node entry x=17 y=29\n')).toEqual([
+    { knot: 'entry', x: 17, y: 29 },
+  ]);
+});
+
+it('recognizes a tab between the opening header delimiter and knot name', () => {
+  expect(listInkKnots('===\tentry ===\n')).toEqual(['entry']);
+});
+
+it('keeps an unquoted backslash from escaping a following comment delimiter', () => {
+  const source = '=== start ===\nPath \\// -> hidden\n-> visible\n';
+
+  expect(listInkEdges(source)).toEqual([{ from: 'start', to: 'visible' }]);
+});
+
+it('rejects a leading plus sign on a horizontal layout coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry x=+4 y=7\n')).toEqual([]);
+});
+
+it('rejects a leading plus sign on a vertical layout coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry x=4 y=+7\n')).toEqual([]);
+});

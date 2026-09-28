@@ -273,3 +273,9 @@ it('identifies choosing as the operation attempted before opening a story', () =
   const provider = new InkDialogueProvider(new Map());
   expect(() => provider.choose(0)).toThrow('InkDialogueProvider: choose() called before open().');
 });
+
+it('identifies advancing as the operation attempted before opening a story', () => {
+  const provider = new InkDialogueProvider(new Map());
+
+  expect(() => provider.next()).toThrow('InkDialogueProvider: next() called before open().');
+});

@@ -230,3 +230,13 @@ it('loads an override using the published input bindings magic', () => {
   expect(table.actionForKeyboardKey('f')).toBe(Actions.Interact);
   expect(table.actionForKeyboardKey('e')).toBeUndefined();
 });
+
+it('rejects a persisted pointer source with a keyboard-shaped key', () => {
+  expect(
+    parseInputBindingsDocument({
+      magic: INPUT_BINDINGS_MAGIC,
+      version: 1,
+      bindings: [{ action: Actions.Interact, source: { device: 'pointer', key: 'e' } }],
+    }),
+  ).toEqual({ ok: false, reason: 'invalid binding entry' });
+});
