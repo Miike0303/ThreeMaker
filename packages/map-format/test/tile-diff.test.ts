@@ -123,6 +123,21 @@ describe('command stack (undo/redo, cap 100)', () => {
     expect(redone.state.undoStack.map((diff) => diff.cells[0]?.after)).toEqual([1, 2, 3]);
   });
 
+  it('keeps the remaining redo history after redoing one of several commands', () => {
+    let stack = EMPTY_COMMAND_STACK;
+    for (const value of [1, 2, 3]) stack = pushCommand(stack, makeDiff(value));
+
+    for (let i = 0; i < 2; i++) {
+      const undone = undoCommand(stack);
+      if (!undone) throw new Error('Expected a command to undo.');
+      stack = undone.state;
+    }
+
+    const redone = redoCommand(stack);
+    if (!redone) throw new Error('Expected a command to redo.');
+    expect(redone.state.redoStack.map((diff) => diff.cells[0]?.after)).toEqual([3]);
+  });
+
   it('undo sequence: paint 5 tiles then undo 3 -> map reflects state after the first 2 paints', () => {
     let stack = EMPTY_COMMAND_STACK;
     let layers = makeLayers(1, 1);

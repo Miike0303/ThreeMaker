@@ -102,6 +102,24 @@ describe('parseMapDocument', () => {
     registerMigration(5, migrateV5ToV6);
   });
 
+  it('classifies null input as a malformed map document', () => {
+    expect(() => parseMapDocument(null)).toThrow(MapFormatError);
+  });
+
+  it('classifies a version-5 object in place of floors as malformed', () => {
+    const input = makeValidDocInput({ version: 5, floors: {} });
+    delete input.lights;
+
+    expect(() => parseMapDocument(input)).toThrow(MapFormatError);
+  });
+
+  it('classifies a null floor in a version-5 document as malformed', () => {
+    const input = makeValidDocInput({ version: 5, floors: [null] });
+    delete input.lights;
+
+    expect(() => parseMapDocument(input)).toThrow(MapFormatError);
+  });
+
   it('accepts a document already at the current version, with no migration needed', () => {
     const doc = parseMapDocument(makeValidDocInput());
     expect(doc.version).toBe(CURRENT_MAP_FORMAT_VERSION);

@@ -45,6 +45,16 @@ describe('createBlankMapDocument', () => {
     expect(new Set(layerArrays).size).toBe(layerArrays.length);
   });
 
+  it('initializes every tile, shadow, and region cell to zero', () => {
+    const layers = createBlankMapDocument(BLANK_OPTIONS).floors[0]?.layers;
+    if (layers === undefined) throw new Error('Blank document is missing its first floor.');
+
+    for (const layer of [...layers.tiles, layers.shadows, layers.regions]) {
+      expect(layer).toHaveLength(BLANK_OPTIONS.width * BLANK_OPTIONS.height);
+      expect(layer.every((tileId) => tileId === 0)).toBe(true);
+    }
+  });
+
   it('uses the standard 48-pixel tile size for a new map', () => {
     expect(createBlankMapDocument(BLANK_OPTIONS).tileset.tilePixelSize).toBe(48);
   });
