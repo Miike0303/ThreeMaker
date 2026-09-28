@@ -40,6 +40,38 @@ function createInspect(particleCount?: number): {
   return { scene, layer };
 }
 
+type GraphNodeShape = {
+  readonly node?: unknown;
+  readonly nodes?: unknown;
+  readonly aNode?: unknown;
+  readonly bNode?: unknown;
+  readonly cNode?: unknown;
+  readonly op?: string;
+  readonly method?: string;
+  readonly value?: unknown;
+};
+
+function graphContains(
+  root: unknown,
+  matches: (node: GraphNodeShape) => boolean,
+  seen: WeakSet<object> = new WeakSet(),
+): boolean {
+  if (!root || typeof root !== 'object' || seen.has(root)) return false;
+  seen.add(root);
+  if (Array.isArray(root)) {
+    return root.some((child) => graphContains(child, matches, seen));
+  }
+  const node = root as GraphNodeShape;
+  if (matches(node)) return true;
+  return [node.node, node.nodes, node.aNode, node.bNode, node.cNode].some((child) =>
+    graphContains(child, matches, seen),
+  );
+}
+
+function positionGraph(layer: WeatherLayerInspect): unknown {
+  return (layer.mesh.material as THREE.SpriteNodeMaterial).positionNode;
+}
+
 describe('createWeatherLayer structure', () => {
   it('adds one mesh with instance count equal to particleCount (default 3000)', () => {
     const { scene, layer } = createInspect();
@@ -106,6 +138,78 @@ describe('createWeatherLayer structure', () => {
     const { layer } = createInspect(8);
     expect(layer.mesh.visible).toBe(false);
     expect(layer.particlesVisible).toBe(false);
+  });
+});
+
+describe('particle position graph', () => {
+  it('adds the camera center to each particle offset', () => {
+    const { layer } = createInspect(4);
+    const root = positionGraph(layer) as { node?: { op?: string; aNode?: unknown } };
+    expect(root.node?.op).toBe('+');
+    expect(root.node?.aNode).toBe(layer.uniforms.volumeCenter);
+    layer.dispose();
+  });
+
+  it('uses the fall-speed uniform to animate vertical movement', () => {
+    const { layer } = createInspect(4);
+    expect(graphContains(positionGraph(layer), (node) => node === layer.uniforms.fallSpeed)).toBe(
+      true,
+    );
+    layer.dispose();
+  });
+
+  it('uses the drift-amplitude uniform to animate lateral movement', () => {
+    const { layer } = createInspect(4);
+    expect(
+      graphContains(positionGraph(layer), (node) => node === layer.uniforms.driftAmplitude),
+    ).toBe(true);
+    layer.dispose();
+  });
+
+  it('moves falling particles downward as time advances', () => {
+    const { layer } = createInspect(4);
+    expect(
+      graphContains(
+        positionGraph(layer),
+        (node) =>
+          node.op === '-' &&
+          graphContains(node.bNode, (operand) => operand === layer.uniforms.fallSpeed),
+      ),
+    ).toBe(true);
+    layer.dispose();
+  });
+
+  it('keeps particles at least two world units from the camera', () => {
+    const { layer } = createInspect(4);
+    expect(
+      graphContains(
+        positionGraph(layer),
+        (node) => node.op === '/' && graphContains(node.aNode, (operand) => operand.value === 2),
+      ),
+    ).toBe(true);
+    layer.dispose();
+  });
+
+  it('spans a twenty-unit vertical weather volume', () => {
+    const { layer } = createInspect(4);
+    expect(
+      graphContains(
+        positionGraph(layer),
+        (node) => node.op === '*' && graphContains(node.bNode, (operand) => operand.value === 20),
+      ),
+    ).toBe(true);
+    layer.dispose();
+  });
+
+  it('wraps falling particles after one vertical volume', () => {
+    const { layer } = createInspect(4);
+    expect(
+      graphContains(
+        positionGraph(layer),
+        (node) => node.op === '%' && graphContains(node.bNode, (operand) => operand.value === 1),
+      ),
+    ).toBe(true);
+    layer.dispose();
   });
 });
 

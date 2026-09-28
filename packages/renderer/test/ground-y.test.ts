@@ -6,6 +6,13 @@ import { buildMap } from './fixtures.js';
 const HEIGHT_UNIT = 1;
 
 describe('groundYAt', () => {
+  it('samples the requested Y row independently of the X column', () => {
+    const elevation = new ElevationField(buildMap(2, 2, [0, 1, 2, 3]));
+
+    expect(groundYAt(elevation, 1, 0, HEIGHT_UNIT)).toBe(1);
+    expect(groundYAt(elevation, 0, 1, HEIGHT_UNIT)).toBe(2);
+  });
+
   it('flat step unchanged: constant world Y across a fractional position on a flat cell', () => {
     const map = buildMap(2, 1, [3, 3]);
     const elevation = new ElevationField(map);
