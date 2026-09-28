@@ -91,6 +91,18 @@ describe('createMostRecentHeldAction', () => {
     expect(held.current()).toBe(Actions.MoveUp);
   });
 
+  it('keeps a newer held action when a middle key is released', () => {
+    const held = createMostRecentHeldAction((key) => table.actionForKeyboardKey(key));
+    held.press('w');
+    held.press('a');
+    held.press('s');
+
+    held.release('a');
+    expect(held.current()).toBe(Actions.MoveDown);
+    held.release('s');
+    expect(held.current()).toBe(Actions.MoveUp);
+  });
+
   it('ignores keys that do not resolve to an action', () => {
     const held = createMostRecentHeldAction((key) => table.actionForKeyboardKey(key));
     held.press('e');

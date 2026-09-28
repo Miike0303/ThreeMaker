@@ -119,6 +119,13 @@ describe('applyBindingOverrides / collectBindingOverrides', () => {
     ]);
   });
 
+  it('persists a custom action that is absent from the default bindings', () => {
+    const binding = { action: 'custom.scan', source: { device: 'keyboard' as const, key: 'q' } };
+    const table = createBindingTable([binding]);
+
+    expect(collectBindingOverrides(table, [])).toEqual([binding]);
+  });
+
   it('does not persist unchanged aliases when their order differs', () => {
     const defaults = [
       { action: Actions.MoveUp, source: { device: 'keyboard' as const, key: 'w' } },
