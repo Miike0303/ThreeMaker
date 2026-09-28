@@ -64,6 +64,11 @@ describe('createWeatherLayer structure', () => {
     expect(layer.mesh.material.depthWrite).toBe(false);
     layer.dispose();
   });
+  it('blends translucent rain and snow particles', () => {
+    const { layer } = createInspect(8);
+    expect(layer.mesh.material.transparent).toBe(true);
+    layer.dispose();
+  });
   it('sizes rain and snow particles in world space', () => {
     const { layer } = createInspect(8);
     expect((layer.mesh.material as THREE.SpriteNodeMaterial).sizeAttenuation).toBe(true);

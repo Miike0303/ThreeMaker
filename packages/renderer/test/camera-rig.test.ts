@@ -40,6 +40,11 @@ describe('computeCameraPose: hd2d mode', () => {
 });
 
 describe('computeCameraPose: top-down mode', () => {
+  it('uses the configured field of view independently of tilt', () => {
+    const pose = computeCameraPose('top-down', { ...BASE_PARAMS, fovDeg: 57 }, TARGET);
+    expect(pose.fovDeg).toBe(57);
+  });
+
   it('uses an 85-degree view above the horizon', () => {
     const pose = computeCameraPose('top-down', BASE_PARAMS, TARGET);
 
@@ -62,6 +67,11 @@ describe('computeCameraPose: top-down mode', () => {
 });
 
 describe('computeCameraPose: first-person mode', () => {
+  it('uses the configured field of view independently of tilt', () => {
+    const pose = computeCameraPose('first-person', { ...BASE_PARAMS, fovDeg: 57 }, TARGET);
+    expect(pose.fovDeg).toBe(57);
+  });
+
   it('places the camera 0.8 tiles above the character feet', () => {
     const pose = computeCameraPose('first-person', BASE_PARAMS, TARGET);
 

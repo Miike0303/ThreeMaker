@@ -35,6 +35,22 @@ describe('generateSyntheticMap', () => {
     expect(defaultSeed.layers.tileLayers).toEqual(explicitSeed.layers.tileLayers);
   });
 
+  it('uses the documented default wall density', () => {
+    const defaultMap = generateSyntheticMap({ width: 64, height: 64, seed: 19 });
+    const explicitMap = generateSyntheticMap({
+      width: 64,
+      height: 64,
+      seed: 19,
+      wallDensity: 0.04,
+    });
+
+    expect(defaultMap.layers.tileLayers[0]).toEqual(explicitMap.layers.tileLayers[0]);
+  });
+
+  it('preserves an explicitly selected tileset id of zero', () => {
+    expect(generateSyntheticMap({ width: 1, height: 1, tilesetId: 0 }).tilesetId).toBe(0);
+  });
+
   it('fills layer 0 with the ground autotile and scatters some walls', () => {
     const map = generateSyntheticMap({ width: 64, height: 64, seed: 7 });
 

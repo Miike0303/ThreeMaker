@@ -37,6 +37,11 @@ describe('ChunkStreamer', () => {
     );
   });
 
+  it('rejects a fractional dispose radius', () => {
+    expect(() => new ChunkStreamer({ ...GIANT, buildRadius: 1, disposeRadius: 1.5 })).toThrow(
+      /disposeRadius/,
+    );
+  });
   it('first update builds the full (2r+1)^2 square around a mid-map focus', () => {
     const streamer = new ChunkStreamer({ ...GIANT, buildRadius: 2 });
 

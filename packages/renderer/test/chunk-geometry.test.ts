@@ -358,6 +358,24 @@ describe('buildChunks', () => {
     expect(chunks[0]?.tiles[0]?.elevation).toBe('object');
   });
 
+  it('classifies a tile blocked only to the left as "object" elevation', () => {
+    const layer0 = new Array(16).fill(0);
+    layer0[0] = 3;
+    const map = makeMap({
+      layers: {
+        tileLayers: [layer0, new Array(16).fill(0), new Array(16).fill(0), new Array(16).fill(0)],
+        shadows: new Array(16).fill(0),
+        regions: new Array(16).fill(0),
+      },
+    });
+    const flags = new Array(8192).fill(0);
+    flags[3] = 0x2;
+
+    const chunks = buildChunks(map, makeTileset({ flags }), SHEET_SIZES, 16);
+
+    expect(chunks[0]?.tiles[0]?.elevation).toBe('object');
+  });
+
   it('classifies a tile blocked only upward as "object" elevation', () => {
     const layer0 = new Array(16).fill(0);
     layer0[0] = 3;
@@ -441,6 +459,27 @@ describe('buildChunks', () => {
 
     const keys = chunks.map((chunk) => `${chunk.chunkX},${chunk.chunkY}`).sort();
     expect(keys).toEqual(['0,0', '1,0', '1,1']);
+  });
+
+  it('returns chunks in row-major order when a later layer first reaches the left chunk', () => {
+    const leftLayer = new Array(16).fill(0);
+    leftLayer[0] = 1;
+    const rightLayer = new Array(16).fill(0);
+    rightLayer[2] = 1;
+    const map = makeMap({
+      layers: {
+        tileLayers: [rightLayer, leftLayer, new Array(16).fill(0), new Array(16).fill(0)],
+        shadows: new Array(16).fill(0),
+        regions: new Array(16).fill(0),
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 2);
+
+    expect(chunks.map(({ chunkX, chunkY }) => [chunkX, chunkY])).toEqual([
+      [0, 0],
+      [1, 0],
+    ]);
   });
 
   it('skips tiles whose sheet has no known pixel size', () => {

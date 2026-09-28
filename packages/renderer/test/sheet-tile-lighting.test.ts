@@ -86,4 +86,8 @@ describe('dayNightAmbientFactor (C7 WU-02)', () => {
   it('uses the completed minute before advancing the dawn ramp', () => {
     expect(dayNightAmbientFactor(419.9)).toBe(dayNightAmbientFactor(419));
   });
+
+  it('rounds negative fractional minutes down before wrapping the day', () => {
+    expect(dayNightAmbientFactor(-1020.1)).toBe(dayNightAmbientFactor(419));
+  });
 });
