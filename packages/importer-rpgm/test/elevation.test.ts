@@ -103,6 +103,21 @@ describe('computeHeightGrid', () => {
 });
 
 describe('computeRampGrid', () => {
+  it('continues resolving later ramp cells after a valid direction override', () => {
+    const ctx: HeightGridContext = {
+      heightGrid: new Uint8Array([2, 2, 1, 1]),
+      mapWidth: 2,
+      mapHeight: 2,
+    };
+
+    const rampGrid = computeRampGrid(ctx, [
+      { x: 0, y: 0, rampDirection: 'south' },
+      { x: 1, y: 0 },
+    ]);
+
+    expect(Array.from(rampGrid)).toEqual([2, 2, 0, 0]);
+  });
+
   it('reports the ramp height in a multi-level warning', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const heightGrid = new Uint8Array(9).fill(4);
