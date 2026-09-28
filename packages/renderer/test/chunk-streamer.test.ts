@@ -11,6 +11,63 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('rejects a finite negative chunk size', () => {
+    expect(() => new ChunkStreamer({ ...GIANT, chunkSize: -16 })).toThrow(
+      'chunkSize must be a positive number, got -16.',
+    );
+  });
+
+  it('recomputes the build window when only the focus row changes', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 32,
+      mapHeight: 48,
+      buildRadius: 0,
+      disposeRadius: 1,
+    });
+    streamer.update(0, 0);
+
+    expect(streamer.update(0, 16).toBuild).toEqual(['0,1']);
+  });
+
+  it('disposes chunks behind a southbound focus outside the Y radius', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 48,
+      mapHeight: 80,
+      buildRadius: 0,
+      disposeRadius: 1,
+    });
+    streamer.update(16, 0);
+
+    expect(streamer.update(16, 48).toDispose).toEqual(['1,0']);
+    expect(streamer.liveKeys.has('1,0')).toBe(false);
+  });
+
+  it('clamps a negative X focus to column zero with one-tile chunks', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 1,
+      mapWidth: 3,
+      mapHeight: 1,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(-1, 0).toBuild).toEqual(['0,0']);
+  });
+
+  it('clamps a negative Y focus to row zero with one-tile chunks', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 1,
+      mapWidth: 1,
+      mapHeight: 3,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(0, -1).toBuild).toEqual(['0,0']);
+  });
+
   it('keeps one fallback chunk for an empty map width', () => {
     const streamer = new ChunkStreamer({
       chunkSize: 1,

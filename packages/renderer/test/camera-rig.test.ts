@@ -14,6 +14,15 @@ const BASE_PARAMS = { tiltDeg: 40, distance: 10, fovDeg: 45 };
 const TARGET = { x: 3, y: 0, z: 5, facing: 'down' as const };
 
 describe('computeCameraPose: hd2d mode', () => {
+  it('raises boom cameras with the active floor', () => {
+    for (const mode of ['hd2d', 'top-down'] as const) {
+      const ground = computeCameraPose(mode, BASE_PARAMS, TARGET);
+      const elevated = computeCameraPose(mode, BASE_PARAMS, { ...TARGET, y: 6 });
+
+      expect(elevated.position.y - ground.position.y).toBeCloseTo(6, 10);
+    }
+  });
+
   it('places the camera above and behind the target at the configured tilt/distance, looking at the target', () => {
     const pose = computeCameraPose('hd2d', BASE_PARAMS, TARGET);
 

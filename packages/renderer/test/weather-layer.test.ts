@@ -201,6 +201,61 @@ describe('createWeatherLayer structure', () => {
 });
 
 describe('particle position graph', () => {
+  it('scales fall displacement by elapsed time and precipitation speed', () => {
+    const { layer } = createInspect(4);
+    const fall = findGraphNode(
+      positionGraph(layer),
+      (node) => node.bNode === layer.uniforms.fallSpeed,
+    );
+    const clock = graphNode(fall.aNode);
+
+    for (const mode of ['rain', 'snow'] as const) {
+      layer.setMode(mode);
+      expect(evaluateScalarGraph(fall, new Map([[clock, 0]]))).toBe(0);
+      expect(evaluateScalarGraph(fall, new Map([[clock, 0.5]]))).toBeCloseTo(
+        layer.uniforms.fallSpeed.value / 2,
+        10,
+      );
+    }
+    layer.dispose();
+  });
+
+  it('oscillates lateral drift around zero at the active amplitude', () => {
+    const { layer } = createInspect(4);
+    const drift = graphNode(localParticleAxes(layer)[0]).bNode;
+    const wave = findGraphNode(drift, (node) => node.method === 'sin');
+    layer.setMode('snow');
+
+    expect(evaluateScalarGraph(drift, new Map([[wave, 0]]))).toBe(0);
+    expect(evaluateScalarGraph(drift, new Map([[wave, 1]]))).toBe(
+      layer.uniforms.driftAmplitude.value,
+    );
+    expect(evaluateScalarGraph(drift, new Map([[wave, -1]]))).toBe(
+      -layer.uniforms.driftAmplitude.value,
+    );
+    layer.dispose();
+  });
+
+  it('spreads particle drift phases over a full sine cycle', () => {
+    const { layer } = createInspect(4);
+    const wave = findGraphNode(positionGraph(layer), (node) => node.method === 'sin');
+    const angle = graphNode(wave.aNode);
+    const clock = graphNode(graphNode(angle.aNode).aNode);
+    const phaseSample = graphNode(graphNode(angle.bNode).aNode);
+    const sampleAt = (fraction: number): number =>
+      evaluateScalarGraph(
+        wave,
+        new Map([
+          [clock, 0],
+          [phaseSample, fraction],
+        ]),
+      );
+
+    expect(sampleAt(0.25)).toBeCloseTo(1, 8);
+    expect(sampleAt(0.75)).toBeCloseTo(-1, 8);
+    layer.dispose();
+  });
+
   it('spans thirty world units horizontally before lateral drift', () => {
     const { layer } = createInspect(4);
     const spread = graphNode(localParticleAxes(layer)[0]).aNode;
@@ -343,6 +398,16 @@ describe('particle position graph', () => {
 });
 
 describe('setMode', () => {
+  it('renders snowflakes more opaque than rain streaks', () => {
+    const { layer } = createInspect(8);
+    layer.setMode('rain');
+    const rainOpacity = layer.uniforms.opacity.value;
+    layer.setMode('snow');
+
+    expect(layer.uniforms.opacity.value).toBeGreaterThan(rainOpacity);
+    layer.dispose();
+  });
+
   it('shows the mesh for rain and hides it for clear', () => {
     const { layer } = createInspect(8);
     layer.setMode('rain');
@@ -475,6 +540,15 @@ describe('setMode', () => {
 });
 
 describe('followCamera', () => {
+  it('replaces the previous camera center on each follow update', () => {
+    const { layer } = createInspect(4);
+    layer.followCamera(new THREE.Vector3(3, 4, 5));
+    layer.followCamera(new THREE.Vector3(-2, 8, 1));
+
+    expect(layer.uniforms.volumeCenter.value.toArray()).toEqual([-2, 8, 1]);
+    layer.dispose();
+  });
+
   it('writes the volume-center uniform from the camera position', () => {
     const { layer } = createInspect(4);
     layer.followCamera(new THREE.Vector3(3, 4, 5));
@@ -493,6 +567,19 @@ describe('followCamera', () => {
 });
 
 describe('dispose', () => {
+  it('releases the particle material only once across repeated disposal', () => {
+    const { layer } = createInspect(4);
+    let disposeCalls = 0;
+    layer.mesh.material.addEventListener('dispose', () => {
+      disposeCalls++;
+    });
+
+    layer.dispose();
+    layer.dispose();
+
+    expect(disposeCalls).toBe(1);
+  });
+
   it('removes the mesh from the scene and is idempotent', () => {
     const { scene, layer } = createInspect(4);
     expect(scene.children).toContain(layer.mesh);
