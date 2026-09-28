@@ -53,6 +53,17 @@ describe('CommandRegistry', () => {
     expect(() => registry.register(syncPlugin)).toThrow(/already registered/);
   });
 
+  it('keeps the original plugin registered after rejecting a duplicate', () => {
+    const registry = new CommandRegistry();
+    registry.register(syncPlugin);
+    const replacement = { ...syncPlugin };
+
+    expect(() => registry.register(replacement)).toThrow(/already registered/);
+
+    expect(registry.get('shout')).toBe(syncPlugin);
+    expect(registry.types()).toEqual(['shout']);
+  });
+
   it('rejects an empty type', () => {
     const registry = new CommandRegistry();
     expect(() => registry.register({ ...syncPlugin, type: '' })).toThrow(/non-empty string/);

@@ -79,6 +79,19 @@ describe('Node', () => {
     expect(second.parent).toBe(parent);
   });
 
+  it('removes a later child without detaching its preceding sibling', () => {
+    const parent = new Node('parent');
+    const first = new Node('first');
+    const second = new Node('second');
+    parent.addChild(first).addChild(second);
+
+    parent.removeChild(second);
+
+    expect(parent.children).toEqual([first]);
+    expect(first.parent).toBe(parent);
+    expect(second.parent).toBeNull();
+  });
+
   it('removeChild leaves existing children attached when the target is absent', () => {
     const parent = new Node('parent');
     const child = new Node('child');

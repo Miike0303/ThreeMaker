@@ -115,6 +115,10 @@ describe('parseVolume / parseFadeMs', () => {
     expect(() => parseFadeMs(-0.0001, 'x')).toThrow(/non-negative/);
   });
 
+  it('rejects an infinite fade duration', () => {
+    expect(() => parseFadeMs(Number.POSITIVE_INFINITY, 'x')).toThrow(/non-negative/);
+  });
+
   it('accepts a zero-length fade', () => {
     expect(parseFadeMs(0, 'x')).toBe(0);
   });
@@ -159,6 +163,15 @@ describe('createAudioCommandPlugins', () => {
     );
 
     expect(parsed.intro).toStrictEqual([{ type: 'playSound', path: 'se/hit.ogg' }]);
+  });
+
+  it('preserves an authored zero playSound volume during parsing', () => {
+    const parsed = parseEventScript(
+      script({ type: 'playSound', path: 'se/hit.ogg', volume: 0 }),
+      registryFor(),
+    );
+
+    expect(parsed.intro).toStrictEqual([{ type: 'playSound', path: 'se/hit.ogg', volume: 0 }]);
   });
 
   it('forwards playSound to a handler when provided', () => {
@@ -230,6 +243,15 @@ describe('createAudioCommandPlugins', () => {
     expect(parsed.intro).toStrictEqual([{ type: 'playBgm', path: 'bgm/town.ogg', volume: 0 }]);
   });
 
+  it('preserves an authored zero playBgm fade during parsing', () => {
+    const parsed = parseEventScript(
+      script({ type: 'playBgm', path: 'bgm/town.ogg', fadeMs: 0 }),
+      registryFor(),
+    );
+
+    expect(parsed.intro).toStrictEqual([{ type: 'playBgm', path: 'bgm/town.ogg', fadeMs: 0 }]);
+  });
+
   it('forwards playBgm fadeMs to a handler', () => {
     const playBgm = vi.fn();
     const registry = registryFor({ playBgm });
@@ -239,12 +261,30 @@ describe('createAudioCommandPlugins', () => {
     expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { fadeMs: 800 });
   });
 
+  it('forwards a zero fade to a playBgm handler', () => {
+    const playBgm = vi.fn();
+    const registry = registryFor({ playBgm });
+
+    registry.get('playBgm')?.run({ type: 'playBgm', path: 'bgm/town.ogg', fadeMs: 0 }, {} as never);
+
+    expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { fadeMs: 0 });
+  });
+
   it('continues the script after playBgm without a playback handler', () => {
     const registry = registryFor();
 
     expect(
       registry.get('playBgm')?.run({ type: 'playBgm', path: 'bgm/town.ogg' }, {} as never),
     ).toBe('continue');
+  });
+
+  it('forwards a silent volume to a playBgm handler', () => {
+    const playBgm = vi.fn();
+    const registry = registryFor({ playBgm });
+
+    registry.get('playBgm')?.run({ type: 'playBgm', path: 'bgm/town.ogg', volume: 0 }, {} as never);
+
+    expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { volume: 0 });
   });
 
   it('forwards authored playBgm volume to a handler', () => {
@@ -299,6 +339,12 @@ describe('createAudioCommandPlugins', () => {
   it('accepts a stopBgm fade longer than one millisecond', () => {
     const parsed = parseEventScript(script({ type: 'stopBgm', fadeMs: 250 }), registryFor());
     expect(parsed.intro).toEqual([{ type: 'stopBgm', fadeMs: 250 }]);
+  });
+
+  it('preserves an authored zero stopBgm fade during parsing', () => {
+    const parsed = parseEventScript(script({ type: 'stopBgm', fadeMs: 0 }), registryFor());
+
+    expect(parsed.intro).toStrictEqual([{ type: 'stopBgm', fadeMs: 0 }]);
   });
 
   it('forwards stopBgm fadeMs to a handler', () => {
