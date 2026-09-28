@@ -193,6 +193,16 @@ describe('scanGames — asset extensions are matched case-insensitively', () => 
     expect(scanGames(workDir).games[0]?.audioAssets).toContain('bgm/Theme.m4a');
   });
 
+  it('includes plain OGG audio assets', () => {
+    const gameDir = join(workDir, 'plain-ogg');
+    writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);
+    const audioDir = join(gameDir, 'audio', 'bgm');
+    mkdirSync(audioDir, { recursive: true });
+    writeFileSync(join(audioDir, 'Theme.ogg'), 'fake-plain-ogg');
+
+    expect(scanGames(workDir).games[0]?.audioAssets).toContain('bgm/Theme.ogg');
+  });
+
   it('includes encrypted RPG Maker MV audio assets', () => {
     const gameDir = join(workDir, 'encrypted-rpgmvo');
     writeSystemJson(join(gameDir, 'data'), VALID_SYSTEM_JSON);

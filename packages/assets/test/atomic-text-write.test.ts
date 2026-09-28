@@ -15,7 +15,13 @@ import { writeTextFileAtomic } from '../src/atomic-text-write.js';
 const failureState = vi.hoisted(() => ({
   error: Object.assign(new Error('no space left on device'), { code: 'ENOSPC' }),
   failTempWrite: false,
+  uuid: null as string | null,
 }));
+
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:crypto')>();
+  return { ...actual, randomUUID: () => failureState.uuid ?? actual.randomUUID() };
+});
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
@@ -46,7 +52,20 @@ describe('writeTextFileAtomic', () => {
 
   afterEach(() => {
     failureState.failTempWrite = false;
+    failureState.uuid = null;
     rmSync(directory, { recursive: true, force: true });
+  });
+
+  it('preserves a temporary file it did not create when its name collides', () => {
+    failureState.uuid = 'collision';
+    const path = join(directory, 'manifest.json');
+    const tempPath = `${path}.tmp-collision`;
+    writeFileSync(path, 'previous content', 'utf8');
+    writeFileSync(tempPath, 'other writer content', 'utf8');
+
+    expect(() => writeTextFileAtomic(path, 'replacement')).toThrow();
+    expect(readFileSync(path, 'utf8')).toBe('previous content');
+    expect(readFileSync(tempPath, 'utf8')).toBe('other writer content');
   });
 
   it('creates a file with exact content and leaves no temporary sibling', () => {

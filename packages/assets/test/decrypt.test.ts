@@ -67,6 +67,10 @@ describe('parseEncryptionKey', () => {
     expect(parseEncryptionKey({ encryptionKey: 'not-hex-at-all!!' })).toBeNull();
     expect(parseEncryptionKey(null)).toBeNull();
   });
+
+  it('rejects an encryption key with extra hexadecimal digits', () => {
+    expect(parseEncryptionKey({ encryptionKey: `${KEY_HEX}ff` })).toBeNull();
+  });
 });
 
 describe('decryptRpgmv', () => {
@@ -145,6 +149,16 @@ describe('decryptRpgmv', () => {
     } catch (err) {
       expect((err as DecryptError).code).toBe('bad-key');
     }
+  });
+
+  it('rejects an encryption key longer than 16 bytes', () => {
+    const plain = concat(new Uint8Array(PNG_MAGIC), new Uint8Array(16));
+    const encrypted = encryptFixture(plain, KEY_BYTES);
+    const longKey = concat(KEY_BYTES, new Uint8Array([0]));
+
+    expect(() => decryptRpgmv(encrypted, longKey)).toThrowError(
+      expect.objectContaining({ code: 'bad-key' }),
+    );
   });
 
   it('throws DecryptError(magic-mismatch) when decrypted output matches no known magic', () => {
