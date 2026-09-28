@@ -13,6 +13,12 @@ function makeMapJson(width: number, height: number, fill: (z: number, i: number)
 }
 
 describe('parseMap', () => {
+  it('reports the actual type of primitive map input', () => {
+    expect(() => parseMap(false)).toThrow(
+      new Error('Invalid Map JSON: expected an object, got boolean.'),
+    );
+  });
+
   it('omits the events property when no events array is supplied', () => {
     const map = parseMap(makeMapJson(1, 1, () => 0));
 

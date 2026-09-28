@@ -103,6 +103,20 @@ describe('computeHeightGrid', () => {
 });
 
 describe('computeRampGrid', () => {
+  it('does not warn about multi-level drops after resolving an automatic ramp', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ctx: HeightGridContext = {
+      heightGrid: new Uint8Array([2, 1]),
+      mapWidth: 2,
+      mapHeight: 1,
+    };
+
+    const rampGrid = computeRampGrid(ctx, [{ x: 0, y: 0 }]);
+
+    expect(Array.from(rampGrid)).toEqual([3, 0]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   it('continues resolving later ramp cells after a valid direction override', () => {
     const ctx: HeightGridContext = {
       heightGrid: new Uint8Array([2, 2, 1, 1]),

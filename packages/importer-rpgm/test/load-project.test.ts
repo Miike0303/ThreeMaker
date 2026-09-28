@@ -178,6 +178,14 @@ describe('loadProject — data folder layouts', () => {
     rmSync(workDir, { recursive: true, force: true });
   });
 
+  it('reports the requested root and searched folders when project data is missing', async () => {
+    await expect(loadProject(workDir)).rejects.toThrow(
+      new Error(
+        `Could not find an RPG Maker data folder under "${workDir}" (tried: ${workDir}, ${join(workDir, 'data')}, ${join(workDir, 'www', 'data')}).`,
+      ),
+    );
+  });
+
   it('finds the data folder of a deployed MV game under <root>/www/data', async () => {
     const dataDir = join(workDir, 'www', 'data');
     mkdirSync(dataDir, { recursive: true });

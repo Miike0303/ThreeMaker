@@ -6,6 +6,23 @@ function makeFlags(): number[] {
 }
 
 describe('parseTilesets', () => {
+  it('identifies Tilesets.json when the top-level value is not an array', () => {
+    expect(() => parseTilesets({})).toThrow(new Error('Invalid Tilesets.json: expected an array.'));
+  });
+
+  it('identifies the tileset with a non-string sheet name', () => {
+    const tileset = {
+      id: 7,
+      name: 'Town',
+      flags: [0],
+      tilesetNames: ['Town_A1', 'Town_A2', false, '', '', '', '', '', ''],
+    };
+
+    expect(() => parseTilesets([tileset])).toThrow(
+      new Error('Invalid Tilesets.json entry 7: "tilesetNames" must contain only strings.'),
+    );
+  });
+
   it('reports the object type error for a primitive tileset entry', () => {
     expect(() => parseTilesets([false])).toThrow(
       new Error('Invalid Tilesets.json entry: expected an object, got boolean.'),

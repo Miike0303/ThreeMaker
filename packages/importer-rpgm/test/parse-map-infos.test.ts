@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { orderMapInfosByTree, parseMapInfos } from '../src/parse-map-infos.js';
 
 describe('parseMapInfos', () => {
+  it('identifies MapInfos.json when the top-level value is not an array', () => {
+    expect(() => parseMapInfos({})).toThrow(new Error('Invalid MapInfos.json: expected an array.'));
+  });
+
+  it('includes only the malformed map info in the required-field error', () => {
+    const valid = { id: 1, name: 'Town', parentId: 0, order: 1 };
+    const malformed = { id: 23, name: false, parentId: 0, order: 2 };
+
+    expect(() => parseMapInfos([null, valid, malformed])).toThrow(
+      new Error('Invalid MapInfos.json entry: {"id":23,"name":false,"parentId":0,"order":2}'),
+    );
+  });
+
   it('reports the object type error for a primitive map info entry', () => {
     expect(() => parseMapInfos([7])).toThrow(
       new Error('Invalid MapInfos.json entry: expected an object, got number.'),
