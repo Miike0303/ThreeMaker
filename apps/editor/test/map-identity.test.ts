@@ -27,6 +27,10 @@ import {
 } from '../src/map-identity.js';
 
 describe('validateMapName', () => {
+  it('rejects the last C0 control character inside a map filename', () => {
+    expect(validateMapName('Town\u001fSquare')).toBe('invalid-chars');
+  });
+
   it('rejects DEL inside a map filename', () => {
     expect(validateMapName('Town\u007fSquare')).toBe('invalid-chars');
   });

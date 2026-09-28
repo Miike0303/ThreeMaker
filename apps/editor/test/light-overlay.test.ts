@@ -16,6 +16,12 @@ function placed(overrides: Partial<LightDocument> & Pick<LightDocument, 'id'>): 
 }
 
 describe('computeLightOverlayPoints', () => {
+  it('omits a light with a valid x coordinate but no y coordinate', () => {
+    expect(
+      computeLightOverlayPoints([placed({ id: 'missing-y', x: 3, y: undefined })], 'floor-0'),
+    ).toEqual([]);
+  });
+
   it('omits a light with a floor but only one placement coordinate', () => {
     expect(computeLightOverlayPoints([placed({ id: 'partial', x: undefined })], 'floor-0')).toEqual(
       [],

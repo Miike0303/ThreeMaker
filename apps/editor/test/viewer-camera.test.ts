@@ -21,6 +21,11 @@ describe('computeOverviewCameraDistance', () => {
 });
 
 describe('computeOverviewCameraPose', () => {
+  it('clamps a vertical overview to an eighty-nine-degree tilt', () => {
+    const pose = computeOverviewCameraPose(4, 9, 90, 10);
+    expect(pose.position.z).toBeCloseTo(9.1745240644, 8);
+  });
+
   it('clamps a horizontal overview to a one-degree tilt', () => {
     const pose = computeOverviewCameraPose(4, 9, 0, 10);
     expect(pose.position.y).toBeCloseTo(0.1745240644, 8);

@@ -36,6 +36,13 @@ describe('isPlainSheet', () => {
 });
 
 describe('computePlainGridDimensions', () => {
+  it('omits an incomplete second column from a plain sheet', () => {
+    expect(computePlainGridDimensions('B', { width: 95, height: 48 })).toEqual({
+      cols: 1,
+      rows: 1,
+    });
+  });
+
   it('derives cols/rows from the real loaded image pixel size, capped at 16 cols (two 8-col blocks)', () => {
     expect(computePlainGridDimensions('B', { width: 768, height: 768 })).toEqual({
       cols: 16,

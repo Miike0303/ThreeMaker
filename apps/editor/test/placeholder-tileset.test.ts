@@ -21,6 +21,12 @@ import {
 } from '../src/placeholder-tileset.js';
 
 describe('buildPlaceholderTextures', () => {
+  it('rejects a truncated RGBA buffer before encoding a palette image', () => {
+    expect(() => encodeRgbaPng(1, 1, new Uint8Array([10, 20, 30]))).toThrow(
+      'encodeRgbaPng: rgba buffer shorter than width*height*4',
+    );
+  });
+
   it('encodes a palette image that spans multiple stored deflate blocks', () => {
     const rgba = new Uint8Array(128 * 128 * 4).fill(255);
     const png = encodeRgbaPng(128, 128, rgba);

@@ -282,6 +282,14 @@ describe('usesOnlyImportedSlotSources (WU-COMM-06)', () => {
 });
 
 describe('licenseTagFromSlots (WU-COMM-07)', () => {
+  it('does not classify a non-finite game id as imported provenance', () => {
+    expect(
+      licenseTagFromSlots({
+        A5: { object: 'a'.repeat(64), sourceGameId: Number.POSITIVE_INFINITY },
+      }),
+    ).toBe('user-owned');
+  });
+
   const SHA = 'a'.repeat(64);
 
   it('classifies empty, user-owned, import-rpgm, and mixed', () => {
