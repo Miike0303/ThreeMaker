@@ -207,6 +207,13 @@ describe('deriveRampCells', () => {
 });
 
 describe('syncRampCells', () => {
+  it('removes a ramp when its only dirty cell is cleared', () => {
+    const layers = [[0], EMPTY_LAYER(1), EMPTY_LAYER(1), EMPTY_LAYER(1)] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+
+    expect(syncRampCells([{ x: 0, y: 0 }], layers, semantics, 1, [{ x: 0, y: 0 }])).toEqual([]);
+  });
+
   it('restores row order when dirty cells arrive from different rows out of order', () => {
     const layers = [[0, 0, 7, 7, 0, 0], EMPTY_LAYER(6), EMPTY_LAYER(6), EMPTY_LAYER(6)] as const;
     const semantics: SemanticOverrides = { '7': { class: 'ramp' } };

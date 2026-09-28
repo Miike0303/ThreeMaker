@@ -12,6 +12,14 @@ import { computeRoomIdGrid } from '../src/rooms.js';
 import type { RoomDocument } from '../src/schema.js';
 
 describe('computeRoomIdGrid', () => {
+  it('clips a room at the right edge without painting the next row', () => {
+    const rooms: readonly RoomDocument[] = [
+      { id: 'right-edge', floor: 'floor-0', rects: [{ x: 1, y: 0, width: 2, height: 1 }] },
+    ];
+
+    expect(Array.from(computeRoomIdGrid(rooms, 'floor-0', 2, 2))).toEqual([0, 1, 0, 0]);
+  });
+
   it('returns an all-zero grid when there are no rooms (spec: Unauthored cell defaults)', () => {
     const grid = computeRoomIdGrid([], 'floor-0', 3, 2);
     expect(grid).toBeInstanceOf(Uint16Array);

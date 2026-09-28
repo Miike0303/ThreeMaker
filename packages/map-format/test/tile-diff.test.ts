@@ -111,6 +111,24 @@ describe('command stack (undo/redo, cap 100)', () => {
     return { layer: 0, cells: [{ x: 0, y: 0, before: 0, after }] };
   }
 
+  it('drops the oldest redo entry when undoing into a full redo stack', () => {
+    const redoStack = Array.from({ length: COMMAND_STACK_CAP }, (_, value) => makeDiff(value));
+    const result = undoCommand({ undoStack: [makeDiff(100)], redoStack });
+
+    expect(result?.state.redoStack).toHaveLength(COMMAND_STACK_CAP);
+    expect(result?.state.redoStack[0]?.cells[0]?.after).toBe(1);
+    expect(result?.state.redoStack.at(-1)?.cells[0]?.after).toBe(100);
+  });
+
+  it('drops the oldest undo entry when redoing into a full undo stack', () => {
+    const undoStack = Array.from({ length: COMMAND_STACK_CAP }, (_, value) => makeDiff(value));
+    const result = redoCommand({ undoStack, redoStack: [makeDiff(100)] });
+
+    expect(result?.state.undoStack).toHaveLength(COMMAND_STACK_CAP);
+    expect(result?.state.undoStack[0]?.cells[0]?.after).toBe(1);
+    expect(result?.state.undoStack.at(-1)?.cells[0]?.after).toBe(100);
+  });
+
   it('keeps earlier undo history when redoing the latest command', () => {
     let stack = EMPTY_COMMAND_STACK;
     for (const value of [1, 2, 3]) stack = pushCommand(stack, makeDiff(value));
