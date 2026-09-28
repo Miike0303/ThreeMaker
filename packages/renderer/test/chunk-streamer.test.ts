@@ -11,6 +11,34 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('rebuilds and disposes chunks after traveling west beyond the live window', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 64,
+      mapHeight: 16,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+    streamer.update(48, 0);
+
+    expect(streamer.update(0, 0)).toEqual({ toBuild: ['0,0'], toDispose: ['3,0'] });
+    expect([...streamer.liveKeys]).toEqual(['0,0']);
+  });
+
+  it('rebuilds and disposes chunks after traveling north beyond the live window', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 16,
+      mapHeight: 64,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+    streamer.update(0, 48);
+
+    expect(streamer.update(0, 0)).toEqual({ toBuild: ['0,0'], toDispose: ['0,3'] });
+    expect([...streamer.liveKeys]).toEqual(['0,0']);
+  });
+
   it('reports the rejected build radius in validation errors', () => {
     expect(() => new ChunkStreamer({ ...GIANT, buildRadius: 0.5 })).toThrow(
       'buildRadius must be a non-negative integer, got 0.5.',

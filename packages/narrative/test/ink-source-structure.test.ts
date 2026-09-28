@@ -680,3 +680,25 @@ it('rejects a leading plus sign on a horizontal layout coordinate', () => {
 it('rejects a leading plus sign on a vertical layout coordinate', () => {
   expect(parseInkNodeLayouts('// @tm-node entry x=4 y=+7\n')).toEqual([]);
 });
+
+it('recognizes a tab before the closing knot delimiter', () => {
+  expect(listInkKnots('=== entry\t===\n')).toEqual(['entry']);
+});
+
+it('rejects a layout marker with only one comment slash', () => {
+  expect(parseInkNodeLayouts('/ @tm-node entry x=17 y=29\n')).toEqual([]);
+});
+
+it('preserves an author comment without the layout marker sigil', () => {
+  const source = '// tm-node entry x=1 y=2\n=== entry ===\nWelcome.\n';
+
+  expect(applyInkNodeLayouts(source, [{ knot: 'entry', x: 17, y: 29 }])).toBe(
+    `// @tm-node entry x=17 y=29\n\n${source}`,
+  );
+});
+
+it('does not turn a greater-than sign in dialogue into a divert', () => {
+  expect(listInkEdges('=== start ===\nBetter > worse.\n-> exit\n')).toEqual([
+    { from: 'start', to: 'exit' },
+  ]);
+});

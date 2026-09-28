@@ -58,3 +58,7 @@ it('keeps quick save and quick load as one-shot actions', () => {
   expect(HOLD_ACTIONS.has(Actions.SystemSave)).toBe(false);
   expect(HOLD_ACTIONS.has(Actions.SystemLoad)).toBe(false);
 });
+
+it('resolves the persisted move-down identifier to downward movement', () => {
+  expect(directionFromMoveAction('move.down')).toBe('down');
+});
