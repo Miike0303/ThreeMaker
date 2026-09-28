@@ -75,6 +75,10 @@ describe('parseVolume / parseFadeMs', () => {
     expect(() => parseFadeMs(-0.25, 'x')).toThrow(/non-negative/);
   });
 
+  it('accepts a zero-length fade', () => {
+    expect(parseFadeMs(0, 'x')).toBe(0);
+  });
+
   it('accepts a fractional fade duration', () => {
     expect(parseFadeMs(0.5, 'x')).toBe(0.5);
   });

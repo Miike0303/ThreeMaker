@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { Node } from '../src/node.js';
 
 describe('Node', () => {
+  it('uses Node as the default name', () => {
+    expect(new Node().name).toBe('Node');
+  });
+
   it('addChild sets the parent reference and includes the child in children', () => {
     const parent = new Node('parent');
     const child = new Node('child');
