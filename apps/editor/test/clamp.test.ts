@@ -19,6 +19,10 @@ describe('clampRange', () => {
 });
 
 describe('clampTileIndex', () => {
+  it('returns tile zero when the map size is infinite', () => {
+    expect(clampTileIndex(2, Number.POSITIVE_INFINITY)).toBe(0);
+  });
+
   it('clamps into [0, size) as an integer tile index', () => {
     expect(clampTileIndex(0, 4)).toBe(0);
     expect(clampTileIndex(3, 4)).toBe(3);

@@ -342,6 +342,11 @@ describe('licenseTagFromSlots (WU-COMM-07)', () => {
 });
 
 describe('community share offline queue', () => {
+  it('preserves imported provenance when importing a queued job', () => {
+    const job = { ...sampleJob('imported-job'), licenseTag: 'import-rpgm' as const };
+    expect(parseCommunityShareQueueJson(JSON.stringify([job]))).toEqual({ ok: true, jobs: [job] });
+  });
+
   it('starts empty and push prepends newest first', () => {
     const storage = memoryStorage();
     expect(loadCommunityShareQueue(storage)).toEqual([]);

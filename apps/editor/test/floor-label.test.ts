@@ -18,6 +18,14 @@ function tFor(code: string) {
 }
 
 describe('resolveFloorLabel + spawn summary', () => {
+  it('uses the referenced floor label when it is not the first floor', () => {
+    const floors = [
+      { id: 'floor-0', label: 'Basement' },
+      { id: 'floor-1', label: 'Library' },
+    ];
+    expect(resolveFloorLabel(floors, 'floor-1', tFor('en'))).toBe('Library');
+  });
+
   it('preserves an explicitly blank floor label', () => {
     expect(resolveFloorLabel([{ id: 'floor-0', label: '' }], 'floor-0', tFor('en'))).toBe('');
   });

@@ -10,6 +10,10 @@ import {
 } from '../src/viewer-camera.js';
 
 describe('computeOverviewCameraDistance', () => {
+  it('frames a tall map using its height before applying the distance cap', () => {
+    expect(computeOverviewCameraDistance(10, 30, 1.6, 60)).toBe(48);
+  });
+
   it('scales with the larger map dimension', () => {
     expect(computeOverviewCameraDistance(100, 50, 0.9, 24)).toBeCloseTo(24); // capped
     expect(computeOverviewCameraDistance(10, 5, 0.9, 24)).toBeCloseTo(9);

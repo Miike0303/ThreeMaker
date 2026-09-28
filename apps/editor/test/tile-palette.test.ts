@@ -92,6 +92,11 @@ describe('computePlainGridDimensions', () => {
 });
 
 describe('computePaletteCells - plain sheets (B/C/D/E/A5)', () => {
+  it('selects the first tile of the right block without spilling into the next sheet', () => {
+    const cells = computePaletteCells('B', { width: 768, height: 48 });
+    expect(cells[8]).toEqual({ tileId: 128, x: 384, y: 0, width: 48, height: 48 });
+  });
+
   it('resolves the documented "Map007 dark diamond" regression case: B tile 77 sits at pixel (240,432)', () => {
     // Mirrors packages/renderer/src/geometry/tile-uv.ts's computeGridUv
     // doc comment exactly -- same known-good case, inverted (pixel -> id
@@ -143,6 +148,10 @@ describe('computePaletteCells - autotile sheets (A1-A4)', () => {
 });
 
 describe('computeAutotileKindCount', () => {
+  it('exposes both A3 kind rows when the sheet is four tiles tall', () => {
+    expect(computeAutotileKindCount('A3', { width: 768, height: 192 })).toBe(16);
+  });
+
   it('omits the incomplete second row of autotile kinds', () => {
     expect(computeAutotileKindCount('A2', { width: 768, height: 287 })).toBe(8);
   });

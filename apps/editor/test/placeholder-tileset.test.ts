@@ -162,6 +162,18 @@ describe('buildPlaceholderTextures', () => {
 });
 
 describe('composePlaceholderMap', () => {
+  it('rejects an overlong object hash before stamping starter slots', () => {
+    const doc = composePlaceholderMap({
+      id: 'starter-long-sha',
+      name: 'Starter',
+      width: 2,
+      height: 2,
+    });
+    expect(() =>
+      stampPlaceholderSlotObjects(doc, { A5: 'a'.repeat(65), B: 'b'.repeat(64) }),
+    ).toThrow('A5/B object shas must be 64 lowercase hex chars');
+  });
+
   it('seeds ground with PLACEHOLDER_GROUND_TILE_ID on A5 and keeps flags passable', () => {
     const doc = composePlaceholderMap({
       id: 'starter-1',
