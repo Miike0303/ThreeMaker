@@ -22,6 +22,17 @@ import {
 } from '../src/placeholder-tileset.js';
 
 describe('buildPlaceholderTextures', () => {
+  it('declares eight-bit RGBA pixels in the palette PNG header', () => {
+    const png = encodeRgbaPng(1, 1, new Uint8Array([10, 20, 30, 128]));
+    expect(Array.from(png.subarray(24, 29))).toEqual([8, 6, 0, 0, 0]);
+  });
+
+  it('records independent width and height for a rectangular palette PNG', () => {
+    const png = encodeRgbaPng(2, 3, new Uint8Array(2 * 3 * 4).fill(255));
+    const header = new DataView(png.buffer, png.byteOffset, png.byteLength);
+    expect([header.getUint32(16), header.getUint32(20)]).toEqual([2, 3]);
+  });
+
   it('rejects a zero-width palette image before encoding', () => {
     expect(() => encodeRgbaPng(0, 1, new Uint8Array(0))).toThrow('encodeRgbaPng: invalid size 0x1');
   });
@@ -162,6 +173,32 @@ describe('buildPlaceholderTextures', () => {
 });
 
 describe('composePlaceholderMap', () => {
+  it('preserves B slot provenance independently when stamping starter object hashes', () => {
+    const doc = composePlaceholderMap({
+      id: 'starter-provenance',
+      name: 'Starter',
+      width: 2,
+      height: 2,
+    });
+    const b = { object: 'd'.repeat(64), sourceGameId: 30, sourceTilesetId: 40 };
+    const authored = {
+      ...doc,
+      tileset: {
+        ...doc.tileset,
+        slots: {
+          ...doc.tileset.slots,
+          A5: { object: 'c'.repeat(64), sourceGameId: 10, sourceTilesetId: 20 },
+          B: b,
+        },
+      },
+    };
+    const stamped = stampPlaceholderSlotObjects(authored, {
+      A5: 'a'.repeat(64),
+      B: 'b'.repeat(64),
+    });
+    expect(stamped.tileset.slots.B).toEqual({ ...b, object: 'b'.repeat(64) });
+  });
+
   it('rejects an overlong object hash before stamping starter slots', () => {
     const doc = composePlaceholderMap({
       id: 'starter-long-sha',

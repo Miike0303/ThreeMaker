@@ -27,6 +27,10 @@ import {
 } from '../src/map-identity.js';
 
 describe('validateMapName', () => {
+  it('accepts a map name that only ends with a reserved device name', () => {
+    expect(validateMapName('Falcon')).toBeNull();
+  });
+
   it('rejects a closing angle bracket in a map filename', () => {
     expect(validateMapName('Town>Square')).toBe('invalid-chars');
   });

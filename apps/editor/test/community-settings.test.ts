@@ -176,6 +176,11 @@ describe('community-settings', () => {
 });
 
 describe('formatCommunityShareAt (WU-COMM-09)', () => {
+  it('abbreviates the month in a localized queue timestamp', () => {
+    const at = new Date(2026, 8, 28, 13, 5).toISOString();
+    expect(formatCommunityShareAt(at, 'en-US')).toMatch(/^Sep 28, 2026, /);
+  });
+
   it('keeps the timestamp when the requested locale is invalid', () => {
     const at = '2026-08-08T00:00:00.000Z';
     expect(formatCommunityShareAt(at, 'invalid_locale')).toBe(at);
@@ -342,6 +347,17 @@ describe('licenseTagFromSlots (WU-COMM-07)', () => {
 });
 
 describe('community share offline queue', () => {
+  it('removes only the first imported job when map id and timestamp are duplicated', () => {
+    const storage = memoryStorage();
+    const first = { ...sampleJob('duplicate'), mapName: 'First imported copy' };
+    const last = { ...sampleJob('duplicate'), mapName: 'Last imported copy' };
+    const other = sampleJob('other');
+    replaceCommunityShareQueue([first, other, last], storage);
+
+    expect(removeCommunityShareQueueJob(first.mapId, first.at, storage)).toEqual([other, last]);
+    expect(loadCommunityShareQueue(storage)).toEqual([other, last]);
+  });
+
   it('preserves imported provenance when importing a queued job', () => {
     const job = { ...sampleJob('imported-job'), licenseTag: 'import-rpgm' as const };
     expect(parseCommunityShareQueueJson(JSON.stringify([job]))).toEqual({ ok: true, jobs: [job] });
