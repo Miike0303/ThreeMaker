@@ -41,6 +41,28 @@ function makeMap(overrides: Partial<RpgmMap> = {}): RpgmMap {
 }
 
 describe('buildChunks elevation (region-derived height)', () => {
+  it('reads tile elevation from the correct row on a rectangular map', () => {
+    const map = makeMap({
+      width: 2,
+      height: 3,
+      layers: {
+        tileLayers: [
+          [0, 0, 0, 1, 0, 0],
+          [0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0],
+        ],
+        shadows: [0, 0, 0, 0, 0, 0],
+        regions: [0, 0, 0, 3, 0, 0],
+      },
+    });
+
+    const tiles = buildChunks(map, makeTileset(), SHEET_SIZES).flatMap((chunk) => chunk.tiles);
+
+    expect(tiles).toHaveLength(1);
+    expect(tiles[0]).toMatchObject({ tileX: 1, tileY: 1, height: 3 });
+  });
+
   it('keeps tiles beyond a truncated region layer at ground level', () => {
     const map = makeMap({
       width: 2,
@@ -938,6 +960,29 @@ describe('buildChunks', () => {
     expect(chunks[0]?.shadows).toEqual([{ tileX: 0, tileY: 0, mask: 1, height: 3 }]);
   });
 
+  it('reads shadow elevation from the correct row on a rectangular map', () => {
+    const map = makeMap({
+      width: 2,
+      height: 3,
+      layers: {
+        tileLayers: [
+          [0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0],
+        ],
+        shadows: [0, 0, 0, 5, 0, 0],
+        regions: [0, 0, 0, 3, 0, 0],
+      },
+    });
+
+    const shadows = buildChunks(map, makeTileset(), SHEET_SIZES).flatMap(
+      (chunk) => chunk.shadows ?? [],
+    );
+
+    expect(shadows).toEqual([{ tileX: 1, tileY: 1, mask: 5, height: 3 }]);
+  });
+
   it('rejects a stale/out-of-range onlyChunks key by simply producing no chunk for it (never throws)', () => {
     const chunks = buildChunks(makeMap(), makeTileset(), SHEET_SIZES, 16, new Set(['99,99']));
     expect(chunks).toEqual([]);
@@ -970,6 +1015,28 @@ describe('buildChunks', () => {
 });
 
 describe('buildChunks ramp grid (Slice 2a plumbing)', () => {
+  it('reads ramp codes from the correct row on a rectangular map', () => {
+    const map = makeMap({
+      width: 1,
+      height: 3,
+      layers: {
+        tileLayers: [
+          [1, 1, 1],
+          [0, 0, 0],
+          [0, 0, 0],
+          [0, 0, 0],
+        ],
+        shadows: [0, 0, 0],
+        regions: [3, 3, 2],
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16, undefined, [{ x: 0, y: 1 }]);
+    const rampTile = chunks.flatMap((chunk) => chunk.tiles).find((tile) => tile.tileY === 1);
+
+    expect(rampTile?.ramp).toEqual({ direction: 'south', highHeight: 3, lowHeight: 2 });
+  });
+
   it('does not duplicate a floor ramp on a ground overlay', () => {
     const map = makeMap({
       width: 1,

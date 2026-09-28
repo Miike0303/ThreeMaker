@@ -11,6 +11,18 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('reports the rejected build radius in validation errors', () => {
+    expect(() => new ChunkStreamer({ ...GIANT, buildRadius: 0.5 })).toThrow(
+      'buildRadius must be a non-negative integer, got 0.5.',
+    );
+  });
+
+  it('reports the rejected dispose radius alongside the minimum build radius', () => {
+    expect(() => new ChunkStreamer({ ...GIANT, buildRadius: 3, disposeRadius: 2 })).toThrow(
+      'disposeRadius must be an integer >= buildRadius (3), got 2.',
+    );
+  });
+
   it('honors an explicit zero disposal radius when crossing a chunk boundary', () => {
     const streamer = new ChunkStreamer({
       chunkSize: 16,

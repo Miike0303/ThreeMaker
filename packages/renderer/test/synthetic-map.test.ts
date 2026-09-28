@@ -6,6 +6,12 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('reports the rejected height in dimension validation errors', () => {
+    expect(() => generateSyntheticMap({ width: 7, height: -3 })).toThrow(
+      'height must be a positive integer, got -3.',
+    );
+  });
+
   it('centers the spawn clearing horizontally on a rectangular map', () => {
     const map = generateSyntheticMap({
       width: 9,
