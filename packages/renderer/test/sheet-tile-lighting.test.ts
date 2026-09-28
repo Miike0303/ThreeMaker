@@ -79,6 +79,10 @@ describe('dayNightAmbientFactor (C7 WU-02)', () => {
     expect(dayNightAmbientFactor(-720)).toBeCloseTo(1);
   });
 
+  it('repeats the dawn factor exactly after one full day', () => {
+    expect(dayNightAmbientFactor(1440 + 360)).toBe(dayNightAmbientFactor(360));
+  });
+
   it('uses the completed minute before advancing the dawn ramp', () => {
     expect(dayNightAmbientFactor(419.9)).toBe(dayNightAmbientFactor(419));
   });

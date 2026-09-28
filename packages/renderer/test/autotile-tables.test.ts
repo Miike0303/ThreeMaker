@@ -139,6 +139,42 @@ describe('computeAutotileQuarterOrigins', () => {
     ]);
   });
 
+  it('places the fourth A1 water kind in the lower right water block', () => {
+    expect(computeAutotileQuarterOrigins(2192, 'A1')).toEqual([
+      { x: 336, y: 240 },
+      { x: 312, y: 240 },
+      { x: 336, y: 216 },
+      { x: 312, y: 216 },
+    ]);
+  });
+
+  it('places A1 kind 6 in the lower water block', () => {
+    expect(computeAutotileQuarterOrigins(2336, 'A1')).toEqual([
+      { x: 432, y: 240 },
+      { x: 408, y: 240 },
+      { x: 432, y: 216 },
+      { x: 408, y: 216 },
+    ]);
+  });
+
+  it('advances the second A2 kind by two horizontal block units', () => {
+    expect(computeAutotileQuarterOrigins(2864, 'A2')).toEqual([
+      { x: 144, y: 96 },
+      { x: 120, y: 96 },
+      { x: 144, y: 72 },
+      { x: 120, y: 72 },
+    ]);
+  });
+
+  it('advances the second A3 kind by two horizontal block units', () => {
+    expect(computeAutotileQuarterOrigins(4400, 'A3')).toEqual([
+      { x: 144, y: 48 },
+      { x: 120, y: 48 },
+      { x: 144, y: 24 },
+      { x: 120, y: 24 },
+    ]);
+  });
+
   it('A1 even non-special kind (kind 4) picks FLOOR_AUTOTILE_TABLE via the tx/ty formula', () => {
     // tileId = 2048 + 4*48 = 2240. tx=4, ty=0. bx=floor(4/4)*8=8, by=0*6+(2%2)*3=0.
     const origins = computeAutotileQuarterOrigins(2240, 'A1');

@@ -358,6 +358,24 @@ describe('buildChunks', () => {
     expect(chunks[0]?.tiles[0]?.elevation).toBe('object');
   });
 
+  it('classifies a tile blocked only upward as "object" elevation', () => {
+    const layer0 = new Array(16).fill(0);
+    layer0[0] = 3;
+    const map = makeMap({
+      layers: {
+        tileLayers: [layer0, new Array(16).fill(0), new Array(16).fill(0), new Array(16).fill(0)],
+        shadows: new Array(16).fill(0),
+        regions: new Array(16).fill(0),
+      },
+    });
+    const flags = new Array(8192).fill(0);
+    flags[3] = 0x8;
+
+    const chunks = buildChunks(map, makeTileset({ flags }), SHEET_SIZES, 16);
+
+    expect(chunks[0]?.tiles[0]?.elevation).toBe('object');
+  });
+
   it('keeps a passable (no impassable bits) object-sheet tile as "ground" elevation (decals/rugs stay flat)', () => {
     const layer0 = new Array(16).fill(0);
     layer0[0] = 1; // sheet B, no flags set in the default makeTileset().
@@ -551,6 +569,22 @@ describe('buildChunks', () => {
     const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
 
     expect(chunks[0]?.shadows).toEqual([{ tileX: 0, tileY: 0, mask: 5 }]);
+  });
+
+  it('places a shadow on its region-elevated surface', () => {
+    const map = makeMap({
+      width: 1,
+      height: 1,
+      layers: {
+        tileLayers: [[0], [0], [0], [0]],
+        shadows: [1],
+        regions: [3],
+      },
+    });
+
+    const chunks = buildChunks(map, makeTileset(), SHEET_SIZES, 16);
+
+    expect(chunks[0]?.shadows).toEqual([{ tileX: 0, tileY: 0, mask: 1, height: 3 }]);
   });
 
   it('rejects a stale/out-of-range onlyChunks key by simply producing no chunk for it (never throws)', () => {

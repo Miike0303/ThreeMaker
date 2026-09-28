@@ -40,6 +40,12 @@ describe('computeCameraPose: hd2d mode', () => {
 });
 
 describe('computeCameraPose: top-down mode', () => {
+  it('uses an 85-degree view above the horizon', () => {
+    const pose = computeCameraPose('top-down', BASE_PARAMS, TARGET);
+
+    expect(pose.position.y).toBeCloseTo(TARGET.y + 10 * Math.sin((85 * Math.PI) / 180), 8);
+  });
+
   it('ignores the params tilt and uses the fixed near-vertical top-down preset instead', () => {
     const pose = computeCameraPose('top-down', BASE_PARAMS, TARGET);
 
@@ -56,6 +62,12 @@ describe('computeCameraPose: top-down mode', () => {
 });
 
 describe('computeCameraPose: first-person mode', () => {
+  it('places the camera 0.8 tiles above the character feet', () => {
+    const pose = computeCameraPose('first-person', BASE_PARAMS, TARGET);
+
+    expect(pose.position.y).toBeCloseTo(0.8, 8);
+  });
+
   it('places the camera at head height above the target tile, hides the character', () => {
     const pose = computeCameraPose('first-person', BASE_PARAMS, TARGET);
 
@@ -83,6 +95,10 @@ describe('computeCameraPose: first-person mode', () => {
 });
 
 describe('clampTiltDeg', () => {
+  it('keeps the minimum HD-2D tilt at 15 degrees', () => {
+    expect(clampTiltDeg(14)).toBe(15);
+  });
+
   it('clamps within [MIN_TILT_DEG, MAX_TILT_DEG]', () => {
     expect(clampTiltDeg(0)).toBe(MIN_TILT_DEG);
     expect(clampTiltDeg(1000)).toBe(MAX_TILT_DEG);

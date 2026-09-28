@@ -33,6 +33,10 @@ describe('isObjectSheet', () => {
   it('treats D-sheet decorations as standing objects', () => {
     expect(isObjectSheet('D')).toBe(true);
   });
+
+  it('treats E-sheet decorations as standing objects', () => {
+    expect(isObjectSheet('E')).toBe(true);
+  });
 });
 
 describe('computeCliffEdges', () => {

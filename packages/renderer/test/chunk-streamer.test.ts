@@ -115,6 +115,18 @@ describe('ChunkStreamer', () => {
     expect(diff.toDispose).toHaveLength(0);
   });
 
+  it('disposes a chunk two steps behind when the default build radius is zero', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 64,
+      mapHeight: 16,
+      buildRadius: 0,
+    });
+    streamer.update(0, 0);
+
+    expect(streamer.update(32, 0).toDispose).toEqual(['0,0']);
+  });
+
   it('builds the new leading edge when crossing a chunk boundary but keeps the trailing edge (hysteresis)', () => {
     const streamer = new ChunkStreamer({ ...GIANT, buildRadius: 2, disposeRadius: 3 });
     streamer.update(256, 256); // chunk (16, 16); live columns 14..18

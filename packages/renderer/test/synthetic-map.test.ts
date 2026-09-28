@@ -28,6 +28,13 @@ describe('generateSyntheticMap', () => {
     expect(a.layers.tileLayers[0]).not.toEqual(c.layers.tileLayers[0]);
   });
 
+  it('uses seed 1 when no seed is provided', () => {
+    const defaultSeed = generateSyntheticMap({ width: 40, height: 40 });
+    const explicitSeed = generateSyntheticMap({ width: 40, height: 40, seed: 1 });
+
+    expect(defaultSeed.layers.tileLayers).toEqual(explicitSeed.layers.tileLayers);
+  });
+
   it('fills layer 0 with the ground autotile and scatters some walls', () => {
     const map = generateSyntheticMap({ width: 64, height: 64, seed: 7 });
 
@@ -81,6 +88,19 @@ describe('generateSyntheticMap', () => {
 
     expect(map.layers.tileLayers[0][3 * 9 + 4]).toBe(ROSELIAM_DUNGEON_WALL_TILE_ID);
     expect(map.layers.tileLayers[0][4 * 9 + 4]).toBe(ROSELIAM_DUNGEON_GROUND_TILE_ID);
+  });
+
+  it('does not place decorations on wall tiles', () => {
+    const map = generateSyntheticMap({
+      width: 5,
+      height: 5,
+      wallDensity: 1,
+      decorDensity: 1,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0][0]).toBe(ROSELIAM_DUNGEON_WALL_TILE_ID);
+    expect(map.layers.tileLayers[2][0]).toBe(0);
   });
 
   it('paints the west half of ground immediately east of a wall', () => {
