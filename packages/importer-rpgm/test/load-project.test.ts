@@ -116,6 +116,15 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect(project.maps.size).toBe(0);
   });
 
+  it('ignores a filename with a prefix before Map001.json', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['BackupMap001.json']);
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.size).toBe(0);
+  });
+
   it('omits an empty editor name from a loaded map', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json']);
@@ -154,6 +163,20 @@ describe('loadProject — data folder layouts', () => {
     expect(project.mapInfos[0]?.name).toBe('Map001');
     expect(project.tilesets).toHaveLength(1);
     expect(project.tilesets[0]?.name).toBe('Outside');
+  });
+
+  it('skips a data folder with only Tilesets.json when a complete deployed folder exists', async () => {
+    const incompleteDataDir = join(workDir, 'data');
+    const deployedDataDir = join(workDir, 'www', 'data');
+    mkdirSync(incompleteDataDir, { recursive: true });
+    mkdirSync(deployedDataDir, { recursive: true });
+    writeFileSync(join(incompleteDataDir, 'Tilesets.json'), JSON.stringify(TILESETS_JSON), 'utf8');
+    writeFileSync(join(deployedDataDir, 'MapInfos.json'), JSON.stringify(MAP_INFOS_JSON), 'utf8');
+    writeFileSync(join(deployedDataDir, 'Tilesets.json'), JSON.stringify(TILESETS_JSON), 'utf8');
+
+    const project = await loadProject(workDir);
+
+    expect(project.mapInfos[0]?.name).toBe('Map001');
   });
 
   it('prefers <root>/data when both data folder layouts exist', async () => {

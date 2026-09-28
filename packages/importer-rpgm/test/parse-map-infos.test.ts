@@ -23,6 +23,12 @@ describe('parseMapInfos', () => {
     expect(() => parseMapInfos([{ id: '1', name: 'Town', parentId: 0, order: 1 }])).toThrow();
   });
 
+  it('rejects a map info with a nonnumeric sidebar order', () => {
+    expect(() => parseMapInfos([{ id: 1, name: 'Town', parentId: 0, order: '1' }])).toThrow(
+      /Invalid MapInfos.json entry/,
+    );
+  });
+
   it('skips undefined slots in a sparse map info list', () => {
     expect(parseMapInfos([undefined, { id: 1, name: 'Town', parentId: 0, order: 1 }])).toEqual([
       { id: 1, name: 'Town', parentId: 0, order: 1 },
