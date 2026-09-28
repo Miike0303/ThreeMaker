@@ -117,4 +117,18 @@ describe('map-file (shared working-map read helper)', () => {
       baseDir: 'Home',
     });
   });
+
+  it('reads the manifest from the published manifest.json path', async () => {
+    fsMocks.exists.mockResolvedValueOnce(true);
+    fsMocks.readTextFile.mockResolvedValueOnce('{"maps":[]}');
+
+    await expect(readManifestText()).resolves.toBe('{"maps":[]}');
+
+    expect(fsMocks.exists).toHaveBeenCalledWith('.threemaker/maps/manifest.json', {
+      baseDir: 'Home',
+    });
+    expect(fsMocks.readTextFile).toHaveBeenCalledWith('.threemaker/maps/manifest.json', {
+      baseDir: 'Home',
+    });
+  });
 });

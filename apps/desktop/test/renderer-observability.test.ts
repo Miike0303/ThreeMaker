@@ -79,3 +79,11 @@ it('prefers a mixed-case WebGPU constructor name over a conflicting fallback fla
 it('ignores a numeric WebGL backend flag', () => {
   expect(mapRendererBackendName({ isWebGLBackend: 1 })).toBe('webgpu');
 });
+
+it('defaults to WebGPU when the renderer backend is null', () => {
+  expect(mapRendererBackendName(null)).toBe('webgpu');
+});
+
+it('uses the WebGL flag when constructor metadata is absent', () => {
+  expect(mapRendererBackendName({ constructor: undefined, isWebGLBackend: true })).toBe('webgl2');
+});

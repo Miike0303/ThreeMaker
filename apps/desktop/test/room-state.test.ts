@@ -165,3 +165,15 @@ it('does not read the preceding row for a negative tile x coordinate', () => {
 
   expect(tracker.roomAt(0, -1, 1)).toBe(0);
 });
+
+it('returns no room for a tile immediately below the room grid', () => {
+  const tracker = createRoomTracker([new Uint16Array([7, 7, 7, 7])], 2);
+
+  expect(tracker.roomAt(0, 0, 2)).toBe(0);
+});
+
+it('rejects a negative tile row even when x would alias an authored cell', () => {
+  const tracker = createRoomTracker([new Uint16Array([7, 0, 0])], 3);
+
+  expect(tracker.roomAt(0, 3, -1)).toBe(0);
+});
