@@ -377,6 +377,14 @@ describe('licenseTagFromSlots (WU-COMM-07)', () => {
 });
 
 describe('community share offline queue', () => {
+  it('skips null imported queue entries while preserving valid jobs', () => {
+    const job = sampleJob('valid');
+    expect(parseCommunityShareQueueJson(JSON.stringify([null, job]))).toEqual({
+      ok: true,
+      jobs: [job],
+    });
+  });
+
   it('keeps a newer save when a removal uses an older timestamp for the same map', () => {
     const storage = memoryStorage();
     const current = sampleJob('town', '2026-09-28T02:00:00.000Z');

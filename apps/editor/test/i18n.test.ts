@@ -9,6 +9,13 @@ const LOCALES = {
 };
 
 describe('createI18n', () => {
+  it('returns the key when a translation and the English locale are both missing', () => {
+    const i18n = createI18n({
+      fr: { name: 'French', strings: { greeting: 'Bonjour' } },
+    });
+    expect(i18n.t('missing')).toBe('missing');
+  });
+
   it('defaults to the given initial locale', () => {
     const i18n = createI18n(LOCALES, 'es');
     expect(i18n.locale).toBe('es');

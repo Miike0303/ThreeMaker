@@ -4,7 +4,7 @@ import { applyDungeonStampToMapDocument } from '../src/procgen/apply-stamp.js';
 import { pickMainRoomSpawn, stampSimpleDungeon } from '../src/procgen/dungeon-stamp.js';
 
 function twoFloorSemanticFixture(
-  currentClass: 'window' | 'wall',
+  currentClass: 'window' | 'wall' | 'none',
   floor0TileId: number,
   floor1TileId: number,
 ) {
@@ -59,6 +59,27 @@ function twoFloorSemanticFixture(
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('throws when the last stamp layer is larger than the map', () => {
+    const doc = createBlankMapDocument({
+      id: 'stamp-long-layer',
+      name: 'Long layer',
+      width: 16,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 1,
+      groundTileId: 2816,
+      wallTileId: 4352,
+    });
+    stamp.layers[3].push(0);
+
+    expect(() => applyDungeonStampToMapDocument(doc, stamp)).toThrow(/stamp layer length/);
+  });
+
   it('throws when a stamp layer is smaller than the map', () => {
     const doc = createBlankMapDocument({
       id: 'stamp-short-layer',
@@ -230,6 +251,16 @@ describe('applyDungeonStampToMapDocument', () => {
 
     expect(next.tileset.semantics['4352']).toEqual({ class: 'wall' });
     expect(next.floors[1]?.layers.tiles[2]).toEqual(stamp.layers[2]);
+  });
+
+  it('classifies a shared tile whose existing semantic class is none', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 4352, 0);
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 });
+
+    expect(next.tileset.semantics['4352']).toEqual({ class: 'wall' });
+    expect(next.floors[0]?.layers.tiles[0]?.[0]).toBe(4352);
+    expect(doc.tileset.semantics['4352']).toEqual({ class: 'none' });
   });
 
   it('stamps a tile used on another floor with the same semantic class', () => {

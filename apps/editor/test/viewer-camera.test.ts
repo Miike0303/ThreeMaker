@@ -25,6 +25,10 @@ describe('computeOverviewCameraDistance', () => {
 });
 
 describe('computeOverviewCameraPose', () => {
+  it('centers the overview camera horizontally on a map away from the origin', () => {
+    expect(computeOverviewCameraPose(4, 9, 45, 10).position.x).toBe(4);
+  });
+
   it('clamps a vertical overview to an eighty-nine-degree tilt', () => {
     const pose = computeOverviewCameraPose(4, 9, 90, 10);
     expect(pose.position.z).toBeCloseTo(9.1745240644, 8);
@@ -103,6 +107,10 @@ describe('zoomCameraDistanceByFactor (WU-VIEW-02)', () => {
 });
 
 describe('zoomPercentForDistance (WU-VIEW-02)', () => {
+  it('uses the default zoom readout when the reference distance is negative', () => {
+    expect(zoomPercentForDistance(-20, 10)).toBe(100);
+  });
+
   it('is 100% at the reference framing distance', () => {
     expect(zoomPercentForDistance(20, 20)).toBe(100);
   });

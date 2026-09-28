@@ -22,6 +22,19 @@ import {
 } from '../src/placeholder-tileset.js';
 
 describe('buildPlaceholderTextures', () => {
+  it('labels palette object URLs as PNG images', async () => {
+    const texture = {
+      image: { width: 1, height: 1, data: new Uint8Array([10, 20, 30, 255]) },
+    } as unknown as Parameters<typeof textureSheetToObjectUrl>[0];
+    const url = textureSheetToObjectUrl(texture);
+    try {
+      const response = await fetch(url);
+      expect(response.headers.get('content-type')).toBe('image/png');
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  });
+
   it('preserves distinct source pixels on successive PNG scanlines', () => {
     const rgba = new Uint8Array([10, 20, 30, 128, 40, 50, 60, 255]);
     const png = encodeRgbaPng(1, 2, rgba);

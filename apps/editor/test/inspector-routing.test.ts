@@ -22,6 +22,10 @@ const ALL_TOOLS: readonly ToolId[] = [
 ];
 
 describe('inspectorRoutingReducer', () => {
+  it('opens the paint inspector before any tool or tab interaction', () => {
+    expect(initialInspectorRoutingState).toEqual({ tab: 'paint', manual: false });
+  });
+
   it('preserves a manual tab across incidental tool-state changes', () => {
     const manual = inspectorRoutingReducer(initialInspectorRoutingState, {
       type: 'manual-tab',

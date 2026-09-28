@@ -11,6 +11,10 @@ import {
 } from '../src/procgen/seed.js';
 
 describe('nextProcgenSeed', () => {
+  it('keeps the incremented seed unsigned across the signed 32-bit boundary', () => {
+    expect(nextProcgenSeed(0x7fffffff)).toBe(0x80000000);
+  });
+
   it('increments as uint32 and wraps', () => {
     expect(nextProcgenSeed(0)).toBe(1);
     expect(nextProcgenSeed(41)).toBe(42);
@@ -41,6 +45,10 @@ describe('clampFurnitureDensity', () => {
 });
 
 describe('furniture density percent round-trip', () => {
+  it('rounds a fractional density percentage to the nearest integer', () => {
+    expect(furnitureDensityToPercent(0.126)).toBe(13);
+  });
+
   it('converts percent ↔ density', () => {
     expect(furnitureDensityFromPercent(6)).toBeCloseTo(0.06);
     expect(furnitureDensityFromPercent(0)).toBe(0);
@@ -62,6 +70,10 @@ describe('pushProcgenSeedHistory', () => {
     }
     expect(h).toHaveLength(PROCGEN_SEED_HISTORY_MAX);
     expect(h[0]).toBe(3 + PROCGEN_SEED_HISTORY_MAX);
+  });
+
+  it('moves an unsigned-equivalent history seed to the front without duplicating it', () => {
+    expect(pushProcgenSeedHistory([-1, 7], 0xffffffff)).toEqual([0xffffffff, 7]);
   });
 
   it('moves duplicate seed to front without doubling', () => {

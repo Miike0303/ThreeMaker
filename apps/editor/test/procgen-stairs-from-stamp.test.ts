@@ -23,6 +23,10 @@ describe('pickAdjacentFloorIndex', () => {
     expect(pickAdjacentFloorIndex(2, 2)).toBeUndefined();
   });
 
+  it('rejects fractional floor counts even with an integer target index', () => {
+    expect(pickAdjacentFloorIndex(0, 2.5)).toBeUndefined();
+  });
+
   it('rejects fractional target floor indexes', () => {
     expect(pickAdjacentFloorIndex(1.5, 3)).toBeUndefined();
   });
@@ -51,6 +55,23 @@ describe('roomLandingTile', () => {
       x: 4 + Math.floor(6 / 2),
       y: 6 + Math.floor(4 / 2),
     });
+  });
+
+  it('keeps the first largest room as the stair landing when areas tie', () => {
+    const rooms = [
+      {
+        id: 'first',
+        floor: 'floor-0',
+        rects: [{ x: 1, y: 1, width: 4, height: 4 }],
+      },
+      {
+        id: 'second',
+        floor: 'floor-0',
+        rects: [{ x: 10, y: 6, width: 8, height: 2 }],
+      },
+    ];
+
+    expect(roomLandingTile(rooms, 'floor-0', 20, 12)).toEqual({ x: 3, y: 3 });
   });
 
   it('falls back to map center when the floor has no rooms', () => {
@@ -91,6 +112,15 @@ describe('mergeStampStairLinks', () => {
   const reverse = stampStairLinkBetween('floor-1', { x: 9, y: 9 }, 'floor-0', { x: 8, y: 8 });
   const authored = { ...a, id: 'hand-drawn' };
   const isStandable = (x: number, y: number) => x === 1 && y === 1;
+
+  it('keeps an authored stair whose id contains the generated prefix after other text', () => {
+    const named = { ...authored, id: 'hand-stamp-stair-annex' };
+
+    expect(mergeStampStairLinks([named], 'floor-0', 'floor-1', a, 'floor-0', isStandable)).toEqual([
+      named,
+      a,
+    ]);
+  });
 
   it('replaces generated links in either direction and keeps authored and other pairs', () => {
     const next = mergeStampStairLinks(
