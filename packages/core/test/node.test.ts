@@ -6,6 +6,10 @@ describe('Node', () => {
     expect(new Node().name).toBe('Node');
   });
 
+  it('preserves a custom node name', () => {
+    expect(new Node('merchant').name).toBe('merchant');
+  });
+
   it('addChild sets the parent reference and includes the child in children', () => {
     const parent = new Node('parent');
     const child = new Node('child');

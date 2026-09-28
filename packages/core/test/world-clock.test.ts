@@ -16,6 +16,11 @@ describe('WorldClock', () => {
     expect(clock.minutes).toBe(0);
   });
 
+  it('accepts the final minute of the day', () => {
+    const clock = new WorldClock({ minutesPerRealSecond: 1, startMinutes: 1439 });
+    expect(clock.minutes).toBe(1439);
+  });
+
   it('returns 0 when advance stays sub-minute', () => {
     // 0.5 real seconds * 1 min/s = 0.5 simulated minutes → no whole boundary
     const clock = new WorldClock({ minutesPerRealSecond: 1, startMinutes: 100 });

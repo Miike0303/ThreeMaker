@@ -55,6 +55,10 @@ describe('parseVolume / parseFadeMs', () => {
     expect(parseVolume(undefined, 'x')).toBeUndefined();
   });
 
+  it('rejects null rather than treating it as an absent volume', () => {
+    expect(() => parseVolume(null, 'x')).toThrow(/between 0 and 1/);
+  });
+
   it('allows zero volume', () => {
     expect(parseVolume(0, 'x')).toBe(0);
   });
@@ -101,6 +105,15 @@ describe('createAudioCommandPlugins', () => {
     expect(
       registry.get('playSound')?.run({ type: 'playSound', path: 'se/hit.ogg' }, {} as never),
     ).toBe('continue');
+  });
+
+  it('rejects a playSound volume above full gain through the command parser', () => {
+    expect(() =>
+      parseEventScript(
+        script({ type: 'playSound', path: 'se/hit.ogg', volume: 1.5 }),
+        registryFor(),
+      ),
+    ).toThrow(/between 0 and 1/);
   });
 
   it('omits playSound volume when it is not authored', () => {
@@ -182,10 +195,24 @@ describe('createAudioCommandPlugins', () => {
     ).toThrow(/"loop" must be a boolean/);
   });
 
+  it('rejects null as a playBgm loop option', () => {
+    expect(() =>
+      parseEventScript(
+        script({ type: 'playBgm', path: 'bgm/town.ogg', loop: null }),
+        registryFor(),
+      ),
+    ).toThrow(/"loop" must be a boolean/);
+  });
+
   it('parses stopBgm with no options', () => {
     const registry = registryFor();
     const parsed = parseEventScript(script({ type: 'stopBgm' }), registry);
     expect(parsed.intro).toEqual([{ type: 'stopBgm' }]);
+  });
+
+  it('accepts a stopBgm fade longer than one millisecond', () => {
+    const parsed = parseEventScript(script({ type: 'stopBgm', fadeMs: 250 }), registryFor());
+    expect(parsed.intro).toEqual([{ type: 'stopBgm', fadeMs: 250 }]);
   });
 
   it('forwards stopBgm fadeMs to a handler', () => {

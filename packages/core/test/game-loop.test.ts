@@ -14,6 +14,16 @@ class FakeClock implements Clock {
 }
 
 describe('GameLoop (variable timestep)', () => {
+  it('reports running state across start and stop', () => {
+    const loop = new GameLoop({ clock: new FakeClock(), onTick: vi.fn() });
+
+    expect(loop.running).toBe(false);
+    loop.start();
+    expect(loop.running).toBe(true);
+    loop.stop();
+    expect(loop.running).toBe(false);
+  });
+
   it('does not tick before start() is called', () => {
     const clock = new FakeClock();
     const onTick = vi.fn();
