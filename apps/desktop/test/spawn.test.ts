@@ -69,8 +69,23 @@ describe('findSpawnTile', () => {
     expect(findSpawnTile(gridWithOnlyCandidate(0, 2), 1, 1)).toEqual({ x: 0, y: 2 });
   });
 
+  it('includes the first tile on the bottom edge of a search ring', () => {
+    expect(findSpawnTile(gridWithOnlyCandidate(1, 2), 1, 1)).toEqual({ x: 1, y: 2 });
+  });
+
   it('includes the left edge of a search ring', () => {
     expect(findSpawnTile(gridWithOnlyCandidate(0, 1), 1, 1)).toEqual({ x: 0, y: 1 });
+  });
+
+  it('checks a nearby left-edge tile before a farther one', () => {
+    const grid: StandabilityQuery = {
+      width: 5,
+      height: 5,
+      isStandable: () => true,
+      isGoodSpawnCandidate: (x, y) => x === 1 && (y === 2 || y === 4),
+    };
+
+    expect(findSpawnTile(grid, 2, 2)).toEqual({ x: 1, y: 2 });
   });
 
   it('expands outward until it finds a standable tile several rings away', () => {
@@ -175,6 +190,15 @@ describe('resolveInitialSpawn', () => {
   it('falls back to floor 0 when the authored floorIndex does not exist', () => {
     const result = resolveInitialSpawn([floor0, floor1], { x: 0, y: 0, floorIndex: 7 }, 1, 1);
     expect(result).toEqual({ x: 1, y: 1, floorIndex: 0 });
+  });
+
+  it('falls back to floor 0 when the authored floor index is negative', () => {
+    const result = resolveInitialSpawn([floor0, floor1], { x: 0, y: 0, floorIndex: -1 }, 1, 1);
+    expect(result).toEqual({ x: 1, y: 1, floorIndex: 0 });
+  });
+
+  it('reports an empty floor list before searching for a spawn tile', () => {
+    expect(() => resolveInitialSpawn([], undefined, 0, 0)).toThrow(/no floor at index 0/i);
   });
 
   it('rejects an authored spawn that is standable but fully enclosed (no standable neighbor), falling back to findSpawnTile (spawn-quality bug fix: "spawns in a wall")', () => {

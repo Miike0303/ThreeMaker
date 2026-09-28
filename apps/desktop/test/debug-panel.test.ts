@@ -107,6 +107,12 @@ describe('formatDebugRows', () => {
     expect(lit.find((r) => r.label === 'Lights')?.value).toBe('2 (lit)');
   });
 
+  it('shows the current weather after it changes from clear', () => {
+    const rows = formatDebugRows({ ...SNAPSHOT, weather: 'rain' }, createI18n(LOCALES, 'en').t);
+
+    expect(rows.find((row) => row.label === 'Weather')?.value).toBe('rain');
+  });
+
   it('exposes last-hop dispose counts for C1 GPU-leak debug-panel contract', () => {
     const i18n = createI18n(LOCALES, 'en');
     const rows = formatDebugRows(
@@ -201,6 +207,20 @@ describe('debug panel collapsed-state persistence', () => {
         setItem: () => {},
       }),
     ).toBe(false);
+  });
+
+  it('keeps the panel usable when persisting collapsed state throws', () => {
+    expect(() =>
+      writeDebugPanelCollapsed(
+        {
+          getItem: () => null,
+          setItem: () => {
+            throw new Error('Storage disabled');
+          },
+        },
+        true,
+      ),
+    ).not.toThrow();
   });
 });
 
@@ -319,6 +339,26 @@ describe('debug panel toggle accessibility', () => {
     const { created } = mountPanel(false, true);
 
     expect(created.some((node) => node.textContent === 'G')).toBe(true);
+  });
+
+  it('labels Ctrl as the noclip shortcut', () => {
+    const { created } = mountPanel(false);
+    const controlRow = created.find(
+      (node) =>
+        node.className === 'debug-panel-row' &&
+        node.children[1]?.textContent === 'debug.controls.noclip',
+    );
+
+    expect(controlRow?.children[0]?.textContent).toBe('Ctrl');
+  });
+
+  it('seeds the weather readout with clear before the first update', () => {
+    const { created } = mountPanel(false);
+    const weatherRow = created.find(
+      (node) => node.className === 'debug-panel-row' && node.children[0]?.textContent === 'Weather',
+    );
+
+    expect(weatherRow?.children[1]?.textContent).toBe('clear');
   });
 
   it('shows noclip as on while the shortcut is active', () => {

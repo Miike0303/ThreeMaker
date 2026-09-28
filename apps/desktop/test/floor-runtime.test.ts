@@ -72,6 +72,16 @@ describe('createFloorRouter', () => {
     expect(router.baseElevation).toBe(3);
   });
 
+  it('starts on an explicitly selected floor', () => {
+    const tileset = buildTileset();
+    const floor0 = buildFloorGameplay('floor-0', 0, buildMap(1, 1, [0]), tileset);
+    const floor1 = buildFloorGameplay('floor-1', 3, buildMap(1, 1, [0]), tileset);
+    const router = createFloorRouter([floor0, floor1], 1);
+
+    expect(router.currentFloor).toBe(1);
+    expect(router.baseElevation).toBe(3);
+  });
+
   it("floor A's own results are unaffected by having queried floor B in between (independent containers)", () => {
     const router = buildTwoFloorRouter();
 
