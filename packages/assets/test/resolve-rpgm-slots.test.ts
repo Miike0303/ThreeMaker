@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Catalog } from '../src/catalog.js';
 import { openCatalog } from '../src/catalog.js';
 import { resolveRpgmSlotsFromCatalog } from '../src/resolve-rpgm-slots.js';
@@ -177,5 +177,16 @@ describe('resolveRpgmSlotsFromCatalog', () => {
     seedA1Sheet();
 
     expect(resolveRpgmSlotsFromCatalog(catalog, join(gameRoot, 'www', 'database'), 1)).toEqual({});
+  });
+
+  it('returns empty slots when a listed tileset record is no longer available', () => {
+    const { tilesetId } = seedA1Sheet();
+    const lookup = vi.spyOn(catalog, 'getTileset').mockReturnValueOnce(null);
+    try {
+      expect(resolveRpgmSlotsFromCatalog(catalog, gameRoot, 1)).toEqual({});
+      expect(lookup).toHaveBeenCalledWith(tilesetId);
+    } finally {
+      lookup.mockRestore();
+    }
   });
 });

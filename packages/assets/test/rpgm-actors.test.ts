@@ -240,4 +240,24 @@ describe('readLeadActorSheet', () => {
 
     expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor1', characterIndex: 2 });
   });
+
+  it('falls back to the first actor when the party leader is a numeric string', () => {
+    writeActors([
+      null,
+      { characterName: 'FallbackHero', characterIndex: 1 },
+      { characterName: 'OtherHero', characterIndex: 3 },
+    ]);
+    writeFileSync(join(gameDir, 'System.json'), JSON.stringify({ partyMembers: ['2'] }), 'utf8');
+
+    expect(readLeadActorSheet(gameDir)).toEqual({
+      characterName: 'FallbackHero',
+      characterIndex: 1,
+    });
+  });
+
+  it('returns undefined when Actors.json has no defined actors', () => {
+    writeActors([null, null]);
+
+    expect(readLeadActorSheet(gameDir)).toBeUndefined();
+  });
 });

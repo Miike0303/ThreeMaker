@@ -93,6 +93,12 @@ describe('WorldClock', () => {
     expect(clock.minutes).toBe(601);
   });
 
+  it('rejects numeric strings instead of coercing the simulation rate', () => {
+    expect(() => new WorldClock({ minutesPerRealSecond: '2' as unknown as number })).toThrow(
+      /minutesPerRealSecond must be finite and > 0/,
+    );
+  });
+
   it('rejects non-positive or non-finite minutesPerRealSecond', () => {
     expect(() => new WorldClock({ minutesPerRealSecond: 0 })).toThrow(/minutesPerRealSecond/);
     expect(() => new WorldClock({ minutesPerRealSecond: -1 })).toThrow(/minutesPerRealSecond/);

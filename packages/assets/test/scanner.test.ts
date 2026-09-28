@@ -635,4 +635,20 @@ describe('scanGames — asset and metadata boundaries', () => {
       expect.objectContaining({ path: variantsDir, code: 'depth-exceeded' }),
     ]);
   });
+
+  it('identifies the corrupt System.json file in the diagnostic', () => {
+    const gameDir = join(workDir, 'corrupt-mv-metadata');
+    const dataDir = join(gameDir, 'www', 'data');
+    writeSystemJson(dataDir, '{broken');
+
+    expect(scanGames(workDir).errors).toEqual([
+      {
+        path: gameDir,
+        code: 'invalid-system-json',
+        message: expect.stringContaining(
+          `Corrupt System.json at "${join(dataDir, 'System.json')}":`,
+        ),
+      },
+    ]);
+  });
 });
