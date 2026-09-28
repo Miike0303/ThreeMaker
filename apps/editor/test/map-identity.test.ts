@@ -137,6 +137,13 @@ describe('list / sidecar / rename / delete plans', () => {
     expect(listMapNamesFromEntries(entries)).toEqual(['current', 'town']);
   });
 
+  it('sorts saved map names independently of directory entry order', () => {
+    expect(listMapNamesFromEntries(['zeta.tmmap.json', 'alpha.tmmap.json'])).toEqual([
+      'alpha',
+      'zeta',
+    ]);
+  });
+
   it('identifies ink sidecars that belong to a map', () => {
     expect(isInkSidecarForMap('current.elder.ink', 'current')).toBe(true);
     expect(isInkSidecarForMap('current.guard.ink', 'current')).toBe(true);
@@ -148,6 +155,12 @@ describe('list / sidecar / rename / delete plans', () => {
   it('lists only path-safe story ids for the named map, ignoring other files', () => {
     expect(listInkStoryIdsFromEntries(entries, 'current')).toEqual(['elder', 'guard']);
     expect(listInkStoryIdsFromEntries(entries, 'town')).toEqual(['welcome']);
+  });
+
+  it('sorts ink story ids independently of directory entry order', () => {
+    expect(
+      listInkStoryIdsFromEntries(['current.zeta.ink', 'current.alpha.ink'], 'current'),
+    ).toEqual(['alpha', 'zeta']);
   });
 
   it('drops sidecar names that would escape the maps directory', () => {

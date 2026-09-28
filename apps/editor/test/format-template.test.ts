@@ -20,6 +20,10 @@ describe('formatTemplate', () => {
     expect(formatTemplate('{missing} assets', {})).toBe('{missing} assets');
   });
 
+  it('leaves empty braces untouched even when values contain an empty key', () => {
+    expect(formatTemplate('Keep {} visible', { '': 'replacement' })).toBe('Keep {} visible');
+  });
+
   it('replaces every occurrence of a repeated placeholder', () => {
     expect(formatTemplate('{n} and {n}', { n: 3 })).toBe('3 and 3');
   });

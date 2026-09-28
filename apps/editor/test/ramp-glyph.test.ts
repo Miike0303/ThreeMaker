@@ -34,6 +34,22 @@ describe('computeRampGlyphCells', () => {
     ]);
   });
 
+  it('uses the last row of a square map when resolving a ramp direction', () => {
+    const width = 3;
+    const height = 3;
+    const layers = [
+      [0, 0, 0, 0, 0, 0, 0, 7, 0],
+      EMPTY_LAYER(width * height),
+      EMPTY_LAYER(width * height),
+      EMPTY_LAYER(width * height),
+    ] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+
+    expect(
+      computeRampGlyphCells(layers, [0, 0, 0, 0, 0, 0, 0, 1, 0], semantics, width, height),
+    ).toEqual([{ x: 1, y: 2, direction: 'south' }]);
+  });
+
   it('honors an explicit rampDirection override over the tie-break candidate', () => {
     const width = 2;
     const height = 2;
