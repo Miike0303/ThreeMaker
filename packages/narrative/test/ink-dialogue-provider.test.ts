@@ -171,3 +171,31 @@ it('removes a trailing CRLF from a dialogue line', () => {
 
   expect(provider.next()).toEqual({ kind: 'line', text: 'Hello' });
 });
+
+it('preserves an internal line break when removing the final newline', () => {
+  const story = {
+    canContinue: true,
+    Continue: () => 'First\nSecond\n',
+    currentTags: [],
+    currentChoices: [],
+  } as unknown as Story;
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', text: 'First\nSecond' });
+});
+
+it('trims trailing whitespace from a speaker tag', () => {
+  const story = {
+    canContinue: true,
+    Continue: () => 'Hello\n',
+    currentTags: ['speaker: Elder   '],
+    currentChoices: [],
+  } as unknown as Story;
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello' });
+});

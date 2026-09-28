@@ -422,3 +422,11 @@ it('rejects a layout whose Y coordinate overflows to infinity', () => {
 it('rejects a layout comment without an X coordinate', () => {
   expect(parseInkNodeLayouts('// @tm-node start x= y=1\n')).toEqual([]);
 });
+
+it('rejects a layout coordinate with a trailing decimal point', () => {
+  expect(parseInkNodeLayouts('// @tm-node start x=1. y=2\n')).toEqual([]);
+});
+
+it('requires the exact lowercase layout marker', () => {
+  expect(parseInkNodeLayouts('// @TM-NODE start x=1 y=2\n')).toEqual([]);
+});
