@@ -249,6 +249,20 @@ describe('StairTraversal (waypoints)', () => {
     ).toThrow(/at least 2 waypoints/);
   });
 
+  it('reports the invalid waypoint floor index', () => {
+    expect(
+      () =>
+        new StairTraversal({
+          waypoints: [
+            { x: 1, y: 0, floor: 0 },
+            { x: 7, y: 0, floor: 3 },
+          ],
+          floors: FLOORS,
+          heightUnit: HEIGHT_UNIT,
+        }),
+    ).toThrow(/floor index 3, but only 2 floor/);
+  });
+
   it('stays on the first leg before a shorter second leg begins', () => {
     const traversal = new StairTraversal({
       waypoints: [
