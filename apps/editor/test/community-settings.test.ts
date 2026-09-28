@@ -75,6 +75,18 @@ describe('community-settings', () => {
     ).toBe(2);
   });
 
+  it('defaults a non-finite share payload version to zero', () => {
+    expect(
+      maybeEnqueueCommunityShare(DEFAULT_COMMUNITY_SETTINGS, {
+        mapId: 'map-1',
+        mapName: 'Map',
+        tileObjectShas: [],
+        usesOnlyImportedAssets: false,
+        version: Number.POSITIVE_INFINITY,
+      })?.version,
+    ).toBe(0);
+  });
+
   it('defaults to share-on-save true and imported assets false', () => {
     expect(DEFAULT_COMMUNITY_SETTINGS).toEqual({
       shareOnSave: true,
@@ -426,6 +438,22 @@ describe('community share offline queue', () => {
         JSON.stringify([sampleJob('ok'), { mapId: 1 }, sampleJob('two')]),
       ),
     ).toEqual({ ok: true, jobs: [sampleJob('ok'), sampleJob('two')] });
+  });
+
+  it('rejects an imported queue job whose only invalid field is its map id', () => {
+    const invalid = { ...sampleJob('valid'), mapId: 42 };
+    expect(parseCommunityShareQueueJson(JSON.stringify([invalid]))).toEqual({
+      ok: false,
+      reason: 'no-valid-jobs',
+    });
+  });
+
+  it('rejects an imported queue job with a non-string tile hash among valid hashes', () => {
+    const invalid = { ...sampleJob('mixed-hashes'), tileObjectShas: ['a'.repeat(64), 42] };
+    expect(parseCommunityShareQueueJson(JSON.stringify([invalid]))).toEqual({
+      ok: false,
+      reason: 'no-valid-jobs',
+    });
   });
 
   it('load/parse normalizes legacy jobs missing version and licenseTag', () => {

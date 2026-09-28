@@ -18,11 +18,25 @@ import {
   placeholderSheetPngBytes,
   revokePlaceholderPaletteUrls,
   stampPlaceholderSlotObjects,
+  textureSheetToObjectUrl,
 } from '../src/placeholder-tileset.js';
 
 describe('buildPlaceholderTextures', () => {
   it('rejects a zero-width palette image before encoding', () => {
     expect(() => encodeRgbaPng(0, 1, new Uint8Array(0))).toThrow('encodeRgbaPng: invalid size 0x1');
+  });
+
+  it('rejects a zero-height palette image before encoding', () => {
+    expect(() => encodeRgbaPng(1, 0, new Uint8Array(0))).toThrow('encodeRgbaPng: invalid size 1x0');
+  });
+
+  it('rejects a texture whose image has no width before creating a palette URL', () => {
+    const texture = { image: { data: new Uint8Array(4), height: 1 } } as unknown as Parameters<
+      typeof textureSheetToObjectUrl
+    >[0];
+    expect(() => textureSheetToObjectUrl(texture)).toThrow(
+      'textureSheetToObjectUrl: expected DataTexture with RGBA image.data',
+    );
   });
 
   it('rejects a truncated RGBA buffer before encoding a palette image', () => {
@@ -177,6 +191,30 @@ describe('composePlaceholderMap', () => {
     expect(stamped.tileset.slots.A5?.object).toBe(a5);
     expect(stamped.tileset.slots.B?.object).toBe(b);
     expect(doc.tileset.slots.A5?.object).toBeUndefined();
+  });
+
+  it('rejects uppercase object shas before stamping starter slots', () => {
+    const doc = composePlaceholderMap({
+      id: 'starter-uppercase',
+      name: 'Starter',
+      width: 2,
+      height: 2,
+    });
+    expect(() =>
+      stampPlaceholderSlotObjects(doc, { A5: 'A'.repeat(64), B: 'b'.repeat(64) }),
+    ).toThrow('A5/B object shas must be 64 lowercase hex chars');
+  });
+
+  it('validates the B object sha independently of the A5 sha', () => {
+    const doc = composePlaceholderMap({
+      id: 'starter-invalid-b',
+      name: 'Starter',
+      width: 2,
+      height: 2,
+    });
+    expect(() =>
+      stampPlaceholderSlotObjects(doc, { A5: 'a'.repeat(64), B: 'g'.repeat(64) }),
+    ).toThrow('A5/B object shas must be 64 lowercase hex chars');
   });
 
   it('placeholderSheetPngBytes emits a PNG signature for A5 and B', () => {

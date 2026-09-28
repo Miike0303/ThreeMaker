@@ -193,6 +193,13 @@ describe('projectToScreenFraction', () => {
     expect(result?.xFrac).toBeGreaterThan(0.5);
   });
 
+  it('halves the horizontal screen offset when the viewport aspect doubles', () => {
+    const point = { x: 5, y: 0, z: 0 };
+    const square = projectToScreenFraction(point, pose, 45, 1);
+    const wide = projectToScreenFraction(point, pose, 45, 2);
+    expect(wide?.xFrac).toBeCloseTo(0.5 + ((square?.xFrac ?? 0) - 0.5) / 2);
+  });
+
   it('returns undefined for a point behind the camera', () => {
     // Along the camera's own viewing ray, past its position, away from lookAt.
     const behind = { x: 0, y: 13.5355, z: 13.5355 };
