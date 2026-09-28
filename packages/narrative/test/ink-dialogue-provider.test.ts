@@ -237,3 +237,17 @@ it('ignores a weather tag when no speaker is declared', () => {
 
   expect(provider.next()).toEqual({ kind: 'line', text: 'Hello.' });
 });
+
+it('trims leading whitespace from the speaker tag key', () => {
+  const story = {
+    canContinue: true,
+    Continue: () => 'Hello\n',
+    currentTags: [' \t speaker: Elder'],
+    currentChoices: [],
+  } as unknown as Story;
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello' });
+});

@@ -606,3 +606,41 @@ it('parses layout markers with multiple whitespace characters before the knot', 
 it('rejects a single slash as a knot header comment delimiter', () => {
   expect(listInkKnots('=== hidden === / author note\n=== visible ===\n')).toEqual(['visible']);
 });
+
+it('normalizes CRLF in the preserved body when rewriting layouts', () => {
+  const source = '// @tm-node entry x=0 y=0\r\n// Author note.\r\n=== entry ===\r\nWelcome.\r\n';
+
+  expect(applyInkNodeLayouts(source, [{ knot: 'entry', x: 17, y: 29 }])).toBe(
+    '// @tm-node entry x=17 y=29\n\n// Author note.\n=== entry ===\nWelcome.\n',
+  );
+});
+
+it('rejects a knot header with a hyphen inside its name', () => {
+  expect(listInkKnots('=== side-room ===\n=== entry ===\n')).toEqual(['entry']);
+});
+
+it('rejects a layout knot name containing a hyphen', () => {
+  expect(parseInkNodeLayouts('// @tm-node side-room x=4 y=7\n')).toEqual([]);
+});
+
+it('parses a layout marker after multiple comment-padding characters', () => {
+  expect(parseInkNodeLayouts('// \t @tm-node entry x=4 y=7\n')).toEqual([
+    { knot: 'entry', x: 4, y: 7 },
+  ]);
+});
+
+it('parses an X coordinate after multiple separating whitespace characters', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry \t x=4 y=7\n')).toEqual([
+    { knot: 'entry', x: 4, y: 7 },
+  ]);
+});
+
+it('parses a Y coordinate after multiple separating whitespace characters', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry x=4 \t y=7\n')).toEqual([
+    { knot: 'entry', x: 4, y: 7 },
+  ]);
+});
+
+it('recognizes a knot header with multiple spaces before its author comment', () => {
+  expect(listInkKnots('=== entry === \t // Author note.\n')).toEqual(['entry']);
+});
