@@ -108,6 +108,17 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('preserves region IDs when shadow masks differ', () => {
+    const map = buildSyntheticMap();
+    const regions = [0, 1, 2, 3, 4, 7];
+    const doc = convertRpgmMap(
+      { ...map, layers: { ...map.layers, regions, shadows: [8, 9, 10, 11, 12, 13] } },
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.floors[0]?.layers.regions).toEqual(regions);
+  });
+
   it('preserves a zero numeric map ID in the document ID', () => {
     const doc = convertRpgmMap(buildSyntheticMap({ id: 0 }), buildSyntheticTileset());
     expect(doc.id).toBe('rpgm-map-0');

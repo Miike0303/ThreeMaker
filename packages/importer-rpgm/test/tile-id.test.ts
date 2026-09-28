@@ -12,6 +12,26 @@ import {
 } from '../src/tile-id.js';
 
 describe('SHEET_BASE_ID / SHEET_END_ID vs SHEET_ID_RANGES', () => {
+  it('prevents callers from overwriting a sheet end ID', () => {
+    const original = SHEET_END_ID.A1;
+    const changed = Reflect.set(SHEET_END_ID, 'A1', 0);
+    const actual = SHEET_END_ID.A1;
+    if (changed) Reflect.set(SHEET_END_ID, 'A1', original);
+
+    expect(changed).toBe(false);
+    expect(actual).toBe(2816);
+  });
+
+  it('prevents callers from overwriting a sheet base ID', () => {
+    const original = SHEET_BASE_ID.A1;
+    const changed = Reflect.set(SHEET_BASE_ID, 'A1', 0);
+    const actual = SHEET_BASE_ID.A1;
+    if (changed) Reflect.set(SHEET_BASE_ID, 'A1', original);
+
+    expect(changed).toBe(false);
+    expect(actual).toBe(2048);
+  });
+
   it('keeps the twin tables equal (decode walks ranges; authoring uses BASE/END)', () => {
     const sheets = Object.keys(SHEET_BASE_ID) as TileSheetId[];
     expect(sheets.sort()).toEqual([...SHEET_ID_RANGES.map((r) => r.sheet)].sort());

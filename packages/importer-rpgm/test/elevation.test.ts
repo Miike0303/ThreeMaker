@@ -59,6 +59,12 @@ describe('heightForRegion', () => {
 });
 
 describe('computeHeightGrid', () => {
+  it('fills missing region cells with ground height', () => {
+    const map = buildMap(2, 2, [3]);
+
+    expect(Array.from(computeHeightGrid(map))).toEqual([3, 0, 0, 0]);
+  });
+
   it('produces a row-major grid matching heightForRegion for every cell', () => {
     const regions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 200];
     const map = buildMap(10, 1, regions);
@@ -97,6 +103,31 @@ describe('computeHeightGrid', () => {
 });
 
 describe('computeRampGrid', () => {
+  it('warns for an automatic ramp with an exact two-level drop', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const heightGrid = new Uint8Array(9).fill(2);
+    heightGrid[1] = 0;
+
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, [{ x: 1, y: 1 }]);
+
+    expect(rampGrid[4]).toBe(0);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toMatch(/multi-level span/i);
+  });
+
+  it('keeps a one-level uphill override inert without a multi-level warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const heightGrid = new Uint8Array(9).fill(2);
+    heightGrid[1] = 3;
+
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, [
+      { x: 1, y: 1, rampDirection: 'north' },
+    ]);
+
+    expect(rampGrid[4]).toBe(0);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -310,6 +341,17 @@ describe('computeRampGrid', () => {
 });
 
 describe('edgeProfileAt', () => {
+  it('keeps an edge flat when its ramp code is missing', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([3]),
+      rampGrid: new Uint8Array(),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(edgeProfileAt(ctx, 0, 0, 'west')).toEqual([3, 3]);
+  });
+
   it('returns ground at the east boundary instead of reading the next row', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([2, 3, 7, 6]),
@@ -503,6 +545,17 @@ describe('profilesEqual', () => {
 });
 
 describe('surfaceHeightAt', () => {
+  it('samples ground when the height cell is missing', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array(),
+      rampGrid: new Uint8Array([0]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(surfaceHeightAt(ctx, 0.25, 0.75)).toBe(0);
+  });
+
   it('samples the last column of a wide map using the map width', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([2, 4, 6]),
