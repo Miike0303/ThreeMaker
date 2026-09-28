@@ -210,3 +210,12 @@ it('offers and follows the only pending dialogue choice', () => {
   provider.choose(0);
   expect(provider.next()).toEqual({ kind: 'line', text: 'Welcome back.' });
 });
+
+it('ignores a colonless tag whose prefix is speaker', () => {
+  const story = compileInk('Hello. # speakerX\n-> END\n');
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', text: 'Hello.' });
+});

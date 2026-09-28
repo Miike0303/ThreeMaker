@@ -206,3 +206,14 @@ describe('applyBindingOverrides / collectBindingOverrides', () => {
     expect(reloaded.actionForKeyboardKey('F5')).toBe(Actions.SystemSave);
   });
 });
+
+it('does not persist a case-only change to a default keyboard key', () => {
+  const defaults = [
+    { action: Actions.Interact, source: { device: 'keyboard' as const, key: 'e' } },
+  ];
+  const table = createBindingTable([
+    { action: Actions.Interact, source: { device: 'keyboard', key: 'E' } },
+  ]);
+
+  expect(collectBindingOverrides(table, defaults)).toEqual([]);
+});

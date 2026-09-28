@@ -506,3 +506,21 @@ it('keeps digits inside dotted divert target names', () => {
     { from: 'start', to: 'chapter2.ending3' },
   ]);
 });
+
+it('requires whitespace between the layout knot name and X coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node startx=1 y=2\n')).toEqual([]);
+});
+
+it('requires whitespace between layout coordinates', () => {
+  expect(parseInkNodeLayouts('// @tm-node start x=1y=2\n')).toEqual([]);
+});
+
+it('keeps a divert after a single slash in dialogue', () => {
+  expect(listInkEdges('=== start ===\nTake the north / south road. -> END\n')).toEqual([
+    { from: 'start', to: 'END' },
+  ]);
+});
+
+it('recognizes a knot header followed by an empty comment', () => {
+  expect(listInkKnots('=== opening === //\n')).toEqual(['opening']);
+});

@@ -166,3 +166,22 @@ it('does not reverse a stair link one row before its landing', () => {
 
   expect(tracker.shouldTrigger({ floor: 1, x: 4, y: 1 }, [LINK])).toBeUndefined();
 });
+
+it('does not start an upper-floor stair link from the floor below its entry', () => {
+  const link: StairLinkDefinition = {
+    bidirectional: false,
+    waypoints: [
+      { x: 2, y: 2, floor: 2 },
+      { x: 4, y: 2, floor: 3 },
+    ],
+  };
+  const tracker = new StairTriggerTracker();
+
+  expect(tracker.shouldTrigger({ floor: 1, x: 2, y: 2 }, [link])).toBeUndefined();
+});
+
+it('does not reverse a stair link from the floor above its landing', () => {
+  const tracker = new StairTriggerTracker();
+
+  expect(tracker.shouldTrigger({ floor: 2, x: 4, y: 2 }, [LINK])).toBeUndefined();
+});
