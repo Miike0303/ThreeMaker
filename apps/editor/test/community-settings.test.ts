@@ -43,6 +43,15 @@ const sampleJob = (id: string, at = '2026-08-08T00:00:00.000Z'): CommunityShareE
 });
 
 describe('community-settings', () => {
+  it('ignores an empty slot when classifying imported sheet provenance', () => {
+    expect(
+      licenseTagFromSlots({
+        A: null,
+        B: { object: 'a'.repeat(64), sourceGameId: 1 },
+      }),
+    ).toBe('import-rpgm');
+  });
+
   it('truncates a fractional map version in a queued share payload', () => {
     expect(
       maybeEnqueueCommunityShare(DEFAULT_COMMUNITY_SETTINGS, {
@@ -129,6 +138,11 @@ describe('community-settings', () => {
 });
 
 describe('formatCommunityShareAt (WU-COMM-09)', () => {
+  it('keeps the timestamp when the requested locale is invalid', () => {
+    const at = '2026-08-08T00:00:00.000Z';
+    expect(formatCommunityShareAt(at, 'invalid_locale')).toBe(at);
+  });
+
   it('formats a valid ISO timestamp with the given locale', () => {
     const formatted = formatCommunityShareAt('2026-08-08T14:30:00.000Z', 'en-US');
     // Locale shapes vary by ICU data; assert it is not the raw ISO string and parses.

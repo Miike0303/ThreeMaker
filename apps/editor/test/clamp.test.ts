@@ -94,4 +94,13 @@ describe('clampRoomRect', () => {
       height: 2,
     });
   });
+
+  it('uses the left edge when a room origin has a non-finite x coordinate', () => {
+    expect(clampRoomRect({ x: Number.NaN, y: 2, width: 2, height: 2 }, 5, 5)).toEqual({
+      x: 0,
+      y: 2,
+      width: 2,
+      height: 2,
+    });
+  });
 });

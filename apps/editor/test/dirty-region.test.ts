@@ -134,6 +134,12 @@ describe('expandDirtyRectNorthThroughStars', () => {
 });
 
 describe('dirtyRectToChunkKeys', () => {
+  it('does not include the next chunk when a rect ends exactly at its edge', () => {
+    expect([...dirtyRectToChunkKeys({ xStart: 0, yStart: 0, xEnd: 16, yEnd: 1 }, 16)]).toEqual([
+      '0,0',
+    ]);
+  });
+
   it('returns every chunk key the rect overlaps', () => {
     const rect = { xStart: 14, yStart: 0, xEnd: 18, yEnd: 1 };
     const keys = dirtyRectToChunkKeys(rect, 16);

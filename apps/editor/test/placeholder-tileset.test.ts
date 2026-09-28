@@ -1,8 +1,9 @@
 /**
  * Starter placeholder A5/B sheets + composePlaceholderMap (catalog-free paint path).
  */
+import { inflateSync } from 'node:zlib';
 import { getTileSheet } from '@threemaker/importer-rpgm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { composePlaceholderMap, toRenderableMap } from '../src/map-compose.js';
 import {
   buildPlaceholderTextures,
@@ -20,6 +21,23 @@ import {
 } from '../src/placeholder-tileset.js';
 
 describe('buildPlaceholderTextures', () => {
+  it('marks the final PNG deflate block so a palette image can be decoded', () => {
+    const rgba = new Uint8Array([10, 20, 30, 255, 40, 50, 60, 255]);
+    const png = encodeRgbaPng(2, 1, rgba);
+    const idatLength = new DataView(png.buffer, png.byteOffset).getUint32(33);
+    expect(Array.from(inflateSync(png.subarray(41, 41 + idatLength)))).toEqual([0, ...rgba]);
+  });
+
+  it('revokes both starter palette URLs when the map session ends', () => {
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    try {
+      revokePlaceholderPaletteUrls({ A5: 'blob:a5', B: 'blob:b' });
+      expect(revoke.mock.calls).toEqual([['blob:a5'], ['blob:b']]);
+    } finally {
+      revoke.mockRestore();
+    }
+  });
+
   it('builds A5/B sheets at the standard RPGM plain-grid sizes @ 48px', () => {
     const built = buildPlaceholderTextures();
     try {
@@ -114,7 +132,7 @@ describe('composePlaceholderMap', () => {
     expect(getTileSheet(PLACEHOLDER_GROUND_TILE_ID)).toBe('A5');
     expect(getTileSheet(PLACEHOLDER_DECOR_TILE_ID)).toBe('B');
 
-    const ground = doc.floors[0]!.layers.tiles[0];
+    const ground = doc.floors[0]?.layers.tiles[0];
     expect(ground).toBeDefined();
     expect(ground?.every((id) => id === PLACEHOLDER_GROUND_TILE_ID)).toBe(true);
     expect(doc.tileset.flags).toHaveLength(8192);

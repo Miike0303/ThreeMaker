@@ -109,6 +109,12 @@ describe('zoomPercentForDistance (WU-VIEW-02)', () => {
 });
 
 describe('panCameraTarget (WU-UX-01)', () => {
+  it('keeps pan coordinates finite before the viewport has a height', () => {
+    const target = panCameraTarget({ x: 0, z: 0 }, 10, 10, 10, 0, 45, 45);
+    expect(Number.isFinite(target.x)).toBe(true);
+    expect(Number.isFinite(target.z)).toBe(true);
+  });
+
   const target = { x: 10, z: 20 };
 
   it('a zero drag leaves the target unchanged', () => {
