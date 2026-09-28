@@ -291,3 +291,32 @@ describe('buildInkGraphModel / setInkNodePosition', () => {
     expect(layouts.find((l) => l.knot === 'mid')).toBeDefined();
   });
 });
+
+it('collects both conditional divert targets on one line', () => {
+  expect(listInkEdges('=== start ===\n{flag: -> left | -> right}\n')).toEqual([
+    { from: 'start', to: 'left' },
+    { from: 'start', to: 'right' },
+  ]);
+});
+
+it('honors zero row height for the fifth default graph node', () => {
+  const source = '=== a ===\n=== b ===\n=== c ===\n=== d ===\n=== e ===\n';
+  const model = buildInkGraphModel(source, { rowHeight: 0 });
+
+  expect(model.nodes[4]).toEqual({ knot: 'e', x: 0, y: 0 });
+});
+
+it('keeps underscore-prefixed divert targets', () => {
+  expect(listInkEdges('=== start ===\n-> _hidden\n')).toEqual([{ from: 'start', to: '_hidden' }]);
+});
+
+it('uses stored layout for a dotted knot name', () => {
+  const source = '// @tm-node chapter.next x=17 y=29\n=== chapter.next ===\n';
+  const model = buildInkGraphModel(source);
+
+  expect(model.nodes[0]).toEqual({ knot: 'chapter.next', x: 17, y: 29 });
+});
+
+it('lists dotted knot names without truncating them', () => {
+  expect(listInkKnots('=== chapter.next ===\n')).toEqual(['chapter.next']);
+});

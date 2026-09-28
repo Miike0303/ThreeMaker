@@ -147,3 +147,12 @@ describe('InkDialogueProvider', () => {
     );
   });
 });
+
+it('accepts whitespace around the speaker tag key', () => {
+  const story = compileInk('Hello. # speaker : Elder\n-> END\n');
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello.' });
+});
