@@ -124,6 +124,15 @@ describe('scanGames — depth/cycle guard (modeled on the LoQOO self-nested fold
     const cycleErrors = result.errors.filter((e) => e.code === 'cycle-detected');
     expect(cycleErrors.length).toBeGreaterThan(0);
   });
+
+  it('ignores a dangling directory junction without reporting a scan error', () => {
+    symlinkSync(join(workDir, 'missing'), join(workDir, 'dangling'), 'junction');
+
+    const result = scanGames(workDir);
+
+    expect(result.games).toEqual([]);
+    expect(result.errors).toEqual([]);
+  });
 });
 
 describe('scanGames — folder-agnostic MV/MZ auto-detect', () => {

@@ -29,6 +29,50 @@ describe('readLeadActorSheet', () => {
     expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'Actor1', characterIndex: 0 });
   });
 
+  it('reads the lead actor from an MZ data directory', () => {
+    const dataDir = join(gameDir, 'data');
+    mkdirSync(dataDir);
+    writeFileSync(
+      join(dataDir, 'Actors.json'),
+      JSON.stringify([null, { characterName: 'MZHero', characterIndex: 2 }]),
+      'utf8',
+    );
+
+    expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'MZHero', characterIndex: 2 });
+  });
+
+  it('uses the starting party leader from System.json beside MZ Actors.json', () => {
+    const dataDir = join(gameDir, 'data');
+    mkdirSync(dataDir);
+    writeFileSync(
+      join(dataDir, 'Actors.json'),
+      JSON.stringify([
+        null,
+        { characterName: 'FirstActor', characterIndex: 0 },
+        { characterName: 'PartyLeader', characterIndex: 3 },
+      ]),
+      'utf8',
+    );
+    writeFileSync(join(dataDir, 'System.json'), JSON.stringify({ partyMembers: [2] }), 'utf8');
+
+    expect(readLeadActorSheet(gameDir)).toEqual({
+      characterName: 'PartyLeader',
+      characterIndex: 3,
+    });
+  });
+
+  it('reads the lead actor from a deployed MV www/data directory', () => {
+    const dataDir = join(gameDir, 'www', 'data');
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(
+      join(dataDir, 'Actors.json'),
+      JSON.stringify([null, { characterName: 'MVHero', characterIndex: 5 }]),
+      'utf8',
+    );
+
+    expect(readLeadActorSheet(gameDir)).toEqual({ characterName: 'MVHero', characterIndex: 5 });
+  });
+
   it('uses the first defined actor when actor 1 is missing', () => {
     writeActors([
       null,
