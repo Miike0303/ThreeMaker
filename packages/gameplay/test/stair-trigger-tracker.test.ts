@@ -154,3 +154,15 @@ it('does not reverse a stair link one row past its landing', () => {
 
   expect(tracker.shouldTrigger({ floor: 1, x: 4, y: 3 }, [LINK])).toBeUndefined();
 });
+
+it('does not start a stair link one row before its entry', () => {
+  const tracker = new StairTriggerTracker({ floor: 0, x: 0, y: 0 });
+
+  expect(tracker.shouldTrigger({ floor: 0, x: 2, y: 1 }, [LINK])).toBeUndefined();
+});
+
+it('does not reverse a stair link one row before its landing', () => {
+  const tracker = new StairTriggerTracker({ floor: 1, x: 0, y: 0 });
+
+  expect(tracker.shouldTrigger({ floor: 1, x: 4, y: 1 }, [LINK])).toBeUndefined();
+});

@@ -457,3 +457,15 @@ it('ignores a commented divert after a string ending in an escaped backslash', (
 
   expect(listInkEdges(source)).toEqual([{ from: 'start', to: 'visible' }]);
 });
+
+it('rejects exponent notation in a horizontal layout coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node start x=1e2 y=3\n')).toEqual([]);
+});
+
+it('requires whitespace between the layout marker and knot name', () => {
+  expect(parseInkNodeLayouts('// @tm-nodestart x=1 y=2\n')).toEqual([]);
+});
+
+it('ignores a knot header without closing equals signs', () => {
+  expect(listInkKnots('=== unfinished\n=== finished ===\n')).toEqual(['finished']);
+});

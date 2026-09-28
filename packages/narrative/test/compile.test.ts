@@ -201,3 +201,14 @@ it('compiles a playable story containing an author TODO note', () => {
 
   expect(story.Continue()).toBe('Hello, traveler.\n');
 });
+
+it('separates multiple compiler issues in the failure message', () => {
+  const error = new InkCompileError([
+    { type: 'error', message: 'Unknown divert target.' },
+    { type: 'error', message: 'Missing knot.' },
+  ]);
+
+  expect(error.message).toBe(
+    'Ink compilation failed with 2 issue(s): Unknown divert target.; Missing knot.',
+  );
+});

@@ -109,3 +109,9 @@ describe('ElevationField', () => {
     expect(field.height).toBe(3);
   });
 });
+
+it('reads elevation on the last row of a tall map', () => {
+  const field = new ElevationField(buildMap(2, 3, {}, [0, 0, 0, 0, 3, 0]));
+
+  expect(field.heightAt(0, 2)).toBe(3);
+});
