@@ -24,6 +24,10 @@ function snap(partial: {
 }
 
 describe('activeActionsFromGamepad', () => {
+  it('moves once the stick clears the default quarter-axis deadzone', () => {
+    expect(activeActionsFromGamepad(snap({ axes: [0.3, 0] }))).toEqual([Actions.MoveRight]);
+  });
+
   it('treats a missing horizontal axis as neutral', () => {
     expect(activeActionsFromGamepad(snap({ axes: [] }))).toEqual([]);
   });

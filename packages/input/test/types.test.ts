@@ -14,6 +14,10 @@ describe('isMoveAction', () => {
   });
 });
 
+it('keeps quick save distinct from quick load', () => {
+  expect(Actions.SystemSave).not.toBe(Actions.SystemLoad);
+});
+
 describe('directionFromMoveAction', () => {
   it('maps the down action to the down grid direction', () => {
     expect(directionFromMoveAction(Actions.MoveDown)).toBe('down');
