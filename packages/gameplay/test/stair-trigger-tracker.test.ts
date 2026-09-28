@@ -136,3 +136,21 @@ describe('StairTriggerTracker — mark (completion-frame arrival, no re-trigger)
     ); // re-enters
   });
 });
+
+it('does not start a stair link one row past its entry', () => {
+  const tracker = new StairTriggerTracker({ floor: 0, x: 0, y: 0 });
+
+  expect(tracker.shouldTrigger({ floor: 0, x: 2, y: 3 }, [LINK])).toBeUndefined();
+});
+
+it('does not reverse a stair link one column past its landing', () => {
+  const tracker = new StairTriggerTracker({ floor: 1, x: 0, y: 0 });
+
+  expect(tracker.shouldTrigger({ floor: 1, x: 5, y: 2 }, [LINK])).toBeUndefined();
+});
+
+it('does not reverse a stair link one row past its landing', () => {
+  const tracker = new StairTriggerTracker({ floor: 1, x: 0, y: 0 });
+
+  expect(tracker.shouldTrigger({ floor: 1, x: 4, y: 3 }, [LINK])).toBeUndefined();
+});
