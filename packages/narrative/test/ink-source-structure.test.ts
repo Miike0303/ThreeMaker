@@ -702,3 +702,23 @@ it('does not turn a greater-than sign in dialogue into a divert', () => {
     { from: 'start', to: 'exit' },
   ]);
 });
+
+it('deduplicates a knot name after multiple repeated headers', () => {
+  expect(listInkKnots('=== start ===\n===start===\n=== start ===\n')).toEqual(['start']);
+});
+
+it('keeps one graph edge after three identical diverts', () => {
+  expect(listInkEdges('=== start ===\n-> exit\n-> exit\n-> exit\n')).toEqual([
+    { from: 'start', to: 'exit' },
+  ]);
+});
+
+it('lists knot names with internal uppercase letters', () => {
+  expect(listInkKnots('=== sideRoom ===\n')).toEqual(['sideRoom']);
+});
+
+it('reads a stored layout for a knot with internal uppercase letters', () => {
+  expect(parseInkNodeLayouts('// @tm-node sideRoom x=17 y=29\n')).toEqual([
+    { knot: 'sideRoom', x: 17, y: 29 },
+  ]);
+});

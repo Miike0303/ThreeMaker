@@ -302,3 +302,16 @@ it('preserves dialogue spaces before the final newline', () => {
 
   expect(provider.next()).toEqual({ kind: 'line', text: 'Wait...  ' });
 });
+
+it('preserves a trailing content line break before the final newline', () => {
+  const story = {
+    canContinue: true,
+    Continue: () => 'Wait.\n\n',
+    currentTags: [],
+    currentChoices: [],
+  } as unknown as Story;
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', text: 'Wait.\n' });
+});

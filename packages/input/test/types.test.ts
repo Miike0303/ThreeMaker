@@ -70,3 +70,11 @@ it('resolves the persisted move-left identifier to leftward movement', () => {
 it('resolves the persisted move-right identifier to rightward movement', () => {
   expect(directionFromMoveAction('move.right')).toBe('right');
 });
+
+it('recognizes the persisted noclip identifier as a hold action', () => {
+  expect(HOLD_ACTIONS.has('view.noclip')).toBe(true);
+});
+
+it('resolves the persisted move-up identifier to upward movement', () => {
+  expect(directionFromMoveAction('move.up')).toBe('up');
+});
