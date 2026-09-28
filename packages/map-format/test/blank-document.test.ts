@@ -31,6 +31,12 @@ describe('createBlankMapDocument', () => {
     expect(doc.tileset.flags).toEqual(flags);
   });
 
+  it('starts with an object for tile semantic overrides', () => {
+    const doc = createBlankMapDocument(BLANK_OPTIONS);
+
+    expect(doc.tileset.semantics).toEqual({});
+  });
+
   it('preserves the supplied display name independently of the map id', () => {
     expect(createBlankMapDocument(BLANK_OPTIONS).name).toBe('Blank Test');
   });

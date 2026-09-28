@@ -420,6 +420,10 @@ describe('parseMapDocument', () => {
     }
   });
 
+  it('directs a version-2 map with rooms to declare version 3', () => {
+    expect(() => migrateV2ToV3({ rooms: [] })).toThrow('Set "version" to 3');
+  });
+
   it('rejects a null rooms field on a v2 document', () => {
     expect(() => migrateV2ToV3({ rooms: null })).toThrow(MapFormatError);
   });
@@ -428,12 +432,32 @@ describe('parseMapDocument', () => {
     expect(() => migrateV4ToV5({ tileset: { tilePixelSize: null } })).toThrow(MapFormatError);
   });
 
+  it('classifies a version-4 map carrying props as malformed', () => {
+    try {
+      migrateV4ToV5({ props: [] });
+      throw new Error('Expected the migration to reject props on a v4 document.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(MapFormatError);
+      expect((error as MapFormatError).code).toBe('malformed');
+    }
+  });
+
   it('rejects a null floor light map on a v5 document', () => {
     expect(() => migrateV5ToV6({ floors: [{ lightMap: null }] })).toThrow(MapFormatError);
   });
 
   it('rejects a null lights field on a v5 document', () => {
     expect(() => migrateV5ToV6({ lights: null })).toThrow(MapFormatError);
+  });
+
+  it('classifies a version-5 map carrying lights as malformed', () => {
+    try {
+      migrateV5ToV6({ lights: [] });
+      throw new Error('Expected the migration to reject lights on a v5 document.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(MapFormatError);
+      expect((error as MapFormatError).code).toBe('malformed');
+    }
   });
 
   it('names lightMap once when multiple v5 floors already carry it', () => {
