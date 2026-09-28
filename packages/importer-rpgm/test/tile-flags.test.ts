@@ -2,6 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { decodeTileFlags } from '../src/tile-flags.js';
 
 describe('decodeTileFlags', () => {
+  it('does not mark a ladder-only tile as a bush', () => {
+    expect(decodeTileFlags(0x20)).toMatchObject({ isLadder: true, isBush: false });
+  });
+
+  it('does not block rightward passage for a left-only passage flag', () => {
+    expect(decodeTileFlags(0x2)).toMatchObject({
+      impassableLeft: true,
+      impassableRight: false,
+    });
+  });
+
+  it('does not block downward passage for a left-only passage flag', () => {
+    expect(decodeTileFlags(0x2)).toMatchObject({
+      impassableLeft: true,
+      impassableDown: false,
+    });
+  });
+
   it('does not mark a bush-only tile as a ladder', () => {
     expect(decodeTileFlags(0x40)).toMatchObject({ isBush: true, isLadder: false });
   });

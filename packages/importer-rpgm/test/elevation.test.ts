@@ -310,6 +310,17 @@ describe('computeRampGrid', () => {
 });
 
 describe('edgeProfileAt', () => {
+  it('returns ground at the east boundary instead of reading the next row', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2, 3, 7, 6]),
+      rampGrid: new Uint8Array(4),
+      mapWidth: 2,
+      mapHeight: 2,
+    };
+
+    expect(edgeProfileAt(ctx, 2, 0, 'west')).toEqual([0, 0]);
+  });
+
   it('returns [H,H] for every edge of a flat (non-ramp) cell', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([2]),

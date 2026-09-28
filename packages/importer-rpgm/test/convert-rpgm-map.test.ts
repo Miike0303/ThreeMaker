@@ -108,6 +108,41 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('preserves a zero numeric map ID in the document ID', () => {
+    const doc = convertRpgmMap(buildSyntheticMap({ id: 0 }), buildSyntheticTileset());
+    expect(doc.id).toBe('rpgm-map-0');
+  });
+
+  it('rejects an event at the width boundary of a taller map', () => {
+    const event = { ...placedEvent(showTextPage(0, ['Outside the map'])), x: 2, y: 1 };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 2, height: 4, events: [event] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('preserves shadow masks when region IDs differ', () => {
+    const map = buildSyntheticMap();
+    const shadows = [1, 2, 3, 4, 5, 6];
+    const doc = convertRpgmMap(
+      {
+        ...map,
+        layers: { ...map.layers, shadows, regions: [10, 11, 12, 13, 14, 15] },
+      },
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.floors[0]?.layers.shadows).toEqual(shadows);
+  });
+
+  it('keeps the RPG Maker tile size at 48 pixels', () => {
+    const doc = convertRpgmMap(buildSyntheticMap(), buildSyntheticTileset());
+    expect(doc.tileset.tilePixelSize).toBe(48);
+  });
+
   it('imports an event below the width boundary on a taller map', () => {
     const event = { ...placedEvent(showTextPage(0, ['Hello'])), x: 1, y: 3 };
     const doc = convertRpgmMap(
