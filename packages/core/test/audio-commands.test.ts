@@ -197,6 +197,30 @@ describe('createAudioCommandPlugins', () => {
     ]);
   });
 
+  it('rejects an escaping playBgm path through the command parser', () => {
+    expect(() =>
+      parseEventScript(script({ type: 'playBgm', path: '../outside.ogg' }), registryFor()),
+    ).toThrow(/"\.\." segments/);
+  });
+
+  it('rejects playBgm volume above full gain through the command parser', () => {
+    expect(() =>
+      parseEventScript(
+        script({ type: 'playBgm', path: 'bgm/town.ogg', volume: 1.5 }),
+        registryFor(),
+      ),
+    ).toThrow(/between 0 and 1/);
+  });
+
+  it('preserves an authored true playBgm loop during parsing', () => {
+    const parsed = parseEventScript(
+      script({ type: 'playBgm', path: 'bgm/town.ogg', loop: true }),
+      registryFor(),
+    );
+
+    expect(parsed.intro).toStrictEqual([{ type: 'playBgm', path: 'bgm/town.ogg', loop: true }]);
+  });
+
   it('preserves an authored zero playBgm volume during parsing', () => {
     const parsed = parseEventScript(
       script({ type: 'playBgm', path: 'bgm/town.ogg', volume: 0 }),
@@ -239,6 +263,15 @@ describe('createAudioCommandPlugins', () => {
       .get('playBgm')
       ?.run({ type: 'playBgm', path: 'bgm/town.ogg', loop: false }, {} as never);
     expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { loop: false });
+  });
+
+  it('forwards loop true to a playBgm handler', () => {
+    const playBgm = vi.fn();
+    const registry = registryFor({ playBgm });
+    registry
+      .get('playBgm')
+      ?.run({ type: 'playBgm', path: 'bgm/town.ogg', loop: true }, {} as never);
+    expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { loop: true });
   });
 
   it('rejects a non-boolean loop', () => {
