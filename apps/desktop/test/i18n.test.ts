@@ -28,6 +28,12 @@ describe('createI18n', () => {
     expect(i18n.t('doesNotExist')).toBe('doesNotExist');
   });
 
+  it('returns the key when English is unavailable and the active locale has no translation', () => {
+    const i18n = createI18n({ es: LOCALES.es }, 'es');
+
+    expect(i18n.t('onlyInEnglish')).toBe('onlyInEnglish');
+  });
+
   it('setLocale switches the active locale and t() reflects the change', () => {
     const i18n = createI18n(LOCALES, 'en');
     i18n.setLocale('es');

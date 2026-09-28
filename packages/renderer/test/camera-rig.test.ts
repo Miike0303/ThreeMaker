@@ -13,6 +13,16 @@ import { clampRange } from '../src/runtime/clamp.js';
 const BASE_PARAMS = { tiltDeg: 40, distance: 10, fovDeg: 45 };
 const TARGET = { x: 3, y: 0, z: 5, facing: 'down' as const };
 
+describe('computeCameraPose: invalid mode', () => {
+  it('reports the rejected camera mode in the diagnostic', () => {
+    const mode = 'orbit' as Parameters<typeof computeCameraPose>[0];
+
+    expect(() => computeCameraPose(mode, BASE_PARAMS, TARGET)).toThrow(
+      'Unknown camera mode: orbit',
+    );
+  });
+});
+
 describe('computeCameraPose: adjustable boom distance', () => {
   it('scales boom height with the requested camera distance', () => {
     for (const mode of ['hd2d', 'top-down'] as const) {

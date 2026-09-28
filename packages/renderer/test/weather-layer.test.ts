@@ -214,6 +214,36 @@ describe('createWeatherLayer structure', () => {
 });
 
 describe('particle position graph', () => {
+  it('decorrelates drift phases from vertical particle positions', () => {
+    const { layer } = createInspect(4);
+    try {
+      const [horizontal, vertical] = localParticleAxes(layer);
+      const drift = graphNode(horizontal).bNode;
+
+      for (const instance of [0, 1, 2, 3]) {
+        expect(sampleParticleSeed(drift, instance)).not.toBe(
+          sampleParticleSeed(vertical, instance),
+        );
+      }
+    } finally {
+      layer.dispose();
+    }
+  });
+
+  it('decorrelates drift phases from depth particle positions', () => {
+    const { layer } = createInspect(4);
+    try {
+      const [horizontal, , depth] = localParticleAxes(layer);
+      const drift = graphNode(horizontal).bNode;
+
+      for (const instance of [0, 1, 2, 3]) {
+        expect(sampleParticleSeed(drift, instance)).not.toBe(sampleParticleSeed(depth, instance));
+      }
+    } finally {
+      layer.dispose();
+    }
+  });
+
   it('decorrelates depth samples from horizontal samples', () => {
     const { layer } = createInspect(4);
     try {
