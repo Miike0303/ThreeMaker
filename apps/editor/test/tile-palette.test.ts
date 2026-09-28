@@ -49,6 +49,10 @@ describe('computePlainGridDimensions', () => {
     expect(computePlainGridDimensions('B', { width: 768, height: 100000 }).rows).toBe(16);
   });
 
+  it('keeps the lower half of a tall A5 sheet available', () => {
+    expect(computePlainGridDimensions('A5', { width: 384, height: 1536 }).rows).toBe(32);
+  });
+
   it('never reports fewer than 1 col/row for a degenerate (near-zero) pixel size', () => {
     expect(computePlainGridDimensions('B', { width: 1, height: 1 })).toEqual({ cols: 1, rows: 1 });
   });
@@ -125,6 +129,10 @@ describe('computePaletteCells - autotile sheets (A1-A4)', () => {
 });
 
 describe('computeAutotileKindCount', () => {
+  it('keeps all 48 A4 kinds available on a tall sheet', () => {
+    expect(computeAutotileKindCount('A4', { width: 768, height: 720 })).toBe(48);
+  });
+
   it('counts both alternating A4 kind rows at their average height', () => {
     expect(computeAutotileKindCount('A4', { width: 768, height: 240 })).toBe(16);
   });

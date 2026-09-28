@@ -102,6 +102,10 @@ describe('zoomPercentForDistance (WU-VIEW-02)', () => {
     expect(zoomPercentForDistance(20, 15)).toBe(133);
     expect(zoomPercentForDistance(0, 15)).toBe(100);
   });
+
+  it('rounds a fractional zoom percentage to the nearest whole percent', () => {
+    expect(zoomPercentForDistance(20, 14)).toBe(143);
+  });
 });
 
 describe('panCameraTarget (WU-UX-01)', () => {

@@ -31,6 +31,10 @@ describe('validateMapName', () => {
     expect(validateMapName('x'.repeat(MAP_NAME_MAX_LENGTH))).toBeNull();
   });
 
+  it('rejects an asterisk in a map filename', () => {
+    expect(validateMapName('draft*copy')).toBe('invalid-chars');
+  });
+
   it('accepts ordinary stems including spaces and the legacy current name', () => {
     expect(validateMapName('current')).toBeNull();
     expect(validateMapName('town')).toBeNull();

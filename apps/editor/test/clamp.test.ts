@@ -85,4 +85,13 @@ describe('clampRoomRect', () => {
       height: 1,
     });
   });
+
+  it('floors a fractional room height before fitting it inside the map', () => {
+    expect(clampRoomRect({ x: 1, y: 1, width: 1, height: 2.9 }, 5, 5)).toEqual({
+      x: 1,
+      y: 1,
+      width: 1,
+      height: 2,
+    });
+  });
 });

@@ -407,6 +407,21 @@ describe('community share offline queue', () => {
     });
   });
 
+  it('truncates a fractional version when importing a queued job', () => {
+    const job = {
+      mapId: 'fractional',
+      mapName: 'Fractional',
+      tileObjectShas: [],
+      at: '2026-08-08T00:00:00.000Z',
+      version: 2.9,
+      licenseTag: 'user-owned',
+    };
+    expect(parseCommunityShareQueueJson(JSON.stringify([job]))).toEqual({
+      ok: true,
+      jobs: [{ ...job, version: 2 }],
+    });
+  });
+
   it('replaceCommunityShareQueue overwrites storage with filtered jobs', () => {
     const storage = memoryStorage();
     pushCommunityShareQueue(sampleJob('old'), storage);
