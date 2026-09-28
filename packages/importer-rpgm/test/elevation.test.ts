@@ -103,6 +103,26 @@ describe('computeHeightGrid', () => {
 });
 
 describe('computeRampGrid', () => {
+  it('keeps a missing ramp height inert at ground level', () => {
+    const ctx: HeightGridContext = {
+      heightGrid: new Uint8Array(),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(Array.from(computeRampGrid(ctx, [{ x: 0, y: 0 }]))).toEqual([0]);
+  });
+
+  it('counts a missing in-bounds neighbor height as ground', () => {
+    const ctx: HeightGridContext = {
+      heightGrid: new Uint8Array([2, 2, 2, 2, 1]),
+      mapWidth: 3,
+      mapHeight: 3,
+    };
+
+    expect(computeRampGrid(ctx, [{ x: 1, y: 1 }])[4]).toBe(2);
+  });
+
   it('warns for an automatic ramp with an exact two-level drop', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const heightGrid = new Uint8Array(9).fill(2);
@@ -341,6 +361,28 @@ describe('computeRampGrid', () => {
 });
 
 describe('edgeProfileAt', () => {
+  it('uses ground for a missing in-bounds edge height', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array(),
+      rampGrid: new Uint8Array([0]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(edgeProfileAt(ctx, 0, 0, 'east')).toEqual([0, 0]);
+  });
+
+  it('excludes the south boundary even with extra backing cells', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2, 7]),
+      rampGrid: new Uint8Array(2),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(edgeProfileAt(ctx, 0, 1, 'north')).toEqual([0, 0]);
+  });
+
   it('keeps an edge flat when its ramp code is missing', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([3]),
@@ -545,6 +587,17 @@ describe('profilesEqual', () => {
 });
 
 describe('surfaceHeightAt', () => {
+  it('keeps the surface flat when its ramp code is missing', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([3]),
+      rampGrid: new Uint8Array(),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(surfaceHeightAt(ctx, 0.25, 0.75)).toBe(3);
+  });
+
   it('samples ground when the height cell is missing', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array(),

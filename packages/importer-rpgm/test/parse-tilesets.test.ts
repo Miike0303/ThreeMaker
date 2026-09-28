@@ -6,6 +6,25 @@ function makeFlags(): number[] {
 }
 
 describe('parseTilesets', () => {
+  it('keeps missing sheet names empty in a sparse sheet list', () => {
+    const tilesetNames = new Array<string>(9);
+    tilesetNames[0] = 'Town_A1';
+
+    const tilesets = parseTilesets([{ id: 1, name: 'Town', flags: [0], tilesetNames }]);
+
+    expect(tilesets[0]?.sheetNames).toEqual({
+      A1: 'Town_A1',
+      A2: '',
+      A3: '',
+      A4: '',
+      A5: '',
+      B: '',
+      C: '',
+      D: '',
+      E: '',
+    });
+  });
+
   it('maps tilesetNames in A1-A5, B-E order', () => {
     const tilesets = parseTilesets([
       null,

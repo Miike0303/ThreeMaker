@@ -13,6 +13,12 @@ function makeMapJson(width: number, height: number, fill: (z: number, i: number)
 }
 
 describe('parseMap', () => {
+  it('reports a validation error for non-array tile data', () => {
+    const json = { ...makeMapJson(1, 1, () => 0), data: '000000' };
+
+    expect(() => parseMap(json)).toThrow('Invalid Map JSON: "data" must be an array of numbers.');
+  });
+
   it('rejects a fractional height even when the total layer length is integral', () => {
     const json = { ...makeMapJson(1, 1, () => 0), height: 1.5, data: new Array(9).fill(0) };
 
