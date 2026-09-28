@@ -212,3 +212,29 @@ it('separates multiple compiler issues in the failure message', () => {
     'Ink compilation failed with 2 issue(s): Unknown divert target.; Missing knot.',
   );
 });
+
+it('preserves author note severity alongside a compilation error', () => {
+  expect.assertions(1);
+  try {
+    compileInk('TODO: Finish the greeting.\n-> missing\n');
+  } catch (error) {
+    if (!(error instanceof InkCompileError)) throw error;
+    expect(error.issues).toContainEqual({
+      type: 'author',
+      message: expect.stringContaining('Finish the greeting.'),
+    });
+  }
+});
+
+it('preserves warning severity alongside a compilation error', () => {
+  expect.assertions(1);
+  try {
+    compileInk('=== intro ===\nHello.\n=== broken ===\n-> missing\n');
+  } catch (error) {
+    if (!(error instanceof InkCompileError)) throw error;
+    expect(error.issues).toContainEqual({
+      type: 'warning',
+      message: expect.stringContaining('Apparent loose end'),
+    });
+  }
+});

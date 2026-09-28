@@ -524,3 +524,25 @@ it('keeps a divert after a single slash in dialogue', () => {
 it('recognizes a knot header followed by an empty comment', () => {
   expect(listInkKnots('=== opening === //\n')).toEqual(['opening']);
 });
+
+it('rejects exponent notation in a vertical layout coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node start x=3 y=1e2\n')).toEqual([]);
+});
+
+it('replaces stale layouts after an indented author comment', () => {
+  const source = '  // Author note.\n// @tm-node start x=0 y=0\n=== start ===\nHello.\n';
+
+  expect(applyInkNodeLayouts(source, [{ knot: 'start', x: 40, y: 60 }])).toBe(
+    '// @tm-node start x=40 y=60\n\n  // Author note.\n=== start ===\nHello.\n',
+  );
+});
+
+it('uses stored positions for knot names containing digits', () => {
+  const source = '// @tm-node chapter2.room3 x=17 y=29\n=== chapter2.room3 ===\n';
+
+  expect(buildInkGraphModel(source).nodes).toEqual([{ knot: 'chapter2.room3', x: 17, y: 29 }]);
+});
+
+it('rejects knot names that start with a digit', () => {
+  expect(listInkKnots('=== 1st_room ===\n=== entry ===\n')).toEqual(['entry']);
+});

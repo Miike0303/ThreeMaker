@@ -219,3 +219,12 @@ it('ignores a colonless tag whose prefix is speaker', () => {
 
   expect(provider.next()).toEqual({ kind: 'line', text: 'Hello.' });
 });
+
+it('keeps the full speaker name without whitespace after the colon', () => {
+  const story = compileInk('Hello. # speaker:Elder\n-> END\n');
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello.' });
+});

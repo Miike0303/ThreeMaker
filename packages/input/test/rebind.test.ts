@@ -35,3 +35,15 @@ describe('rebindKeyboard', () => {
     expect(next).not.toBe(base);
   });
 });
+
+it('preserves another movement action when rebinding move up', () => {
+  const base = createBindingTable([
+    { action: Actions.MoveDown, source: { device: 'keyboard', key: 's' } },
+    { action: Actions.MoveUp, source: { device: 'keyboard', key: 'w' } },
+  ]);
+
+  const rebound = rebindKeyboard(base, Actions.MoveUp, 'i');
+
+  expect(rebound.actionForKeyboardKey('s')).toBe(Actions.MoveDown);
+  expect(rebound.actionForKeyboardKey('i')).toBe(Actions.MoveUp);
+});
