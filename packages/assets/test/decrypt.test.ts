@@ -79,6 +79,10 @@ describe('parseEncryptionKey', () => {
   it('rejects a 32-character encryption key containing g', () => {
     expect(parseEncryptionKey({ encryptionKey: `${KEY_HEX.slice(0, 31)}g` })).toBeNull();
   });
+
+  it('rejects a valid-looking encryption key on a later line', () => {
+    expect(parseEncryptionKey({ encryptionKey: `invalid\n${KEY_HEX}` })).toBeNull();
+  });
 });
 
 describe('decryptRpgmv', () => {

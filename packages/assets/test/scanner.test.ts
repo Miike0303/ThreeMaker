@@ -8,6 +8,7 @@ const fsFailure = vi.hoisted(() => ({
   fn: null as 'realpathSync' | 'readdirSync' | 'readFileSync' | null,
   path: null as string | null,
   message: 'injected filesystem failure',
+  thrownValue: undefined as unknown,
 }));
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -17,7 +18,7 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     realpathSync: (...args: Parameters<typeof actual.realpathSync>) => {
       if (fsFailure.fn === 'realpathSync' && args[0] === fsFailure.path) {
-        throw new Error(fsFailure.message);
+        throw fsFailure.thrownValue ?? new Error(fsFailure.message);
       }
       return actual.realpathSync(...args);
     },
@@ -41,12 +42,14 @@ let workDir: string;
 beforeEach(() => {
   fsFailure.fn = null;
   fsFailure.path = null;
+  fsFailure.thrownValue = undefined;
   workDir = mkdtempSync(join(tmpdir(), 'assets-scanner-test-'));
 });
 
 afterEach(() => {
   fsFailure.fn = null;
   fsFailure.path = null;
+  fsFailure.thrownValue = undefined;
   rmSync(workDir, { recursive: true, force: true });
 });
 
@@ -143,6 +146,15 @@ describe('scanGames — depth/cycle guard (modeled on the LoQOO self-nested fold
 
     expect(result.games).toEqual([]);
     expect(result.errors).toEqual([]);
+  });
+
+  it('reports the offending junction path when a cycle is detected', () => {
+    const loopPath = join(workDir, 'loop-back');
+    symlinkSync(workDir, loopPath, 'junction');
+
+    expect(scanGames(workDir).errors).toEqual([
+      expect.objectContaining({ path: loopPath, code: 'cycle-detected' }),
+    ]);
   });
 });
 
@@ -434,6 +446,16 @@ describe('scanGames — per-game error isolation', () => {
 });
 
 describe('scanGames — an unreadable branch does not abort a later healthy game', () => {
+  it('preserves a non-Error filesystem failure as a readable diagnostic', () => {
+    fsFailure.fn = 'realpathSync';
+    fsFailure.path = workDir;
+    fsFailure.thrownValue = 'filesystem unavailable';
+
+    expect(scanGames(workDir).errors).toEqual([
+      { path: workDir, code: 'read-error', message: 'filesystem unavailable' },
+    ]);
+  });
+
   // `aaa-unreadable` sorts before `zzz-healthy`, and is created first, so the
   // failing branch is the one the walk reaches first.
   function writeUnreadableThenHealthy(failingIsGame: boolean): {
