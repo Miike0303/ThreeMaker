@@ -199,3 +199,14 @@ it('trims trailing whitespace from a speaker tag', () => {
 
   expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello' });
 });
+
+it('offers and follows the only pending dialogue choice', () => {
+  const story = compileInk('-> start\n=== start ===\n* [Continue]\n  Welcome back.\n  -> END\n');
+  const provider = new InkDialogueProvider(new Map([['single-choice', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'single-choice' });
+
+  expect(provider.next()).toEqual({ kind: 'choices', options: ['Continue'] });
+  provider.choose(0);
+  expect(provider.next()).toEqual({ kind: 'line', text: 'Welcome back.' });
+});

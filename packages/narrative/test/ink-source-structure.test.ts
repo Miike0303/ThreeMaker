@@ -430,3 +430,30 @@ it('rejects a layout coordinate with a trailing decimal point', () => {
 it('requires the exact lowercase layout marker', () => {
   expect(parseInkNodeLayouts('// @TM-NODE start x=1 y=2\n')).toEqual([]);
 });
+
+it('excludes commented-out knot headers from the knot list', () => {
+  expect(listInkKnots('// === hidden ===\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('rejects a knot header followed by ordinary prose', () => {
+  expect(listInkKnots('=== draft === unfinished dialogue\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('ignores layout markers embedded in dialogue text', () => {
+  expect(parseInkNodeLayouts('Narrator: // @tm-node start x=12 y=34\n')).toEqual([]);
+});
+
+it('accepts trailing spaces and tabs on a layout comment', () => {
+  expect(parseInkNodeLayouts('// @tm-node start x=12 y=34 \t\n')).toEqual([
+    { knot: 'start', x: 12, y: 34 },
+  ]);
+});
+
+it('ignores a commented divert after a string ending in an escaped backslash', () => {
+  const source = String.raw`=== start ===
+"folder\\" // -> hidden
+-> visible
+`;
+
+  expect(listInkEdges(source)).toEqual([{ from: 'start', to: 'visible' }]);
+});

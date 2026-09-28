@@ -189,3 +189,15 @@ describe('compileInk', () => {
     expect(Compiler).toHaveBeenCalledTimes(2);
   });
 });
+
+it('includes the only compiler issue in the failure message', () => {
+  const error = new InkCompileError([{ type: 'error', message: 'Missing divert target.' }]);
+
+  expect(error.message).toBe('Ink compilation failed with 1 issue(s): Missing divert target.');
+});
+
+it('compiles a playable story containing an author TODO note', () => {
+  const story = compileInk('TODO: Expand this greeting.\nHello, traveler.\n-> END\n');
+
+  expect(story.Continue()).toBe('Hello, traveler.\n');
+});
