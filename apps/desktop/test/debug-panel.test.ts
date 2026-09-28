@@ -210,7 +210,7 @@ type FakeNode = {
   readonly children: FakeNode[];
   readonly attributes: Map<string, string>;
   readonly listeners: Map<string, () => void>;
-  readonly classList: { toggle(name: string, on?: boolean): void };
+  readonly classList: { toggle(name: string, on?: boolean): void; contains(name: string): boolean };
   setAttribute(name: string, value: string): void;
   addEventListener(type: string, listener: () => void): void;
   append(...nodes: unknown[]): void;
@@ -218,13 +218,20 @@ type FakeNode = {
 };
 
 function fakeNode(tag: string): FakeNode {
+  const classes = new Set<string>();
   const node: FakeNode = {
     tag,
     textContent: '',
     children: [],
     attributes: new Map(),
     listeners: new Map(),
-    classList: { toggle: () => {} },
+    classList: {
+      toggle: (name, on) => {
+        if (on ?? !classes.has(name)) classes.add(name);
+        else classes.delete(name);
+      },
+      contains: (name) => classes.has(name),
+    },
     setAttribute: (name, value) => {
       node.attributes.set(name, value);
     },
@@ -289,6 +296,23 @@ describe('debug panel toggle accessibility', () => {
 
   it('starts expanded when nothing collapsed was stored', () => {
     expect(mountPanel(false).toggle.attributes.get('aria-expanded')).toBe('true');
+  });
+
+  it('marks the panel collapsed until the user expands it', () => {
+    const { toggle, created } = mountPanel(true);
+    const panel = created[0];
+
+    expect(panel?.classList.contains('debug-panel-collapsed')).toBe(true);
+    toggle.listeners.get('click')?.();
+    expect(panel?.classList.contains('debug-panel-collapsed')).toBe(false);
+  });
+
+  it('shows the collapsed and expanded arrow glyphs for each toggle state', () => {
+    const { toggle } = mountPanel(true);
+
+    expect(toggle.textContent).toBe('▸');
+    toggle.listeners.get('click')?.();
+    expect(toggle.textContent).toBe('▾');
   });
 
   it('includes the map-cycle control row in dev mode', () => {

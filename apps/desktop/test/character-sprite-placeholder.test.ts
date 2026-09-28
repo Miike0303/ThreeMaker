@@ -103,4 +103,20 @@ describe('buildPlaceholderCharacterTexture', () => {
 
     expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([0, 170, 0, 255]);
   });
+
+  it('paints the up-facing row at the end of the first character block', () => {
+    const texture = buildPlaceholderCharacterTexture();
+    const image = texture.image as { width: number; data: Uint8Array };
+    const pixel = DIRECTION_ROW.up * FRAME_PIXEL_SIZE * image.width * 4;
+
+    expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([220, 210, 0, 255]);
+  });
+
+  it('keeps the first frame of the next character block neutral gray', () => {
+    const texture = buildPlaceholderCharacterTexture();
+    const image = texture.image as { data: Uint8Array };
+    const pixel = FRAME_COLUMNS * FRAME_PIXEL_SIZE * 4;
+
+    expect(Array.from(image.data.slice(pixel, pixel + 4))).toEqual([128, 128, 128, 255]);
+  });
 });

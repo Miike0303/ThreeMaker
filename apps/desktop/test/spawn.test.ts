@@ -34,6 +34,15 @@ function fakeGrid(rows: readonly string[]): StandabilityQuery {
   };
 }
 
+function gridWithOnlyCandidate(x: number, y: number): StandabilityQuery {
+  return {
+    width: 3,
+    height: 3,
+    isStandable: () => true,
+    isGoodSpawnCandidate: (candidateX, candidateY) => candidateX === x && candidateY === y,
+  };
+}
+
 describe('findSpawnTile', () => {
   it('returns the origin itself when it is already standable', () => {
     const grid = fakeGrid(['...', '...', '...']);
@@ -52,6 +61,18 @@ describe('findSpawnTile', () => {
     expect(findSpawnTile(fakeGrid(['###', '##.', '##.']), 1, 1)).toEqual({ x: 2, y: 1 });
   });
 
+  it('includes the top-right corner of a search ring', () => {
+    expect(findSpawnTile(gridWithOnlyCandidate(2, 0), 1, 1)).toEqual({ x: 2, y: 0 });
+  });
+
+  it('includes the bottom-left corner of a search ring', () => {
+    expect(findSpawnTile(gridWithOnlyCandidate(0, 2), 1, 1)).toEqual({ x: 0, y: 2 });
+  });
+
+  it('includes the left edge of a search ring', () => {
+    expect(findSpawnTile(gridWithOnlyCandidate(0, 1), 1, 1)).toEqual({ x: 0, y: 1 });
+  });
+
   it('expands outward until it finds a standable tile several rings away', () => {
     // Two adjacent open tiles ((2,2) and (3,2)) rather than one isolated
     // dot: findSpawnTile now requires a GOOD spawn candidate (standable
@@ -64,6 +85,11 @@ describe('findSpawnTile', () => {
   it('searches to the full map extent on long maps', () => {
     const grid = fakeGrid(['########..', '########..']);
     expect(findSpawnTile(grid, 0, 0)).toEqual({ x: 8, y: 0 });
+  });
+
+  it('searches to the full map extent on tall maps', () => {
+    const grid = fakeGrid(['##', '##', '##', '##', '.#', '.#']);
+    expect(findSpawnTile(grid, 0, 0)).toEqual({ x: 0, y: 4 });
   });
 
   it('searches the last ring when the origin is just beyond the map edge', () => {
@@ -86,6 +112,12 @@ describe('findSpawnTile', () => {
     const grid = fakeGrid(['...', '...', '...']);
 
     expect(findSpawnTile(grid, 1.6, 1)).toEqual({ x: 2, y: 1 });
+  });
+
+  it('rounds a vertical origin below the half-tile boundary downward', () => {
+    const grid = fakeGrid(['...', '...', '...']);
+
+    expect(findSpawnTile(grid, 1, 0.4)).toEqual({ x: 1, y: 0 });
   });
 
   it('ignores out-of-bounds ring candidates near the map edge', () => {

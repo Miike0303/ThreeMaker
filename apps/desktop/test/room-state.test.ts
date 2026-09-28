@@ -97,6 +97,10 @@ describe('resolveFadedRoomId (camera-mode gate)', () => {
     expect(resolveFadedRoomId('first-person', 7)).toBeNull();
     expect(resolveFadedRoomId('first-person', 0)).toBeNull();
   });
+
+  it('never fades a room for a negative room ordinal', () => {
+    expect(resolveFadedRoomId('hd2d', -1)).toBeNull();
+  });
 });
 
 describe('aboveFloorTilemap (fade drives the floor ABOVE, not the current floor -- obs #117 gotcha)', () => {

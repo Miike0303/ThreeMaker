@@ -49,6 +49,10 @@ describe('smoothFrameTimeMs', () => {
   it('seeds from the raw delta when the previous frame estimate is negative', () => {
     expect(smoothFrameTimeMs(-5, 120, 100)).toBe(20);
   });
+
+  it('smooths a positive frame estimate below one millisecond', () => {
+    expect(smoothFrameTimeMs(0.5, 20, 10, 0.5)).toBeCloseTo(5.25);
+  });
 });
 
 describe('shouldForceWebGL', () => {

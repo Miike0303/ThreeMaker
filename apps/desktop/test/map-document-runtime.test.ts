@@ -235,6 +235,58 @@ describe('translateMapDocument', () => {
     expect(result.floorSources[1]?.roomIdGrid).toBeUndefined();
   });
 
+  it('computes room grids when different floors each have authored rooms', () => {
+    const doc = buildDevDemoEquivalentDocument();
+    const result = translateMapDocument({
+      ...doc,
+      rooms: [
+        ...doc.rooms,
+        {
+          id: 'upper-room',
+          name: 'Upper Room',
+          floor: 'floor-1',
+          rects: [{ x: 1, y: 1, width: 1, height: 1 }],
+        },
+      ],
+    });
+
+    expect(result.floorSources[0]?.roomIdGrid?.[5 * FLOOR_SIZE + 5]).toBe(1);
+    expect(result.floorSources[1]?.roomIdGrid?.[FLOOR_SIZE + 1]).toBe(1);
+  });
+
+  it('uses the document width to index rooms on a rectangular map', () => {
+    const width = 4;
+    const height = 3;
+    const doc = buildDevDemoEquivalentDocument();
+    const rectangular: MapDocument = {
+      ...doc,
+      width,
+      height,
+      floors: doc.floors.map((floor) => ({
+        ...floor,
+        layers: {
+          tiles: Array.from({ length: 4 }, () => emptyLayer(width, height)),
+          shadows: emptyLayer(width, height),
+          regions: emptyLayer(width, height),
+        },
+      })),
+      stairLinks: [],
+      rooms: [
+        {
+          id: 'edge',
+          name: 'Edge',
+          floor: 'floor-0',
+          rects: [{ x: 3, y: 2, width: 1, height: 1 }],
+        },
+      ],
+      spawn: undefined,
+    };
+
+    const grid = translateMapDocument(rectangular).floorSources[0]?.roomIdGrid;
+    expect(grid).toHaveLength(width * height);
+    expect(grid?.[2 * width + 3]).toBe(1);
+  });
+
   it('resolves stair-link string floor ids to floors-array indices, in floors array order', () => {
     const result = translateMapDocument(buildDevDemoEquivalentDocument());
 

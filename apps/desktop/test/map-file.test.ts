@@ -14,6 +14,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MANIFEST_FILE_RELATIVE,
+  MAP_DIR_RELATIVE,
   MAP_FILE_RELATIVE,
   readManifestText,
   readMapAssetBytes,
@@ -107,5 +108,13 @@ describe('map-file (shared working-map read helper)', () => {
       expect.stringMatching(/audio\/bgm\.ogg$/),
       expect.objectContaining({ baseDir: 'Home' }),
     );
+  });
+
+  it('reads an asset relative to the maps directory', async () => {
+    await readMapAssetBytes('audio/bgm.ogg');
+
+    expect(fsMocks.readFile).toHaveBeenCalledWith(`${MAP_DIR_RELATIVE}/audio/bgm.ogg`, {
+      baseDir: 'Home',
+    });
   });
 });

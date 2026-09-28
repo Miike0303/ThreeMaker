@@ -247,6 +247,36 @@ describe('createDialogueOverlay', () => {
     expect(choices?.children).toHaveLength(0);
   });
 
+  it('visually highlights the selected choice as soon as choices appear', () => {
+    const { overlay, choices } = overlayParts();
+
+    overlay.showChoices(['Yes', 'No', 'Later'], 1);
+
+    expect(
+      choices?.children.map((choice) => choice.classList.contains('dialogue-choice-highlighted')),
+    ).toEqual([false, true, false]);
+  });
+
+  it('clears error styling when a dialogue line follows an error', () => {
+    const { overlay } = overlayParts();
+    const element = overlay.element as unknown as FakeElement;
+
+    overlay.showError('Could not load.');
+    overlay.showLine('Alice', 'Try again.');
+
+    expect(element.classList.contains('dialogue-overlay-error')).toBe(false);
+  });
+
+  it('clears error styling when choices follow an error', () => {
+    const { overlay } = overlayParts();
+    const element = overlay.element as unknown as FakeElement;
+
+    overlay.showError('Could not load.');
+    overlay.showChoices(['Try again'], 0);
+
+    expect(element.classList.contains('dialogue-overlay-error')).toBe(false);
+  });
+
   it('clears the advance hint on errors and restores it for the next dialogue line', () => {
     const { overlay, hint } = overlayParts();
 

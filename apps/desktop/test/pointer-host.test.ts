@@ -22,4 +22,8 @@ describe('pointerTargetFromDialogueHit', () => {
   it('does not treat a fractional choice index as a choice row', () => {
     expect(pointerTargetFromDialogueHit('1.5')).toEqual({ kind: 'actionable' });
   });
+
+  it('does not accept a numeric prefix followed by invalid choice-index text', () => {
+    expect(pointerTargetFromDialogueHit('2junk')).toEqual({ kind: 'actionable' });
+  });
 });
