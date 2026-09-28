@@ -14,6 +14,13 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('rejects a story id containing a line break before deriving its sidecar path', () => {
+    const storyId = 'intro\nsecret';
+
+    expect(isSafeStoryId(storyId)).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+  });
+
   it('rejects tilde in a story id before deriving its sidecar path', () => {
     expect(isSafeStoryId('chapter~2')).toBe(false);
     expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'chapter~2')).toThrow(/story id/i);

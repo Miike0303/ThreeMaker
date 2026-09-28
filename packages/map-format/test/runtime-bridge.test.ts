@@ -15,6 +15,13 @@ import type { SemanticOverrides } from '../src/schema.js';
 const EMPTY_LAYER = (size: number) => new Array(size).fill(0);
 
 describe('deriveRampCells', () => {
+  it('omits the direction property when a ramp has no authored override', () => {
+    const layers = [[7], EMPTY_LAYER(1), EMPTY_LAYER(1), EMPTY_LAYER(1)] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+
+    expect(deriveRampCells(layers, semantics, 1, 1)).toStrictEqual([{ x: 0, y: 0 }]);
+  });
+
   it('treats missing tile entries as empty cells', () => {
     const layers = [
       new Array<number>(1),

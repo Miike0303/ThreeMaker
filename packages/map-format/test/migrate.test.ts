@@ -90,6 +90,26 @@ function makeV1DocInput(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('parseMapDocument', () => {
+  it('reports the unsupported-version code for a missing migration', () => {
+    clearMigrations();
+
+    expect(() => parseMapDocument(makeValidDocInput({ version: 3 }))).toThrowError(
+      expect.objectContaining({ code: 'unsupported-version' }),
+    );
+  });
+
+  it('reports the malformed code for a non-integer version', () => {
+    expect(() => parseMapDocument(makeValidDocInput({ version: 2.5 }))).toThrowError(
+      expect.objectContaining({ code: 'malformed' }),
+    );
+  });
+
+  it('reports the malformed code for a non-object document', () => {
+    expect(() => parseMapDocument('not a map')).toThrowError(
+      expect.objectContaining({ code: 'malformed' }),
+    );
+  });
+
   it('passes the authoring command registry to event validation', () => {
     const command = { type: 'playSound', path: 'se/hit.ogg' };
     const input = makeValidDocInput({ events: { hit: [command] } });
