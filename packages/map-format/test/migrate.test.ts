@@ -454,6 +454,10 @@ describe('parseMapDocument', () => {
     }
   });
 
+  it('rejects null props on a version-4 map before migration can discard them', () => {
+    expect(() => migrateV4ToV5({ props: null })).toThrow(MapFormatError);
+  });
+
   it('rejects a null floor light map on a v5 document', () => {
     expect(() => migrateV5ToV6({ floors: [{ lightMap: null }] })).toThrow(MapFormatError);
   });
