@@ -336,6 +336,16 @@ it('lists dotted knot names without truncating them', () => {
   expect(listInkKnots('=== chapter.next ===\n')).toEqual(['chapter.next']);
 });
 
+it('lists an underscore-prefixed knot name', () => {
+  expect(listInkKnots('=== _private ===\n')).toEqual(['_private']);
+});
+
+it('parses a layout for an underscore-prefixed knot', () => {
+  expect(parseInkNodeLayouts('// @tm-node _private x=3 y=4\n')).toEqual([
+    { knot: '_private', x: 3, y: 4 },
+  ]);
+});
+
 it('recognizes an indented knot header', () => {
   expect(listInkKnots('  === alcove ===\n')).toEqual(['alcove']);
 });
@@ -382,4 +392,17 @@ it('uses custom graph spacing when recording a dragged knot', () => {
   const updated = setInkNodePosition(source, 'first', 7, 8, { colWidth: 40 });
 
   expect(parseInkNodeLayouts(updated)).toContainEqual({ knot: 'second', x: 40, y: 0 });
+});
+
+it('keeps the fourth default graph node on the first row', () => {
+  const source = '=== first ===\n=== second ===\n=== third ===\n=== fourth ===\n';
+  const model = buildInkGraphModel(source);
+
+  expect(model.nodes[3]).toEqual({ knot: 'fourth', x: 540, y: 0 });
+});
+
+it('orders undeclared graph nodes by their first divert', () => {
+  const model = buildInkGraphModel('=== start ===\n-> first\n-> second\n');
+
+  expect(model.nodes.map((node) => node.knot)).toEqual(['start', 'first', 'second']);
 });
