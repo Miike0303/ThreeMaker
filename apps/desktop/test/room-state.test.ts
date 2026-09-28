@@ -66,6 +66,12 @@ describe('createRoomTracker', () => {
     expect(tracker.roomAt(0, 0, 0)).toBe(0);
   });
 
+  it('resolves authored rooms on a one-column map', () => {
+    const tracker = createRoomTracker([new Uint16Array([0, 7])], 1);
+
+    expect(tracker.roomAt(0, 0, 1)).toBe(7);
+  });
+
   it('two floors are independent -- querying one never leaks into the other', () => {
     const width = 2;
     const floor0 = new Uint16Array([1, 1, 0, 0]);
@@ -80,6 +86,11 @@ describe('createRoomTracker', () => {
 });
 
 describe('resolveFadedRoomId (camera-mode gate)', () => {
+  it('fades the first authored room in overhead camera modes', () => {
+    expect(resolveFadedRoomId('hd2d', 1)).toBe(1);
+    expect(resolveFadedRoomId('top-down', 1)).toBe(1);
+  });
+
   it('hd2d resolves a positive room id as-is', () => {
     expect(resolveFadedRoomId('hd2d', 3)).toBe(3);
   });

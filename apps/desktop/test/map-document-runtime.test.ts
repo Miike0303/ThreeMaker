@@ -348,6 +348,34 @@ describe('translateMapDocument', () => {
     ]);
   });
 
+  it('names fromFloor when a stair source floor cannot be resolved', () => {
+    const doc = buildDevDemoEquivalentDocument();
+    const link = doc.stairLinks[0];
+    if (!link) throw new Error('fixture must have a stair link');
+    const dangling: MapDocument = {
+      ...doc,
+      stairLinks: [{ ...link, fromFloor: 'missing-source-floor' }],
+    };
+
+    expect(() => translateMapDocument(dangling)).toThrow(
+      'stairLinks[demo-stair-0-1].fromFloor: no floor with id "missing-source-floor" in this document.',
+    );
+  });
+
+  it('names toFloor when a stair destination floor cannot be resolved', () => {
+    const doc = buildDevDemoEquivalentDocument();
+    const link = doc.stairLinks[0];
+    if (!link) throw new Error('fixture must have a stair link');
+    const dangling: MapDocument = {
+      ...doc,
+      stairLinks: [{ ...link, toFloor: 'missing-destination-floor' }],
+    };
+
+    expect(() => translateMapDocument(dangling)).toThrow(
+      'stairLinks[demo-stair-0-1].toFloor: no floor with id "missing-destination-floor" in this document.',
+    );
+  });
+
   it('names the waypoint field when its floor id cannot be resolved', () => {
     const doc = buildDevDemoEquivalentDocument();
     const link = doc.stairLinks[0];

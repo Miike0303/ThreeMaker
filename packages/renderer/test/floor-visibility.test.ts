@@ -49,6 +49,10 @@ describe('WindowedFloorPolicy', () => {
     expect(policy.visibleFloors(4, 3)).toEqual([]);
   });
 
+  it('omits the floor below when its index is strictly greater than the floor count', () => {
+    expect(policy.visibleFloors(5, 3)).toEqual([]);
+  });
+
   it('is swappable behind the FloorVisibilityPolicy interface (change 3 substitutes an occlusion policy)', () => {
     const showEverything: FloorVisibilityPolicy = {
       visibleFloors: (_current, floorCount) => Array.from({ length: floorCount }, (_, i) => i),
@@ -82,6 +86,10 @@ describe('OcclusionFloorPolicy', () => {
 
   it('clamps currentFloor + 1 away when it would exceed floorCount - 1 (top floor)', () => {
     expect(policy.visibleFloors(2, 3)).toEqual([1, 2]);
+  });
+
+  it('omits an occlusion window entirely above the building', () => {
+    expect(policy.visibleFloors(4, 3)).toEqual([]);
   });
 
   it('matches WindowedFloorPolicy for single-floor maps (regression: output unchanged from the prior policy)', () => {

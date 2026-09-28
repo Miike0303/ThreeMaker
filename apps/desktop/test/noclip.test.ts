@@ -45,6 +45,17 @@ describe('withNoclip', () => {
     expect(wrapped(1, 2, 'up')).toBe(false);
   });
 
+  it('keeps a blocked move blocked when the actual origin row is standable', () => {
+    const grid = { isStandable: (x: number, y: number) => y === 3 && (x === 2 || x === 3) };
+    const wrapped = withNoclip(
+      () => false,
+      grid,
+      () => false,
+    );
+
+    expect(wrapped(2, 3, 'right')).toBe(false);
+  });
+
   it('allows escaping when the current tile is not standable (e.g. released Ctrl inside a wall) and the destination is standable', () => {
     const canMove = vi.fn(() => false); // the normal check still refuses (origin flags trap it)
     const grid = {
