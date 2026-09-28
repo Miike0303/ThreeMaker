@@ -250,6 +250,20 @@ describe('computeRampGrid', () => {
     expect(rampGrid[4]).toBe(2); // south wins the tie-break among the valid candidates
   });
 
+  it('warns when an explicit ramp override points exactly two levels uphill', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const heightGrid = new Uint8Array(9).fill(1);
+    heightGrid[1] = 3;
+
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, [
+      { x: 1, y: 1, rampDirection: 'north' },
+    ]);
+
+    expect(rampGrid[4]).toBe(0);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toMatch(/multi-level span/i);
+  });
+
   it('treats a multi-level-span ramp cell as inert (not rejected) and logs a dev warning', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // (0,0) height 3, its explicit override points south to (0,1) at
@@ -307,6 +321,30 @@ describe('edgeProfileAt', () => {
     for (const edge of ['north', 'south', 'east', 'west'] as const) {
       expect(edgeProfileAt(ctx, 0, 0, edge)).toEqual([2, 2]);
     }
+  });
+
+  it('keeps the entire north edge low on a north-downhill ramp', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([3]),
+      rampGrid: new Uint8Array([1]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(edgeProfileAt(ctx, 0, 0, 'north')).toEqual([2, 2]);
+    expect(edgeProfileAt(ctx, 0, 0, 'south')).toEqual([3, 3]);
+  });
+
+  it('keeps the entire west edge low on a west-downhill ramp', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([3]),
+      rampGrid: new Uint8Array([4]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(edgeProfileAt(ctx, 0, 0, 'west')).toEqual([2, 2]);
+    expect(edgeProfileAt(ctx, 0, 0, 'east')).toEqual([3, 3]);
   });
 
   it('returns ground ([0,0]) for out-of-bounds coordinates', () => {

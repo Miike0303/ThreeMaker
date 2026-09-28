@@ -23,6 +23,12 @@ describe('parseMapInfos', () => {
     expect(() => parseMapInfos([{ id: '1', name: 'Town', parentId: 0, order: 1 }])).toThrow();
   });
 
+  it('rejects a nonnumeric parent id even when every other field is valid', () => {
+    expect(() => parseMapInfos([{ id: 1, name: 'Town', parentId: '0', order: 1 }])).toThrow(
+      /Invalid MapInfos.json entry/,
+    );
+  });
+
   it('rejects a map info with a nonnumeric sidebar order', () => {
     expect(() => parseMapInfos([{ id: 1, name: 'Town', parentId: 0, order: '1' }])).toThrow(
       /Invalid MapInfos.json entry/,

@@ -116,6 +116,15 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect(project.maps.get(1)?.editorName).toBe('A');
   });
 
+  it('ignores a map filename without a literal dot before json', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map002xjson']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
   it('ignores a map filename with a trailing extension', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json.bak']);

@@ -88,6 +88,12 @@ describe('parseMap', () => {
     );
   });
 
+  it('rejects a string tileset id instead of accepting a broken tileset reference', () => {
+    const json = { ...makeMapJson(1, 1, () => 0), tilesetId: '1' };
+
+    expect(() => parseMap(json)).toThrow(/"tilesetId" must be a number/);
+  });
+
   it('throws on non-object input', () => {
     expect(() => parseMap(null)).toThrow();
     expect(() => parseMap('nope')).toThrow();

@@ -24,8 +24,19 @@ describe('decodeTileFlags', () => {
     expect(decodeTileFlags(0x8).impassableUp).toBe(true);
   });
 
+  it('does not block left passage when only the right passage bit is set', () => {
+    expect(decodeTileFlags(0x4)).toMatchObject({
+      impassableLeft: false,
+      impassableRight: true,
+    });
+  });
+
   it('decodes the star bit as isUpperLayer', () => {
     expect(decodeTileFlags(0x10).isUpperLayer).toBe(true);
+  });
+
+  it('does not mark a bush-only tile as a counter', () => {
+    expect(decodeTileFlags(0x40)).toMatchObject({ isBush: true, isCounter: false });
   });
 
   it('decodes ladder, bush, counter, and damage floor bits', () => {
