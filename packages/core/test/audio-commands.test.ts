@@ -67,6 +67,10 @@ describe('parseVolume / parseFadeMs', () => {
     expect(parseVolume(1, 'x')).toBe(1);
   });
 
+  it('rejects a volume just below zero', () => {
+    expect(() => parseVolume(-0.01, 'x')).toThrow(/between 0 and 1/);
+  });
+
   it.each([-0.1, 1.1, Number.NaN, '0.5'])('rejects volume %p', (value) => {
     expect(() => parseVolume(value, 'x')).toThrow(/between 0 and 1/);
   });
@@ -77,6 +81,10 @@ describe('parseVolume / parseFadeMs', () => {
 
   it('rejects a fractional negative fade', () => {
     expect(() => parseFadeMs(-0.25, 'x')).toThrow(/non-negative/);
+  });
+
+  it('rejects a fade just below zero', () => {
+    expect(() => parseFadeMs(-0.01, 'x')).toThrow(/non-negative/);
   });
 
   it('accepts a zero-length fade', () => {
@@ -170,6 +178,14 @@ describe('createAudioCommandPlugins', () => {
     expect(playBgm).toHaveBeenCalledWith('bgm/town.ogg', { fadeMs: 800 });
   });
 
+  it('continues the script after playBgm without a playback handler', () => {
+    const registry = registryFor();
+
+    expect(
+      registry.get('playBgm')?.run({ type: 'playBgm', path: 'bgm/town.ogg' }, {} as never),
+    ).toBe('continue');
+  });
+
   it('forwards authored playBgm volume to a handler', () => {
     const playBgm = vi.fn();
     const registry = registryFor({ playBgm });
@@ -220,6 +236,12 @@ describe('createAudioCommandPlugins', () => {
     const registry = registryFor({ stopBgm });
     registry.get('stopBgm')?.run({ type: 'stopBgm', fadeMs: 200 }, {} as never);
     expect(stopBgm).toHaveBeenCalledWith(200);
+  });
+
+  it('continues the script after stopBgm without a playback handler', () => {
+    const registry = registryFor();
+
+    expect(registry.get('stopBgm')?.run({ type: 'stopBgm' }, {} as never)).toBe('continue');
   });
 
   it('rejects an escaping path through the full parse path', () => {

@@ -42,6 +42,13 @@ describe('WorldClock', () => {
     expect(clock.minutes).toBe(101);
   });
 
+  it('accepts a small positive simulated minute rate', () => {
+    const clock = new WorldClock({ minutesPerRealSecond: 0.01, startMinutes: 100 });
+
+    expect(clock.advance(100)).toBe(1);
+    expect(clock.minutes).toBe(101);
+  });
+
   it('carries fractional remainder across successive advances', () => {
     const clock = new WorldClock({ minutesPerRealSecond: 1, startMinutes: 0 });
     expect(clock.advance(0.6)).toBe(0);
