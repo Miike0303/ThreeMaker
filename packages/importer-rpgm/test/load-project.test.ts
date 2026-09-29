@@ -82,6 +82,15 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect([...project.maps.keys()]).toEqual([1]);
   });
 
+  it('ignores map filenames with hexadecimal letters in the ID', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map00a.json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
   it('looks up editor names by map ID when sidebar order differs', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map007.json']);
