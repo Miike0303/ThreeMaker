@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   COMMUNITY_SHARE_QUEUE_MAX,
   type CommunityShareEnqueue,
@@ -724,4 +724,55 @@ it('uses an ISO UTC timestamp when a share is enqueued without a clock', () => {
     usesOnlyImportedAssets: false,
   });
   expect(job?.at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+});
+
+it('normalizes an unrecognized imported license tag to user-owned', () => {
+  const job = sampleJob('unknown-license');
+  const raw = JSON.stringify([{ ...job, licenseTag: 'user' }]);
+
+  expect(parseCommunityShareQueueJson(raw)).toEqual({ ok: true, jobs: [job] });
+});
+
+it('loads community preferences from local storage when no storage is supplied', () => {
+  const preferences = { shareOnSave: false, allowImportedAssets: true };
+  vi.stubGlobal(
+    'localStorage',
+    memoryStorage({ 'threemaker-maker-studio:community': JSON.stringify(preferences) }),
+  );
+  vi.stubGlobal('sessionStorage', memoryStorage());
+  try {
+    expect(loadCommunitySettings()).toEqual(preferences);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it('loads offline share jobs from local storage when no storage is supplied', () => {
+  const job = sampleJob('persistent-share');
+  vi.stubGlobal(
+    'localStorage',
+    memoryStorage({ 'threemaker-maker-studio:community-queue': JSON.stringify([job]) }),
+  );
+  vi.stubGlobal('sessionStorage', memoryStorage());
+  try {
+    expect(loadCommunityShareQueue()).toEqual([job]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it('saves community preferences to local storage when no storage is supplied', () => {
+  const persistent = memoryStorage();
+  const session = memoryStorage();
+  const preferences = { shareOnSave: false, allowImportedAssets: true };
+  vi.stubGlobal('localStorage', persistent);
+  vi.stubGlobal('sessionStorage', session);
+  try {
+    saveCommunitySettings(preferences);
+
+    expect(loadCommunitySettings(persistent)).toEqual(preferences);
+    expect(session.getItem('threemaker-maker-studio:community')).toBeNull();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

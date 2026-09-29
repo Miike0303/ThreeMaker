@@ -235,3 +235,10 @@ describe('projectToScreenFraction', () => {
     expect(projectToScreenFraction(pose.position, pose, 45, 1)).toBeUndefined();
   });
 });
+
+it('omits an overlay marker when the camera position equals its look-at target', () => {
+  const position = { x: 4, y: 6, z: 8 };
+  const pose = { position, lookAt: { ...position } };
+
+  expect(projectToScreenFraction({ x: 4, y: 0, z: 0 }, pose, 45, 1)).toBeUndefined();
+});

@@ -469,3 +469,25 @@ it('keeps northern star chunks on tall maps', () => {
 
   expect([...keys].sort()).toEqual(['0,1', '0,2']);
 });
+
+it('keeps southern dirty chunks when a stroke returns north across a chunk row', () => {
+  const map = makeMap(32, 64, new Array<number>(32 * 64).fill(1));
+  const keys = computeDirtyChunkKeys(
+    [
+      { x: 16, y: 33 },
+      { x: 16, y: 17 },
+    ],
+    map,
+    makeTileset(),
+    16,
+  );
+
+  expect([...keys].sort()).toEqual(['0,1', '0,2', '1,1', '1,2']);
+});
+
+it('does not expand reversed vertical bounds through northern star tiles', () => {
+  const map = makeMap(4, 4, new Array<number>(16).fill(2));
+  const rect = { xStart: 1, yStart: 3, xEnd: 2, yEnd: 2 };
+
+  expect(expandDirtyRectNorthThroughStars(rect, map, makeTileset())).toEqual(rect);
+});
