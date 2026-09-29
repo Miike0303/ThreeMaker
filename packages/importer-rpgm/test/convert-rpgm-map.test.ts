@@ -108,6 +108,112 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('skips a transfer with a negative designation mode', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 201, indent: 0, parameters: [-1, 2, 1, 2, 6, 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('preserves a one-character Show Text speaker', () => {
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [placedEvent(showTextPage(0, ['Hello'], 'A'))],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      { type: 'showDialogue', speaker: 'A', source: { kind: 'text', lines: ['Hello'] } },
+    ]);
+  });
+
+  it('skips a variable assignment with a negative operation mode', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 122, indent: 0, parameters: [5, 5, -1, 0, 42] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips a variable assignment with a negative operand mode', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 122, indent: 0, parameters: [5, 5, 0, -1, 42] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips an item change with an unsafe integer item ID', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 126, indent: 0, parameters: [Number.MAX_SAFE_INTEGER + 1, 0, 0, 1] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips an item change with an unsafe integer quantity', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 126, indent: 0, parameters: [7, 0, 0, Number.MAX_SAFE_INTEGER + 1] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips an item change with a negative operation mode', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 126, indent: 0, parameters: [7, -1, 0, 1] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips a self-switch command with a negative ON/OFF value', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 123, indent: 0, parameters: ['A', -1] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
   it('skips an event with a fractional event ID', () => {
     const event = { ...placedEvent(showTextPage(0, ['Hello'])), id: 1.5 };
     const doc = convertRpgmMap(
