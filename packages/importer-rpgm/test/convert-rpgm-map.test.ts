@@ -529,6 +529,18 @@ describe('convertRpgmMap', () => {
     expect(doc.worldSeeds).toEqual({});
   });
 
+  it('initializes imported maps with an empty props list', () => {
+    const doc = convertRpgmMap(buildSyntheticMap(), buildSyntheticTileset());
+
+    expect(doc.props).toEqual([]);
+  });
+
+  it('initializes imported maps with an empty lights list', () => {
+    const doc = convertRpgmMap(buildSyntheticMap(), buildSyntheticTileset());
+
+    expect(doc.lights).toEqual([]);
+  });
+
   it('passes given tileset slots through verbatim (catalog lookup is the caller job, not this pure converters)', () => {
     const map = buildSyntheticMap();
     const tileset = buildSyntheticTileset();

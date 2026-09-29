@@ -73,6 +73,18 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     }
   }
 
+  it('rejects a leading replacement character instead of stripping it as a BOM', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, []);
+    writeFileSync(
+      join(dataDir, 'MapInfos.json'),
+      `\ufffd${JSON.stringify(MAP_INFOS_JSON)}`,
+      'utf8',
+    );
+
+    await expect(loadProject(workDir)).rejects.toThrow(SyntaxError);
+  });
+
   it('ignores map filenames with fractional IDs', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json', 'Map001.5.json']);
