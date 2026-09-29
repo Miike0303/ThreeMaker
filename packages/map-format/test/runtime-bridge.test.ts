@@ -363,3 +363,21 @@ it('skips undefined semantic entries when finding authored ramps', () => {
     { x: 0, y: 0, rampDirection: 'south' },
   ]);
 });
+
+it('orders dirty ramps left to right on a nonzero row', () => {
+  const ground = EMPTY_LAYER(20);
+  ground[17] = 7;
+  ground[19] = 7;
+  const layers = [ground, EMPTY_LAYER(20), EMPTY_LAYER(20), EMPTY_LAYER(20)] as const;
+  const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+
+  expect(
+    syncRampCells([], layers, semantics, 4, [
+      { x: 3, y: 4 },
+      { x: 1, y: 4 },
+    ]),
+  ).toEqual([
+    { x: 1, y: 4 },
+    { x: 3, y: 4 },
+  ]);
+});

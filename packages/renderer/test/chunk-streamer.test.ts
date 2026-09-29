@@ -11,6 +11,18 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('accepts a positive chunk size smaller than one tile', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 0.5,
+      mapWidth: 2,
+      mapHeight: 1,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+
+    expect(streamer.update(1, 0)).toEqual({ toBuild: ['2,0'], toDispose: [] });
+  });
+
   it('rejects a numeric string chunk size instead of coercing it', () => {
     expect(() => new ChunkStreamer({ ...GIANT, chunkSize: '16' as unknown as number })).toThrow(
       'chunkSize must be a positive number, got 16.',

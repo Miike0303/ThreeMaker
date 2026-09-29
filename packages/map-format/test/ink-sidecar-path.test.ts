@@ -169,3 +169,17 @@ it('rejects percent-encoded separators in story ids before deriving a sidecar pa
   expect(isSafeStoryId(storyId)).toBe(false);
   expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
 });
+
+it('rejects vertical bars in story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter|2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects double quotes in story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter"2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
