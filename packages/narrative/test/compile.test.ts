@@ -339,3 +339,24 @@ it('caches a small story after evicting an oversized source', () => {
     clearInkCompileCacheForTests();
   }
 });
+
+it('enforces the cache size bound after evicting a comment-heavy source', () => {
+  clearInkCompileCacheForTests();
+  vi.mocked(Compiler).mockClear();
+
+  try {
+    const oversized = `// ${'x'.repeat(3 * 1024 * 1024)}\nComment-heavy.\n-> END\n`;
+    const padding = 'x'.repeat(600 * 1024);
+    const firstSource = `First ${padding}\n-> END\n`;
+    const secondSource = `Second ${padding}\n-> END\n`;
+
+    compileInk(oversized);
+    compileInk(firstSource);
+    compileInk(secondSource);
+    compileInk(firstSource);
+
+    expect(Compiler).toHaveBeenCalledTimes(4);
+  } finally {
+    clearInkCompileCacheForTests();
+  }
+});
