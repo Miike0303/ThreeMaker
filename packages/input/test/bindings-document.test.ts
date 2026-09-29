@@ -240,3 +240,9 @@ it('rejects a persisted pointer source with a keyboard-shaped key', () => {
     }),
   ).toEqual({ ok: false, reason: 'invalid binding entry' });
 });
+
+it('reports the supplied unsupported input bindings version', () => {
+  expect(
+    parseInputBindingsDocument({ magic: INPUT_BINDINGS_MAGIC, version: 2, bindings: [] }),
+  ).toEqual({ ok: false, reason: 'unknown version 2' });
+});

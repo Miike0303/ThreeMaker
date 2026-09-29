@@ -58,3 +58,20 @@ describe('createBindingTable', () => {
     expect(table.actionForKeyboardKey('e')).toBe('interact');
   });
 });
+
+it('matches uppercase sharp S to its lowercase keyboard binding', () => {
+  const table = createBindingTable([
+    { action: 'interact', source: { device: 'keyboard', key: '\u00df' } },
+  ]);
+
+  expect(table.actionForKeyboardKey('\u1e9e')).toBe('interact');
+});
+
+it('removes a lowercase sharp S binding using its uppercase key', () => {
+  const table = createBindingTable([
+    { action: 'interact', source: { device: 'keyboard', key: '\u00df' } },
+  ]);
+  const cleared = table.withoutSource({ device: 'keyboard', key: '\u1e9e' });
+
+  expect(cleared.actionForKeyboardKey('\u00df')).toBeUndefined();
+});

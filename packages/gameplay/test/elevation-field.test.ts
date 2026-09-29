@@ -122,3 +122,10 @@ it('reads a ramp direction when the row differs from the column', () => {
 
   expect(field.rampDirAt(2, 1)).toBe('west');
 });
+
+it('does not read the preceding row ramp for a negative column', () => {
+  const field = new ElevationField(buildMap(3, 2, {}, [1, 0, 1, 1, 1, 1]), [{ x: 2, y: 0 }]);
+
+  expect(field.rampDirAt(2, 0)).toBeDefined();
+  expect(field.rampDirAt(-1, 1)).toBeUndefined();
+});

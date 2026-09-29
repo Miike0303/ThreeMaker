@@ -266,3 +266,13 @@ it('rejects unknown compiler diagnostic severities', async () => {
     new InkCompileError([{ type: 'error', message: 'Unknown diagnostic severity.' }]),
   );
 });
+
+it('identifies Ink compilation failures in the displayed error string', () => {
+  expect.assertions(1);
+  try {
+    compileInk('-> missing_display_target\n');
+  } catch (error) {
+    if (!(error instanceof InkCompileError)) throw error;
+    expect(String(error)).toMatch(/^InkCompileError: Ink compilation failed with \d+ issue\(s\):/);
+  }
+});
