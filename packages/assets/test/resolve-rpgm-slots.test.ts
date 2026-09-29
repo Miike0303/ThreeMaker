@@ -173,6 +173,18 @@ describe('resolveRpgmSlotsFromCatalog', () => {
     expect(resolveRpgmSlotsFromCatalog(catalog, join(gameRoot, 'database'), 1)).toEqual({});
   });
 
+  it('does not treat metadata as a data directory', () => {
+    seedA1Sheet();
+
+    expect(resolveRpgmSlotsFromCatalog(catalog, join(gameRoot, 'metadata'), 1)).toEqual({});
+  });
+
+  it('does not resolve a grandparent game through a non-www data directory', () => {
+    seedA1Sheet();
+
+    expect(resolveRpgmSlotsFromCatalog(catalog, join(gameRoot, 'backup', 'data'), 1)).toEqual({});
+  });
+
   it('does not treat www/database as the deployed MV data directory', () => {
     seedA1Sheet();
 

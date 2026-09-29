@@ -436,6 +436,32 @@ describe('buildChunks star-tile stacking (MV3D "tileoffset" fix)', () => {
 });
 
 describe('buildChunks', () => {
+  it('assigns a southern shadow to its tile row when its column is zero', () => {
+    const map = makeMap({
+      width: 1,
+      height: 2,
+      layers: {
+        tileLayers: [
+          [0, 0],
+          [0, 0],
+          [0, 0],
+          [0, 0],
+        ],
+        shadows: [0, 1],
+        regions: [0, 0],
+      },
+    });
+
+    expect(buildChunks(map, makeTileset(), SHEET_SIZES, 1)).toEqual([
+      {
+        chunkX: 0,
+        chunkY: 1,
+        tiles: [],
+        shadows: [{ tileX: 0, tileY: 1, mask: 1 }],
+      },
+    ]);
+  });
+
   it('rebuilds a valid chunk after ignoring a stale requested key', () => {
     const map = makeMap({
       width: 1,

@@ -93,3 +93,17 @@ it('recognizes a prefixed WebGL backend constructor name', () => {
 
   expect(mapRendererBackendName(new CustomWebGLBackend())).toBe('webgl2');
 });
+
+it('recognizes a WebGL backend constructor with a suffix', () => {
+  class WebGLBackendWithTelemetry {}
+
+  expect(mapRendererBackendName(new WebGLBackendWithTelemetry())).toBe('webgl2');
+});
+
+it('prefers a prefixed WebGPU constructor name over a conflicting fallback flag', () => {
+  class CustomWebGPUBackend {
+    readonly isWebGLBackend = true;
+  }
+
+  expect(mapRendererBackendName(new CustomWebGPUBackend())).toBe('webgpu');
+});
