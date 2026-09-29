@@ -7,6 +7,23 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('paints southern wall shadows at the correct cell on a three-column map', () => {
+    const map = generateSyntheticMap({
+      width: 3,
+      height: 3,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0].slice(7, 9)).toEqual([
+      ROSELIAM_DUNGEON_WALL_TILE_ID,
+      ROSELIAM_DUNGEON_GROUND_TILE_ID,
+    ]);
+    expect(map.layers.shadows[8]).toBe(5);
+  });
+
   it('defaults the tileset without modifying frozen options', () => {
     const options = Object.freeze({ width: 1, height: 1, clearRadius: 0 });
 

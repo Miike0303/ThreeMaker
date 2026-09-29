@@ -11,6 +11,33 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('keeps trailing chunks at the default disposal boundary for an odd build radius', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 96,
+      mapHeight: 16,
+      buildRadius: 1,
+    });
+    streamer.update(32, 0);
+
+    expect(streamer.update(48, 0)).toEqual({ toBuild: ['4,0'], toDispose: [] });
+    expect(streamer.liveKeys.has('1,0')).toBe(true);
+  });
+
+  it('clamps an out-of-bounds X focus to the final chunk of an even-width map', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 1,
+      mapWidth: 4,
+      mapHeight: 1,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+    expect(streamer.update(3, 0).toBuild).toEqual(['3,0']);
+
+    expect(streamer.update(99, 0)).toEqual({ toBuild: [], toDispose: [] });
+    expect([...streamer.liveKeys]).toEqual(['3,0']);
+  });
+
   it('defaults the disposal radius without modifying frozen options', () => {
     const options = Object.freeze({ ...GIANT, buildRadius: 0 });
     const streamer = new ChunkStreamer(options);

@@ -218,3 +218,19 @@ it('rejects less-than signs in story ids before deriving a sidecar path', () => 
   expect(isSafeStoryId(storyId)).toBe(false);
   expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
 });
+
+it('accepts a 65-character story id without truncating its sidecar path', () => {
+  const storyId = 'a'.repeat(65);
+
+  expect(isSafeStoryId(storyId)).toBe(true);
+  expect(inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toBe(`maps/town.${storyId}.ink`);
+});
+
+it('rejects trailing whitespace before deriving a sidecar path', () => {
+  for (const whitespace of [' ', '\t', '\n', '\r\n']) {
+    const storyId = `intro${whitespace}`;
+
+    expect(isSafeStoryId(storyId)).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+  }
+});
