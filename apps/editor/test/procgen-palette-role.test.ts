@@ -51,6 +51,10 @@ describe('selectedTileIdForRole', () => {
     expect(selectedTileIdForRole('brush', { ...state, fillTileId: -1 })).toBe(0);
   });
 
+  it('clears the wall highlight for a negative wall override', () => {
+    expect(selectedTileIdForRole('wall', { ...state, wallOverride: -1 })).toBe(0);
+  });
+
   it('returns 0 when override is auto (zero)', () => {
     expect(
       selectedTileIdForRole('furniture', {

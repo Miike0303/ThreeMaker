@@ -199,6 +199,17 @@ describe('stampSimpleDungeon', () => {
 });
 
 describe('scatterFurnitureInRooms', () => {
+  it('preserves occupied interior cells while furnishing the remaining cells', () => {
+    const mid = new Array<number>(25).fill(0);
+    mid[12] = 5001;
+
+    const count = scatterFurnitureInRooms([{ x: 0, y: 0, w: 5, h: 5 }], mid, 5, 5, 9, 1, () => 0);
+
+    expect(mid[12]).toBe(5001);
+    expect(count).toBe(8);
+    expect(mid.filter((id) => id === 9)).toHaveLength(8);
+  });
+
   it('places furniture in the single interior column of a three-tile-wide room', () => {
     const mid = new Array<number>(42).fill(0);
     const count = scatterFurnitureInRooms([{ x: 1, y: 1, w: 3, h: 5 }], mid, 6, 7, 9, 1, () => 0);
@@ -232,6 +243,10 @@ describe('scatterFurnitureInRooms', () => {
 });
 
 describe('pickMainRoomSpawn', () => {
+  it('uses the center column of an odd-width map when no rooms were placed', () => {
+    expect(pickMainRoomSpawn([], 9, 8)).toEqual({ x: 4, y: 4 });
+  });
+
   it('returns the center of the largest room by area', () => {
     const spawn = pickMainRoomSpawn(
       [
@@ -283,6 +298,16 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('finds an opening whose outside neighbor is in column zero', () => {
+    const walkable = new Uint8Array(12);
+    walkable[4] = 1;
+    walkable[5] = 1;
+
+    expect(findDoorOpenings([{ x: 1, y: 1, w: 1, h: 1 }], walkable, 4, 3)).toEqual([
+      { x: 1, y: 1 },
+    ]);
+  });
+
   it('finds a bottom-edge opening in a two-row room', () => {
     const walkable = new Uint8Array(30);
     for (const y of [1, 2]) {

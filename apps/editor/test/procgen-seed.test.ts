@@ -52,6 +52,12 @@ describe('clampFurnitureDensity', () => {
 });
 
 describe('furniture density percent round-trip', () => {
+  it('uses the default density for non-finite percentages', () => {
+    for (const percent of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(furnitureDensityFromPercent(percent)).toBe(DEFAULT_FURNITURE_DENSITY);
+    }
+  });
+
   it('rounds a fractional density percentage to the nearest integer', () => {
     expect(furnitureDensityToPercent(0.126)).toBe(13);
   });

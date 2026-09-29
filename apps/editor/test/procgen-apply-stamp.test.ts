@@ -59,6 +59,32 @@ function twoFloorSemanticFixture(
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('uses the requested room-light ID prefix when applying a stamp', () => {
+    const doc = createBlankMapDocument({
+      id: 'stamp-light-prefix',
+      name: 'Light prefix',
+      width: 16,
+      height: 16,
+      slots: {},
+      flags: new Array(8192).fill(0),
+    });
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 1,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      roomCount: 1,
+    });
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, {
+      placeRoomLights: true,
+      roomLightOptions: { idPrefix: 'custom-lamp' },
+    });
+
+    expect(next.lights.map((light) => light.id)).toEqual(['custom-lamp-1']);
+  });
+
   it('throws when the last stamp layer is larger than the map', () => {
     const doc = createBlankMapDocument({
       id: 'stamp-long-layer',

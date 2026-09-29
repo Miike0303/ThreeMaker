@@ -336,3 +336,7 @@ it('does not confirm a dual write when the custom playtest target is already ope
     }),
   ).toBe(false);
 });
+
+it('rejects a control character at the start of a map name', () => {
+  expect(validateMapName('\u0000Harbor')).toBe('invalid-chars');
+});

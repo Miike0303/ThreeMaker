@@ -402,3 +402,37 @@ it('skips palette URL cleanup when no session exists', () => {
     revoke.mockRestore();
   }
 });
+
+it('uses the B sheet dimensions for its palette object URL', async () => {
+  const built = buildPlaceholderTextures(2);
+  try {
+    const response = await fetch(built.paletteUrls.B);
+    const header = new DataView(await response.arrayBuffer());
+    expect([header.getUint32(16), header.getUint32(20)]).toEqual([
+      built.sheetPixelSizes.B?.width,
+      built.sheetPixelSizes.B?.height,
+    ]);
+  } finally {
+    revokePlaceholderPaletteUrls(built.paletteUrls);
+    built.textures.A5?.dispose();
+    built.textures.B?.dispose();
+  }
+});
+
+it('preserves texture pixels in the palette object URL', async () => {
+  const texture = {
+    image: { width: 2, height: 1, data: new Uint8Array([10, 20, 30, 128, 40, 50, 60, 255]) },
+  } as unknown as Parameters<typeof textureSheetToObjectUrl>[0];
+  const url = textureSheetToObjectUrl(texture);
+  try {
+    const response = await fetch(url);
+    const png = new Uint8Array(await response.arrayBuffer());
+    expect([...png.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    const idatLength = new DataView(png.buffer, png.byteOffset).getUint32(33);
+    expect([...inflateSync(png.subarray(41, 41 + idatLength))]).toEqual([
+      0, 10, 20, 30, 128, 40, 50, 60, 255,
+    ]);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+});

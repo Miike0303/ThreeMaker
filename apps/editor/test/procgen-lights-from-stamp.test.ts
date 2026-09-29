@@ -16,6 +16,14 @@ describe('dungeonRoomCenter', () => {
 });
 
 describe('lightsFromDungeonRooms', () => {
+  it('preserves an explicit zero height for room lights', () => {
+    const [light] = lightsFromDungeonRooms([{ x: 0, y: 0, w: 2, h: 2 }], 'floor-0', {
+      height: 0,
+    });
+
+    expect(light?.height).toBe(0);
+  });
+
   it('returns empty for no rooms', () => {
     expect(lightsFromDungeonRooms([], 'floor-0')).toEqual([]);
   });

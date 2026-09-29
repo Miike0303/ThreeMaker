@@ -31,3 +31,7 @@ describe('statusLayerNameKey (WU-UX-11)', () => {
     expect(statusLayerNameKey(9)).toBe('painter.layer.ground');
   });
 });
+
+it('keeps the brush label for a negative tile selection', () => {
+  expect(statusToolKey('brush', -1)).toBe('painter.tool.brush');
+});
