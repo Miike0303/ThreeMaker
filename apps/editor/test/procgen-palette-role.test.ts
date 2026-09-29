@@ -33,6 +33,17 @@ describe('assignmentFromPaletteClick', () => {
 });
 
 describe('selectedTileIdForRole', () => {
+  it('highlights tile ID one for the door role', () => {
+    expect(
+      selectedTileIdForRole('door', {
+        fillTileId: 10,
+        wallOverride: 20,
+        doorOverride: 1,
+        furnitureOverride: 40,
+      }),
+    ).toBe(1);
+  });
+
   it('highlights tile ID one for the furniture role', () => {
     expect(
       selectedTileIdForRole('furniture', {

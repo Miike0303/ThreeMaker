@@ -242,3 +242,11 @@ it('omits an overlay marker when the camera position equals its look-at target',
 
   expect(projectToScreenFraction({ x: 4, y: 0, z: 0 }, pose, 45, 1)).toBeUndefined();
 });
+
+it('centers the look-at marker for a camera viewing from the side', () => {
+  const pose = { position: { x: 6, y: 8, z: 0 }, lookAt: { x: 0, y: 0, z: 0 } };
+  const projected = projectToScreenFraction(pose.lookAt, pose, 90, 1);
+
+  expect(projected?.xFrac).toBeCloseTo(0.5);
+  expect(projected?.yFrac).toBeCloseTo(0.5);
+});

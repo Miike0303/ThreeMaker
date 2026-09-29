@@ -340,3 +340,12 @@ it('does not confirm a dual write when the custom playtest target is already ope
 it('rejects a control character at the start of a map name', () => {
   expect(validateMapName('\u0000Harbor')).toBe('invalid-chars');
 });
+
+it('confirms overwriting current when the open map name sorts before it', () => {
+  expect(
+    shouldConfirmPlaytestDualWrite({
+      openMapName: 'castle',
+      savedMapNames: ['current'],
+    }),
+  ).toBe(true);
+});

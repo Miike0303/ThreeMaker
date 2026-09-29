@@ -53,6 +53,48 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('uses wall override tile ID one ahead of an automatic wall', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 10,
+      groundLayer: [],
+      wallLayer: [90, 90],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      wallTileOverride: 1,
+      semantics: { '90': { class: 'wall' } },
+    });
+
+    expect(tiles.wallTileId).toBe(1);
+  });
+
+  it('uses furniture override tile ID one ahead of the painted furniture', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 10,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [200, 200],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      furnitureTileOverride: 1,
+      semantics: { '200': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBe(1);
+  });
+
+  it('uses a distinct wall fallback when the explicit wall override matches ground', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 7,
+      groundLayer: [],
+      wallLayer: [9, 9],
+      fallbackGround: 7,
+      fallbackWall: 20,
+      wallTileOverride: 7,
+    });
+
+    expect(tiles.wallTileId).toBe(20);
+  });
+
   it('uses door override tile ID one ahead of an automatic semantic door', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 10,

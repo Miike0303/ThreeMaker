@@ -59,6 +59,30 @@ function twoFloorSemanticFixture(
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('drops a negative stair column even when its wrapped cell is standable', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+    const wrappedIndex = doc.width - 1;
+    stamp.layers[0][wrappedIndex] = 2816;
+    stamp.layers[2][wrappedIndex] = 0;
+    const stair = {
+      id: 'authored-negative-column',
+      fromFloor: 'floor-1',
+      toFloor: 'floor-0',
+      bidirectional: true,
+      waypoints: [
+        { x: -1, y: 1, floor: 'floor-1' },
+        { x: 1, y: 1, floor: 'floor-0' },
+      ],
+    };
+
+    const next = applyDungeonStampToMapDocument({ ...doc, stairLinks: [stair] }, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks.map((link) => link.id)).not.toContain(stair.id);
+  });
+
   it('keeps an authored stair on standable row zero after stamping', () => {
     const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
     stamp.layers[0][1] = 2816;

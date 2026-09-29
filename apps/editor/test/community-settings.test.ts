@@ -895,3 +895,11 @@ it('keeps an older queued save when removal requests a future timestamp', () => 
   ]);
   expect(loadCommunityShareQueue(storage)).toEqual([job]);
 });
+
+it('keeps a one-character map id visible in the share queue', () => {
+  expect(formatCommunityShareMapId('x')).toBe('x');
+});
+
+it('classifies a one-character sheet reference with catalog provenance as imported', () => {
+  expect(licenseTagFromSlots({ B: { object: 'x', sourceGameId: 1 } })).toBe('import-rpgm');
+});
