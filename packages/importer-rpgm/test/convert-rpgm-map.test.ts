@@ -108,6 +108,106 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('rejects a null unsupported page-condition flag', () => {
+    const conditions = JSON.parse('{"actorValid":null}');
+    const page = showTextPage(0, ['Actor only'], undefined, conditions);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects a numeric zero switch-page activation flag', () => {
+    const conditions = JSON.parse('{"switch1Valid":0,"switch1Id":3}');
+    const page = showTextPage(0, ['Locked'], undefined, conditions);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects a numeric zero self-switch-page activation flag', () => {
+    const conditions = JSON.parse('{"selfSwitchValid":0,"selfSwitchCh":"A"}');
+    const page = showTextPage(0, ['Locked'], undefined, conditions);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects a numeric zero item-page activation flag', () => {
+    const conditions = JSON.parse('{"itemValid":0,"itemId":7}');
+    const page = showTextPage(0, ['Locked'], undefined, conditions);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects a string OFF value in a switch assignment', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 121, indent: 0, parameters: [3, 3, '1'] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects a string OFF value in a self-switch assignment', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 123, indent: 0, parameters: ['A', '1'] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects a string removal operation in an item change', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 126, indent: 0, parameters: [7, '1', 0, 2] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects a string left-facing transfer direction', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 201, indent: 0, parameters: [0, 2, 1, 2, '4', 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
   it('rejects a string player-touch trigger', () => {
     const page = { ...showTextPage(1, ['Hello']), trigger: JSON.parse('"1"') };
     const doc = convertRpgmMap(
