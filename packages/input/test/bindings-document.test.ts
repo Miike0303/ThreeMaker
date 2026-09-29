@@ -317,3 +317,23 @@ it('collects only the quick-save override without copying unchanged actions', ()
     { action: Actions.SystemSave, source: { device: 'keyboard', key: 'F6' } },
   ]);
 });
+
+it('keeps authored alias order when applying overrides for one action', () => {
+  const aliases = [
+    { action: Actions.Interact, source: { device: 'keyboard' as const, key: 'f' } },
+    { action: Actions.Interact, source: { device: 'keyboard' as const, key: 'Enter' } },
+  ];
+
+  const merged = applyBindingOverrides(createBindingTable([]), aliases);
+
+  expect(merged.list()).toEqual(aliases);
+});
+
+it('keeps binding order when collecting aliases for persistence', () => {
+  const aliases = [
+    { action: Actions.Interact, source: { device: 'keyboard' as const, key: 'f' } },
+    { action: Actions.Interact, source: { device: 'keyboard' as const, key: 'Enter' } },
+  ];
+
+  expect(collectBindingOverrides(createBindingTable(aliases), [])).toEqual(aliases);
+});

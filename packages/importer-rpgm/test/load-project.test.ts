@@ -73,6 +73,27 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     }
   }
 
+  it('ignores map filenames with a truncated JSON extension', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map002.jso']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
+  it('rejects a second leading BOM instead of trimming multiple markers', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, []);
+    writeFileSync(
+      join(dataDir, 'MapInfos.json'),
+      BOM + BOM + JSON.stringify(MAP_INFOS_JSON),
+      'utf8',
+    );
+
+    await expect(loadProject(workDir)).rejects.toThrow(SyntaxError);
+  });
+
   it('rejects a leading replacement character instead of stripping it as a BOM', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, []);

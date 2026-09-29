@@ -360,3 +360,18 @@ it('enforces the cache size bound after evicting a comment-heavy source', () => 
     clearInkCompileCacheForTests();
   }
 });
+
+it('preserves source order when reporting multiple compiler errors', () => {
+  expect.assertions(1);
+  try {
+    compileInk('=== first ===\n-> missing_first\n=== second ===\n-> missing_second\n');
+  } catch (error) {
+    if (!(error instanceof InkCompileError)) throw error;
+    expect(
+      error.issues.filter((issue) => issue.type === 'error').map((issue) => issue.message),
+    ).toEqual([
+      expect.stringContaining('missing_first'),
+      expect.stringContaining('missing_second'),
+    ]);
+  }
+});
