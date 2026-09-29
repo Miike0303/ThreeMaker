@@ -72,3 +72,15 @@ describe('computeStairOverlayPoints', () => {
     expect(computeStairOverlayPoints([], 'floor-0')).toEqual([]);
   });
 });
+
+it('omits the entry marker for a stair draft without waypoints', () => {
+  const draft: StairLinkDocument = {
+    id: 'unfinished-stair',
+    fromFloor: 'floor-0',
+    toFloor: 'floor-1',
+    bidirectional: true,
+    waypoints: [],
+  };
+
+  expect(computeStairOverlayPoints([draft], 'floor-0')).toEqual([]);
+});

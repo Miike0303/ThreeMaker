@@ -133,3 +133,12 @@ describe('RAMP_DIRECTION_ARROW', () => {
     expect(RAMP_DIRECTION_ARROW.west).toBe('←');
   });
 });
+
+it('treats a missing neighbor region as ground level when resolving a ramp', () => {
+  const layers = [[7, 0], EMPTY_LAYER(2), EMPTY_LAYER(2), EMPTY_LAYER(2)] as const;
+  const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+
+  expect(computeRampGlyphCells(layers, [1], semantics, 1, 2)).toEqual([
+    { x: 0, y: 0, direction: 'south' },
+  ]);
+});

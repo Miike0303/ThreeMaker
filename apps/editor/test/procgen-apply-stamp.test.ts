@@ -59,6 +59,37 @@ function twoFloorSemanticFixture(
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('keeps an authored stair on standable row zero after stamping', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+    stamp.layers[0][1] = 2816;
+    stamp.layers[2][1] = 0;
+    const stair = {
+      id: 'authored-first-row',
+      fromFloor: 'floor-1',
+      toFloor: 'floor-0',
+      bidirectional: true,
+      waypoints: [
+        { x: 1, y: 0, floor: 'floor-1' },
+        { x: 1, y: 1, floor: 'floor-0' },
+      ],
+    };
+
+    const next = applyDungeonStampToMapDocument({ ...doc, stairLinks: [stair] }, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks).toContainEqual(stair);
+  });
+
+  it('rejects a NaN target floor instead of defaulting to the ground floor', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+
+    expect(() =>
+      applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: Number.NaN }),
+    ).toThrow(/target floor index/);
+  });
+
   it('keeps an authored stair on standable column zero after stamping', () => {
     const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
     stamp.layers[0][doc.width] = 2816;

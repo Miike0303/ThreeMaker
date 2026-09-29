@@ -17,3 +17,9 @@ describe('computeSpawnOverlayPoint', () => {
     expect(computeSpawnOverlayPoint(undefined, 'floor-0')).toBeUndefined();
   });
 });
+
+it('hides a lower-floor spawn while the upper floor is active', () => {
+  const spawn: MapSpawn = { x: 3, y: 4, floor: 'floor-0' };
+
+  expect(computeSpawnOverlayPoint(spawn, 'floor-1')).toBeUndefined();
+});

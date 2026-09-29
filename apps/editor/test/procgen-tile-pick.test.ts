@@ -7,6 +7,10 @@ import {
 } from '../src/procgen/tile-pick.js';
 
 describe('firstClassedTileId', () => {
+  it('selects tile ID one when it is the lowest matching semantic tile', () => {
+    expect(firstClassedTileId({ '1': { class: 'wall' }, '88': { class: 'wall' } }, 'wall')).toBe(1);
+  });
+
   it('ignores negative semantic tile IDs', () => {
     expect(firstClassedTileId({ '-5': { class: 'wall' }, '88': { class: 'wall' } }, 'wall')).toBe(
       88,
@@ -49,6 +53,20 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('uses door override tile ID one ahead of an automatic semantic door', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 10,
+      groundLayer: [],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      doorTileOverride: 1,
+      semantics: { '77': { class: 'door' } },
+    });
+
+    expect(tiles.doorTileId).toBe(1);
+  });
+
   it('prefers a painted wall-class tile over a lower unused wall semantic', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 1,

@@ -68,3 +68,23 @@ describe('roomRectCorners', () => {
     ]);
   });
 });
+
+it('preserves an explicitly blank room name on its overlay', () => {
+  const rect = { x: 2, y: 3, width: 4, height: 5 };
+  const room: RoomDocument = { id: 'quiet-room', name: '', floor: 'floor-0', rects: [rect] };
+
+  expect(computeRoomOverlayRects([room], 'floor-0')).toEqual([
+    { roomId: 'quiet-room', roomName: '', rect },
+  ]);
+});
+
+it('omits lower-floor rooms when displaying the upper floor', () => {
+  const rooms: readonly RoomDocument[] = [
+    { id: 'lobby', floor: 'floor-0', rects: [{ x: 1, y: 2, width: 3, height: 4 }] },
+    { id: 'attic', floor: 'floor-1', rects: [{ x: 5, y: 6, width: 2, height: 3 }] },
+  ];
+
+  expect(computeRoomOverlayRects(rooms, 'floor-1')).toEqual([
+    { roomId: 'attic', rect: { x: 5, y: 6, width: 2, height: 3 } },
+  ]);
+});

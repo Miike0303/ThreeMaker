@@ -86,3 +86,27 @@ describe('createI18n', () => {
 it('rejects an empty locale registry before translation lookup', () => {
   expect(() => createI18n({})).toThrow('createI18n requires at least one locale.');
 });
+
+it('preserves a blank active translation instead of showing the English fallback', () => {
+  const i18n = createI18n(
+    {
+      en: { name: 'English', strings: { caption: 'Map caption' } },
+      es: { name: 'Spanish', strings: { caption: '' } },
+    },
+    'es',
+  );
+
+  expect(i18n.t('caption')).toBe('');
+});
+
+it('preserves a blank English fallback instead of exposing the translation key', () => {
+  const i18n = createI18n(
+    {
+      en: { name: 'English', strings: { caption: '' } },
+      es: { name: 'Spanish', strings: {} },
+    },
+    'es',
+  );
+
+  expect(i18n.t('caption')).toBe('');
+});

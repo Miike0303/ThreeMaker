@@ -11,6 +11,25 @@ const GROUND = 2816;
 const WALL = 4352;
 
 describe('stampSimpleDungeon', () => {
+  it('places no furniture when its density is explicitly zero', () => {
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 7,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      furnitureTileId: 9001,
+      furnitureDensity: 0,
+      roomCount: 1,
+      minRoomSize: 4,
+      maxRoomSize: 4,
+    });
+
+    expect(stamp.rooms).toHaveLength(1);
+    expect(stamp.furnitureCount).toBe(0);
+    expect(stamp.layers[1].every((id) => id === 0)).toBe(true);
+  });
+
   it('leaves furniture empty when its tile id is the door tile', () => {
     const stamp = stampSimpleDungeon({
       width: 32,
@@ -243,6 +262,15 @@ describe('stampSimpleDungeon', () => {
 });
 
 describe('scatterFurnitureInRooms', () => {
+  it('does not count empty tile ID zero as placed furniture', () => {
+    const mid = new Array<number>(9).fill(0);
+
+    const count = scatterFurnitureInRooms([{ x: 0, y: 0, w: 3, h: 3 }], mid, 3, 3, 0, 1, () => 0);
+
+    expect(count).toBe(0);
+    expect(mid).toEqual(new Array<number>(9).fill(0));
+  });
+
   it('leaves room interiors unchanged for a negative furniture tile ID', () => {
     const mid = new Array<number>(9).fill(0);
 
@@ -385,6 +413,12 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('does not create door openings for a zero-height room', () => {
+    const walkable = new Uint8Array(25).fill(1);
+
+    expect(findDoorOpenings([{ x: 1, y: 1, w: 3, h: 0 }], walkable, 5, 5)).toEqual([]);
+  });
+
   it('does not create door openings for a zero-width room', () => {
     const walkable = new Uint8Array(25).fill(1);
 

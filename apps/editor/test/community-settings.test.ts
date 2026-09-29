@@ -883,3 +883,15 @@ it('distinguishes queue timestamps saved in different hours', () => {
 
   expect(first).not.toBe(next);
 });
+
+it('keeps an older queued save when removal requests a future timestamp', () => {
+  const job = sampleJob('harbor', '2026-09-29T12:00:00.000Z');
+  const storage = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify([job]),
+  });
+
+  expect(removeCommunityShareQueueJob(job.mapId, '2026-09-29T13:00:00.000Z', storage)).toEqual([
+    job,
+  ]);
+  expect(loadCommunityShareQueue(storage)).toEqual([job]);
+});
