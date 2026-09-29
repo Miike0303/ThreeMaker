@@ -321,3 +321,21 @@ it('reports non-string story serialization before caching the compilation', () =
     clearInkCompileCacheForTests();
   }
 });
+
+it('caches a small story after evicting an oversized source', () => {
+  clearInkCompileCacheForTests();
+  vi.mocked(Compiler).mockClear();
+
+  try {
+    const oversized = `// ${'x'.repeat(3 * 1024 * 1024)}\nOversized.\n-> END\n`;
+    const source = 'After eviction.\n-> END\n';
+    compileInk(oversized);
+    compileInk(source);
+    const cached = compileInk(source);
+
+    expect(Compiler).toHaveBeenCalledTimes(2);
+    expect(cached.Continue()).toBe('After eviction.\n');
+  } finally {
+    clearInkCompileCacheForTests();
+  }
+});

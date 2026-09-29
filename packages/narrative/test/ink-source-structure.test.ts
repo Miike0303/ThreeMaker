@@ -781,3 +781,31 @@ it('records an undeclared knot that sorts after existing knots', () => {
     { knot: 'zeta', x: 12, y: 34 },
   ]);
 });
+
+it('recognizes a knot header indented with a non-breaking space', () => {
+  expect(listInkKnots('\u00a0=== entry ===\n')).toEqual(['entry']);
+});
+
+it('recognizes a layout comment indented with a non-breaking space', () => {
+  expect(parseInkNodeLayouts('\u00a0// @tm-node entry x=17 y=29\n')).toEqual([
+    { knot: 'entry', x: 17, y: 29 },
+  ]);
+});
+
+it('finds a divert after a non-breaking space', () => {
+  expect(listInkEdges('=== start ===\n->\u00a0exit\n')).toEqual([{ from: 'start', to: 'exit' }]);
+});
+
+it('rejects a knot name that begins with a dot', () => {
+  expect(listInkKnots('=== .hidden ===\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('rejects a layout knot name that begins with a dot', () => {
+  expect(parseInkNodeLayouts('// @tm-node .hidden x=17 y=29\n')).toEqual([]);
+});
+
+it('ignores a divert target that begins with a dot', () => {
+  expect(listInkEdges('=== start ===\n-> .hidden\n-> visible\n')).toEqual([
+    { from: 'start', to: 'visible' },
+  ]);
+});
