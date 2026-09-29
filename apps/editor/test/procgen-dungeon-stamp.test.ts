@@ -97,6 +97,85 @@ describe('stampSimpleDungeon oversized corridor boundaries', () => {
 });
 
 describe('stampSimpleDungeon', () => {
+  it('keeps oversized rooms within the map width', () => {
+    const width = 8;
+    const stamp = stampSimpleDungeon({
+      width,
+      height: 12,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 1,
+      minRoomSize: 20,
+      maxRoomSize: 20,
+    });
+
+    expect(stamp.rooms).toHaveLength(1);
+    for (const room of stamp.rooms) {
+      expect(room.x + room.w).toBeLessThanOrEqual(width);
+    }
+  });
+
+  it('keeps oversized rooms within the map height', () => {
+    const height = 8;
+    const stamp = stampSimpleDungeon({
+      width: 12,
+      height,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 1,
+      minRoomSize: 20,
+      maxRoomSize: 20,
+    });
+
+    expect(stamp.rooms).toHaveLength(1);
+    for (const room of stamp.rooms) {
+      expect(room.y + room.h).toBeLessThanOrEqual(height);
+    }
+  });
+
+  it('centers the fallback hall horizontally on a wide map', () => {
+    const width = 12;
+    const height = 8;
+    const stamp = stampSimpleDungeon({
+      width,
+      height,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 0,
+    });
+    const centerRow = Math.floor(height / 2);
+    const row = stamp.layers[0].slice(centerRow * width, (centerRow + 1) * width);
+
+    expect(stamp.rooms).toEqual([]);
+    expect(row).toContain(GROUND);
+    expect(row).toEqual([...row].reverse());
+  });
+
+  it('centers the fallback hall vertically on a tall map', () => {
+    const width = 8;
+    const height = 12;
+    const stamp = stampSimpleDungeon({
+      width,
+      height,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 0,
+    });
+    const centerColumn = Math.floor(width / 2);
+    const column = Array.from(
+      { length: height },
+      (_, y) => stamp.layers[0][y * width + centerColumn],
+    );
+
+    expect(stamp.rooms).toEqual([]);
+    expect(column).toContain(GROUND);
+    expect(column).toEqual([...column].reverse());
+  });
+
   it('uses sparse default furniture placement when density is omitted', () => {
     const options = {
       width: 12,
@@ -422,6 +501,24 @@ describe('stampSimpleDungeon', () => {
 });
 
 describe('scatterFurnitureInRooms', () => {
+  it('furnishes valid rows beyond the map width on a tall map', () => {
+    const mid = new Array<number>(21).fill(0);
+
+    const count = scatterFurnitureInRooms([{ x: 0, y: 3, w: 3, h: 3 }], mid, 3, 7, 9, 1, () => 0);
+
+    expect(count).toBe(1);
+    expect(mid.flatMap((id, index) => (id === 9 ? [index] : []))).toEqual([13]);
+  });
+
+  it('furnishes valid columns beyond the map height on a wide map', () => {
+    const mid = new Array<number>(21).fill(0);
+
+    const count = scatterFurnitureInRooms([{ x: 3, y: 0, w: 3, h: 3 }], mid, 7, 3, 9, 1, () => 0);
+
+    expect(count).toBe(1);
+    expect(mid.flatMap((id, index) => (id === 9 ? [index] : []))).toEqual([11]);
+  });
+
   it('places furniture tile ID one in an empty room interior', () => {
     const mid = new Array<number>(9).fill(0);
 

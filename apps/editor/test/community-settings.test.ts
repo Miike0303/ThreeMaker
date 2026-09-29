@@ -921,3 +921,11 @@ it('rejects an imported share job without a save timestamp', () => {
 
   expect(parseCommunityShareQueueJson(raw)).toEqual({ ok: false, reason: 'no-valid-jobs' });
 });
+
+it('uses the default map id prefix when the requested limit is infinite', () => {
+  const mapId = '0123456789abcdef';
+
+  expect(formatCommunityShareMapId(mapId, Number.POSITIVE_INFINITY)).toBe(
+    formatCommunityShareMapId(mapId),
+  );
+});

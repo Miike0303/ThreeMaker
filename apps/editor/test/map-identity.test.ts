@@ -376,3 +376,14 @@ it('keeps non-Ink files when deleting a map whose name contains the Ink extensio
 it('classifies a colon after an underscore as an invalid character rather than a drive prefix', () => {
   expect(validateMapName('_:harbor')).toBe('invalid-chars');
 });
+
+it('keeps an embedded map-name suffix out of the delete plan', () => {
+  expect(planDeleteMapFiles('town', ['town.greeting.ink', 'uptown.ink'])).toEqual([
+    '.threemaker/maps/town.tmmap.json',
+    '.threemaker/maps/town.greeting.ink',
+  ]);
+});
+
+it('reports the first saved spelling when several map names collide', () => {
+  expect(collidingSavedMapName('town', ['Town', 'TOWN'])).toBe('Town');
+});

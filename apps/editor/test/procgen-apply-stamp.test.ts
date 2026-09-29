@@ -85,6 +85,14 @@ function rectangularStairFixture(roomCount: number) {
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('reports a fractional target floor as an out-of-range index', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+
+    expect(() => applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 0.5 })).toThrow(
+      'target floor index 0.5 is out of range (floors=2)',
+    );
+  });
+
   it('classifies furniture in the first mid-layer cell', () => {
     const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
     stamp.layers[1][0] = 9001;
