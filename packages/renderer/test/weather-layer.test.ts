@@ -320,6 +320,28 @@ describe('particle position graph', () => {
     }
   });
 
+  it('shifts a centered particle in the direction of a positive drift wave', () => {
+    const { layer } = createInspect(4);
+    try {
+      layer.setMode('snow');
+      const [horizontal] = localParticleAxes(layer);
+      const sample = findGraphNode(horizontal, (node) => Array.isArray(node.rawInputs));
+      const wave = findGraphNode(horizontal, (node) => node.method === 'sin');
+
+      expect(
+        evaluateScalarGraph(
+          horizontal,
+          new Map([
+            [graphNode(sample), 0.5],
+            [graphNode(wave), 1],
+          ]),
+        ),
+      ).toBeCloseTo(layer.uniforms.driftAmplitude.value, 8);
+    } finally {
+      layer.dispose();
+    }
+  });
+
   it('keeps particle seeds distinct at the same frame time', () => {
     const { layer } = createInspect(4);
     try {

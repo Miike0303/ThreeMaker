@@ -77,6 +77,11 @@ describe('computeCameraPose: hd2d mode', () => {
     expect(steep.position.y).toBeGreaterThan(shallow.position.y);
     expect(steep.position.z).toBeLessThan(shallow.position.z);
   });
+
+  it('uses the requested field of view', () => {
+    const pose = computeCameraPose('hd2d', { ...BASE_PARAMS, fovDeg: 57 }, TARGET);
+    expect(pose.fovDeg).toBe(57);
+  });
 });
 
 describe('computeCameraPose: top-down mode', () => {
@@ -148,6 +153,46 @@ describe('computeCameraPose: first-person mode', () => {
     expect(Math.sign(pose.lookAt.z - pose.position.z)).toBe(Math.sign(dir.z));
     // Same height as the camera -- looking straight ahead, not up/down.
     expect(pose.lookAt.y).toBeCloseTo(pose.position.y);
+  });
+
+  it('stands the first-person camera on the character column', () => {
+    const pose = computeCameraPose('first-person', BASE_PARAMS, { ...TARGET, x: 12 });
+    expect(pose.position.x).toBe(12);
+  });
+
+  it('stands the first-person camera on the character row', () => {
+    const pose = computeCameraPose('first-person', BASE_PARAMS, { ...TARGET, z: -4 });
+    expect(pose.position.z).toBe(-4);
+  });
+});
+
+describe('computeCameraPose: boom cameras follow the character', () => {
+  const moved = { x: 12, y: 6, z: -4, facing: 'up' as const };
+
+  it('aims at the character height on a raised floor', () => {
+    for (const mode of ['hd2d', 'top-down'] as const) {
+      expect(computeCameraPose(mode, BASE_PARAMS, moved).lookAt.y).toBe(moved.y);
+    }
+  });
+
+  it('aims at the character column', () => {
+    for (const mode of ['hd2d', 'top-down'] as const) {
+      expect(computeCameraPose(mode, BASE_PARAMS, moved).lookAt.x).toBe(moved.x);
+    }
+  });
+
+  it('stands the boom camera on the character column', () => {
+    for (const mode of ['hd2d', 'top-down'] as const) {
+      expect(computeCameraPose(mode, BASE_PARAMS, moved).position.x).toBe(moved.x);
+    }
+  });
+
+  it('keeps depth anchored to the character row', () => {
+    for (const mode of ['hd2d', 'top-down'] as const) {
+      const south = computeCameraPose(mode, BASE_PARAMS, { ...moved, z: 8 });
+      const north = computeCameraPose(mode, BASE_PARAMS, { ...moved, z: -2 });
+      expect(south.position.z - north.position.z).toBe(10);
+    }
   });
 });
 
