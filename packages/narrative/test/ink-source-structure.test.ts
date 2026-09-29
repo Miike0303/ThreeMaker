@@ -809,3 +809,29 @@ it('ignores a divert target that begins with a dot', () => {
     { from: 'start', to: 'visible' },
   ]);
 });
+
+it('lists knot names containing a zero digit', () => {
+  expect(listInkKnots('=== room0 ===\n')).toEqual(['room0']);
+});
+
+it('reads a stored layout for a knot containing a zero digit', () => {
+  expect(parseInkNodeLayouts('// @tm-node room0 x=17 y=29\n')).toEqual([
+    { knot: 'room0', x: 17, y: 29 },
+  ]);
+});
+
+it('keeps a zero digit inside a divert target name', () => {
+  expect(listInkEdges('=== start ===\n-> room0\n')).toEqual([{ from: 'start', to: 'room0' }]);
+});
+
+it('ignores a separated arrow in dialogue text', () => {
+  expect(listInkEdges('=== start ===\nThe sign reads - > exit.\n-> visible\n')).toEqual([
+    { from: 'start', to: 'visible' },
+  ]);
+});
+
+it('keeps a divert after a slash directly followed by a word', () => {
+  expect(listInkEdges('=== start ===\nTake /north -> exit\n')).toEqual([
+    { from: 'start', to: 'exit' },
+  ]);
+});
