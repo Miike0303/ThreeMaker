@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { bindingTableFromPersistedText } from '../src/bindings-document.js';
 import { Actions, directionFromMoveAction, HOLD_ACTIONS, isMoveAction } from '../src/types.js';
 
 describe('isMoveAction', () => {
@@ -77,4 +78,64 @@ it('recognizes the persisted noclip identifier as a hold action', () => {
 
 it('resolves the persisted move-up identifier to upward movement', () => {
   expect(directionFromMoveAction('move.up')).toBe('up');
+});
+
+function loadPersistedActionOverride(action: string) {
+  return bindingTableFromPersistedText(
+    JSON.stringify({
+      magic: 'threemaker.input-bindings',
+      version: 1,
+      bindings: [{ action, source: { device: 'keyboard', key: 'q' } }],
+    }),
+  );
+}
+
+it('loads a persisted quick-save override for the current save action', () => {
+  const table = loadPersistedActionOverride('system.save');
+
+  expect(table.actionForKeyboardKey('q')).toBe(Actions.SystemSave);
+  expect(table.actionForKeyboardKey('F5')).toBeUndefined();
+});
+
+it('loads a persisted quick-load override for the current load action', () => {
+  const table = loadPersistedActionOverride('system.load');
+
+  expect(table.actionForKeyboardKey('q')).toBe(Actions.SystemLoad);
+  expect(table.actionForKeyboardKey('F9')).toBeUndefined();
+});
+
+it('loads a persisted camera-cycle override for the current camera action', () => {
+  const table = loadPersistedActionOverride('view.cycleCamera');
+
+  expect(table.actionForKeyboardKey('q')).toBe(Actions.ViewCycleCamera);
+  expect(table.actionForKeyboardKey('c')).toBeUndefined();
+});
+
+it('loads a persisted post-processing override for the current toggle action', () => {
+  const table = loadPersistedActionOverride('view.togglePostProcessing');
+
+  expect(table.actionForKeyboardKey('q')).toBe(Actions.ViewTogglePostProcessing);
+  expect(table.actionForKeyboardKey('p')).toBeUndefined();
+});
+
+it('loads a persisted downward-tilt override for the current tilt action', () => {
+  const table = loadPersistedActionOverride('view.tiltDown');
+
+  expect(table.actionForKeyboardKey('q')).toBe(Actions.ViewTiltDown);
+  expect(table.actionForKeyboardKey('[')).toBeUndefined();
+});
+
+it('loads a persisted upward-tilt override for the current tilt action', () => {
+  const table = loadPersistedActionOverride('view.tiltUp');
+
+  expect(table.actionForKeyboardKey('q')).toBe(Actions.ViewTiltUp);
+  expect(table.actionForKeyboardKey(']')).toBeUndefined();
+});
+
+it('loads a persisted zoom-out override and replaces both default aliases', () => {
+  const table = loadPersistedActionOverride('view.zoomOut');
+
+  expect(table.actionForKeyboardKey('q')).toBe(Actions.ViewZoomOut);
+  expect(table.actionForKeyboardKey('-')).toBeUndefined();
+  expect(table.actionForKeyboardKey('_')).toBeUndefined();
 });

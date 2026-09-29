@@ -73,6 +73,21 @@ describe('hop-stats', () => {
     });
   });
 
+  it('counts completed hops independently of the previous outgoing asset count', () => {
+    const first = recordHopCompleted(createHopStats(), {
+      outgoingNarrativeSprites: 0,
+      outgoingFloorTextureKeys: 0,
+      outgoingPropAssets: 7,
+    });
+
+    const second = recordHopCompleted(first, {
+      outgoingNarrativeSprites: 0,
+      outgoingFloorTextureKeys: 0,
+    });
+
+    expect(second.hopsCompleted).toBe(2);
+  });
+
   it('records each completed hop and the outgoing resource counts at dispose time', () => {
     const a = recordHopCompleted(createHopStats(), {
       outgoingNarrativeSprites: 2,

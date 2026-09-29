@@ -722,3 +722,9 @@ it('reads a stored layout for a knot with internal uppercase letters', () => {
     { knot: 'sideRoom', x: 17, y: 29 },
   ]);
 });
+
+it('keeps a column-zero divert before an inline comment', () => {
+  expect(listInkEdges('=== start ===\n-> exit // -> hidden\n')).toEqual([
+    { from: 'start', to: 'exit' },
+  ]);
+});
