@@ -534,3 +534,15 @@ it('treats missing tile-layer cells as empty during northern star expansion', ()
 
   expect(expandDirtyRectNorthThroughStars(rect, map, makeTileset([1]))).toEqual(rect);
 });
+
+it('expands north through a star whose tile id is negative', () => {
+  const map = makeMap(2, 2, [-1, 1, 1, 1]);
+  const rect = { xStart: 0, yStart: 1, xEnd: 1, yEnd: 2 };
+
+  expect(expandDirtyRectNorthThroughStars(rect, map, makeTileset([-1]))).toEqual({
+    xStart: 0,
+    yStart: 0,
+    xEnd: 1,
+    yEnd: 2,
+  });
+});

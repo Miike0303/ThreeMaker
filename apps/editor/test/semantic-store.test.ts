@@ -45,6 +45,19 @@ describe('resolveTouchedTileIds', () => {
 
     expect(ids).toEqual(new Set([9]));
   });
+
+  it('collects a negative tile id and still skips empty tile zero', () => {
+    expect(
+      resolveTouchedTileIds(
+        [
+          { x: 0, y: 0 },
+          { x: 1, y: 0 },
+        ],
+        [-4, 0],
+        2,
+      ),
+    ).toEqual(new Set([-4]));
+  });
 });
 
 describe('assignSemanticClass / getSemanticClass', () => {

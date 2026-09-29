@@ -330,3 +330,7 @@ it('resolves save when Ctrl and Meta are both held', () => {
 it('allows shortcuts from a target with no element tag name', () => {
   expect(shouldIgnoreToolShortcut({}, {})).toBe(false);
 });
+
+it('keeps the wall layer on a brush stroke', () => {
+  expect(beginStroke(TOOL_SM_IDLE, 'brush', 2, { x: 1, y: 1 })).toMatchObject({ layer: 2 });
+});

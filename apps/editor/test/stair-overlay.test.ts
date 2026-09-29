@@ -96,3 +96,21 @@ it('omits the exit marker for a stair draft without waypoints', () => {
 
   expect(computeStairOverlayPoints([draft], 'floor-1')).toEqual([]);
 });
+
+it('places the exit marker on the last waypoint when a stair has a middle landing', () => {
+  const link: StairLinkDocument = {
+    id: 'landing',
+    fromFloor: 'floor-0',
+    toFloor: 'floor-1',
+    bidirectional: false,
+    waypoints: [
+      { x: 1, y: 1, floor: 'floor-0' },
+      { x: 2, y: 2, floor: 'floor-0' },
+      { x: 8, y: 9, floor: 'floor-1' },
+    ],
+  };
+
+  expect(computeStairOverlayPoints([link], 'floor-1')).toEqual([
+    { linkId: 'landing', role: 'exit', x: 8, y: 9, bidirectional: false },
+  ]);
+});

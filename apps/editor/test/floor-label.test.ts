@@ -61,4 +61,12 @@ describe('resolveFloorLabel + spawn summary', () => {
   it('shows the floor id when a referenced floor is missing', () => {
     expect(resolveFloorLabel(unlabeled, 'floor-9', tFor('en'))).toBe('floor-9');
   });
+
+  it('uses the first floor when two floors share an id', () => {
+    const floors = [
+      { id: 'floor-0', label: 'Cellar' },
+      { id: 'floor-0', label: 'Attic' },
+    ];
+    expect(resolveFloorLabel(floors, 'floor-0', tFor('en'))).toBe('Cellar');
+  });
 });

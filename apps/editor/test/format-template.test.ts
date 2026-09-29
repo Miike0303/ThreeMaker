@@ -52,3 +52,7 @@ it('substitutes a placeholder containing uppercase identifier characters', () =>
 it('substitutes a numeric placeholder name', () => {
   expect(formatTemplate('Tile {0}', { '0': 42 })).toBe('Tile 42');
 });
+
+it('substitutes a zero placeholder value', () => {
+  expect(formatTemplate('{count} assets', { count: 0 })).toBe('0 assets');
+});

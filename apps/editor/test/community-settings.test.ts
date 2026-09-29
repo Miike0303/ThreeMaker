@@ -936,3 +936,17 @@ it('normalizes a coercible array license tag to user-owned', () => {
 
   expect(parseCommunityShareQueueJson(raw)).toEqual({ ok: true, jobs: [job] });
 });
+
+it('keeps a blank map name on the newest queued share', () => {
+  expect(
+    describeCommunityShareStatus(DEFAULT_COMMUNITY_SETTINGS, [
+      { ...sampleJob('blank'), mapName: '' },
+    ]),
+  ).toEqual({ kind: 'queued', queueLength: 1, lastMapName: '' });
+});
+
+it('treats a fractional catalog game id as imported provenance', () => {
+  expect(licenseTagFromSlots({ A5: { object: 'a'.repeat(64), sourceGameId: 1.5 } })).toBe(
+    'import-rpgm',
+  );
+});
