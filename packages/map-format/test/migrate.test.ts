@@ -90,6 +90,24 @@ function makeV1DocInput(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('parseMapDocument', () => {
+  it('initializes an empty trigger collection in the direct v3 migration output', () => {
+    const input = makeV2DocInput({ version: 3, rooms: [] });
+
+    expect(migrateV3ToV4(input).triggers).toEqual([]);
+  });
+
+  it('initializes an empty event dictionary in the direct v3 migration output', () => {
+    const input = makeV2DocInput({ version: 3, rooms: [] });
+
+    expect(migrateV3ToV4(input).events).toEqual({});
+  });
+
+  it('initializes an empty world seed dictionary in the direct v3 migration output', () => {
+    const input = makeV2DocInput({ version: 3, rooms: [] });
+
+    expect(migrateV3ToV4(input).worldSeeds).toEqual({});
+  });
+
   it('initializes an empty NPC collection in the direct v3 migration output', () => {
     const input = makeV2DocInput({ version: 3, rooms: [] });
 
