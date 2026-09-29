@@ -58,12 +58,12 @@ function twoFloorSemanticFixture(
   return { doc, stamp };
 }
 
-function rectangularStairFixture(roomCount: number) {
+function rectangularStairFixture(roomCount: number, width = 20, height = 12) {
   const blank = createBlankMapDocument({
     id: 'stamp-rectangular-stairs',
     name: 'Rectangular stairs',
-    width: 20,
-    height: 12,
+    width,
+    height,
     slots: {},
     flags: new Array(8192).fill(0),
   });
@@ -85,6 +85,56 @@ function rectangularStairFixture(roomCount: number) {
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('keeps an authored stair beyond the height on a wide map', () => {
+    const { doc, stamp } = rectangularStairFixture(0);
+    const entry = { x: doc.width - 3, y: 3, floor: 'floor-1' };
+    const index = entry.y * doc.width + entry.x;
+    expect([stamp.layers[0][index], stamp.layers[2][index]]).toEqual([2816, 0]);
+    const stair = {
+      id: 'authored-wide-map',
+      fromFloor: 'floor-1',
+      toFloor: 'floor-0',
+      bidirectional: true,
+      waypoints: [entry, { x: 3, y: 3, floor: 'floor-0' }],
+    };
+
+    const next = applyDungeonStampToMapDocument({ ...doc, stairLinks: [stair] }, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks).toContainEqual(stair);
+  });
+
+  it('keeps an authored stair beyond the width on a tall map', () => {
+    const { doc, stamp } = rectangularStairFixture(0, 12, 20);
+    const entry = { x: 3, y: doc.height - 3, floor: 'floor-1' };
+    const index = entry.y * doc.width + entry.x;
+    expect([stamp.layers[0][index], stamp.layers[2][index]]).toEqual([2816, 0]);
+    const stair = {
+      id: 'authored-tall-map',
+      fromFloor: 'floor-1',
+      toFloor: 'floor-0',
+      bidirectional: true,
+      waypoints: [entry, { x: 3, y: 3, floor: 'floor-0' }],
+    };
+
+    const next = applyDungeonStampToMapDocument({ ...doc, stairLinks: [stair] }, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks).toContainEqual(stair);
+  });
+
+  it('places the fallback spawn at the rectangular map center when no rooms land', () => {
+    const { doc, stamp } = rectangularStairFixture(0);
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, { placeSpawnInMainRoom: true });
+
+    expect(next.spawn).toEqual({ x: 10, y: 6, floor: 'floor-0' });
+  });
+
   it('reports a fractional target floor as an out-of-range index', () => {
     const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
 

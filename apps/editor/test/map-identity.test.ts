@@ -387,3 +387,14 @@ it('keeps an embedded map-name suffix out of the delete plan', () => {
 it('reports the first saved spelling when several map names collide', () => {
   expect(collidingSavedMapName('town', ['Town', 'TOWN'])).toBe('Town');
 });
+
+it('loads a valid map stem when its filename exceeds the stem length limit', () => {
+  const name = 'n'.repeat(54);
+
+  expect(mapNameFromDocumentFileName(`${name}.tmmap.json`)).toBe(name);
+});
+
+it('accepts 64-character map names and rejects 65-character names', () => {
+  expect(validateMapName('n'.repeat(64))).toBeNull();
+  expect(validateMapName('n'.repeat(65))).toBe('too-long');
+});

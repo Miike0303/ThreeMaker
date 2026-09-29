@@ -929,3 +929,10 @@ it('uses the default map id prefix when the requested limit is infinite', () => 
     formatCommunityShareMapId(mapId),
   );
 });
+
+it('normalizes a coercible array license tag to user-owned', () => {
+  const job = sampleJob('array-license');
+  const raw = JSON.stringify([{ ...job, licenseTag: ['user-owned'] }]);
+
+  expect(parseCommunityShareQueueJson(raw)).toEqual({ ok: true, jobs: [job] });
+});

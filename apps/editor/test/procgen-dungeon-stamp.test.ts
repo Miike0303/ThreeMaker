@@ -97,6 +97,75 @@ describe('stampSimpleDungeon oversized corridor boundaries', () => {
 });
 
 describe('stampSimpleDungeon', () => {
+  it('places a second room with exactly one separating column west of the first', () => {
+    const stamp = stampSimpleDungeon({
+      width: 10,
+      height: 8,
+      seed: 7,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 2,
+      minRoomSize: 3,
+      maxRoomSize: 3,
+    });
+
+    expect(stamp.rooms.map((room) => ({ x: room.x, width: room.w }))).toEqual([
+      { x: 5, width: 3 },
+      { x: 1, width: 3 },
+    ]);
+  });
+
+  it('carves the full corridor width at the east endpoint beside a smaller room', () => {
+    const width = 14;
+    const stamp = stampSimpleDungeon({
+      width,
+      height: 10,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 2,
+      minRoomSize: 3,
+      maxRoomSize: 3,
+      corridorWidth: 4,
+    });
+    const [eastRoom, westRoom] = stamp.rooms;
+    if (!eastRoom || !westRoom) throw new Error('fixture needs two rooms');
+    expect(eastRoom.x).toBeGreaterThan(westRoom.x);
+    const centerX = eastRoom.x + Math.floor(eastRoom.w / 2);
+    const centerY = eastRoom.y + Math.floor(eastRoom.h / 2);
+
+    // A four-tile corridor spans offsets -1 through +2 around its endpoint.
+    for (const dy of [-1, 0, 1, 2]) {
+      const index = (centerY + dy) * width + centerX + 2;
+      expect([stamp.layers[0][index], stamp.layers[2][index]]).toEqual([GROUND, 0]);
+    }
+  });
+
+  it('carves the full corridor width at the south endpoint beside a smaller room', () => {
+    const width = 14;
+    const stamp = stampSimpleDungeon({
+      width,
+      height: 10,
+      seed: 0,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 2,
+      minRoomSize: 3,
+      maxRoomSize: 3,
+      corridorWidth: 4,
+    });
+    const [northRoom, southRoom] = stamp.rooms;
+    if (!northRoom || !southRoom) throw new Error('fixture needs two rooms');
+    expect(southRoom.y).toBeGreaterThan(northRoom.y);
+    const centerX = southRoom.x + Math.floor(southRoom.w / 2);
+    const centerY = southRoom.y + Math.floor(southRoom.h / 2);
+
+    for (const dx of [-1, 0, 1, 2]) {
+      const index = (centerY + 2) * width + centerX + dx;
+      expect([stamp.layers[0][index], stamp.layers[2][index]]).toEqual([GROUND, 0]);
+    }
+  });
+
   it('keeps oversized rooms within the map width', () => {
     const width = 8;
     const stamp = stampSimpleDungeon({
