@@ -148,3 +148,10 @@ it('rejects dollar signs in story ids before deriving a sidecar path', () => {
   expect(isSafeStoryId('act$2')).toBe(false);
   expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'act$2')).toThrow(/story id/i);
 });
+
+it('rejects wildcard story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter*2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});

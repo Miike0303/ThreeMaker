@@ -11,6 +11,12 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('rejects a numeric string chunk size instead of coercing it', () => {
+    expect(() => new ChunkStreamer({ ...GIANT, chunkSize: '16' as unknown as number })).toThrow(
+      'chunkSize must be a positive number, got 16.',
+    );
+  });
+
   it('rebuilds and disposes chunks after traveling west beyond the live window', () => {
     const streamer = new ChunkStreamer({
       chunkSize: 16,
