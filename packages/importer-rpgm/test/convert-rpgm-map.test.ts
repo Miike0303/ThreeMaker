@@ -674,6 +674,13 @@ describe('convertRpgmMap', () => {
       ]);
     });
 
+    it('skips a transfer with a string downward direction', () => {
+      const doc = convertPage([{ ...transfer, parameters: [0, 2, 1, 2, '2', 0] }, end]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
     it('imports a transfer to map 1', () => {
       const doc = convertPage([{ ...transfer, parameters: [0, 1, 0, 0, 2, 0] }, end]);
 
@@ -861,6 +868,54 @@ describe('convertRpgmMap', () => {
       expect(commands?.[99]).toEqual({ type: 'setWorldVar', key: 'rpgm.switch.100', value: true });
     });
 
+    it('skips an item change with a negative operand mode', () => {
+      const doc = convertList([{ code: 126, indent: 0, parameters: [7, 0, -1, 2] }, end]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('skips a weapon change with a sixth parameter', () => {
+      const doc = convertList([{ code: 127, indent: 0, parameters: [7, 0, 0, 2, true, 0] }, end]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('skips the whole event when a switch range runs backwards', () => {
+      const doc = convertList([
+        ...showTextPage(0, ['Before']).list,
+        { code: 121, indent: 0, parameters: [2, 1, 0] },
+        end,
+      ]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('omits an empty scrolling block before a switch assignment', () => {
+      const doc = convertList([
+        { code: 105, indent: 0, parameters: [2, false] },
+        { code: 121, indent: 0, parameters: [1, 1, 0] },
+        end,
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'setWorldVar', key: 'rpgm.switch.1', value: true },
+      ]);
+    });
+
+    it('skips the whole event when a dialogue line is not a string', () => {
+      const doc = convertList([
+        ...showTextPage(0, ['Before']).list,
+        { code: 401, indent: 0, parameters: [17] },
+        end,
+      ]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
     it('imports Change Items 126 increases as giveItem', () => {
       const doc = convertList([{ code: 126, indent: 0, parameters: [7, 0, 0, 1] }, end]);
 
@@ -1027,6 +1082,14 @@ describe('convertRpgmMap', () => {
           else: [dialogue('Hello')],
         },
       ]);
+    });
+
+    it('skips an item-gated page with a numeric activation flag', () => {
+      const conditions = JSON.parse('{"itemValid":1,"itemId":7}');
+      const doc = convertPages([showTextPage(0, ['Locked'], undefined, conditions)]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
     });
 
     it('selects an item-gated page over an unconditional fallback', () => {
@@ -1383,6 +1446,20 @@ describe('convertRpgmMap', () => {
       expect(doc.events['rpgm-event-1']).toEqual([
         { type: 'showDialogue', source: { kind: 'text', lines: ['Reset'] } },
         { type: 'setWorldVar', key: 'rpgm.self.100.1.B', value: false },
+      ]);
+    });
+
+    it('imports self switch C with its event-scoped key', () => {
+      const page = showTextPage(0, ['Opened'], undefined, CLEAR_CONDITIONS, [selfSwitch('C', 0)]);
+      const doc = convertRpgmMap(
+        buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+        buildSyntheticTileset(),
+      );
+
+      expect(doc.triggers).toHaveLength(1);
+      expect(doc.events['rpgm-event-1']).toEqual([
+        { type: 'showDialogue', source: { kind: 'text', lines: ['Opened'] } },
+        { type: 'setWorldVar', key: 'rpgm.self.100.1.C', value: true },
       ]);
     });
 
