@@ -307,3 +307,17 @@ it('retains a compilation that exactly fills the cache size limit', async () => 
   expect(Compiler).toHaveBeenCalledTimes(1);
   expect(cached.Continue()).toBe('Cache boundary.\n');
 });
+
+it('reports non-string story serialization before caching the compilation', () => {
+  clearInkCompileCacheForTests();
+  const serialize = vi.spyOn(EngineStory.prototype, 'ToJson').mockReturnValueOnce(undefined);
+
+  try {
+    expect(() => compileInk('Serialization guard fixture.\n-> END\n')).toThrow(
+      'Ink story serialization did not return JSON.',
+    );
+  } finally {
+    serialize.mockRestore();
+    clearInkCompileCacheForTests();
+  }
+});

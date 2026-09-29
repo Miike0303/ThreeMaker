@@ -91,3 +91,14 @@ it('retains the binding snapshot when the caller clears its array before rebindi
   expect(rebound.actionForKeyboardKey('e')).toBe('interact');
   expect(rebound.actionForKeyboardKey('w')).toBe('move.up');
 });
+
+it('removes a source from the snapshot after the caller clears the input array', () => {
+  const bindings: ActionBinding[] = [...sample];
+  const table = createBindingTable(bindings);
+  bindings.length = 0;
+
+  const remaining = table.withoutSource({ device: 'keyboard', key: 'w' });
+
+  expect(remaining.list()).toEqual(sample.slice(1));
+  expect(remaining.actionForKeyboardKey('ArrowUp')).toBe('move.up');
+});

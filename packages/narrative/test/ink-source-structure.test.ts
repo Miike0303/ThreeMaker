@@ -756,3 +756,17 @@ it('keeps a divert target beginning with lowercase z', () => {
 it('keeps a divert target beginning with uppercase Z', () => {
   expect(listInkEdges('=== start ===\n-> Zone\n')).toEqual([{ from: 'start', to: 'Zone' }]);
 });
+
+it('lists a knot beginning with uppercase A', () => {
+  expect(listInkKnots('=== Atrium ===\n')).toEqual(['Atrium']);
+});
+
+it('reads a stored layout for a knot beginning with uppercase A', () => {
+  expect(parseInkNodeLayouts('// @tm-node Atrium x=17 y=29\n')).toEqual([
+    { knot: 'Atrium', x: 17, y: 29 },
+  ]);
+});
+
+it('keeps a divert target beginning with uppercase A', () => {
+  expect(listInkEdges('=== start ===\n-> Atrium\n')).toEqual([{ from: 'start', to: 'Atrium' }]);
+});

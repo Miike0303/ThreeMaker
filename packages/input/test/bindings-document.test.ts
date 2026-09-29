@@ -288,3 +288,23 @@ it('keeps the last binding when a persisted key is assigned twice', () => {
 
   expect(table.actionForKeyboardKey('q')).toBe(Actions.MoveUp);
 });
+
+it('rejects a numeric persisted action identifier', () => {
+  expect(
+    parseInputBindingsDocument({
+      magic: INPUT_BINDINGS_MAGIC,
+      version: 1,
+      bindings: [{ action: 7, source: { device: 'keyboard', key: 'e' } }],
+    }),
+  ).toEqual({ ok: false, reason: 'invalid binding entry' });
+});
+
+it('rejects a numeric persisted keyboard key', () => {
+  expect(
+    parseInputBindingsDocument({
+      magic: INPUT_BINDINGS_MAGIC,
+      version: 1,
+      bindings: [{ action: Actions.Interact, source: { device: 'keyboard', key: 7 } }],
+    }),
+  ).toEqual({ ok: false, reason: 'invalid binding entry' });
+});
