@@ -859,3 +859,27 @@ it('replaces share jobs in local storage when no storage is supplied', () => {
     vi.unstubAllGlobals();
   }
 });
+
+it('counts a one-character tile reference in a share job', () => {
+  expect(communityShareTileCount(['x', 'x', ''])).toBe(1);
+});
+
+it('counts a shared one-character tile reference once across queued jobs', () => {
+  expect(
+    communityShareQueueTileTotal([{ tileObjectShas: ['x'] }, { tileObjectShas: ['x', ''] }]),
+  ).toBe(1);
+});
+
+it('distinguishes queue timestamps saved in consecutive minutes', () => {
+  const first = formatCommunityShareAt('2026-09-29T13:07:00.000Z', 'en-US');
+  const next = formatCommunityShareAt('2026-09-29T13:08:00.000Z', 'en-US');
+
+  expect(first).not.toBe(next);
+});
+
+it('distinguishes queue timestamps saved in different hours', () => {
+  const first = formatCommunityShareAt('2026-09-29T13:07:00.000Z', 'en-US');
+  const next = formatCommunityShareAt('2026-09-29T14:07:00.000Z', 'en-US');
+
+  expect(first).not.toBe(next);
+});

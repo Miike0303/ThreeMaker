@@ -59,6 +59,29 @@ function twoFloorSemanticFixture(
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('keeps an authored stair on standable column zero after stamping', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+    stamp.layers[0][doc.width] = 2816;
+    stamp.layers[2][doc.width] = 0;
+    const stair = {
+      id: 'authored-first-column',
+      fromFloor: 'floor-1',
+      toFloor: 'floor-0',
+      bidirectional: true,
+      waypoints: [
+        { x: 0, y: 1, floor: 'floor-1' },
+        { x: 1, y: 1, floor: 'floor-0' },
+      ],
+    };
+
+    const next = applyDungeonStampToMapDocument({ ...doc, stairLinks: [stair] }, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks).toContainEqual(stair);
+  });
+
   it('copies stamped furniture into the target floor mid layer', () => {
     const { doc } = twoFloorSemanticFixture('none', 0, 0);
     const stamp = stampSimpleDungeon({

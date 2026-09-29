@@ -48,3 +48,7 @@ describe('formatTemplate', () => {
 it('substitutes a placeholder containing uppercase identifier characters', () => {
   expect(formatTemplate('Tile {TileId}', { TileId: 42 })).toBe('Tile 42');
 });
+
+it('substitutes a numeric placeholder name', () => {
+  expect(formatTemplate('Tile {0}', { '0': 42 })).toBe('Tile 42');
+});

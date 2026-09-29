@@ -243,6 +243,15 @@ describe('stampSimpleDungeon', () => {
 });
 
 describe('scatterFurnitureInRooms', () => {
+  it('leaves room interiors unchanged for a negative furniture tile ID', () => {
+    const mid = new Array<number>(9).fill(0);
+
+    const count = scatterFurnitureInRooms([{ x: 0, y: 0, w: 3, h: 3 }], mid, 3, 3, -1, 1, () => 0);
+
+    expect(count).toBe(0);
+    expect(mid).toEqual(new Array<number>(9).fill(0));
+  });
+
   it('furnishes column zero when a clipped room interior reaches the west edge', () => {
     const mid = new Array<number>(12).fill(0);
     const count = scatterFurnitureInRooms([{ x: -1, y: 0, w: 3, h: 3 }], mid, 4, 3, 9, 1, () => 0);
@@ -303,6 +312,20 @@ describe('scatterFurnitureInRooms', () => {
 });
 
 describe('pickMainRoomSpawn', () => {
+  it('selects a larger main room even below the sum of earlier room areas', () => {
+    const spawn = pickMainRoomSpawn(
+      [
+        { x: 1, y: 1, w: 2, h: 2 },
+        { x: 5, y: 1, w: 3, h: 3 },
+        { x: 10, y: 1, w: 4, h: 3 },
+      ],
+      20,
+      10,
+    );
+
+    expect(spawn).toEqual({ x: 12, y: 2 });
+  });
+
   it('uses the center row of an odd-height map when no rooms were placed', () => {
     expect(pickMainRoomSpawn([], 8, 9)).toEqual({ x: 4, y: 4 });
   });
@@ -362,6 +385,12 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('does not create door openings for a zero-width room', () => {
+    const walkable = new Uint8Array(25).fill(1);
+
+    expect(findDoorOpenings([{ x: 1, y: 1, w: 0, h: 3 }], walkable, 5, 5)).toEqual([]);
+  });
+
   it('finds a door in column zero that opens east into a corridor', () => {
     const walkable = new Uint8Array(12);
     walkable[4] = 1;

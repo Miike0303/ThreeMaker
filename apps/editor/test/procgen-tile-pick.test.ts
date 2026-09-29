@@ -49,6 +49,37 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('prefers a painted wall-class tile over a lower unused wall semantic', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [7, 7, 90],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: {
+        '7': { class: 'furniture' },
+        '80': { class: 'wall' },
+        '90': { class: 'wall' },
+      },
+    });
+
+    expect(tiles.wallTileId).toBe(90);
+  });
+
+  it('prefers the furniture majority on the mid layer over a lower semantic ID', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [201, 201, 200],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: { '200': { class: 'furniture' }, '201': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBe(201);
+  });
+
   it('uses door auto-pick for a negative door override', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 1,
