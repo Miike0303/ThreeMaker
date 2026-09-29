@@ -770,3 +770,14 @@ it('reads a stored layout for a knot beginning with uppercase A', () => {
 it('keeps a divert target beginning with uppercase A', () => {
   expect(listInkEdges('=== start ===\n-> Atrium\n')).toEqual([{ from: 'start', to: 'Atrium' }]);
 });
+
+it('records an undeclared knot that sorts after existing knots', () => {
+  const source = '// @tm-node start x=3 y=5\n=== start ===\nHello.\n';
+
+  const updated = setInkNodePosition(source, 'zeta', 12, 34);
+
+  expect(parseInkNodeLayouts(updated)).toEqual([
+    { knot: 'start', x: 3, y: 5 },
+    { knot: 'zeta', x: 12, y: 34 },
+  ]);
+});

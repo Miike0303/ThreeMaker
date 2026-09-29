@@ -308,3 +308,12 @@ it('rejects a numeric persisted keyboard key', () => {
     }),
   ).toEqual({ ok: false, reason: 'invalid binding entry' });
 });
+
+it('collects only the quick-save override without copying unchanged actions', () => {
+  const defaults = createBindingTable(defaultKeyboardBindings());
+  const remapped = rebindKeyboard(defaults, Actions.SystemSave, 'F6');
+
+  expect(collectBindingOverrides(remapped)).toEqual([
+    { action: Actions.SystemSave, source: { device: 'keyboard', key: 'F6' } },
+  ]);
+});
