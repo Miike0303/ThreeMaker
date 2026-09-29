@@ -82,3 +82,7 @@ describe('createI18n', () => {
     expect(i18n.locale).toBe('fr');
   });
 });
+
+it('rejects an empty locale registry before translation lookup', () => {
+  expect(() => createI18n({})).toThrow('createI18n requires at least one locale.');
+});

@@ -32,6 +32,10 @@ describe('randomProcgenSeed', () => {
 });
 
 describe('clampFurnitureDensity', () => {
+  it('caps an oversized fallback at full furniture density', () => {
+    expect(clampFurnitureDensity(Number.NaN, 2)).toBe(1);
+  });
+
   it('uses the default when both density and its fallback are non-finite', () => {
     expect(clampFurnitureDensity(Number.NaN, Number.NaN)).toBe(DEFAULT_FURNITURE_DENSITY);
   });
@@ -62,6 +66,10 @@ describe('furniture density percent round-trip', () => {
 });
 
 describe('pushProcgenSeedHistory', () => {
+  it('normalizes retained history seeds to unsigned values', () => {
+    expect(pushProcgenSeedHistory([-1, 5], 7)).toEqual([7, 0xffffffff, 5]);
+  });
+
   it('rounds a fractional seed history limit down', () => {
     expect(pushProcgenSeedHistory([30, 20, 10], 40, 2.9)).toEqual([40, 30]);
   });

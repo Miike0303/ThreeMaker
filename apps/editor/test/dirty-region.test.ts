@@ -430,3 +430,42 @@ it('returns no chunks for reversed horizontal bounds within one chunk', () => {
 it('returns no chunks for reversed vertical bounds within one chunk', () => {
   expect([...dirtyRectToChunkKeys({ xStart: 1, yStart: 8, xEnd: 2, yEnd: 7 }, 16)]).toEqual([]);
 });
+
+it('keeps northern star chunks on wide maps', () => {
+  const width = 48;
+  const height = 32;
+  const layer = new Array<number>(width * height).fill(1);
+  for (let y = 0; y < 16; y++) layer[y * width + 33] = 2;
+
+  const keys = computeDirtyChunkKeys(
+    [{ x: 33, y: 17 }],
+    makeMap(width, height, layer),
+    makeTileset(),
+    16,
+  );
+
+  expect([...keys].sort()).toEqual(['2,0', '2,1']);
+});
+
+it('does not dirty a chunk below the bottom of a wide map', () => {
+  const map = makeMap(32, 16, new Array<number>(32 * 16).fill(1));
+  const keys = computeDirtyChunkKeys([{ x: 8, y: 15 }], map, makeTileset(), 16);
+
+  expect([...keys]).toEqual(['0,0']);
+});
+
+it('keeps northern star chunks on tall maps', () => {
+  const width = 16;
+  const height = 64;
+  const layer = new Array<number>(width * height).fill(1);
+  for (let y = 16; y < 32; y++) layer[y * width + 8] = 2;
+
+  const keys = computeDirtyChunkKeys(
+    [{ x: 8, y: 33 }],
+    makeMap(width, height, layer),
+    makeTileset(),
+    16,
+  );
+
+  expect([...keys].sort()).toEqual(['0,1', '0,2']);
+});

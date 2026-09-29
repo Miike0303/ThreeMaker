@@ -308,3 +308,21 @@ describe('TilePalette', () => {
     expect(markup).toContain(`aria-label="tile ${selected}" aria-pressed="true"`);
   });
 });
+
+it('caps oversized A3 palettes before the A4 tile range', () => {
+  const cells = computePaletteCells('A3', { width: 768, height: 480 });
+
+  expect(cells).toHaveLength(32);
+  expect(cells.at(-1)?.tileId).toBe(5840);
+});
+
+it('caps oversized A4 palettes at the final valid kind', () => {
+  const cells = computePaletteCells('A4', { width: 768, height: 840 });
+
+  expect(cells).toHaveLength(48);
+  expect(cells.at(-1)?.tileId).toBe(8144);
+});
+
+it('omits an incomplete alternating A4 kind row', () => {
+  expect(computeAutotileKindCount('A4', { width: 768, height: 239 })).toBe(8);
+});

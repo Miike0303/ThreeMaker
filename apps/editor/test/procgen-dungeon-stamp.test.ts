@@ -11,6 +11,21 @@ const GROUND = 2816;
 const WALL = 4352;
 
 describe('stampSimpleDungeon', () => {
+  it('clamps a zero corridor width to a one-tile passage', () => {
+    const options = {
+      width: 24,
+      height: 18,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+    };
+    const minimum = stampSimpleDungeon({ ...options, corridorWidth: 1 });
+    const zero = stampSimpleDungeon({ ...options, corridorWidth: 0 });
+
+    expect(minimum.rooms.length).toBeGreaterThan(1);
+    expect(zero.layers).toEqual(minimum.layers);
+  });
+
   it('rejects a map with only one undersized dimension', () => {
     for (const dimensions of [
       { width: 7, height: 8 },
@@ -184,6 +199,14 @@ describe('stampSimpleDungeon', () => {
 });
 
 describe('scatterFurnitureInRooms', () => {
+  it('places furniture in the single interior column of a three-tile-wide room', () => {
+    const mid = new Array<number>(42).fill(0);
+    const count = scatterFurnitureInRooms([{ x: 1, y: 1, w: 3, h: 5 }], mid, 6, 7, 9, 1, () => 0);
+
+    expect(count).toBe(3);
+    expect(mid.flatMap((id, index) => (id === 9 ? [index] : []))).toEqual([14, 20, 26]);
+  });
+
   it('ignores furniture interior cells beyond the right map edge', () => {
     const mid = new Array<number>(16).fill(0);
     const count = scatterFurnitureInRooms([{ x: 2, y: 0, w: 4, h: 3 }], mid, 4, 4, 9, 1, () => 0);
@@ -260,6 +283,30 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('finds a bottom-edge opening in a two-row room', () => {
+    const walkable = new Uint8Array(30);
+    for (const y of [1, 2]) {
+      for (const x of [1, 2, 3]) walkable[y * 6 + x] = 1;
+    }
+    walkable[3 * 6 + 2] = 1;
+
+    expect(findDoorOpenings([{ x: 1, y: 1, w: 3, h: 2 }], walkable, 6, 5)).toEqual([
+      { x: 2, y: 2 },
+    ]);
+  });
+
+  it('finds a right-edge opening in a two-column room', () => {
+    const walkable = new Uint8Array(30);
+    for (const y of [1, 2, 3]) {
+      for (const x of [1, 2]) walkable[y * 5 + x] = 1;
+    }
+    walkable[2 * 5 + 3] = 1;
+
+    expect(findDoorOpenings([{ x: 1, y: 1, w: 2, h: 3 }], walkable, 5, 6)).toEqual([
+      { x: 2, y: 2 },
+    ]);
+  });
+
   it('does not wrap an east-edge door neighbor into the next row', () => {
     const walkable = new Uint8Array(16);
     walkable[7] = 1;

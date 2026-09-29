@@ -33,6 +33,30 @@ describe('pickAdjacentFloorIndex', () => {
 });
 
 describe('roomLandingTile', () => {
+  it('clamps a room landing beyond the south edge to the last row', () => {
+    const rooms = [
+      {
+        id: 'south-room',
+        floor: 'floor-0',
+        rects: [{ x: 1, y: 7, width: 4, height: 4 }],
+      },
+    ];
+
+    expect(roomLandingTile(rooms, 'floor-0', 10, 8)).toEqual({ x: 3, y: 7 });
+  });
+
+  it('keeps a first-row room landing on row zero', () => {
+    const rooms = [
+      {
+        id: 'first-row-room',
+        floor: 'floor-0',
+        rects: [{ x: 1, y: 0, width: 4, height: 1 }],
+      },
+    ];
+
+    expect(roomLandingTile(rooms, 'floor-0', 10, 8)).toEqual({ x: 3, y: 0 });
+  });
+
   it('clamps a room landing beyond the east edge to the last column', () => {
     const rooms = [
       {

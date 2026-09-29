@@ -392,3 +392,13 @@ it('rejects a dimensioned texture without RGBA data before creating a palette UR
     'textureSheetToObjectUrl: expected DataTexture with RGBA image.data',
   );
 });
+
+it('skips palette URL cleanup when no session exists', () => {
+  const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  try {
+    expect(() => revokePlaceholderPaletteUrls(null)).not.toThrow();
+    expect(revoke).not.toHaveBeenCalled();
+  } finally {
+    revoke.mockRestore();
+  }
+});
