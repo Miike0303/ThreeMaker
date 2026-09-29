@@ -171,3 +171,33 @@ it('keeps trigger events separate when floor and column digits collide', () => {
   expect(index.enter(1, 23, 4)).toEqual(['first-event']);
   expect(index.enter(12, 3, 4)).toEqual(['second-event']);
 });
+
+it('identifies enter when rejecting an invalid trigger lookup floor', () => {
+  const index = new TriggerIndex([]);
+
+  expect(() => index.enter(-1, 3, 4)).toThrow(
+    'TriggerIndex#enter: floor must be a non-negative integer floor index, got -1.',
+  );
+});
+
+it('identifies interact when rejecting an invalid trigger lookup floor', () => {
+  const index = new TriggerIndex([]);
+
+  expect(() => index.interact(-1, 3, 4, 'up')).toThrow(
+    'TriggerIndex#interact: floor must be a non-negative integer floor index, got -1.',
+  );
+});
+
+it('identifies the initial tile when rejecting an invalid spawn floor', () => {
+  expect(() => new TriggerIndex([], { floor: -1, x: 3, y: 4 })).toThrow(
+    'TriggerIndex: initialTile: floor must be a non-negative integer floor index, got -1.',
+  );
+});
+
+it('names the offending trigger instead of its event when rejecting its floor', () => {
+  expect(
+    () => new TriggerIndex([trigger({ id: 'broken-stairs', event: 'open-stairs', floor: -1 })]),
+  ).toThrow(
+    'TriggerIndex: trigger "broken-stairs": floor must be a non-negative integer floor index, got -1.',
+  );
+});
