@@ -265,3 +265,15 @@ it('reports a non-array input bindings collection', () => {
     parseInputBindingsDocument({ magic: INPUT_BINDINGS_MAGIC, version: 1, bindings: {} }),
   ).toEqual({ ok: false, reason: 'bindings must be an array' });
 });
+
+it('does not persist a case-only sharp S key change', () => {
+  const defaults = [
+    { action: Actions.Interact, source: { device: 'keyboard' as const, key: '\u00df' } },
+  ];
+  const table = createBindingTable([
+    { action: Actions.Interact, source: { device: 'keyboard', key: '\u1e9e' } },
+  ]);
+
+  expect(table.actionForKeyboardKey('\u00df')).toBe(Actions.Interact);
+  expect(collectBindingOverrides(table, defaults)).toEqual([]);
+});

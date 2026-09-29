@@ -738,3 +738,21 @@ it('restores a stored layout at the uppercase knot name boundary', () => {
 
   expect(buildInkGraphModel(source).nodes).toEqual([{ knot: 'Zone', x: 17, y: 29 }]);
 });
+
+it('lists a knot beginning with lowercase z', () => {
+  expect(listInkKnots('=== zone ===\n')).toEqual(['zone']);
+});
+
+it('reads a stored layout for a knot beginning with lowercase z', () => {
+  expect(parseInkNodeLayouts('// @tm-node zone x=17 y=29\n')).toEqual([
+    { knot: 'zone', x: 17, y: 29 },
+  ]);
+});
+
+it('keeps a divert target beginning with lowercase z', () => {
+  expect(listInkEdges('=== start ===\n-> zone\n')).toEqual([{ from: 'start', to: 'zone' }]);
+});
+
+it('keeps a divert target beginning with uppercase Z', () => {
+  expect(listInkEdges('=== start ===\n-> Zone\n')).toEqual([{ from: 'start', to: 'Zone' }]);
+});
