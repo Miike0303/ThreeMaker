@@ -162,3 +162,10 @@ it('rejects wildcard story ids before deriving a sidecar path', () => {
   expect(isSafeStoryId(storyId)).toBe(false);
   expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
 });
+
+it('rejects percent-encoded separators in story ids before deriving a sidecar path', () => {
+  const storyId = 'act%2Fintro';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});

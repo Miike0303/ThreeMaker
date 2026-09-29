@@ -7,6 +7,24 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('shadows ground east of a wall when the next tile east is open', () => {
+    const map = generateSyntheticMap({
+      width: 10,
+      height: 3,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[0].slice(7, 10)).toEqual([
+      ROSELIAM_DUNGEON_WALL_TILE_ID,
+      ROSELIAM_DUNGEON_GROUND_TILE_ID,
+      ROSELIAM_DUNGEON_GROUND_TILE_ID,
+    ]);
+    expect(map.layers.shadows[8]).toBe(5);
+  });
+
   it('leaves floor tiles undecorated when decoration density is zero', () => {
     const map = generateSyntheticMap({
       width: 3,

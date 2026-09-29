@@ -351,3 +351,15 @@ it('returns undefined from a direct lookup when no layer contributes a ramp', ()
 
   expect(deriveRampCellAt(layers, semantics, 1, 0, 0)).toBeUndefined();
 });
+
+it('skips undefined semantic entries when finding authored ramps', () => {
+  const layers = [[8], [0], [0], [0]] as const;
+  const semantics: SemanticOverrides = Object.fromEntries([
+    ['7', undefined],
+    ['8', { class: 'ramp', rampDirection: 'south' }],
+  ]);
+
+  expect(deriveRampCells(layers, semantics, 1, 1)).toEqual([
+    { x: 0, y: 0, rampDirection: 'south' },
+  ]);
+});
