@@ -11,6 +11,34 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('floors the focus column before selecting a fractional-size chunk', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 1.5,
+      mapWidth: 3,
+      mapHeight: 1,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+    expect(streamer.update(1, 0).toBuild).toEqual(['0,0']);
+
+    expect(streamer.update(1.5, 0)).toEqual({ toBuild: [], toDispose: [] });
+    expect(streamer.update(2, 0)).toEqual({ toBuild: ['1,0'], toDispose: ['0,0'] });
+  });
+
+  it('floors the focus row before selecting a fractional-size chunk', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 1.5,
+      mapWidth: 1,
+      mapHeight: 3,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+    expect(streamer.update(0, 1).toBuild).toEqual(['0,0']);
+
+    expect(streamer.update(0, 1.5)).toEqual({ toBuild: [], toDispose: [] });
+    expect(streamer.update(0, 2)).toEqual({ toBuild: ['0,1'], toDispose: ['0,0'] });
+  });
+
   it('accepts a positive chunk size smaller than one tile', () => {
     const streamer = new ChunkStreamer({
       chunkSize: 0.5,

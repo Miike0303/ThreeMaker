@@ -183,3 +183,17 @@ it('rejects double quotes in story ids before deriving a sidecar path', () => {
   expect(isSafeStoryId(storyId)).toBe(false);
   expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
 });
+
+it('rejects hash signs in story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter#2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects less-than signs in story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter<2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
