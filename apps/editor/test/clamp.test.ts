@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { clampRange, clampRoomRect, clampTileIndex } from '../src/clamp.js';
 
 describe('clampRange', () => {
+  it('uses the normalized lower bound for NaN in an inverted range', () => {
+    expect(clampRange(Number.NaN, 20, 3)).toBe(3);
+  });
+
   it('clamps within the given [min, max]', () => {
     expect(clampRange(1, 3, 20)).toBe(3);
     expect(clampRange(100, 3, 20)).toBe(20);

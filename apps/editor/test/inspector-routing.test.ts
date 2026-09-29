@@ -58,6 +58,14 @@ describe('inspectorRoutingReducer', () => {
 });
 
 describe('inspectorTabForTool', () => {
+  it('keeps the Events inspector available for manual navigation', () => {
+    expect(INSPECTOR_TAB_IDS).toContain('events');
+  });
+
+  it('keeps the Ink inspector available for manual navigation', () => {
+    expect(INSPECTOR_TAB_IDS).toContain('ink');
+  });
+
   it('exposes dedicated procgen and community tabs without routing tools to them', () => {
     expect(INSPECTOR_TAB_IDS).toContain('procgen');
     expect(INSPECTOR_TAB_IDS).toContain('community');

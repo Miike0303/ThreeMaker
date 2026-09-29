@@ -53,6 +53,20 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('prefers painted furniture below the ground tile ID over unused semantics', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 90,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [80, 80, 70],
+      fallbackGround: 10,
+      fallbackWall: 100,
+      semantics: { '70': { class: 'furniture' }, '80': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBe(80);
+  });
+
   it('prefers a painted door majority below the ground tile ID over unused semantics', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 90,

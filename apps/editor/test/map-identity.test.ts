@@ -132,6 +132,12 @@ describe('validateMapName', () => {
 });
 
 describe('assertMapName / path derivation', () => {
+  it('preserves the validation issue on a rejected map name', () => {
+    expect(() => assertMapName('Castle?')).toThrowError(
+      expect.objectContaining({ issue: 'invalid-chars' }),
+    );
+  });
+
   it('ignores backup filenames that contain but do not end with the map suffix', () => {
     expect(mapNameFromDocumentFileName('town.tmmap.json.bak')).toBeNull();
   });

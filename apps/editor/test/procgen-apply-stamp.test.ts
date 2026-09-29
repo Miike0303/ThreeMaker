@@ -58,7 +58,65 @@ function twoFloorSemanticFixture(
   return { doc, stamp };
 }
 
+function rectangularStairFixture(roomCount: number) {
+  const blank = createBlankMapDocument({
+    id: 'stamp-rectangular-stairs',
+    name: 'Rectangular stairs',
+    width: 20,
+    height: 12,
+    slots: {},
+    flags: new Array(8192).fill(0),
+  });
+  const ground = blank.floors[0];
+  if (!ground) throw new Error('fixture has no ground floor');
+  const doc = {
+    ...blank,
+    floors: [ground, { ...ground, id: 'floor-1', baseElevation: 1 }],
+  };
+  const stamp = stampSimpleDungeon({
+    width: doc.width,
+    height: doc.height,
+    seed: 3,
+    groundTileId: 2816,
+    wallTileId: 4352,
+    roomCount,
+  });
+  return { doc, stamp };
+}
+
 describe('applyDungeonStampToMapDocument', () => {
+  it('classifies furniture in the first mid-layer cell', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+    stamp.layers[1][0] = 9001;
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 });
+
+    expect(next.floors[1]?.layers.tiles[1][0]).toBe(9001);
+    expect(next.tileset.semantics['9001']).toEqual({ class: 'furniture' });
+  });
+
+  it('uses the rectangular map center for a stair entry when no rooms were stamped', () => {
+    const { doc, stamp } = rectangularStairFixture(0);
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks[0]?.waypoints[0]).toEqual({ x: 10, y: 6, floor: 'floor-1' });
+  });
+
+  it('lands stairs at the rectangular map center when the adjacent floor has no rooms', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, {
+      targetFloorIndex: 0,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks[0]?.waypoints[1]).toEqual({ x: 10, y: 6, floor: 'floor-1' });
+  });
+
   it('rejects wall stamping that would reclass a door tile used on another floor', () => {
     const { doc, stamp } = twoFloorSemanticFixture('none', 4352, 0);
     const sharedDoorDoc = {
