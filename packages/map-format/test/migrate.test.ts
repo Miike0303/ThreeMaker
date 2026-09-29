@@ -90,6 +90,31 @@ function makeV1DocInput(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('parseMapDocument', () => {
+  it('initializes an empty NPC collection in the direct v3 migration output', () => {
+    const input = makeV2DocInput({ version: 3, rooms: [] });
+
+    expect(migrateV3ToV4(input).npcs).toEqual([]);
+  });
+
+  it('rejects a non-string format before checking a future version', () => {
+    const input = makeValidDocInput({
+      format: [MAP_FORMAT_MAGIC],
+      version: CURRENT_MAP_FORMAT_VERSION + 1,
+    });
+
+    expect(() => parseMapDocument(input)).toThrowError(
+      expect.objectContaining({ code: 'bad-magic' }),
+    );
+  });
+
+  it('names version 2 in the diagnostic for prematurely authored rooms', () => {
+    const input = makeV2DocInput({ rooms: [] });
+
+    expect(() => parseMapDocument(input)).toThrow(
+      'Map document declares "version": 2 but already carries v3 room content',
+    );
+  });
+
   it('names the required format value in a bad-magic diagnostic', () => {
     const input = makeValidDocInput({ format: 'wrong-format' });
 

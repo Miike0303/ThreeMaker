@@ -14,6 +14,24 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('accepts story ids that start with a digit, underscore, or hyphen', () => {
+    for (const storyId of ['7_intro', '_intro', '-intro']) {
+      expect(isSafeStoryId(storyId)).toBe(true);
+      expect(inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toBe(
+        `maps/town.${storyId}.ink`,
+      );
+    }
+  });
+
+  it('accepts a UUID-length story id when deriving a sidecar path', () => {
+    const storyId = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+
+    expect(isSafeStoryId(storyId)).toBe(true);
+    expect(inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toBe(
+      'maps/town.f47ac10b-58cc-4372-a567-0e02b2c3d479.ink',
+    );
+  });
+
   it('rejects at signs in story ids before deriving a sidecar path', () => {
     expect(isSafeStoryId('chapter@2')).toBe(false);
     expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'chapter@2')).toThrow(/story id/i);

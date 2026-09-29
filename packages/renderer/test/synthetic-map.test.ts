@@ -7,6 +7,18 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('leaves floor tiles undecorated when decoration density is zero', () => {
+    const map = generateSyntheticMap({
+      width: 3,
+      height: 3,
+      wallDensity: 0,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[2]).toEqual(Array(9).fill(0));
+  });
+
   it('places southern decorations using the width of a rectangular map', () => {
     const map = generateSyntheticMap({
       width: 7,
