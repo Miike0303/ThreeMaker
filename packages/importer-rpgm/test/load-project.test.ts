@@ -73,6 +73,29 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     }
   }
 
+  it('ignores map filenames with fractional IDs', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map001.5.json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
+  it('looks up editor names by map ID when sidebar order differs', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map007.json']);
+    writeFileSync(
+      join(dataDir, 'MapInfos.json'),
+      JSON.stringify([null, { id: 7, name: 'Harbor', parentId: 0, order: 1 }]),
+      'utf8',
+    );
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.get(7)?.editorName).toBe('Harbor');
+  });
+
   it('rejects two map files that resolve to the same numeric id', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json', 'Map1.json']);

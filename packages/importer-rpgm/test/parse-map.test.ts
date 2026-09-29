@@ -13,6 +13,20 @@ function makeMapJson(width: number, height: number, fill: (z: number, i: number)
 }
 
 describe('parseMap', () => {
+  it('identifies map JSON when a tileset reference is not numeric', () => {
+    const json = { ...makeMapJson(1, 1, () => 0), tilesetId: '1' };
+
+    expect(() => parseMap(json)).toThrow(
+      new Error('Invalid Map JSON: "tilesetId" must be a number.'),
+    );
+  });
+
+  it('identifies the data field when a tile cell is negative', () => {
+    expect(() => parseMap(makeMapJson(1, 1, () => -1))).toThrow(
+      new Error('Invalid Map JSON: "data" must contain non-negative safe integers.'),
+    );
+  });
+
   it('reports overflow just above the safe six-layer cell-count boundary', () => {
     const width = Math.floor(Number.MAX_SAFE_INTEGER / 6) + 1;
     const json = { width, height: 1, tilesetId: 1, data: [] };

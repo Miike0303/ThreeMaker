@@ -92,6 +92,11 @@ describe('getTileSheet', () => {
 });
 
 describe('getLocalTileIndex', () => {
+  it('subtracts the A2 sheet base across a 256-tile block boundary', () => {
+    expect(getLocalTileIndex(3071)).toBe(255);
+    expect(getLocalTileIndex(3072)).toBe(256);
+  });
+
   it('is 0-based from each sheet start', () => {
     expect(getLocalTileIndex(0)).toBe(0);
     expect(getLocalTileIndex(256)).toBe(0);
