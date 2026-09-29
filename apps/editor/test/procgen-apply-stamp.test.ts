@@ -59,6 +59,85 @@ function twoFloorSemanticFixture(
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('rejects door stamping that would reclass a wall tile used on another floor', () => {
+    const { doc } = twoFloorSemanticFixture('wall', 5001, 0);
+    const sharedWallDoc = {
+      ...doc,
+      tileset: {
+        ...doc.tileset,
+        semantics: { ...doc.tileset.semantics, '5001': { class: 'wall' as const } },
+      },
+    };
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 42,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      doorTileId: 5001,
+      minRoomSize: 3,
+      maxRoomSize: 3,
+      roomCount: 2,
+    });
+
+    expect(stamp.doors.length).toBeGreaterThan(0);
+    expect(() =>
+      applyDungeonStampToMapDocument(sharedWallDoc, stamp, { targetFloorIndex: 1 }),
+    ).toThrow(/tile 5001.*wall.*door.*floor-0/);
+  });
+
+  it('rejects furniture stamping that would reclass a wall tile used on another floor', () => {
+    const { doc } = twoFloorSemanticFixture('wall', 9001, 0);
+    const sharedWallDoc = {
+      ...doc,
+      tileset: {
+        ...doc.tileset,
+        semantics: { ...doc.tileset.semantics, '9001': { class: 'wall' as const } },
+      },
+    };
+    const stamp = stampSimpleDungeon({
+      width: 16,
+      height: 16,
+      seed: 42,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      furnitureTileId: 9001,
+      furnitureDensity: 1,
+      minRoomSize: 4,
+      maxRoomSize: 4,
+      roomCount: 1,
+    });
+
+    expect(stamp.furnitureCount).toBeGreaterThan(0);
+    expect(() =>
+      applyDungeonStampToMapDocument(sharedWallDoc, stamp, { targetFloorIndex: 1 }),
+    ).toThrow(/tile 9001.*wall.*furniture.*floor-0/);
+  });
+
+  it('drops an east-edge stair waypoint even when its wrapped cell is standable', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+    const wrappedIndex = 2 * doc.width;
+    stamp.layers[0][wrappedIndex] = 2816;
+    stamp.layers[2][wrappedIndex] = 0;
+    const stair = {
+      id: 'authored-east-edge',
+      fromFloor: 'floor-1',
+      toFloor: 'floor-0',
+      bidirectional: true,
+      waypoints: [
+        { x: doc.width, y: 1, floor: 'floor-1' },
+        { x: 1, y: 1, floor: 'floor-0' },
+      ],
+    };
+
+    const next = applyDungeonStampToMapDocument({ ...doc, stairLinks: [stair] }, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks.map((link) => link.id)).not.toContain(stair.id);
+  });
+
   it('uses the requested room-light ID prefix when applying a stamp', () => {
     const doc = createBlankMapDocument({
       id: 'stamp-light-prefix',

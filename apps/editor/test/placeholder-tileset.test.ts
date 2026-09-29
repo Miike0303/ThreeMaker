@@ -436,3 +436,31 @@ it('preserves texture pixels in the palette object URL', async () => {
     URL.revokeObjectURL(url);
   }
 });
+
+it('preserves the full A5 sheet height in persisted starter PNG bytes', () => {
+  const tilePixelSize = 2;
+  const png = placeholderSheetPngBytes('A5', tilePixelSize);
+  const header = new DataView(png.buffer, png.byteOffset, png.byteLength);
+
+  expect([header.getUint32(16), header.getUint32(20)]).toEqual([
+    PLACEHOLDER_A5_COLS * tilePixelSize,
+    PLACEHOLDER_A5_ROWS * tilePixelSize,
+  ]);
+});
+
+it('uses the A5 texture for its palette object URL', async () => {
+  const built = buildPlaceholderTextures(2);
+  try {
+    const response = await fetch(built.paletteUrls.A5);
+    const header = new DataView(await response.arrayBuffer());
+
+    expect([header.getUint32(16), header.getUint32(20)]).toEqual([
+      built.sheetPixelSizes.A5?.width,
+      built.sheetPixelSizes.A5?.height,
+    ]);
+  } finally {
+    revokePlaceholderPaletteUrls(built.paletteUrls);
+    built.textures.A5?.dispose();
+    built.textures.B?.dispose();
+  }
+});

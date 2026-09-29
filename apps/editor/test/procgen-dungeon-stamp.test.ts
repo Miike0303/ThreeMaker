@@ -226,6 +226,22 @@ describe('stampSimpleDungeon', () => {
 });
 
 describe('scatterFurnitureInRooms', () => {
+  it('furnishes column zero when a clipped room interior reaches the west edge', () => {
+    const mid = new Array<number>(12).fill(0);
+    const count = scatterFurnitureInRooms([{ x: -1, y: 0, w: 3, h: 3 }], mid, 4, 3, 9, 1, () => 0);
+
+    expect(count).toBe(1);
+    expect(mid.flatMap((id, index) => (id === 9 ? [index] : []))).toEqual([4]);
+  });
+
+  it('furnishes row zero when a clipped room interior reaches the north edge', () => {
+    const mid = new Array<number>(12).fill(0);
+    const count = scatterFurnitureInRooms([{ x: 0, y: -1, w: 3, h: 3 }], mid, 4, 3, 9, 1, () => 0);
+
+    expect(count).toBe(1);
+    expect(mid.flatMap((id, index) => (id === 9 ? [index] : []))).toEqual([1]);
+  });
+
   it('preserves occupied interior cells while furnishing the remaining cells', () => {
     const mid = new Array<number>(25).fill(0);
     mid[12] = 5001;
@@ -329,6 +345,26 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('finds a door in column zero that opens east into a corridor', () => {
+    const walkable = new Uint8Array(12);
+    walkable[4] = 1;
+    walkable[5] = 1;
+
+    expect(findDoorOpenings([{ x: 0, y: 1, w: 1, h: 1 }], walkable, 4, 3)).toEqual([
+      { x: 0, y: 1 },
+    ]);
+  });
+
+  it('finds a door in row zero that opens south into a corridor', () => {
+    const walkable = new Uint8Array(12);
+    walkable[1] = 1;
+    walkable[5] = 1;
+
+    expect(findDoorOpenings([{ x: 1, y: 0, w: 1, h: 1 }], walkable, 4, 3)).toEqual([
+      { x: 1, y: 0 },
+    ]);
+  });
+
   it('finds an opening whose outside neighbor is in row zero', () => {
     const walkable = new Uint8Array(12);
     walkable[1] = 1;

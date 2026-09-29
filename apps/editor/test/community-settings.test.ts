@@ -776,3 +776,86 @@ it('saves community preferences to local storage when no storage is supplied', (
     vi.unstubAllGlobals();
   }
 });
+
+it('prepends share jobs in local storage when no storage is supplied', () => {
+  const previous = sampleJob('previous');
+  const added = sampleJob('added');
+  const sessionJob = sampleJob('session');
+  const persistent = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify([previous]),
+  });
+  const session = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify([sessionJob]),
+  });
+  vi.stubGlobal('localStorage', persistent);
+  vi.stubGlobal('sessionStorage', session);
+  try {
+    expect(pushCommunityShareQueue(added)).toEqual([added, previous]);
+    expect(loadCommunityShareQueue(persistent)).toEqual([added, previous]);
+    expect(loadCommunityShareQueue(session)).toEqual([sessionJob]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it('clears share jobs from local storage when no storage is supplied', () => {
+  const job = sampleJob('persistent');
+  const sessionJob = sampleJob('session');
+  const persistent = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify([job]),
+  });
+  const session = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify([sessionJob]),
+  });
+  vi.stubGlobal('localStorage', persistent);
+  vi.stubGlobal('sessionStorage', session);
+  try {
+    expect(clearCommunityShareQueue()).toEqual([]);
+    expect(loadCommunityShareQueue(persistent)).toEqual([]);
+    expect(loadCommunityShareQueue(session)).toEqual([sessionJob]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it('removes a share job from local storage when no storage is supplied', () => {
+  const removed = sampleJob('removed');
+  const retained = sampleJob('retained');
+  const sessionJob = sampleJob('session');
+  const persistent = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify([removed, retained]),
+  });
+  const session = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify([sessionJob]),
+  });
+  vi.stubGlobal('localStorage', persistent);
+  vi.stubGlobal('sessionStorage', session);
+  try {
+    expect(removeCommunityShareQueueJob(removed.mapId, removed.at)).toEqual([retained]);
+    expect(loadCommunityShareQueue(persistent)).toEqual([retained]);
+    expect(loadCommunityShareQueue(session)).toEqual([sessionJob]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it('replaces share jobs in local storage when no storage is supplied', () => {
+  const previous = sampleJob('previous');
+  const replacement = sampleJob('replacement');
+  const sessionJob = sampleJob('session');
+  const persistent = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify([previous]),
+  });
+  const session = memoryStorage({
+    'threemaker-maker-studio:community-queue': JSON.stringify([sessionJob]),
+  });
+  vi.stubGlobal('localStorage', persistent);
+  vi.stubGlobal('sessionStorage', session);
+  try {
+    expect(replaceCommunityShareQueue([replacement])).toEqual([replacement]);
+    expect(loadCommunityShareQueue(persistent)).toEqual([replacement]);
+    expect(loadCommunityShareQueue(session)).toEqual([sessionJob]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
