@@ -11,6 +11,22 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('defaults the disposal radius without modifying frozen options', () => {
+    const options = Object.freeze({ ...GIANT, buildRadius: 0 });
+    const streamer = new ChunkStreamer(options);
+    streamer.update(256, 256);
+
+    expect(streamer.update(272, 256)).toEqual({ toBuild: ['17,16'], toDispose: [] });
+  });
+
+  it('defaults the build radius without modifying frozen options', () => {
+    const options = Object.freeze({ ...GIANT, disposeRadius: 3 });
+
+    const streamer = new ChunkStreamer(options);
+
+    expect(streamer.update(256, 256).toBuild).toContain('16,16');
+  });
+
   it('floors the focus column before selecting a fractional-size chunk', () => {
     const streamer = new ChunkStreamer({
       chunkSize: 1.5,

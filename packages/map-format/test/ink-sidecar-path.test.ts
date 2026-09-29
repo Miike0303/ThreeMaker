@@ -14,6 +14,27 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('rejects tabs in story ids before deriving a sidecar path', () => {
+    const storyId = 'chapter\t2';
+
+    expect(isSafeStoryId(storyId)).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+  });
+
+  it('rejects NUL bytes in story ids before deriving a sidecar path', () => {
+    const storyId = 'chapter\u00002';
+
+    expect(isSafeStoryId(storyId)).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+  });
+
+  it('rejects greater-than signs in story ids before deriving a sidecar path', () => {
+    const storyId = 'chapter>2';
+
+    expect(isSafeStoryId(storyId)).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+  });
+
   it('rejects question marks in story ids before deriving a sidecar path', () => {
     const storyId = 'chapter?2';
 

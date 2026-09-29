@@ -7,6 +7,22 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('defaults the tileset without modifying frozen options', () => {
+    const options = Object.freeze({ width: 1, height: 1, clearRadius: 0 });
+
+    const map = generateSyntheticMap(options);
+
+    expect(map.tilesetId).toBe(4);
+  });
+
+  it('defaults the clear radius without modifying frozen options', () => {
+    const options = Object.freeze({ width: 1, height: 1, tilesetId: 4 });
+
+    const map = generateSyntheticMap(options);
+
+    expect(map.layers.tileLayers[0][0]).toBe(ROSELIAM_DUNGEON_GROUND_TILE_ID);
+  });
+
   it('shadows ground east of a wall when the next tile east is open', () => {
     const map = generateSyntheticMap({
       width: 10,
