@@ -90,6 +90,15 @@ function makeV1DocInput(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('parseMapDocument', () => {
+  it('classifies an undefined floor in a version-5 document as malformed', () => {
+    const input = makeValidDocInput({ version: 5, floors: [undefined] });
+    delete input.lights;
+
+    expect(() => parseMapDocument(input)).toThrowError(
+      expect.objectContaining({ code: 'malformed' }),
+    );
+  });
+
   it('initializes an empty trigger collection in the direct v3 migration output', () => {
     const input = makeV2DocInput({ version: 3, rooms: [] });
 

@@ -14,6 +14,13 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('rejects question marks in story ids before deriving a sidecar path', () => {
+    const storyId = 'chapter?2';
+
+    expect(isSafeStoryId(storyId)).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+  });
+
   it('accepts story ids that start with a digit, underscore, or hyphen', () => {
     for (const storyId of ['7_intro', '_intro', '-intro']) {
       expect(isSafeStoryId(storyId)).toBe(true);

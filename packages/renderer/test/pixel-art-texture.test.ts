@@ -3,6 +3,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { configurePixelArtTexture, loadSheetTexture } from '../src/scene/pixel-art-texture.js';
 
 describe('configurePixelArtTexture', () => {
+  it('enables mipmaps when reconfiguring a crisp texture for environment rendering', () => {
+    const texture = new THREE.Texture();
+    configurePixelArtTexture(texture);
+    expect(texture.generateMipmaps).toBe(false);
+
+    configurePixelArtTexture(texture, { mipmaps: true });
+
+    expect(texture.generateMipmaps).toBe(true);
+  });
+
+  it('replaces an existing linear color space with sRGB for sheet textures', () => {
+    const texture = new THREE.Texture();
+    texture.colorSpace = THREE.LinearSRGBColorSpace;
+
+    configurePixelArtTexture(texture);
+
+    expect(texture.colorSpace).toBe(THREE.SRGBColorSpace);
+  });
+
   it('defaults mipmapped textures to one anisotropy sample when no maximum is supplied', () => {
     const texture = new THREE.Texture();
     texture.anisotropy = 8;
