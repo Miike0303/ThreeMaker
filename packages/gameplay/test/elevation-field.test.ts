@@ -129,3 +129,9 @@ it('does not read the preceding row ramp for a negative column', () => {
   expect(field.rampDirAt(2, 0)).toBeDefined();
   expect(field.rampDirAt(-1, 1)).toBeUndefined();
 });
+
+it('samples surface height from the requested row when coordinates differ', () => {
+  const field = new ElevationField(buildMap(2, 3, {}, [1, 1, 2, 2, 3, 3]));
+
+  expect(field.surfaceHeightAt(0.25, 1.25)).toBe(2);
+});

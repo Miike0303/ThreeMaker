@@ -246,3 +246,22 @@ it('reports the supplied unsupported input bindings version', () => {
     parseInputBindingsDocument({ magic: INPUT_BINDINGS_MAGIC, version: 2, bindings: [] }),
   ).toEqual({ ok: false, reason: 'unknown version 2' });
 });
+
+it('reports a non-object input bindings document', () => {
+  expect(parseInputBindingsDocument(null)).toEqual({
+    ok: false,
+    reason: 'document must be an object',
+  });
+});
+
+it('reports an invalid input bindings document magic', () => {
+  expect(
+    parseInputBindingsDocument({ magic: 'another.bindings-format', version: 1, bindings: [] }),
+  ).toEqual({ ok: false, reason: 'missing or invalid magic' });
+});
+
+it('reports a non-array input bindings collection', () => {
+  expect(
+    parseInputBindingsDocument({ magic: INPUT_BINDINGS_MAGIC, version: 1, bindings: {} }),
+  ).toEqual({ ok: false, reason: 'bindings must be an array' });
+});

@@ -728,3 +728,13 @@ it('keeps a column-zero divert before an inline comment', () => {
     { from: 'start', to: 'exit' },
   ]);
 });
+
+it('includes Z at the uppercase knot name boundary', () => {
+  expect(listInkKnots('=== Zone ===\n')).toEqual(['Zone']);
+});
+
+it('restores a stored layout at the uppercase knot name boundary', () => {
+  const source = '// @tm-node Zone x=17 y=29\n=== Zone ===\n';
+
+  expect(buildInkGraphModel(source).nodes).toEqual([{ knot: 'Zone', x: 17, y: 29 }]);
+});

@@ -276,3 +276,16 @@ it('identifies Ink compilation failures in the displayed error string', () => {
     expect(String(error)).toMatch(/^InkCompileError: Ink compilation failed with \d+ issue\(s\):/);
   }
 });
+
+it('evicts the next oldest story after repeated size limit evictions', () => {
+  clearInkCompileCacheForTests();
+  vi.mocked(Compiler).mockClear();
+  const padding = 'x'.repeat(400 * 1024);
+  const sourceAt = (index: number) => `Eviction ${index}. ${padding}\n-> END`;
+
+  for (let index = 0; index < 4; index++) compileInk(sourceAt(index));
+  expect(Compiler).toHaveBeenCalledTimes(4);
+
+  compileInk(sourceAt(1));
+  expect(Compiler).toHaveBeenCalledTimes(5);
+});

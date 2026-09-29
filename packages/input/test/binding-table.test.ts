@@ -75,3 +75,19 @@ it('removes a lowercase sharp S binding using its uppercase key', () => {
 
   expect(cleared.actionForKeyboardKey('\u00df')).toBeUndefined();
 });
+
+it('retains the binding snapshot when the caller clears its array before rebinding', () => {
+  const bindings: ActionBinding[] = [
+    { action: 'interact', source: { device: 'keyboard', key: 'e' } },
+  ];
+  const table = createBindingTable(bindings);
+  bindings.length = 0;
+
+  const rebound = table.withBinding({
+    action: 'move.up',
+    source: { device: 'keyboard', key: 'w' },
+  });
+
+  expect(rebound.actionForKeyboardKey('e')).toBe('interact');
+  expect(rebound.actionForKeyboardKey('w')).toBe('move.up');
+});
