@@ -53,6 +53,32 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('selects semantic door tile ID one without an override or painted door', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 10,
+      groundLayer: [],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: { '1': { class: 'door' }, '77': { class: 'door' } },
+    });
+
+    expect(tiles.doorTileId).toBe(1);
+  });
+
+  it('selects semantic furniture tile ID one without an override or painted furniture', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 10,
+      groundLayer: [],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: { '1': { class: 'furniture' }, '200': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBe(1);
+  });
+
   it('uses wall override tile ID one ahead of an automatic wall', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 10,

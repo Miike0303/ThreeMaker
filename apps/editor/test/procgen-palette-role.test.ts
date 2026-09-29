@@ -7,6 +7,15 @@ import {
 } from '../src/procgen/palette-role.js';
 
 describe('assignmentFromPaletteClick', () => {
+  it('assigns tile ID one to every palette role', () => {
+    expect(PROCGEN_PALETTE_ROLES.map((role) => assignmentFromPaletteClick(role, 1))).toEqual([
+      { setFill: 1 },
+      { setWallOverride: 1 },
+      { setDoorOverride: 1 },
+      { setFurnitureOverride: 1 },
+    ]);
+  });
+
   it('assigns fill for brush role', () => {
     expect(assignmentFromPaletteClick('brush', 99)).toEqual({ setFill: 99 });
   });

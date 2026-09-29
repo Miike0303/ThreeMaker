@@ -33,6 +33,28 @@ describe('pickAdjacentFloorIndex', () => {
 });
 
 describe('roomLandingTile', () => {
+  it('selects the largest landing room without accumulating earlier areas', () => {
+    const rooms = [
+      {
+        id: 'small',
+        floor: 'floor-0',
+        rects: [{ x: 1, y: 1, width: 2, height: 2 }],
+      },
+      {
+        id: 'medium',
+        floor: 'floor-0',
+        rects: [{ x: 5, y: 1, width: 3, height: 3 }],
+      },
+      {
+        id: 'largest',
+        floor: 'floor-0',
+        rects: [{ x: 10, y: 1, width: 4, height: 3 }],
+      },
+    ];
+
+    expect(roomLandingTile(rooms, 'floor-0', 20, 10)).toEqual({ x: 12, y: 2 });
+  });
+
   it('keeps the largest landing room when a later room only exceeds the first', () => {
     const rooms = [
       {

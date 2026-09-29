@@ -262,6 +262,15 @@ describe('stampSimpleDungeon', () => {
 });
 
 describe('scatterFurnitureInRooms', () => {
+  it('places furniture tile ID one in an empty room interior', () => {
+    const mid = new Array<number>(9).fill(0);
+
+    const count = scatterFurnitureInRooms([{ x: 0, y: 0, w: 3, h: 3 }], mid, 3, 3, 1, 1, () => 0);
+
+    expect(count).toBe(1);
+    expect(mid).toEqual([0, 0, 0, 0, 1, 0, 0, 0, 0]);
+  });
+
   it('does not wrap a clipped furniture interior west into the preceding row', () => {
     const mid = new Array<number>(12).fill(0);
 
@@ -422,6 +431,31 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('paints door tile ID one at every generated opening', () => {
+    const stamp = stampSimpleDungeon({
+      width: 32,
+      height: 24,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      doorTileId: 1,
+      roomCount: 5,
+    });
+
+    expect(stamp.doors.length).toBeGreaterThan(0);
+    for (const door of stamp.doors) {
+      expect(stamp.layers[1][door.y * 32 + door.x]).toBe(1);
+    }
+  });
+
+  it('rejects a room edge at map width instead of wrapping it into the next row', () => {
+    const walkable = new Uint8Array(12);
+    walkable[7] = 1;
+    walkable[8] = 1;
+
+    expect(findDoorOpenings([{ x: 4, y: 1, w: 1, h: 1 }], walkable, 4, 3)).toEqual([]);
+  });
+
   it('ignores a room edge west of the map even when its wrapped cell is walkable', () => {
     const walkable = new Uint8Array(12);
     walkable[3] = 1;
