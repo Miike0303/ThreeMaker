@@ -10,6 +10,92 @@ import {
 const GROUND = 2816;
 const WALL = 4352;
 
+describe('stampSimpleDungeon furniture seed isolation', () => {
+  const options = {
+    width: 12,
+    height: 12,
+    groundTileId: GROUND,
+    wallTileId: WALL,
+    roomCount: 1,
+    minRoomSize: 10,
+    maxRoomSize: 10,
+    furnitureTileId: 9001,
+    furnitureDensity: 0.5,
+  };
+
+  it('gives adjacent layout seeds distinct furniture placements in the same room', () => {
+    const first = stampSimpleDungeon({ ...options, seed: 0 });
+    const second = stampSimpleDungeon({ ...options, seed: 1 });
+
+    expect(first.rooms).toEqual(second.rooms);
+    expect(first.furnitureCount).toBeGreaterThan(0);
+    expect(second.layers[1]).not.toEqual(first.layers[1]);
+  });
+
+  it('preserves furniture placement when only the ground tile changes', () => {
+    const first = stampSimpleDungeon({ ...options, seed: 42 });
+    const repainted = stampSimpleDungeon({ ...options, seed: 42, groundTileId: GROUND + 1 });
+
+    expect(first.furnitureCount).toBeGreaterThan(0);
+    expect(repainted.layers[1]).toEqual(first.layers[1]);
+  });
+});
+
+describe('stampSimpleDungeon oversized corridor boundaries', () => {
+  const options = {
+    width: 16,
+    height: 12,
+    seed: 42,
+    groundTileId: GROUND,
+    wallTileId: WALL,
+    roomCount: 2,
+    minRoomSize: 3,
+    maxRoomSize: 3,
+    corridorWidth: 32,
+    tightBorder: true,
+  };
+
+  it('carves the first interior column when a wide corridor reaches the west border', () => {
+    const stamp = stampSimpleDungeon(options);
+
+    expect(stamp.rooms).toHaveLength(2);
+    for (let y = 2; y < options.height - 2; y++) {
+      const index = y * options.width + 2;
+      expect([stamp.layers[0][index], stamp.layers[2][index]]).toEqual([GROUND, 0]);
+    }
+  });
+
+  it('carves the first interior row when a wide corridor reaches the north border', () => {
+    const stamp = stampSimpleDungeon(options);
+
+    expect(stamp.rooms).toHaveLength(2);
+    for (let x = 2; x < options.width - 2; x++) {
+      const index = 2 * options.width + x;
+      expect([stamp.layers[0][index], stamp.layers[2][index]]).toEqual([GROUND, 0]);
+    }
+  });
+
+  it('preserves the empty east outer ring when a wide corridor reaches the border', () => {
+    const stamp = stampSimpleDungeon(options);
+    const eastEdge = Array.from(
+      { length: options.height },
+      (_, y) => stamp.layers[0][y * options.width + options.width - 1],
+    );
+
+    expect(stamp.rooms).toHaveLength(2);
+    expect(eastEdge).toEqual(new Array(options.height).fill(0));
+  });
+
+  it('preserves the empty south outer ring when a wide corridor reaches the border', () => {
+    const stamp = stampSimpleDungeon(options);
+
+    expect(stamp.rooms).toHaveLength(2);
+    expect(stamp.layers[0].slice((options.height - 1) * options.width)).toEqual(
+      new Array(options.width).fill(0),
+    );
+  });
+});
+
 describe('stampSimpleDungeon', () => {
   it('places no furniture when its density is explicitly zero', () => {
     const stamp = stampSimpleDungeon({
@@ -431,6 +517,24 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('reports a shared door opening only once across overlapping rooms', () => {
+    const walkable = new Uint8Array(25);
+    walkable[2 * 5 + 3] = 1;
+    walkable[2 * 5 + 4] = 1;
+
+    expect(
+      findDoorOpenings(
+        [
+          { x: 1, y: 1, w: 3, h: 3 },
+          { x: 3, y: 1, w: 1, h: 3 },
+        ],
+        walkable,
+        5,
+        5,
+      ),
+    ).toEqual([{ x: 3, y: 2 }]);
+  });
+
   it('paints door tile ID one at every generated opening', () => {
     const stamp = stampSimpleDungeon({
       width: 32,

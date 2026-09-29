@@ -6,6 +6,7 @@ import { getTileSheet } from '@threemaker/importer-rpgm';
 import { describe, expect, it, vi } from 'vitest';
 import { composePlaceholderMap, toRenderableMap } from '../src/map-compose.js';
 import {
+  buildPlaceholderSheetRgba,
   buildPlaceholderTextures,
   encodeRgbaPng,
   PLACEHOLDER_A5_COLS,
@@ -463,4 +464,13 @@ it('uses the A5 texture for its palette object URL', async () => {
     built.textures.A5?.dispose();
     built.textures.B?.dispose();
   }
+});
+
+it('keeps starter cells from spilling into the next pixel row', () => {
+  const { width, rgba } = buildPlaceholderSheetRgba('A5', 2);
+  const secondRow = width * 4;
+
+  expect(rgba.subarray(secondRow, secondRow + 4)).toEqual(
+    rgba.subarray(secondRow + 4, secondRow + 8),
+  );
 });

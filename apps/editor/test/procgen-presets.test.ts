@@ -12,6 +12,12 @@ const GROUND = 2816;
 const WALL = 4352;
 
 describe('procgen presets', () => {
+  it('rejects an unknown preset ID with a diagnostic naming that ID', () => {
+    expect(() => getProcgenPreset('missing' as ProcgenPresetId)).toThrow(
+      'unknown procgen preset: missing',
+    );
+  });
+
   it('lists dungeon, house, and cave', () => {
     expect(PROCGEN_PRESETS.map((p) => p.id)).toEqual(['dungeon', 'house', 'cave']);
     expect(DEFAULT_PROCGEN_PRESET).toBe('dungeon');

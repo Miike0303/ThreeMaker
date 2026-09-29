@@ -35,3 +35,7 @@ describe('statusLayerNameKey (WU-UX-11)', () => {
 it('keeps the brush label for a negative tile selection', () => {
   expect(statusToolKey('brush', -1)).toBe('painter.tool.brush');
 });
+
+it('keeps the box-fill label when filling with tile zero', () => {
+  expect(statusToolKey('box-fill', 0)).toBe('painter.tool.box-fill');
+});

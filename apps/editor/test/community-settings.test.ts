@@ -903,3 +903,21 @@ it('keeps a one-character map id visible in the share queue', () => {
 it('classifies a one-character sheet reference with catalog provenance as imported', () => {
   expect(licenseTagFromSlots({ B: { object: 'x', sourceGameId: 1 } })).toBe('import-rpgm');
 });
+
+it('rejects an imported share job without a map id', () => {
+  const raw = JSON.stringify([{ ...sampleJob('missing-id'), mapId: undefined }]);
+
+  expect(parseCommunityShareQueueJson(raw)).toEqual({ ok: false, reason: 'no-valid-jobs' });
+});
+
+it('rejects an imported share job without a map name', () => {
+  const raw = JSON.stringify([{ ...sampleJob('missing-name'), mapName: undefined }]);
+
+  expect(parseCommunityShareQueueJson(raw)).toEqual({ ok: false, reason: 'no-valid-jobs' });
+});
+
+it('rejects an imported share job without a save timestamp', () => {
+  const raw = JSON.stringify([{ ...sampleJob('missing-timestamp'), at: undefined }]);
+
+  expect(parseCommunityShareQueueJson(raw)).toEqual({ ok: false, reason: 'no-valid-jobs' });
+});

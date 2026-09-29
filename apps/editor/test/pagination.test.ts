@@ -74,3 +74,7 @@ describe('computePageRange', () => {
     });
   });
 });
+
+it('disables previous-page navigation for a negative page index', () => {
+  expect(computePageRange(-1, 100, 250).hasPrev).toBe(false);
+});
