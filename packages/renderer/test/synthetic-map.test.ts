@@ -1,11 +1,80 @@
 import { describe, expect, it } from 'vitest';
 import {
   generateSyntheticMap,
+  ROSELIAM_DUNGEON_DECOR_TILE_ID,
   ROSELIAM_DUNGEON_GROUND_TILE_ID,
   ROSELIAM_DUNGEON_WALL_TILE_ID,
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('places southern decorations using the width of a rectangular map', () => {
+    const map = generateSyntheticMap({
+      width: 7,
+      height: 3,
+      wallDensity: 0,
+      decorDensity: 1,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[2][2 * 7 + 2]).toBe(ROSELIAM_DUNGEON_DECOR_TILE_ID);
+  });
+
+  it('decorates every column of a non-spawn row', () => {
+    const map = generateSyntheticMap({
+      width: 3,
+      height: 3,
+      wallDensity: 0,
+      decorDensity: 1,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.tileLayers[2].slice(0, 3)).toEqual(
+      Array(3).fill(ROSELIAM_DUNGEON_DECOR_TILE_ID),
+    );
+  });
+
+  it('keeps tile layer 1 blank when wall shadows are present', () => {
+    const map = generateSyntheticMap({
+      width: 3,
+      height: 3,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.shadows).toContain(5);
+    expect(map.layers.tileLayers[1]).toEqual(Array(9).fill(0));
+  });
+
+  it('keeps tile layer 3 blank when wall shadows are present', () => {
+    const map = generateSyntheticMap({
+      width: 3,
+      height: 3,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.shadows).toContain(5);
+    expect(map.layers.tileLayers[3]).toEqual(Array(9).fill(0));
+  });
+
+  it('keeps region IDs blank when wall shadows are present', () => {
+    const map = generateSyntheticMap({
+      width: 3,
+      height: 3,
+      seed: 1,
+      wallDensity: 0.5,
+      decorDensity: 0,
+      clearRadius: 0,
+    });
+
+    expect(map.layers.shadows).toContain(5);
+    expect(map.layers.regions).toEqual(Array(9).fill(0));
+  });
+
   it('keeps walls immediately west of the spawn clearing', () => {
     const map = generateSyntheticMap({
       width: 7,

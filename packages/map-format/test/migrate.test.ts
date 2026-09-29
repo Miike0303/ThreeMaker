@@ -255,6 +255,14 @@ describe('parseMapDocument', () => {
     expect(doc.floors).toHaveLength(1);
   });
 
+  it('moves legacy layers exclusively into floor zero during v1 migration', () => {
+    const input = makeV1DocInput();
+    const migrated = migrateV1ToV2(input);
+
+    expect(migrated).not.toHaveProperty('layers');
+    expect(migrated).toMatchObject({ floors: [{ id: 'floor-0', layers: input.layers }] });
+  });
+
   describe('v1 -> v2 -> v3 migration chain (compatibility gate)', () => {
     it('parses a v1 document all the way to the current version, byte-identical layers', () => {
       const v1Input = makeV1DocInput();

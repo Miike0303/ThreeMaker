@@ -221,6 +221,18 @@ describe('deriveRampCells', () => {
 });
 
 describe('syncRampCells', () => {
+  it('clears ramps left by repeated dirty coordinates', () => {
+    const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+    const painted = [[7], EMPTY_LAYER(1), EMPTY_LAYER(1), EMPTY_LAYER(1)] as const;
+    const previous = syncRampCells([], painted, semantics, 1, [
+      { x: 0, y: 0 },
+      { x: 0, y: 0 },
+    ]);
+    const cleared = [[0], EMPTY_LAYER(1), EMPTY_LAYER(1), EMPTY_LAYER(1)] as const;
+
+    expect(syncRampCells(previous, cleared, semantics, 1, [{ x: 0, y: 0 }])).toEqual([]);
+  });
+
   it('removes a ramp when its only dirty cell is cleared', () => {
     const layers = [[0], EMPTY_LAYER(1), EMPTY_LAYER(1), EMPTY_LAYER(1)] as const;
     const semantics: SemanticOverrides = { '7': { class: 'ramp' } };

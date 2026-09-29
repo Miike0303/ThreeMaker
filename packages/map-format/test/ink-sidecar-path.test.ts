@@ -14,6 +14,13 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('rejects non-ASCII letters in story ids before deriving a sidecar path', () => {
+    const storyId = 'caf\u00e9';
+
+    expect(isSafeStoryId(storyId)).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+  });
+
   it('accepts a one-character story id when deriving a sidecar path', () => {
     expect(isSafeStoryId('x')).toBe(true);
     expect(inkSidecarRelativePath('maps/town.tmmap.json', 'x')).toBe('maps/town.x.ink');
