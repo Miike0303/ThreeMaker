@@ -715,3 +715,13 @@ it('leaves a missing queue job alone when storage writes are unavailable', () =>
   };
   expect(removeCommunityShareQueueJob('missing', job.at, storage)).toEqual([job]);
 });
+
+it('uses an ISO UTC timestamp when a share is enqueued without a clock', () => {
+  const job = maybeEnqueueCommunityShare(DEFAULT_COMMUNITY_SETTINGS, {
+    mapId: 'default-clock',
+    mapName: 'Default clock',
+    tileObjectShas: [],
+    usesOnlyImportedAssets: false,
+  });
+  expect(job?.at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+});

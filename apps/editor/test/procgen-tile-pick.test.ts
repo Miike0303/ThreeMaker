@@ -7,6 +7,11 @@ import {
 } from '../src/procgen/tile-pick.js';
 
 describe('firstClassedTileId', () => {
+  it('ignores negative semantic tile IDs', () => {
+    expect(firstClassedTileId({ '-5': { class: 'wall' }, '88': { class: 'wall' } }, 'wall')).toBe(
+      88,
+    );
+  });
   it('ignores semantic tile ID zero when choosing a wall', () => {
     expect(firstClassedTileId({ '0': { class: 'wall' }, '88': { class: 'wall' } }, 'wall')).toBe(
       88,
@@ -44,6 +49,103 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('uses wall auto-pick for a zero override', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [9, 9],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      wallTileOverride: 0,
+    });
+
+    expect(tiles.wallTileId).toBe(9);
+  });
+
+  it('uses furniture auto-pick for a zero override', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      furnitureTileOverride: 0,
+      semantics: { '200': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBe(200);
+  });
+
+  it('excludes ground from mid-layer door selection', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 80,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [80, 80, 77],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: { '77': { class: 'door' }, '80': { class: 'door' } },
+    });
+
+    expect(tiles.doorTileId).toBe(77);
+  });
+
+  it('excludes wall from mid-layer furniture selection', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [333, 333, 200],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      wallTileOverride: 333,
+      semantics: { '200': { class: 'furniture' }, '333': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBe(200);
+  });
+
+  it('omits a semantic door that collides with the wall', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      wallTileOverride: 77,
+      semantics: { '77': { class: 'door' } },
+    });
+
+    expect(tiles.doorTileId).toBeUndefined();
+  });
+
+  it('omits semantic furniture that collides with the wall', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      wallTileOverride: 200,
+      semantics: { '200': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBeUndefined();
+  });
+
+  it('omits semantic furniture that collides with the door', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      doorTileOverride: 200,
+      semantics: { '200': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBeUndefined();
+  });
   it('falls back when the mid-layer furniture majority equals the selected door', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 1,

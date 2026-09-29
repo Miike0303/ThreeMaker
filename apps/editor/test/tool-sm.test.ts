@@ -312,3 +312,13 @@ describe('ToolSM: npc + trigger tools (c1a follow-up)', () => {
     expect(endStroke(triggerStroking)).toEqual({ status: 'idle' });
   });
 });
+
+it('keeps a southward brush move between distinct cells', () => {
+  const state = beginStroke(TOOL_SM_IDLE, 'brush', 0, { x: 3, y: 3 });
+  expect(continueStroke(state, { x: 3, y: 4 })).toMatchObject({
+    points: [
+      { x: 3, y: 3 },
+      { x: 3, y: 4 },
+    ],
+  });
+});

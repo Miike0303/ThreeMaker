@@ -326,3 +326,13 @@ describe('shouldConfirmPlaytestDualWrite', () => {
 it('accepts a multi-digit LPT map name outside the reserved device range', () => {
   expect(validateMapName('LPT10')).toBeNull();
 });
+
+it('does not confirm a dual write when the custom playtest target is already open', () => {
+  expect(
+    shouldConfirmPlaytestDualWrite({
+      openMapName: 'preview',
+      savedMapNames: ['preview'],
+      legacyMapName: 'preview',
+    }),
+  ).toBe(false);
+});

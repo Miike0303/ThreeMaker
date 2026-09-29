@@ -426,3 +426,7 @@ it('clamps a bottom-edge stroke to the height of a wide map', () => {
 it('returns no chunks for reversed horizontal bounds within one chunk', () => {
   expect([...dirtyRectToChunkKeys({ xStart: 8, yStart: 1, xEnd: 7, yEnd: 2 }, 16)]).toEqual([]);
 });
+
+it('returns no chunks for reversed vertical bounds within one chunk', () => {
+  expect([...dirtyRectToChunkKeys({ xStart: 1, yStart: 8, xEnd: 2, yEnd: 7 }, 16)]).toEqual([]);
+});

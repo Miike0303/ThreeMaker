@@ -377,3 +377,18 @@ describe('composePlaceholderMap', () => {
     expect(map.layers.tileLayers[0]?.[0]).toBe(PLACEHOLDER_GROUND_TILE_ID);
   });
 });
+
+it('rejects a rectangular PNG buffer missing its final scanline', () => {
+  expect(() => encodeRgbaPng(1, 2, new Uint8Array(4))).toThrow(
+    'encodeRgbaPng: rgba buffer shorter than width*height*4',
+  );
+});
+
+it('rejects a dimensioned texture without RGBA data before creating a palette URL', () => {
+  const texture = { image: { width: 1, height: 1 } } as unknown as Parameters<
+    typeof textureSheetToObjectUrl
+  >[0];
+  expect(() => textureSheetToObjectUrl(texture)).toThrow(
+    'textureSheetToObjectUrl: expected DataTexture with RGBA image.data',
+  );
+});
