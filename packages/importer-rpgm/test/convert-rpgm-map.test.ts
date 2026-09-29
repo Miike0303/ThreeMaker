@@ -108,6 +108,119 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('imports exactly 500 commands on a conditional page without a fallback', () => {
+    const page: RpgmEventPage = {
+      conditions: { ...CLEAR_CONDITIONS, switch1Valid: true, switch1Id: 1 },
+      trigger: 0,
+      list: Array.from({ length: 5 }, (_, index) => ({
+        code: 121,
+        indent: 0,
+        parameters: [index * 100 + 1, Math.min((index + 1) * 100, 499), 0],
+      })),
+    };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+    const conditional = doc.events['rpgm-event-1']?.[0];
+
+    expect(doc.triggers).toHaveLength(1);
+    expect(conditional?.type).toBe('conditional');
+    expect(conditional?.then).toHaveLength(499);
+    expect(conditional).not.toHaveProperty('else');
+  });
+
+  it('imports a page with omitted condition flags', () => {
+    const page = showTextPage(0, ['Welcome'], undefined, {});
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      { type: 'showDialogue', source: { kind: 'text', lines: ['Welcome'] } },
+    ]);
+  });
+
+  it('ignores an unsupported lower page when the last page omits condition flags', () => {
+    const lower = showTextPage(0, ['Unreachable'], undefined, CLEAR_CONDITIONS, [
+      { code: 355, indent: 0, parameters: ['unsupported()'] },
+    ]);
+    const upper = showTextPage(0, ['Welcome'], undefined, {});
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(lower, [lower, upper])] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      { type: 'showDialogue', source: { kind: 'text', lines: ['Welcome'] } },
+    ]);
+  });
+
+  it('rejects a scrolling continuation in a normal Show Text block', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 405, indent: 0, parameters: ['Wrong continuation'] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects a string upward-facing transfer direction', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 201, indent: 0, parameters: [0, 2, 1, 2, '8', 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects a numeric zero actor-page activation flag', () => {
+    const conditions = JSON.parse('{"actorValid":0}');
+    const page = showTextPage(0, ['Actor only'], undefined, conditions);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('preserves source event pages during conversion', () => {
+    const lower = showTextPage(0, ['Earlier']);
+    const upper = showTextPage(0, ['Latest']);
+    const event = placedEvent(lower, [lower, upper]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [event] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      { type: 'showDialogue', source: { kind: 'text', lines: ['Latest'] } },
+    ]);
+    expect(event.pages).toEqual([lower, upper]);
+  });
+
+  it('preserves event slot order in imported triggers', () => {
+    const first = { ...placedEvent(showTextPage(0, ['First'])), id: 7, x: 1, y: 1 };
+    const second = { ...placedEvent(showTextPage(0, ['Second'])), id: 2, x: 2, y: 1 };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [null, first, second] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers.map((trigger) => trigger.id)).toEqual(['rpgm-event-7', 'rpgm-event-2']);
+  });
+
   it('rejects a null unsupported page-condition flag', () => {
     const conditions = JSON.parse('{"actorValid":null}');
     const page = showTextPage(0, ['Actor only'], undefined, conditions);
