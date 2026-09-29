@@ -91,3 +91,8 @@ describe('isSafeStoryId / inkSidecarRelativePath', () => {
     expect(() => inkSidecarRelativePath('m.tmmap.json', 'act/intro')).toThrow(/story id/i);
   });
 });
+
+it('rejects dollar signs in story ids before deriving a sidecar path', () => {
+  expect(isSafeStoryId('act$2')).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'act$2')).toThrow(/story id/i);
+});

@@ -76,6 +76,17 @@ describe('configurePixelArtTexture', () => {
 });
 
 describe('loadSheetTexture', () => {
+  it('preserves a null loader failure in the rejection diagnostic', async () => {
+    vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation(
+      (_url, _onLoad, _onProgress, onError) => {
+        onError?.(null);
+        return new THREE.Texture();
+      },
+    );
+
+    await expect(loadSheetTexture('/missing-sheet.png')).rejects.toHaveProperty('message', 'null');
+  });
+
   it('wraps loader error events in an Error with the event diagnostic', async () => {
     const failure = new Event('error');
     vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation(

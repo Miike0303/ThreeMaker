@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { deriveRampCells, syncRampCells } from '../src/runtime-bridge.js';
+import { deriveRampCellAt, deriveRampCells, syncRampCells } from '../src/runtime-bridge.js';
 import type { SemanticOverrides } from '../src/schema.js';
 
 const EMPTY_LAYER = (size: number) => new Array(size).fill(0);
@@ -331,4 +331,11 @@ describe('syncRampCells', () => {
     expect(indexReads.count).toBeLessThan(16);
     expect(indexReads.count).toBeLessThan(width * height * 4);
   });
+});
+
+it('returns undefined from a direct lookup when no layer contributes a ramp', () => {
+  const layers = [[5], [0], [0], [0]] as const;
+  const semantics: SemanticOverrides = { '5': { class: 'wall' } };
+
+  expect(deriveRampCellAt(layers, semantics, 1, 0, 0)).toBeUndefined();
 });
