@@ -326,3 +326,7 @@ it('keeps a southward brush move between distinct cells', () => {
 it('resolves save when Ctrl and Meta are both held', () => {
   expect(resolveEditorChord({ key: 's', ctrlKey: true, metaKey: true })).toBe('save');
 });
+
+it('allows shortcuts from a target with no element tag name', () => {
+  expect(shouldIgnoreToolShortcut({}, {})).toBe(false);
+});

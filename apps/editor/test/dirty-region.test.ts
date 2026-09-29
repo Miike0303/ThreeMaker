@@ -491,3 +491,35 @@ it('does not expand reversed vertical bounds through northern star tiles', () =>
 
   expect(expandDirtyRectNorthThroughStars(rect, map, makeTileset())).toEqual(rect);
 });
+
+it('retains the northern dirty chunk row when a stroke doubles back between its extremes', () => {
+  const map = makeMap(32, 64, new Array<number>(32 * 64).fill(1));
+  const keys = computeDirtyChunkKeys(
+    [
+      { x: 16, y: 17 },
+      { x: 16, y: 49 },
+      { x: 16, y: 33 },
+    ],
+    map,
+    makeTileset(),
+    16,
+  );
+
+  expect(keys).toContain('1,1');
+});
+
+it('retains the southern dirty chunk row when a stroke doubles back between its extremes', () => {
+  const map = makeMap(32, 64, new Array<number>(32 * 64).fill(1));
+  const keys = computeDirtyChunkKeys(
+    [
+      { x: 16, y: 17 },
+      { x: 16, y: 49 },
+      { x: 16, y: 33 },
+    ],
+    map,
+    makeTileset(),
+    16,
+  );
+
+  expect(keys).toContain('1,3');
+});

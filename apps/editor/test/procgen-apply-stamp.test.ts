@@ -59,6 +59,81 @@ function twoFloorSemanticFixture(
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('copies stamped furniture into the target floor mid layer', () => {
+    const { doc } = twoFloorSemanticFixture('none', 0, 0);
+    const stamp = stampSimpleDungeon({
+      width: doc.width,
+      height: doc.height,
+      seed: 42,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      furnitureTileId: 9001,
+      furnitureDensity: 1,
+      roomCount: 1,
+    });
+    const expectedMid = stamp.layers[1].slice();
+    expect(stamp.furnitureCount).toBeGreaterThan(0);
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 });
+
+    expect(next.floors[1]?.layers.tiles[1]).toEqual(expectedMid);
+  });
+
+  it('clears the over layer without copying stamped furniture into it', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 9001);
+    stamp.layers[1][0] = 9001;
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 });
+
+    expect(next.floors[1]?.layers.tiles[3]).toEqual(new Array(doc.width * doc.height).fill(0));
+  });
+
+  it('applies player torch options independently of room light options', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+    const playerTorchOptions = {
+      id: 'explorer-torch',
+      kind: 'spot' as const,
+      color: '#123456',
+      intensity: 0,
+      range: 7,
+    };
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, {
+      placeRoomLights: true,
+      roomLightOptions: { kind: 'point', color: '#abcdef', intensity: 2, range: 4 },
+      placePlayerTorch: true,
+      playerTorchOptions,
+    });
+
+    expect(next.lights.find((light) => light.attach === 'player')).toEqual({
+      ...playerTorchOptions,
+      attach: 'player',
+    });
+  });
+
+  it('drops a fractional stair row even when its linear index is standable', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+    stamp.layers[0][1] = 2816;
+    stamp.layers[2][1] = 0;
+    const stair = {
+      id: 'authored-fractional-row',
+      fromFloor: 'floor-1',
+      toFloor: 'floor-0',
+      bidirectional: true,
+      waypoints: [
+        { x: 0, y: 1 / doc.width, floor: 'floor-1' },
+        { x: 1, y: 1, floor: 'floor-0' },
+      ],
+    };
+
+    const next = applyDungeonStampToMapDocument({ ...doc, stairLinks: [stair] }, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks.map((link) => link.id)).not.toContain(stair.id);
+  });
+
   it('rejects door stamping that would reclass a wall tile used on another floor', () => {
     const { doc } = twoFloorSemanticFixture('wall', 5001, 0);
     const sharedWallDoc = {

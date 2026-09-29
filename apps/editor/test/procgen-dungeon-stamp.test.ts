@@ -11,6 +11,23 @@ const GROUND = 2816;
 const WALL = 4352;
 
 describe('stampSimpleDungeon', () => {
+  it('leaves furniture empty when its tile id is the door tile', () => {
+    const stamp = stampSimpleDungeon({
+      width: 32,
+      height: 24,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      doorTileId: 5001,
+      furnitureTileId: 5001,
+      furnitureDensity: 1,
+    });
+
+    expect(stamp.doors.length).toBeGreaterThan(0);
+    expect(stamp.furnitureCount).toBe(0);
+    expect(stamp.layers[1].filter((id) => id === 5001)).toHaveLength(stamp.doors.length);
+  });
+
   it('carves a walkable center hall when no rooms are requested', () => {
     const stamp = stampSimpleDungeon({
       width: 12,

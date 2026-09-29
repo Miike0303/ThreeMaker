@@ -326,3 +326,17 @@ it('caps oversized A4 palettes at the final valid kind', () => {
 it('omits an incomplete alternating A4 kind row', () => {
   expect(computeAutotileKindCount('A4', { width: 768, height: 239 })).toBe(8);
 });
+
+it('counts columns from the width of a rectangular plain-sheet palette', () => {
+  expect(computePaletteColumns('B', { width: 144, height: 48 })).toBe(3);
+});
+
+it('crops the second autotile kind from its own swatch', () => {
+  const cells = computePaletteCells('A2', { width: 768, height: 576 });
+
+  expect(cells[1]).toEqual({ tileId: 2864, x: 120, y: 72, width: 48, height: 48 });
+});
+
+it('counts palette columns using the authored tile pixel size', () => {
+  expect(computePaletteColumns('B', { width: 192, height: 192 }, 96)).toBe(2);
+});

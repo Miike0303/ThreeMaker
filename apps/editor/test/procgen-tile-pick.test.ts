@@ -49,6 +49,46 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('uses door auto-pick for a negative door override', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      doorTileOverride: -1,
+      semantics: { '77': { class: 'door' } },
+    });
+
+    expect(tiles.doorTileId).toBe(77);
+  });
+
+  it('uses furniture auto-pick for a negative furniture override', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      furnitureTileOverride: -1,
+      semantics: { '200': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBe(200);
+  });
+
+  it('uses the ground fallback when brush and ground layer are empty', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 0,
+      groundLayer: [0, 0],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+    });
+
+    expect(tiles.groundTileId).toBe(10);
+  });
+
   it('uses wall auto-pick for a negative wall override', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 1,
