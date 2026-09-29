@@ -84,3 +84,15 @@ it('omits the entry marker for a stair draft without waypoints', () => {
 
   expect(computeStairOverlayPoints([draft], 'floor-0')).toEqual([]);
 });
+
+it('omits the exit marker for a stair draft without waypoints', () => {
+  const draft: StairLinkDocument = {
+    id: 'unfinished-exit',
+    fromFloor: 'floor-0',
+    toFloor: 'floor-1',
+    bidirectional: true,
+    waypoints: [],
+  };
+
+  expect(computeStairOverlayPoints([draft], 'floor-1')).toEqual([]);
+});

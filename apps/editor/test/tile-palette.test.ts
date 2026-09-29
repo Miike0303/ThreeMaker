@@ -340,3 +340,9 @@ it('crops the second autotile kind from its own swatch', () => {
 it('counts palette columns using the authored tile pixel size', () => {
   expect(computePaletteColumns('B', { width: 192, height: 192 }, 96)).toBe(2);
 });
+
+it('crops an A1 water swatch from its first animation frame', () => {
+  const cells = computePaletteCells('A1', { width: 768, height: 576 });
+
+  expect(cells[0]).toEqual({ tileId: 2048, x: 24, y: 72, width: 48, height: 48 });
+});

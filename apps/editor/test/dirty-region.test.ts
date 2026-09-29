@@ -523,3 +523,14 @@ it('retains the southern dirty chunk row when a stroke doubles back between its 
 
   expect(keys).toContain('1,3');
 });
+
+it('treats missing tile-layer cells as empty during northern star expansion', () => {
+  const base = makeMap(2, 3, []);
+  const map: RpgmMap = {
+    ...base,
+    layers: { ...base.layers, tileLayers: [[], [], [], []] },
+  };
+  const rect = { xStart: 0, yStart: 2, xEnd: 1, yEnd: 3 };
+
+  expect(expandDirtyRectNorthThroughStars(rect, map, makeTileset([1]))).toEqual(rect);
+});
