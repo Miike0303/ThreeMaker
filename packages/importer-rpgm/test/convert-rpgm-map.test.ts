@@ -470,6 +470,12 @@ describe('convertRpgmMap', () => {
     expect(doc.id).toBe('rpgm-map-unknown');
   });
 
+  it('preserves an explicitly empty document ID instead of generating a replacement', () => {
+    const doc = convertRpgmMap(buildSyntheticMap(), buildSyntheticTileset(), { id: '' });
+
+    expect(doc.id).toBe('');
+  });
+
   it('honors an explicit id override', () => {
     const map = buildSyntheticMap();
     const tileset = buildSyntheticTileset();
