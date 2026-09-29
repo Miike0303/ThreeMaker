@@ -14,6 +14,33 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('rejects at signs in story ids before deriving a sidecar path', () => {
+    expect(isSafeStoryId('chapter@2')).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'chapter@2')).toThrow(/story id/i);
+  });
+
+  it('rejects opening brackets in story ids before deriving a sidecar path', () => {
+    expect(isSafeStoryId('chapter[2')).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'chapter[2')).toThrow(/story id/i);
+  });
+
+  it('rejects backticks in story ids before deriving a sidecar path', () => {
+    expect(isSafeStoryId('chapter`2')).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'chapter`2')).toThrow(/story id/i);
+  });
+
+  it('rejects opening braces in story ids before deriving a sidecar path', () => {
+    expect(isSafeStoryId('chapter{2')).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'chapter{2')).toThrow(/story id/i);
+  });
+
+  it('accepts uppercase letters inside the story-id range', () => {
+    expect(isSafeStoryId('chapterM2')).toBe(true);
+    expect(inkSidecarRelativePath('maps/town.tmmap.json', 'chapterM2')).toBe(
+      'maps/town.chapterM2.ink',
+    );
+  });
+
   it('rejects non-ASCII letters in story ids before deriving a sidecar path', () => {
     const storyId = 'caf\u00e9';
 

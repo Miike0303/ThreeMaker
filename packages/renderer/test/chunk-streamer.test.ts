@@ -432,6 +432,21 @@ describe('ChunkStreamer', () => {
     }
   });
 
+  it('returns a single disposal when revisiting an already-built map-edge window', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 80,
+      mapHeight: 16,
+      buildRadius: 1,
+      disposeRadius: 3,
+    });
+    streamer.update(0, 0);
+    streamer.update(48, 0);
+
+    expect(streamer.update(0, 0)).toEqual({ toBuild: [], toDispose: ['4,0'] });
+    expect(streamer.liveKeys.has('4,0')).toBe(false);
+  });
+
   it('keeps the live count bounded by the radius regardless of map size', () => {
     const giant = new ChunkStreamer({ ...GIANT, buildRadius: 2, disposeRadius: 3 });
     // Roseliam Map007-sized map: 20x23 tiles -> 2x2 chunk grid.
