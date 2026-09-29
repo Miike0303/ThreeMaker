@@ -349,3 +349,24 @@ it('confirms overwriting current when the open map name sorts before it', () => 
     }),
   ).toBe(true);
 });
+
+it('preserves surrounding whitespace in an invalid map name diagnostic', () => {
+  expect(() => assertMapName('  Town?Square  ')).toThrow(
+    'Invalid map name "  Town?Square  " (invalid-chars)',
+  );
+});
+
+it('accepts a map name pasted with surrounding tabs and newlines', () => {
+  expect(validateMapName('\tHarbor\n')).toBeNull();
+});
+
+it('keeps non-Ink files when deleting a map whose name contains the Ink extension', () => {
+  expect(planDeleteMapFiles('town.ink', ['town.ink.elder.ink', 'town.ink.notes.txt'])).toEqual([
+    '.threemaker/maps/town.ink.tmmap.json',
+    '.threemaker/maps/town.ink.elder.ink',
+  ]);
+});
+
+it('classifies a colon after an underscore as an invalid character rather than a drive prefix', () => {
+  expect(validateMapName('_:harbor')).toBe('invalid-chars');
+});

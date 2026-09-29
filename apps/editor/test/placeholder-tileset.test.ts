@@ -474,3 +474,17 @@ it('keeps starter cells from spilling into the next pixel row', () => {
     rgba.subarray(secondRow + 4, secondRow + 8),
   );
 });
+
+it('rejects an embedded newline in a starter object hash', () => {
+  const doc = composePlaceholderMap({
+    id: 'starter-multiline-hash',
+    name: 'Starter',
+    width: 2,
+    height: 2,
+  });
+  const multilineHash = `${'a'.repeat(64)}\n${'b'.repeat(64)}`;
+
+  expect(() => stampPlaceholderSlotObjects(doc, { A5: multilineHash, B: 'c'.repeat(64) })).toThrow(
+    'A5/B object shas must be 64 lowercase hex chars',
+  );
+});

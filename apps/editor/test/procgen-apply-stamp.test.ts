@@ -59,6 +59,21 @@ function twoFloorSemanticFixture(
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('rejects wall stamping that would reclass a door tile used on another floor', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 4352, 0);
+    const sharedDoorDoc = {
+      ...doc,
+      tileset: {
+        ...doc.tileset,
+        semantics: { '4352': { class: 'door' as const } },
+      },
+    };
+
+    expect(() =>
+      applyDungeonStampToMapDocument(sharedDoorDoc, stamp, { targetFloorIndex: 1 }),
+    ).toThrow(/tile 4352.*door.*wall.*floor-0/);
+  });
+
   it('drops a negative stair column even when its wrapped cell is standable', () => {
     const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
     const wrappedIndex = doc.width - 1;

@@ -97,6 +97,80 @@ describe('stampSimpleDungeon oversized corridor boundaries', () => {
 });
 
 describe('stampSimpleDungeon', () => {
+  it('uses sparse default furniture placement when density is omitted', () => {
+    const options = {
+      width: 12,
+      height: 12,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 1,
+      minRoomSize: 10,
+      maxRoomSize: 10,
+      furnitureTileId: 9001,
+    };
+    const sparse = stampSimpleDungeon(options);
+    const full = stampSimpleDungeon({ ...options, furnitureDensity: 1 });
+
+    expect(sparse.furnitureCount).toBeGreaterThan(0);
+    expect(sparse.furnitureCount).toBeLessThan(full.furnitureCount);
+  });
+
+  it('places furniture whose tile ID is lower than the ground tile ID', () => {
+    const stamp = stampSimpleDungeon({
+      width: 12,
+      height: 12,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 1,
+      minRoomSize: 10,
+      maxRoomSize: 10,
+      furnitureTileId: 1,
+      furnitureDensity: 1,
+    });
+
+    expect(stamp.furnitureCount).toBeGreaterThan(0);
+    expect(stamp.layers[1]).toContain(1);
+  });
+
+  it('places furniture whose tile ID is lower than the door tile ID', () => {
+    const stamp = stampSimpleDungeon({
+      width: 32,
+      height: 24,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      doorTileId: 5001,
+      furnitureTileId: 4001,
+      furnitureDensity: 1,
+      roomCount: 5,
+    });
+
+    expect(stamp.doors.length).toBeGreaterThan(0);
+    expect(stamp.furnitureCount).toBeGreaterThan(0);
+    expect(stamp.layers[1]).toContain(4001);
+  });
+
+  it('places a second room with exactly one separating row below the first', () => {
+    const stamp = stampSimpleDungeon({
+      width: 8,
+      height: 10,
+      seed: 0,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 2,
+      minRoomSize: 3,
+      maxRoomSize: 3,
+    });
+
+    expect(stamp.rooms).toHaveLength(2);
+    expect(stamp.rooms.map((room) => ({ y: room.y, height: room.h }))).toEqual([
+      { y: 1, height: 3 },
+      { y: 5, height: 3 },
+    ]);
+  });
+
   it('places no furniture when its density is explicitly zero', () => {
     const stamp = stampSimpleDungeon({
       width: 16,

@@ -53,6 +53,48 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('prefers a painted door majority below the ground tile ID over unused semantics', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 90,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [80, 80],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: { '70': { class: 'door' }, '80': { class: 'door' } },
+    });
+
+    expect(tiles.doorTileId).toBe(80);
+  });
+
+  it('prefers a painted door majority below the wall tile ID over unused semantics', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 10,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [80, 80],
+      fallbackGround: 10,
+      fallbackWall: 90,
+      semantics: { '70': { class: 'door' }, '80': { class: 'door' } },
+    });
+
+    expect(tiles.doorTileId).toBe(80);
+  });
+
+  it('prefers a painted furniture majority below the wall tile ID over unused semantics', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 10,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [80, 80],
+      fallbackGround: 10,
+      fallbackWall: 90,
+      semantics: { '70': { class: 'furniture' }, '80': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBe(80);
+  });
+
   it('selects semantic door tile ID one without an override or painted door', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 10,
