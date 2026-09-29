@@ -667,6 +667,16 @@ describe('scatterFurnitureInRooms', () => {
     expect(mid).toEqual([0, 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0]);
   });
 
+  it('preserves a negative occupied cell inside a room interior', () => {
+    const mid = new Array<number>(9).fill(0);
+    mid[4] = -1;
+
+    const count = scatterFurnitureInRooms([{ x: 0, y: 0, w: 3, h: 3 }], mid, 3, 3, 9, 1, () => 0);
+
+    expect(count).toBe(0);
+    expect(mid[4]).toBe(-1);
+  });
+
   it('leaves a room cell empty when the random draw equals density', () => {
     const mid = new Array(9).fill(0);
     const count = scatterFurnitureInRooms(
@@ -949,6 +959,21 @@ describe('stampSimpleDungeon door openings', () => {
     // Mid is empty except doors.
     const midNonZero = stamp.layers[1].filter((id) => id !== 0).length;
     expect(midNonZero).toBe(stamp.doors.length);
+  });
+
+  it('does not paint a negative door tile id at openings', () => {
+    const stamp = stampSimpleDungeon({
+      width: 32,
+      height: 24,
+      seed: 42,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      doorTileId: -1,
+      roomCount: 5,
+    });
+
+    expect(stamp.doors.length).toBeGreaterThan(0);
+    expect(stamp.layers[1].every((id) => id !== -1)).toBe(true);
   });
 
   it('leaves mid empty when doorTileId is omitted', () => {

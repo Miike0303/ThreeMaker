@@ -29,6 +29,10 @@ describe('randomProcgenSeed', () => {
     expect(randomProcgenSeed(() => 0.5)).toBe(500_000_000);
     expect(randomProcgenSeed(() => Number.NaN)).toBe(0);
   });
+
+  it('maps a negative rng sample into the same range as its magnitude', () => {
+    expect(randomProcgenSeed(() => -0.25)).toBe(250_000_000);
+  });
 });
 
 describe('clampFurnitureDensity', () => {

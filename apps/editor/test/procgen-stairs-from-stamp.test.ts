@@ -190,6 +190,17 @@ describe('stampStairLinkBetween', () => {
     });
   });
 
+  it('keeps a blank stair id instead of substituting the generated prefix', () => {
+    const link = stampStairLinkBetween(
+      'floor-1',
+      { x: 3, y: 4 },
+      'floor-0',
+      { x: 5, y: 6 },
+      { id: '' },
+    );
+    expect(link.id).toBe('');
+  });
+
   it('honors an explicitly one-way stair link', () => {
     const link = stampStairLinkBetween(
       'floor-0',

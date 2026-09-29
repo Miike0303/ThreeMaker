@@ -33,6 +33,10 @@ describe('majorityNonZeroTileId', () => {
     expect(majorityNonZeroTileId([1, 2, 2, 0, 2, 1])).toBe(2);
   });
 
+  it('counts a negative tile id when it outnumbers the positive ids', () => {
+    expect(majorityNonZeroTileId([-2, -2, 4])).toBe(-2);
+  });
+
   it('keeps the first id to reach the best count on a tie', () => {
     expect(majorityNonZeroTileId([1, 2])).toBe(1);
     // 1 reaches count 2 before 2 does.
@@ -82,6 +86,20 @@ describe('resolveDungeonTileIds', () => {
     });
 
     expect(tiles.furnitureTileId).toBe(80);
+  });
+
+  it('omits a negative mid-layer door majority', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 10,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [-3, -3],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: { '-3': { class: 'door' } },
+    });
+
+    expect(tiles.doorTileId).toBeUndefined();
   });
 
   it('prefers a painted door majority below the ground tile ID over unused semantics', () => {

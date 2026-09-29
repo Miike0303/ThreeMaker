@@ -84,6 +84,13 @@ describe('lightsFromDungeonRooms', () => {
 });
 
 describe('lightsFromDungeonRooms zero intensity', () => {
+  it('preserves an explicit zero range for room lights', () => {
+    const [light] = lightsFromDungeonRooms([{ x: 0, y: 0, w: 2, h: 2 }], 'floor-0', {
+      range: 0,
+    });
+    expect(light?.range).toBe(0);
+  });
+
   it('preserves an explicit zero intensity for room lights', () => {
     const [light] = lightsFromDungeonRooms([{ x: 0, y: 0, w: 2, h: 2 }], 'floor-0', {
       intensity: 0,
@@ -131,6 +138,10 @@ describe('mergeStampRoomLights', () => {
 });
 
 describe('playerTorchLight / ensurePlayerTorch', () => {
+  it('preserves an explicit zero range when creating a player torch', () => {
+    expect(playerTorchLight({ range: 0 }).range).toBe(0);
+  });
+
   it('preserves zero intensity when creating a player torch', () => {
     expect(playerTorchLight({ intensity: 0 }).intensity).toBe(0);
   });
