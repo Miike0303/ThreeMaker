@@ -108,6 +108,123 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('skips an event with an active actor condition', () => {
+    const page = showTextPage(0, ['Actor only'], undefined, {
+      ...CLEAR_CONDITIONS,
+      actorValid: true,
+    });
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips a string action-button trigger', () => {
+    const page = { ...showTextPage(0, ['Hello']), trigger: JSON.parse('"0"') };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips a switch-gated page with a numeric activation flag', () => {
+    const conditions = JSON.parse('{"switch1Valid":1,"switch1Id":3}');
+    const page = showTextPage(0, ['Locked'], undefined, conditions);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips a variable assignment with a string constant operand mode', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 122, indent: 0, parameters: [5, 5, 0, '0', 42] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips an item change with a string constant operand mode', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 126, indent: 0, parameters: [7, 0, '0', 2] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips an armor change with a non-boolean include-equipment flag', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 128, indent: 0, parameters: [4, 1, 0, 2, 'false'] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips a transfer with a string keep-facing direction', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 201, indent: 0, parameters: [0, 2, 1, 2, '0', 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects 501 commands when the conditional itself crosses the limit', () => {
+    const fallback: RpgmEventPage = {
+      conditions: CLEAR_CONDITIONS,
+      trigger: 0,
+      list: Array.from({ length: 5 }, (_, index) => ({
+        code: 121,
+        indent: 0,
+        parameters: [index * 100 + 1, Math.min((index + 1) * 100, 499), 0],
+      })),
+    };
+    const conditional = showTextPage(0, ['Matched'], undefined, {
+      ...CLEAR_CONDITIONS,
+      switch1Valid: true,
+      switch1Id: 1,
+    });
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [placedEvent(fallback, [fallback, conditional])],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
   it('skips a transfer with a negative designation mode', () => {
     const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
       { code: 201, indent: 0, parameters: [-1, 2, 1, 2, 6, 0] },
