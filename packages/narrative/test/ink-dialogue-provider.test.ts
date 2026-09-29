@@ -315,3 +315,11 @@ it('preserves a trailing content line break before the final newline', () => {
 
   expect(provider.next()).toEqual({ kind: 'line', text: 'Wait.\n' });
 });
+
+it('reports the rejected dialogue source kind', () => {
+  const provider = makeProvider();
+
+  expect(() => provider.open({ kind: 'text', lines: ['Hello.'] })).toThrow(
+    'InkDialogueProvider only supports "ink" sources, got "text".',
+  );
+});

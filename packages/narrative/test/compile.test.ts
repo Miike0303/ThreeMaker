@@ -289,3 +289,21 @@ it('evicts the next oldest story after repeated size limit evictions', () => {
   compileInk(sourceAt(1));
   expect(Compiler).toHaveBeenCalledTimes(5);
 });
+
+it('retains a compilation that exactly fills the cache size limit', async () => {
+  const actual =
+    await vi.importActual<typeof import('inkjs/compiler/Compiler')>('inkjs/compiler/Compiler');
+  const body = 'Cache boundary.\n-> END\n';
+  const json = new actual.Compiler(body).Compile().ToJson();
+  if (typeof json !== 'string') throw new Error('Expected serialized Ink story JSON.');
+  const sizeLimit = 2 * 1024 * 1024;
+  const source = `${body}//${'x'.repeat(sizeLimit - body.length - 2 - json.length)}`;
+  clearInkCompileCacheForTests();
+  vi.mocked(Compiler).mockClear();
+
+  expect(compileInk(source).ToJson()).toBe(json);
+  const cached = compileInk(source);
+
+  expect(Compiler).toHaveBeenCalledTimes(1);
+  expect(cached.Continue()).toBe('Cache boundary.\n');
+});

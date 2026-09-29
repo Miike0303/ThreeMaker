@@ -277,3 +277,14 @@ it('does not persist a case-only sharp S key change', () => {
   expect(table.actionForKeyboardKey('\u00df')).toBe(Actions.Interact);
   expect(collectBindingOverrides(table, defaults)).toEqual([]);
 });
+
+it('keeps the last binding when a persisted key is assigned twice', () => {
+  const text = serializeInputBindingsDocument([
+    { action: Actions.Interact, source: { device: 'keyboard', key: 'q' } },
+    { action: Actions.MoveUp, source: { device: 'keyboard', key: 'q' } },
+  ]);
+
+  const table = bindingTableFromPersistedText(text, []);
+
+  expect(table.actionForKeyboardKey('q')).toBe(Actions.MoveUp);
+});

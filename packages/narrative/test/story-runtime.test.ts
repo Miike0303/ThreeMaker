@@ -388,3 +388,19 @@ After: {r}
     );
   });
 });
+
+it('names the observed Ink variable that cannot be mirrored', () => {
+  const world = new WorldState();
+  const story = compileInk(
+    'LIST colors = red, blue\nVAR selected_colors = ()\n~ selected_colors += red\nDone.\n-> END\n',
+  );
+  bindStoryToWorld(story, {
+    storyId: 'palette',
+    world,
+    observedVariables: ['selected_colors'],
+  });
+
+  expect(() => runToEnd(story)).toThrow(
+    'story-runtime: observed ink variable "selected_colors" changed to a non-primitive value (object); only boolean/number/string ink variables can mirror into world-state.',
+  );
+});
