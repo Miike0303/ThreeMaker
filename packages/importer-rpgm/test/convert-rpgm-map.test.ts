@@ -108,6 +108,111 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('skips an event with a fractional event ID', () => {
+    const event = { ...placedEvent(showTextPage(0, ['Hello'])), id: 1.5 };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [event] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips an event with a fractional tile coordinate', () => {
+    const event = { ...placedEvent(showTextPage(0, ['Hello'])), x: 1.5 };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [event] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('imports dialogue after an orphan text continuation', () => {
+    const page = showTextPage(0, ['Hello']);
+    const event = placedEvent({
+      ...page,
+      list: [{ code: 401, indent: 0, parameters: ['Orphan'] }, ...page.list],
+    });
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [event] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      { type: 'showDialogue', source: { kind: 'text', lines: ['Hello'] } },
+    ]);
+  });
+
+  it('skips a switch assignment with a fractional end ID', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 121, indent: 0, parameters: [1, 1.5, 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips a switch assignment with a negative ON/OFF value', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 121, indent: 0, parameters: [1, 1, -1] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips a variable assignment with an unsafe integer constant', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 122, indent: 0, parameters: [1, 1, 0, 0, Number.MAX_SAFE_INTEGER + 1] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips weapon changes with a non-boolean include-equipment flag', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 127, indent: 0, parameters: [7, 0, 0, 2, 'true'] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('omits the speaker property for an empty Show Text speaker', () => {
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [placedEvent(showTextPage(0, ['Hello'], ''))],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      { type: 'showDialogue', source: { kind: 'text', lines: ['Hello'] } },
+    ]);
+  });
+
   it('preserves region IDs when shadow masks differ', () => {
     const map = buildSyntheticMap();
     const regions = [0, 1, 2, 3, 4, 7];
