@@ -11,6 +11,33 @@ const GROUND = 2816;
 const WALL = 4352;
 
 describe('stampSimpleDungeon', () => {
+  it('carves a walkable center hall when no rooms are requested', () => {
+    const stamp = stampSimpleDungeon({
+      width: 12,
+      height: 10,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 0,
+    });
+
+    expect(stamp.rooms).toEqual([]);
+    expect(stamp.layers[0][5 * 12 + 6]).toBe(GROUND);
+    expect(stamp.layers[2][5 * 12 + 6]).toBe(0);
+  });
+
+  it('rejects a zero wall tile ID with a nonzero ground tile', () => {
+    expect(() =>
+      stampSimpleDungeon({
+        width: 16,
+        height: 16,
+        seed: 1,
+        groundTileId: GROUND,
+        wallTileId: 0,
+      }),
+    ).toThrow(/non-zero tile ids/);
+  });
+
   it('clamps a zero corridor width to a one-tile passage', () => {
     const options = {
       width: 24,
@@ -243,6 +270,10 @@ describe('scatterFurnitureInRooms', () => {
 });
 
 describe('pickMainRoomSpawn', () => {
+  it('uses the center row of an odd-height map when no rooms were placed', () => {
+    expect(pickMainRoomSpawn([], 8, 9)).toEqual({ x: 4, y: 4 });
+  });
+
   it('uses the center column of an odd-width map when no rooms were placed', () => {
     expect(pickMainRoomSpawn([], 9, 8)).toEqual({ x: 4, y: 4 });
   });
@@ -298,6 +329,16 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('finds an opening whose outside neighbor is in row zero', () => {
+    const walkable = new Uint8Array(12);
+    walkable[1] = 1;
+    walkable[5] = 1;
+
+    expect(findDoorOpenings([{ x: 1, y: 1, w: 1, h: 1 }], walkable, 4, 3)).toEqual([
+      { x: 1, y: 1 },
+    ]);
+  });
+
   it('finds an opening whose outside neighbor is in column zero', () => {
     const walkable = new Uint8Array(12);
     walkable[4] = 1;

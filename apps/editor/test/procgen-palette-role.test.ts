@@ -33,6 +33,28 @@ describe('assignmentFromPaletteClick', () => {
 });
 
 describe('selectedTileIdForRole', () => {
+  it('clears the furniture highlight for a negative furniture override', () => {
+    expect(
+      selectedTileIdForRole('furniture', {
+        fillTileId: 10,
+        wallOverride: 20,
+        doorOverride: 30,
+        furnitureOverride: -1,
+      }),
+    ).toBe(0);
+  });
+
+  it('clears the door highlight for a negative door override', () => {
+    expect(
+      selectedTileIdForRole('door', {
+        fillTileId: 10,
+        wallOverride: 20,
+        doorOverride: -1,
+        furnitureOverride: 40,
+      }),
+    ).toBe(0);
+  });
+
   const state = {
     fillTileId: 10,
     wallOverride: 20,

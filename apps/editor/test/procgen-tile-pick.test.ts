@@ -49,6 +49,31 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('uses wall auto-pick for a negative wall override', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 1,
+      groundLayer: [],
+      wallLayer: [9, 9],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      wallTileOverride: -1,
+    });
+
+    expect(tiles.wallTileId).toBe(9);
+  });
+
+  it('uses ground auto-pick for a negative brush fill', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: -1,
+      groundLayer: [3, 3, 4],
+      wallLayer: [],
+      fallbackGround: 10,
+      fallbackWall: 20,
+    });
+
+    expect(tiles.groundTileId).toBe(3);
+  });
+
   it('uses wall auto-pick for a zero override', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 1,
