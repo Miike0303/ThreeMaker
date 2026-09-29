@@ -110,6 +110,12 @@ describe('getLocalTileIndex', () => {
 });
 
 describe('getAutotileKind', () => {
+  it('keeps A3 autotile kinds in the global sequence after tile ID 4095', () => {
+    expect(getAutotileKind(4352)).toBe(48);
+    expect(getAutotileKind(4399)).toBe(48);
+    expect(getAutotileKind(4400)).toBe(49);
+  });
+
   it('groups every 48 ids into the same kind', () => {
     expect(getAutotileKind(2048)).toBe(0);
     expect(getAutotileKind(2048 + 47)).toBe(0);

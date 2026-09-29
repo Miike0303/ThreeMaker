@@ -323,3 +323,17 @@ it('reports the rejected dialogue source kind', () => {
     'InkDialogueProvider only supports "ink" sources, got "text".',
   );
 });
+
+it('preserves a content carriage return before the final CRLF', () => {
+  const story = {
+    canContinue: true,
+    Continue: () => 'Wait.\r\r\n',
+    currentTags: [],
+    currentChoices: [],
+  } as unknown as Story;
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', text: 'Wait.\r' });
+});
