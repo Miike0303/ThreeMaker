@@ -139,3 +139,11 @@ it('loads a persisted zoom-out override and replaces both default aliases', () =
   expect(table.actionForKeyboardKey('-')).toBeUndefined();
   expect(table.actionForKeyboardKey('_')).toBeUndefined();
 });
+
+it('loads a persisted zoom-in override and replaces both default aliases', () => {
+  const table = loadPersistedActionOverride('view.zoomIn');
+
+  expect(table.actionForKeyboardKey('q')).toBe(Actions.ViewZoomIn);
+  expect(table.actionForKeyboardKey('=')).toBeUndefined();
+  expect(table.actionForKeyboardKey('+')).toBeUndefined();
+});

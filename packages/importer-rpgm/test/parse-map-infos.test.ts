@@ -62,6 +62,25 @@ describe('parseMapInfos', () => {
 });
 
 describe('orderMapInfosByTree', () => {
+  it('keeps sidebar order ahead of a conflicting map ID', () => {
+    const infos = orderMapInfosByTree([
+      { id: 9, name: 'First root', parentId: 0, order: 0 },
+      { id: 1, name: 'Second root', parentId: 0, order: 1 },
+    ]);
+
+    expect(infos.map((info) => info.id)).toEqual([9, 1]);
+  });
+
+  it('visits a root child before the next root', () => {
+    const infos = orderMapInfosByTree([
+      { id: 10, name: 'First root', parentId: 0, order: 0 },
+      { id: 11, name: 'Child', parentId: 10, order: 0 },
+      { id: 12, name: 'Second root', parentId: 0, order: 1 },
+    ]);
+
+    expect(infos.map((info) => info.id)).toEqual([10, 11, 12]);
+  });
+
   it('keeps a reachable cycle out of the unvisited map fallback', () => {
     const infos = orderMapInfosByTree([
       { id: 0, name: 'Root cycle', parentId: 0, order: 0 },

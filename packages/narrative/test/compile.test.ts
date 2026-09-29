@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Story } from 'inkjs';
 import { Compiler, CompilerOptions } from 'inkjs/compiler/Compiler';
+import type { ErrorType } from 'inkjs/compiler/Parser/ErrorType';
 import { Story as EngineStory } from 'inkjs/engine/Story';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearInkCompileCacheForTests, compileInk, InkCompileError } from '../src/compile.js';
@@ -245,4 +246,23 @@ it('plays a finished knot when another knot has a compiler warning', () => {
   );
 
   expect(story.Continue()).toBe('Welcome back.\n');
+});
+
+it('rejects unknown compiler diagnostic severities', async () => {
+  clearInkCompileCacheForTests();
+  const actual =
+    await vi.importActual<typeof import('inkjs/compiler/Compiler')>('inkjs/compiler/Compiler');
+  vi.mocked(Compiler).mockImplementationOnce(
+    class extends actual.Compiler {
+      constructor(...args: ConstructorParameters<typeof actual.Compiler>) {
+        super(...args);
+        Object.setPrototypeOf(this, actual.Compiler.prototype);
+        args[1]?.errorHandler?.('Unknown diagnostic severity.', -1 as ErrorType);
+      }
+    },
+  );
+
+  expect(() => compileInk('Unknown severity fixture.\n-> END\n')).toThrowError(
+    new InkCompileError([{ type: 'error', message: 'Unknown diagnostic severity.' }]),
+  );
 });

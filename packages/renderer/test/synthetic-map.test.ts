@@ -6,6 +6,19 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('keeps walls immediately west of the spawn clearing', () => {
+    const map = generateSyntheticMap({
+      width: 7,
+      height: 5,
+      wallDensity: 1,
+      decorDensity: 0,
+      clearRadius: 1,
+    });
+
+    expect(map.layers.tileLayers[0][1 * 7 + 1]).toBe(ROSELIAM_DUNGEON_WALL_TILE_ID);
+    expect(map.layers.tileLayers[0][1 * 7 + 2]).toBe(ROSELIAM_DUNGEON_GROUND_TILE_ID);
+  });
+
   it('reports the rejected height in dimension validation errors', () => {
     expect(() => generateSyntheticMap({ width: 7, height: -3 })).toThrow(
       'height must be a positive integer, got -3.',

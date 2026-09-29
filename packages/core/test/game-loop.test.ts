@@ -51,6 +51,20 @@ describe('GameLoop (variable timestep)', () => {
     expect(onTick.mock.calls[1]?.[0]).toBeCloseTo(0.2);
   });
 
+  it('resets elapsed time when start is called while already running', () => {
+    const clock = new FakeClock();
+    const onTick = vi.fn();
+    const loop = new GameLoop({ clock, onTick });
+    loop.start();
+
+    clock.advance(5);
+    loop.start();
+    clock.advance(0.125);
+    loop.tick();
+
+    expect(onTick.mock.calls).toEqual([[0.125]]);
+  });
+
   it('clamps elapsed time to maxDelta to avoid a spiral of death', () => {
     const clock = new FakeClock();
     const onTick = vi.fn();
