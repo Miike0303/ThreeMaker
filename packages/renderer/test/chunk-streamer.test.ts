@@ -11,6 +11,35 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('clips a build radius beyond the safe-integer range to the map', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 48,
+      mapHeight: 32,
+      buildRadius: Number.MAX_SAFE_INTEGER + 1,
+    });
+
+    expect(streamer.update(16, 16)).toEqual({
+      toBuild: ['0,0', '1,0', '2,0', '0,1', '1,1', '2,1'],
+      toDispose: [],
+    });
+    expect(streamer.liveCount).toBe(6);
+  });
+
+  it('keeps visited chunks live with a disposal radius beyond the safe-integer range', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 64,
+      mapHeight: 16,
+      buildRadius: 0,
+      disposeRadius: Number.MAX_SAFE_INTEGER + 1,
+    });
+    streamer.update(0, 0);
+
+    expect(streamer.update(48, 0)).toEqual({ toBuild: ['3,0'], toDispose: [] });
+    expect([...streamer.liveKeys]).toEqual(['0,0', '3,0']);
+  });
+
   it('keeps trailing chunks at the default disposal boundary for an odd build radius', () => {
     const streamer = new ChunkStreamer({
       chunkSize: 16,

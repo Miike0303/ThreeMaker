@@ -234,3 +234,52 @@ it('rejects trailing whitespace before deriving a sidecar path', () => {
     expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
   }
 });
+
+it('rejects ampersands in story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter&2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects semicolons in story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter;2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects equals signs in story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter=2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects exclamation marks in story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter!2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects commas in story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter,2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects apostrophes in story ids before deriving a sidecar path', () => {
+  const storyId = "chapter'2";
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects parentheses in story ids before deriving a sidecar path', () => {
+  const storyId = 'chapter(2)';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
