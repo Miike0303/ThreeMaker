@@ -856,6 +856,28 @@ describe('profilesEqual', () => {
 });
 
 describe('surfaceHeightAt', () => {
+  it('interpolates a south ramp within the first quarter of a cell', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2]),
+      rampGrid: new Uint8Array([2]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(surfaceHeightAt(ctx, 0.5, 0.125)).toBe(1.875);
+  });
+
+  it('clamps a south ramp just beyond the south edge', () => {
+    const ctx: GridContext = {
+      heightGrid: new Uint8Array([2]),
+      rampGrid: new Uint8Array([2]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(surfaceHeightAt(ctx, 0.5, 1.125)).toBe(1);
+  });
+
   it('samples a west ramp using its column at an off-diagonal cell', () => {
     const ctx: GridContext = {
       heightGrid: new Uint8Array([0, 0, 0, 0, 0, 3]),

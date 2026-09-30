@@ -204,6 +204,14 @@ describe('createGamepadTracker', () => {
 });
 
 describe('snapshotFromGamepads', () => {
+  it('keeps a held bumper at its standard index after missing button slots', () => {
+    const buttons = [{ pressed: false }];
+    buttons[4] = { pressed: true };
+    const snapshot = snapshotFromGamepads([{ axes: [0, 0], buttons }]);
+
+    expect(activeActionsFromGamepad(snapshot)).toEqual([Actions.ViewNoclip]);
+  });
+
   it('skips an undefined gamepad slot before a connected pad', () => {
     expect(
       snapshotFromGamepads([undefined, { axes: [0.4, 0], buttons: [{ pressed: true }] }]),
