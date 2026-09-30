@@ -334,3 +334,17 @@ it('starts stairs at the interpolated ramp surface', () => {
   });
   expect(traversal.update(0).worldY).toBe(4);
 });
+
+it('keeps the landing row when it differs from the landing column', () => {
+  const traversal = new StairTraversal({
+    waypoints: [
+      { x: 0, y: 0, floor: 0 },
+      { x: 4, y: 2, floor: 1 },
+    ],
+    floors: FLOORS,
+    speed: SPEED,
+    heightUnit: HEIGHT_UNIT,
+  });
+
+  expect(traversal.update(10)).toEqual({ x: 4, y: 2, worldY: 3, done: true });
+});
