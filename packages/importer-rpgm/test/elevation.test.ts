@@ -103,6 +103,16 @@ describe('computeHeightGrid', () => {
 });
 
 describe('computeRampGrid', () => {
+  it('uses ground height for off-map neighbors of a one-level boundary ramp', () => {
+    const ctx: HeightGridContext = {
+      heightGrid: new Uint8Array([1]),
+      mapWidth: 1,
+      mapHeight: 1,
+    };
+
+    expect(Array.from(computeRampGrid(ctx, [{ x: 0, y: 0 }]))).toEqual([2]);
+  });
+
   it('keeps a same-level explicit ramp override inert without warning', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const ctx: HeightGridContext = {

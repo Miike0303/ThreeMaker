@@ -372,3 +372,10 @@ it('reports an unsupported large integer bindings version as unknown', () => {
     parseInputBindingsDocument({ magic: INPUT_BINDINGS_MAGIC, version, bindings: [] }),
   ).toEqual({ ok: false, reason: `unknown version ${version}` });
 });
+
+it('loads an empty persisted override list with default controls intact', () => {
+  const defaults = defaultKeyboardBindings();
+  const table = bindingTableFromPersistedText(serializeInputBindingsDocument([]), defaults);
+
+  expect(table.list()).toEqual(defaults);
+});

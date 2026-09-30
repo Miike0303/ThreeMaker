@@ -997,3 +997,25 @@ it('rejects a layout coordinate with no vertical key', () => {
 it('recognizes a knot header followed by a comment containing a URL', () => {
   expect(listInkKnots('=== entry === // https://example.invalid/story\n')).toEqual(['entry']);
 });
+
+it('preserves a content carriage return before CRLF when rewriting layouts', () => {
+  const source = '=== entry ===\r\nWait.\r\r\n';
+
+  expect(applyInkNodeLayouts(source, [{ knot: 'entry', x: 17, y: 29 }])).toBe(
+    '// @tm-node entry x=17 y=29\n\n=== entry ===\nWait.\r\n',
+  );
+});
+
+it('rejects a colon inside a knot header name', () => {
+  expect(listInkKnots('=== chapter:ending ===\n=== entry ===\n')).toEqual(['entry']);
+});
+
+it('rejects a colon inside a stored layout knot name', () => {
+  expect(parseInkNodeLayouts('// @tm-node chapter:ending x=17 y=29\n')).toEqual([]);
+});
+
+it('stops a divert target name at a colon', () => {
+  expect(listInkEdges('=== start ===\n-> chapter:ending\n')).toEqual([
+    { from: 'start', to: 'chapter' },
+  ]);
+});
