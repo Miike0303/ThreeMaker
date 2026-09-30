@@ -108,6 +108,48 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('rejects a null switch-page activation flag', () => {
+    const conditions = JSON.parse('{"switch1Valid":null}');
+    const page = showTextPage(0, ['Locked'], undefined, conditions);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('preserves an integer transfer x coordinate above the safe integer limit', () => {
+    const x = Number.MAX_SAFE_INTEGER + 1;
+    const page = showTextPage(0, [], undefined, CLEAR_CONDITIONS, [
+      { code: 201, indent: 0, parameters: [0, 2, x, 2, 0, 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      { type: 'transferMap', mapFile: 'map002.tmmap.json', x, y: 2 },
+    ]);
+  });
+
+  it('preserves an integer transfer y coordinate above the safe integer limit', () => {
+    const y = Number.MAX_SAFE_INTEGER + 1;
+    const page = showTextPage(0, [], undefined, CLEAR_CONDITIONS, [
+      { code: 201, indent: 0, parameters: [0, 2, 1, y, 0, 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      { type: 'transferMap', mapFile: 'map002.tmmap.json', x: 1, y },
+    ]);
+  });
+
   it('preserves the fallback below a switch-1-only page with other flags omitted', () => {
     const fallback = showTextPage(0, ['Fallback']);
     const conditional = showTextPage(0, ['Matched'], undefined, {

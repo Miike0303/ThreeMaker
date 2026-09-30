@@ -135,3 +135,15 @@ it('samples surface height from the requested row when coordinates differ', () =
 
   expect(field.surfaceHeightAt(0.25, 1.25)).toBe(2);
 });
+
+it('returns ground elevation when a fractional tile query has no stored sample', () => {
+  const field = new ElevationField(buildMap(2, 1, {}, [3, 3]));
+
+  expect(field.heightAt(0.5, 0)).toBe(0);
+});
+
+it('returns no ramp when a fractional tile query has no stored sample', () => {
+  const field = new ElevationField(buildMap(2, 1, {}, [3, 3]));
+
+  expect(field.rampDirAt(0.5, 0)).toBeUndefined();
+});

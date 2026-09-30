@@ -1019,3 +1019,11 @@ it('stops a divert target name at a colon', () => {
     { from: 'start', to: 'chapter' },
   ]);
 });
+
+it('rewrites a leading layout block after a whitespace-only line', () => {
+  const source = ' \t \n// @tm-node entry x=0 y=0\n=== entry ===\nWelcome.\n';
+
+  expect(applyInkNodeLayouts(source, [{ knot: 'entry', x: 17, y: 29 }])).toBe(
+    '// @tm-node entry x=17 y=29\n\n=== entry ===\nWelcome.\n',
+  );
+});
