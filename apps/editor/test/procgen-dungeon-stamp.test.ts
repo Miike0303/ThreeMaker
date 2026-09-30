@@ -767,6 +767,30 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('finds a door in a valid row beyond the width on a tall map', () => {
+    const width = 3;
+    const height = 7;
+    const walkable = new Uint8Array(width * height);
+    walkable[4 * width + 1] = 1;
+    walkable[4 * width + 2] = 1;
+
+    expect(findDoorOpenings([{ x: 1, y: 4, w: 1, h: 1 }], walkable, width, height)).toEqual([
+      { x: 1, y: 4 },
+    ]);
+  });
+
+  it('finds a door whose south neighbor reaches the width on a tall map', () => {
+    const width = 3;
+    const height = 7;
+    const walkable = new Uint8Array(width * height);
+    walkable[2 * width + 1] = 1;
+    walkable[3 * width + 1] = 1;
+
+    expect(findDoorOpenings([{ x: 1, y: 2, w: 1, h: 1 }], walkable, width, height)).toEqual([
+      { x: 1, y: 2 },
+    ]);
+  });
+
   it('reports a shared door opening only once across overlapping rooms', () => {
     const walkable = new Uint8Array(25);
     walkable[2 * 5 + 3] = 1;

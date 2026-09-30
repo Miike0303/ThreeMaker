@@ -85,6 +85,17 @@ function rectangularStairFixture(roomCount: number, width = 20, height = 12) {
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('preserves a blank room-light ID prefix when applying a stamp', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, {
+      placeRoomLights: true,
+      roomLightOptions: { idPrefix: '' },
+    });
+
+    expect(next.lights.map((light) => light.id)).toEqual(['-1']);
+  });
+
   it('keeps an authored stair beyond the height on a wide map', () => {
     const { doc, stamp } = rectangularStairFixture(0);
     const entry = { x: doc.width - 3, y: 3, floor: 'floor-1' };

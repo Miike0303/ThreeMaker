@@ -57,6 +57,20 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('falls back to valid furniture semantics for a negative mid-layer majority', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 10,
+      groundLayer: [],
+      wallLayer: [],
+      midLayer: [-3, -3],
+      fallbackGround: 10,
+      fallbackWall: 20,
+      semantics: { '-3': { class: 'furniture' }, '80': { class: 'furniture' } },
+    });
+
+    expect(tiles.furnitureTileId).toBe(80);
+  });
+
   it('prefers a wall-classed overall majority over a lower unused wall semantic', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 1,

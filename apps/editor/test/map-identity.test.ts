@@ -398,3 +398,7 @@ it('accepts 64-character map names and rejects 65-character names', () => {
   expect(validateMapName('n'.repeat(64))).toBeNull();
   expect(validateMapName('n'.repeat(65))).toBe('too-long');
 });
+
+it('rejects a reserved device name with a hyphenated extension', () => {
+  expect(validateMapName('CON.saved-map')).toBe('reserved');
+});

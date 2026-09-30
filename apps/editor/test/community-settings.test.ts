@@ -950,3 +950,9 @@ it('treats a fractional catalog game id as imported provenance', () => {
     'import-rpgm',
   );
 });
+
+it('treats a fractional catalog tileset id as imported provenance', () => {
+  expect(licenseTagFromSlots({ A5: { object: 'a'.repeat(64), sourceTilesetId: 1.5 } })).toBe(
+    'import-rpgm',
+  );
+});

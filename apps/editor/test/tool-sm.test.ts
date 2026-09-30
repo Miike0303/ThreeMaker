@@ -334,3 +334,19 @@ it('allows shortcuts from a target with no element tag name', () => {
 it('keeps the wall layer on a brush stroke', () => {
   expect(beginStroke(TOOL_SM_IDLE, 'brush', 2, { x: 1, y: 1 })).toMatchObject({ layer: 2 });
 });
+
+it('does not cancel an editor action when Enter is pressed', () => {
+  expect(resolveEditorChord({ key: 'Enter' })).toBeNull();
+});
+
+it('leaves Ctrl plus pipe outside the undo chord', () => {
+  expect(resolveEditorChord({ key: '|', ctrlKey: true })).toBeNull();
+});
+
+it('leaves Ctrl plus closing brace outside the redo chord', () => {
+  expect(resolveEditorChord({ key: '}', ctrlKey: true })).toBeNull();
+});
+
+it('leaves Ctrl plus T outside the save chord', () => {
+  expect(resolveEditorChord({ key: 't', ctrlKey: true })).toBeNull();
+});

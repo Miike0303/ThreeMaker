@@ -16,6 +16,19 @@ describe('dungeonRoomCenter', () => {
 });
 
 describe('lightsFromDungeonRooms', () => {
+  it('preserves a blank room-light ID prefix while numbering the rooms', () => {
+    const lights = lightsFromDungeonRooms(
+      [
+        { x: 0, y: 0, w: 2, h: 2 },
+        { x: 3, y: 3, w: 2, h: 2 },
+      ],
+      'floor-0',
+      { idPrefix: '' },
+    );
+
+    expect(lights.map((light) => light.id)).toEqual(['-1', '-2']);
+  });
+
   it('preserves an explicit zero height for room lights', () => {
     const [light] = lightsFromDungeonRooms([{ x: 0, y: 0, w: 2, h: 2 }], 'floor-0', {
       height: 0,
@@ -138,6 +151,10 @@ describe('mergeStampRoomLights', () => {
 });
 
 describe('playerTorchLight / ensurePlayerTorch', () => {
+  it('preserves a blank player-torch ID instead of substituting the default', () => {
+    expect(playerTorchLight({ id: '' }).id).toBe('');
+  });
+
   it('preserves an explicit zero range when creating a player torch', () => {
     expect(playerTorchLight({ range: 0 }).range).toBe(0);
   });

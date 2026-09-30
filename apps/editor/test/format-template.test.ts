@@ -56,3 +56,7 @@ it('substitutes a numeric placeholder name', () => {
 it('substitutes a zero placeholder value', () => {
   expect(formatTemplate('{count} assets', { count: 0 })).toBe('0 assets');
 });
+
+it('leaves hyphenated placeholder names unchanged', () => {
+  expect(formatTemplate('Tile {tile-id}', { 'tile-id': 42 })).toBe('Tile {tile-id}');
+});
