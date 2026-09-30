@@ -14,6 +14,12 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('explains the allowed characters when rejecting an unsafe story id', () => {
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'act/intro')).toThrow(
+      'is not path-safe (letters, digits, "_" and "-" only).',
+    );
+  });
+
   it('rejects tabs in story ids before deriving a sidecar path', () => {
     const storyId = 'chapter\t2';
 

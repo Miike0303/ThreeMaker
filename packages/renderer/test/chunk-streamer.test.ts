@@ -11,6 +11,34 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('clamps a high X focus to the last tile with half-tile chunks', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 0.5,
+      mapWidth: 2,
+      mapHeight: 1,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+    expect(streamer.update(1, 0).toBuild).toEqual(['2,0']);
+
+    expect(streamer.update(99, 0)).toEqual({ toBuild: [], toDispose: [] });
+    expect([...streamer.liveKeys]).toEqual(['2,0']);
+  });
+
+  it('clamps a high Y focus to the last tile with half-tile chunks', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 0.5,
+      mapWidth: 1,
+      mapHeight: 2,
+      buildRadius: 0,
+      disposeRadius: 0,
+    });
+    expect(streamer.update(0, 1).toBuild).toEqual(['0,2']);
+
+    expect(streamer.update(0, 99)).toEqual({ toBuild: [], toDispose: [] });
+    expect([...streamer.liveKeys]).toEqual(['0,2']);
+  });
+
   it('clips a build radius beyond the safe-integer range to the map', () => {
     const streamer = new ChunkStreamer({
       chunkSize: 16,
