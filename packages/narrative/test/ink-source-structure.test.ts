@@ -963,3 +963,13 @@ it('rejects a bracket inside a stored layout knot name', () => {
 it('stops a divert target name at a bracket', () => {
   expect(listInkEdges('=== start ===\n-> side[room\n')).toEqual([{ from: 'start', to: 'side' }]);
 });
+
+it('reads a layout marker after non-breaking comment padding', () => {
+  expect(parseInkNodeLayouts('//\u00a0@tm-node entry x=17 y=29\n')).toEqual([
+    { knot: 'entry', x: 17, y: 29 },
+  ]);
+});
+
+it('recognizes a knot header with four opening equals signs', () => {
+  expect(listInkKnots('==== entry ===\n')).toEqual(['entry']);
+});

@@ -108,6 +108,74 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('rejects an array-wrapped self-switch B letter', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 123, indent: 0, parameters: [['B'], 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects an array-wrapped self-switch C letter', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 123, indent: 0, parameters: [['C'], 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('rejects an array-wrapped self-switch D letter', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 123, indent: 0, parameters: [['D'], 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('preserves an integer event ID above the safe integer limit', () => {
+    const id = Number.MAX_SAFE_INTEGER + 1;
+    const event = { ...placedEvent(showTextPage(0, ['Hello'])), id };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [event] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers[0]?.id).toBe('rpgm-event-9007199254740992');
+    expect(doc.events['rpgm-event-9007199254740992']).toEqual([
+      { type: 'showDialogue', source: { kind: 'text', lines: ['Hello'] } },
+    ]);
+  });
+
+  it('preserves an integer transfer map ID above the safe integer limit', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 201, indent: 0, parameters: [0, Number.MAX_SAFE_INTEGER + 1, 1, 2, 0, 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      { type: 'showDialogue', source: { kind: 'text', lines: ['Before'] } },
+      { type: 'transferMap', mapFile: 'map9007199254740992.tmmap.json', x: 1, y: 2 },
+    ]);
+  });
+
   it('skips an event with missing pages without throwing', () => {
     const event: RpgmEvent = JSON.parse('{"id":1,"name":"Elder","x":2,"y":3}');
     const doc = convertRpgmMap(
