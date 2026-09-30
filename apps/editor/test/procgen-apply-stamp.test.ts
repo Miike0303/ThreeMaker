@@ -85,6 +85,46 @@ function rectangularStairFixture(roomCount: number, width = 20, height = 12) {
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('classifies a negative nonzero mid-layer tile as furniture', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+    stamp.layers[1][0] = -9;
+
+    const next = applyDungeonStampToMapDocument(doc, stamp);
+
+    expect(next.tileset.semantics['-9']).toEqual({ class: 'furniture' });
+  });
+
+  it('classifies a negative nonzero tile at a stamped opening as a door', () => {
+    const { doc } = twoFloorSemanticFixture('none', 0, 0);
+    const stamp = stampSimpleDungeon({
+      width: doc.width,
+      height: doc.height,
+      seed: 42,
+      groundTileId: 2816,
+      wallTileId: 4352,
+      doorTileId: 5001,
+      roomCount: 2,
+      minRoomSize: 3,
+      maxRoomSize: 3,
+    });
+    const door = stamp.doors[0];
+    if (!door) throw new Error('fixture has no door opening');
+    stamp.layers[1][door.y * doc.width + door.x] = -3;
+
+    const next = applyDungeonStampToMapDocument(doc, stamp);
+
+    expect(next.tileset.semantics['-3']).toEqual({ class: 'door' });
+  });
+
+  it('reports both rectangular dimensions when a stamp layer length is invalid', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+    stamp.layers[3].pop();
+
+    expect(() => applyDungeonStampToMapDocument(doc, stamp)).toThrow(
+      'stamp layer length 239 does not match map size 240 (20x12)',
+    );
+  });
+
   it('keeps an authored stair on a negative nonzero ground tile', () => {
     const { doc, stamp } = rectangularStairFixture(1);
     const entry = pickMainRoomSpawn(stamp.rooms, doc.width, doc.height);

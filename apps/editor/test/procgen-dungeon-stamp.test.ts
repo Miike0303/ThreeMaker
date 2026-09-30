@@ -23,6 +23,14 @@ describe('stampSimpleDungeon furniture seed isolation', () => {
     furnitureDensity: 0.5,
   };
 
+  it('keeps furniture layouts distinct for seeds differing by the second bit', () => {
+    const first = stampSimpleDungeon({ ...options, seed: 0 });
+    const second = stampSimpleDungeon({ ...options, seed: 2 });
+
+    expect(first.rooms).toEqual(second.rooms);
+    expect(second.layers[1]).not.toEqual(first.layers[1]);
+  });
+
   it('gives adjacent layout seeds distinct furniture placements in the same room', () => {
     const first = stampSimpleDungeon({ ...options, seed: 0 });
     const second = stampSimpleDungeon({ ...options, seed: 1 });
@@ -97,6 +105,18 @@ describe('stampSimpleDungeon oversized corridor boundaries', () => {
 });
 
 describe('stampSimpleDungeon', () => {
+  it('reports the rejected rectangular map dimensions in the minimum-size diagnostic', () => {
+    expect(() =>
+      stampSimpleDungeon({
+        width: 12,
+        height: 7,
+        seed: 1,
+        groundTileId: GROUND,
+        wallTileId: WALL,
+      }),
+    ).toThrow('dungeon stamp needs width/height >= 8, got 12x7');
+  });
+
   it('keeps the outer ring empty when no rooms are requested', () => {
     const width = 12;
     const height = 10;

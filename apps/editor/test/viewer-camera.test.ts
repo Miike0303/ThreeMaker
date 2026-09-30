@@ -198,6 +198,22 @@ describe('panCameraTarget (WU-UX-01)', () => {
 });
 
 describe('projectToScreenFraction', () => {
+  it('projects an overlay marker less than one unit in front of the camera', () => {
+    const pose = { position: { x: 0, y: 3, z: 4 }, lookAt: { x: 0, y: 0, z: 0 } };
+    const projected = projectToScreenFraction({ x: 0, y: 2.7, z: 3.6 }, pose, 90, 1);
+
+    expect(projected?.xFrac).toBeCloseTo(0.5);
+    expect(projected?.yFrac).toBeCloseTo(0.5);
+  });
+
+  it('keeps a side-view horizontal frustum marker vertically centered', () => {
+    const pose = { position: { x: 6, y: 8, z: 0 }, lookAt: { x: 0, y: 0, z: 0 } };
+    const projected = projectToScreenFraction({ x: 0, y: 0, z: -10 }, pose, 90, 1);
+
+    expect(projected?.xFrac).toBeCloseTo(1);
+    expect(projected?.yFrac).toBeCloseTo(0.5);
+  });
+
   it('projects the frustum edge with unequal camera height and ground distance', () => {
     const pose = { position: { x: 0, y: 6, z: 8 }, lookAt: { x: 0, y: 0, z: 0 } };
     const projected = projectToScreenFraction({ x: 10, y: 0, z: 0 }, pose, 90, 1);

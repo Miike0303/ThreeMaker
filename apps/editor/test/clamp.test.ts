@@ -23,6 +23,10 @@ describe('clampRange', () => {
 });
 
 describe('clampTileIndex', () => {
+  it('returns tile zero for a negative index when the map size is negative', () => {
+    expect(clampTileIndex(-3, -1)).toBe(0);
+  });
+
   it('returns tile zero for an infinite index on a finite map', () => {
     expect(clampTileIndex(Number.POSITIVE_INFINITY, 4)).toBe(0);
   });
