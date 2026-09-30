@@ -835,3 +835,39 @@ it('keeps a divert after a slash directly followed by a word', () => {
     { from: 'start', to: 'exit' },
   ]);
 });
+
+it('recognizes a non-breaking space after the opening knot delimiter', () => {
+  expect(listInkKnots('===\u00a0entry ===\n')).toEqual(['entry']);
+});
+
+it('recognizes a non-breaking space before the closing knot delimiter', () => {
+  expect(listInkKnots('=== entry\u00a0===\n')).toEqual(['entry']);
+});
+
+it('recognizes a non-breaking space before a knot header comment', () => {
+  expect(listInkKnots('=== entry ===\u00a0// Author note.\n')).toEqual(['entry']);
+});
+
+it('reads a non-breaking space after the layout marker', () => {
+  expect(parseInkNodeLayouts('// @tm-node\u00a0entry x=17 y=29\n')).toEqual([
+    { knot: 'entry', x: 17, y: 29 },
+  ]);
+});
+
+it('reads a non-breaking space before the horizontal layout coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry\u00a0x=17 y=29\n')).toEqual([
+    { knot: 'entry', x: 17, y: 29 },
+  ]);
+});
+
+it('reads a non-breaking space before the vertical layout coordinate', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry x=17\u00a0y=29\n')).toEqual([
+    { knot: 'entry', x: 17, y: 29 },
+  ]);
+});
+
+it('reads a layout comment with a trailing non-breaking space', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry x=17 y=29\u00a0\n')).toEqual([
+    { knot: 'entry', x: 17, y: 29 },
+  ]);
+});

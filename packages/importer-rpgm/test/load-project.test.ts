@@ -73,6 +73,33 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     }
   }
 
+  it('ignores filenames with Max instead of the Map prefix', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Max002.json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
+  it('ignores map filenames with a misspelled JSON extension', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map002.jsom']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
+  it('ignores map filenames with an explicit plus sign in the ID', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map+002.json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
   it('ignores map filenames with a truncated JSON extension', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json', 'Map002.jso']);
