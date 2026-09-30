@@ -108,6 +108,89 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('preserves the fallback below a switch-1-only page with other flags omitted', () => {
+    const fallback = showTextPage(0, ['Fallback']);
+    const conditional = showTextPage(0, ['Matched'], undefined, {
+      switch1Valid: true,
+      switch1Id: 3,
+    });
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [placedEvent(fallback, [fallback, conditional])],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      {
+        type: 'conditional',
+        if: { key: 'rpgm.switch.3', op: 'eq', value: true },
+        then: [{ type: 'showDialogue', source: { kind: 'text', lines: ['Matched'] } }],
+        else: [{ type: 'showDialogue', source: { kind: 'text', lines: ['Fallback'] } }],
+      },
+    ]);
+  });
+
+  it('preserves the fallback below a self-switch-only page with other flags omitted', () => {
+    const fallback = showTextPage(0, ['Fallback']);
+    const conditional = showTextPage(0, ['Matched'], undefined, {
+      selfSwitchValid: true,
+      selfSwitchCh: 'A',
+    });
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [placedEvent(fallback, [fallback, conditional])],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      {
+        type: 'conditional',
+        if: { key: 'rpgm.self.100.1.A', op: 'eq', value: true },
+        then: [{ type: 'showDialogue', source: { kind: 'text', lines: ['Matched'] } }],
+        else: [{ type: 'showDialogue', source: { kind: 'text', lines: ['Fallback'] } }],
+      },
+    ]);
+  });
+
+  it('preserves the fallback below an item-only page with other flags omitted', () => {
+    const fallback = showTextPage(0, ['Fallback']);
+    const conditional = showTextPage(0, ['Matched'], undefined, { itemValid: true, itemId: 7 });
+    const doc = convertRpgmMap(
+      buildSyntheticMap({
+        width: 4,
+        height: 4,
+        events: [placedEvent(fallback, [fallback, conditional])],
+      }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      {
+        type: 'conditional',
+        if: { key: 'rpgm.item.7', op: 'gt', value: 0, source: 'item' },
+        then: [{ type: 'showDialogue', source: { kind: 'text', lines: ['Matched'] } }],
+        else: [{ type: 'showDialogue', source: { kind: 'text', lines: ['Fallback'] } }],
+      },
+    ]);
+  });
+
+  it('rejects an event at the height boundary when its x coordinate is valid', () => {
+    const event = { ...placedEvent(showTextPage(0, ['Outside the map'])), x: 1, y: 4 };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [event] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
   it('rejects an array-wrapped self-switch B letter', () => {
     const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
       { code: 123, indent: 0, parameters: [['B'], 0] },

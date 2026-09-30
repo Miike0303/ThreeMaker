@@ -973,3 +973,27 @@ it('reads a layout marker after non-breaking comment padding', () => {
 it('recognizes a knot header with four opening equals signs', () => {
   expect(listInkKnots('==== entry ===\n')).toEqual(['entry']);
 });
+
+it('stops a divert target name at an internal hyphen', () => {
+  expect(listInkEdges('=== start ===\n-> side-room\n')).toEqual([{ from: 'start', to: 'side' }]);
+});
+
+it('recognizes a knot header with four closing equals signs', () => {
+  expect(listInkKnots('=== entry ====\n')).toEqual(['entry']);
+});
+
+it('rejects a layout marker with an underscore instead of a hyphen', () => {
+  expect(parseInkNodeLayouts('// @tm_node entry x=17 y=29\n')).toEqual([]);
+});
+
+it('rejects a layout coordinate with no horizontal key', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry =17 y=29\n')).toEqual([]);
+});
+
+it('rejects a layout coordinate with no vertical key', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry x=17 =29\n')).toEqual([]);
+});
+
+it('recognizes a knot header followed by a comment containing a URL', () => {
+  expect(listInkKnots('=== entry === // https://example.invalid/story\n')).toEqual(['entry']);
+});

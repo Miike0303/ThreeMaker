@@ -376,3 +376,20 @@ it('falls back to the origin when a stair path has no complete segments', () => 
 
   expect(traversal.update(0)).toEqual({ x: 0, y: 0, worldY: 0, done: true });
 });
+
+it('starts the next complete segment at an exact boundary after a sparse gap', () => {
+  const waypoints = [
+    { x: 1, y: 1, floor: 0 },
+    { x: 2, y: 1, floor: 0 },
+  ];
+  waypoints.length = 3;
+  waypoints.push({ x: 5, y: 4, floor: 1 }, { x: 6, y: 4, floor: 1 });
+  const traversal = new StairTraversal({
+    waypoints,
+    floors: FLOORS,
+    speed: SPEED,
+    heightUnit: HEIGHT_UNIT,
+  });
+
+  expect(traversal.update(0.25)).toEqual({ x: 5, y: 4, worldY: 3, done: false });
+});
