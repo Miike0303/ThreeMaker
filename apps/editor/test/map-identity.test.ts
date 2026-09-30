@@ -463,3 +463,11 @@ it('accepts square brackets in an authored map name', () => {
 it('classifies a digit before a colon as an invalid filename character', () => {
   expect(validateMapName('1:harbor')).toBe('invalid-chars');
 });
+
+it('accepts a reserved word after a separator in an ordinary map name', () => {
+  expect(validateMapName('Harbor CON')).toBeNull();
+});
+
+it('accepts a map name that extends a reserved word with a hyphen', () => {
+  expect(validateMapName('CON-harbor')).toBeNull();
+});

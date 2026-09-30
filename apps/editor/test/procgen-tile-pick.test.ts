@@ -57,6 +57,18 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('preserves a negative nonzero wall majority instead of substituting the fallback', () => {
+    const tiles = resolveDungeonTileIds({
+      fillTileId: 7,
+      groundLayer: [],
+      wallLayer: [-2, -2],
+      fallbackGround: 10,
+      fallbackWall: 20,
+    });
+
+    expect(tiles.wallTileId).toBe(-2);
+  });
+
   it('uses a lower wall fallback when the wall override matches ground', () => {
     expect(
       resolveDungeonTileIds({

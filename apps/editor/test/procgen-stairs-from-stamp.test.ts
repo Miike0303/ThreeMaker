@@ -33,6 +33,14 @@ describe('pickAdjacentFloorIndex', () => {
 });
 
 describe('roomLandingTile', () => {
+  it('centers the fallback stair landing on a map wider than twice its height', () => {
+    expect(roomLandingTile([], 'floor-1', 32, 8)).toEqual({ x: 16, y: 4 });
+  });
+
+  it('centers the fallback stair landing on a map taller than twice its width', () => {
+    expect(roomLandingTile([], 'floor-1', 8, 32)).toEqual({ x: 4, y: 16 });
+  });
+
   it('clamps a room landing west of the map to column zero', () => {
     const rooms = [
       {

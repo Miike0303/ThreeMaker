@@ -779,6 +779,14 @@ describe('scatterFurnitureInRooms', () => {
 });
 
 describe('pickMainRoomSpawn', () => {
+  it('centers the fallback spawn on a map wider than twice its height', () => {
+    expect(pickMainRoomSpawn([], 32, 8)).toEqual({ x: 16, y: 4 });
+  });
+
+  it('centers the fallback spawn on a map taller than twice its width', () => {
+    expect(pickMainRoomSpawn([], 8, 32)).toEqual({ x: 4, y: 16 });
+  });
+
   it('keeps the largest main room when a later room only exceeds the first', () => {
     const spawn = pickMainRoomSpawn(
       [

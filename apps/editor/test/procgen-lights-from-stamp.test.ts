@@ -113,6 +113,13 @@ describe('lightsFromDungeonRooms zero intensity', () => {
 });
 
 describe('mergeStampRoomLights', () => {
+  it('replaces prior generated room lights with a height when regenerating a floor', () => {
+    const existing = lightsFromDungeonRooms([{ x: 0, y: 0, w: 4, h: 4 }], 'floor-0');
+    const replacement = lightsFromDungeonRooms([{ x: 4, y: 4, w: 4, h: 4 }], 'floor-0');
+
+    expect(mergeStampRoomLights(existing, 'floor-0', replacement)).toEqual(replacement);
+  });
+
   it('replaces placed lights on the floor; keeps attached and other floors', () => {
     const existing: LightDocument[] = [
       {
