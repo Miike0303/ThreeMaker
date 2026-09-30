@@ -76,3 +76,7 @@ it('leaves a caret in a placeholder identifier untouched', () => {
 it('leaves a dotted placeholder identifier unchanged', () => {
   expect(formatTemplate('Tile {tile.id}', { 'tile.id': 42 })).toBe('Tile {tile.id}');
 });
+
+it('leaves spaces in a placeholder identifier unchanged', () => {
+  expect(formatTemplate('Tile {tile id}', { 'tile id': 42 })).toBe('Tile {tile id}');
+});

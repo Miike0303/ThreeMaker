@@ -779,6 +779,19 @@ describe('scatterFurnitureInRooms', () => {
 });
 
 describe('pickMainRoomSpawn', () => {
+  it('keeps a taller main room when a later wider room has less area', () => {
+    const spawn = pickMainRoomSpawn(
+      [
+        { x: 1, y: 1, w: 3, h: 8 },
+        { x: 8, y: 1, w: 6, h: 3 },
+      ],
+      16,
+      12,
+    );
+
+    expect(spawn).toEqual({ x: 2, y: 5 });
+  });
+
   it('centers the fallback spawn on a map wider than twice its height', () => {
     expect(pickMainRoomSpawn([], 32, 8)).toEqual({ x: 16, y: 4 });
   });
@@ -874,6 +887,18 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('finds a door whose east neighbor is beyond the height on a wide map', () => {
+    const width = 7;
+    const height = 3;
+    const walkable = new Uint8Array(width * height);
+    walkable[width + 4] = 1;
+    walkable[width + 5] = 1;
+
+    expect(findDoorOpenings([{ x: 4, y: 1, w: 1, h: 1 }], walkable, width, height)).toEqual([
+      { x: 4, y: 1 },
+    ]);
+  });
+
   it('reports a shared door only once across three overlapping rooms', () => {
     const walkable = new Uint8Array(25);
     walkable[2 * 5 + 3] = 1;

@@ -591,3 +591,16 @@ it('preserves an unrelated catalog sheet slot when stamping starter object hashe
 
   expect(stamped.tileset.slots.C).toEqual(catalogSlot);
 });
+
+it('rejects an underscore in a starter object hash', () => {
+  const doc = composePlaceholderMap({
+    id: 'starter-underscore-hash',
+    name: 'Starter',
+    width: 2,
+    height: 2,
+  });
+
+  expect(() =>
+    stampPlaceholderSlotObjects(doc, { A5: `${'a'.repeat(63)}_`, B: 'b'.repeat(64) }),
+  ).toThrow('A5/B object shas must be 64 lowercase hex chars');
+});

@@ -471,3 +471,7 @@ it('accepts a reserved word after a separator in an ordinary map name', () => {
 it('accepts a map name that extends a reserved word with a hyphen', () => {
   expect(validateMapName('CON-harbor')).toBeNull();
 });
+
+it('accepts CO as an ordinary map name', () => {
+  expect(validateMapName('CO')).toBeNull();
+});
