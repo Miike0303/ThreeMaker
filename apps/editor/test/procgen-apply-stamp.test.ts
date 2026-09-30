@@ -85,6 +85,20 @@ function rectangularStairFixture(roomCount: number, width = 20, height = 12) {
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('copies over-layer tiles in stamp order without mutating the stamp', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
+    stamp.layers[3][0] = 9;
+    stamp.layers[3][1] = 2;
+    stamp.layers[3][2] = 7;
+    const expected = stamp.layers[3].slice();
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 });
+
+    expect(next.floors[1]?.layers.tiles[3]).toEqual(expected);
+    expect(stamp.layers[3]).toEqual(expected);
+    expect(next.floors[1]?.layers.tiles[3]).not.toBe(stamp.layers[3]);
+  });
+
   it('preserves a blank room-light ID prefix when applying a stamp', () => {
     const { doc, stamp } = rectangularStairFixture(1);
 

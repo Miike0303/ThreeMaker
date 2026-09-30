@@ -956,3 +956,17 @@ it('treats a fractional catalog tileset id as imported provenance', () => {
     'import-rpgm',
   );
 });
+
+it('normalizes an array import-rpgm license tag to user-owned', () => {
+  const job = sampleJob('array-imported-license');
+  const raw = JSON.stringify([{ ...job, licenseTag: ['import-rpgm'] }]);
+
+  expect(parseCommunityShareQueueJson(raw)).toEqual({ ok: true, jobs: [job] });
+});
+
+it('normalizes an array mixed license tag to user-owned', () => {
+  const job = sampleJob('array-mixed-license');
+  const raw = JSON.stringify([{ ...job, licenseTag: ['mixed'] }]);
+
+  expect(parseCommunityShareQueueJson(raw)).toEqual({ ok: true, jobs: [job] });
+});

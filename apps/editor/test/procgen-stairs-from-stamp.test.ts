@@ -220,6 +220,12 @@ describe('mergeStampStairLinks', () => {
   const authored = { ...a, id: 'hand-drawn' };
   const isStandable = (x: number, y: number) => x === 1 && y === 1;
 
+  it('drops an authored stair blocked on the second floor in the pair', () => {
+    expect(
+      mergeStampStairLinks([authored], 'floor-0', 'floor-1', a, 'floor-1', isStandable),
+    ).toEqual([a]);
+  });
+
   it('keeps an authored stair whose id contains the generated prefix after other text', () => {
     const named = { ...authored, id: 'hand-stamp-stair-annex' };
 

@@ -488,3 +488,31 @@ it('rejects an embedded newline in a starter object hash', () => {
     'A5/B object shas must be 64 lowercase hex chars',
   );
 });
+
+it('accepts hexadecimal zero in a starter object hash', () => {
+  const doc = composePlaceholderMap({
+    id: 'starter-zero-hash',
+    name: 'Starter',
+    width: 2,
+    height: 2,
+  });
+  const hash = '0'.repeat(64);
+
+  expect(
+    stampPlaceholderSlotObjects(doc, { A5: hash, B: 'a'.repeat(64) }).tileset.slots.A5?.object,
+  ).toBe(hash);
+});
+
+it('accepts the final hexadecimal letter in a starter object hash', () => {
+  const doc = composePlaceholderMap({
+    id: 'starter-final-hex-hash',
+    name: 'Starter',
+    width: 2,
+    height: 2,
+  });
+  const hash = 'f'.repeat(64);
+
+  expect(
+    stampPlaceholderSlotObjects(doc, { A5: hash, B: 'a'.repeat(64) }).tileset.slots.A5?.object,
+  ).toBe(hash);
+});

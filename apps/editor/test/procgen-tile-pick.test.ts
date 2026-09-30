@@ -57,6 +57,19 @@ describe('majorityClassedTileId', () => {
 });
 
 describe('resolveDungeonTileIds', () => {
+  it('uses a lower wall fallback when the wall override matches ground', () => {
+    expect(
+      resolveDungeonTileIds({
+        fillTileId: 90,
+        groundLayer: [],
+        wallLayer: [],
+        fallbackGround: 10,
+        fallbackWall: 20,
+        wallTileOverride: 90,
+      }),
+    ).toEqual({ groundTileId: 90, wallTileId: 20 });
+  });
+
   it('falls back to valid furniture semantics for a negative mid-layer majority', () => {
     const tiles = resolveDungeonTileIds({
       fillTileId: 10,

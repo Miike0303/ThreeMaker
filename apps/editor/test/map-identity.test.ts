@@ -402,3 +402,16 @@ it('accepts 64-character map names and rejects 65-character names', () => {
 it('rejects a reserved device name with a hyphenated extension', () => {
   expect(validateMapName('CON.saved-map')).toBe('reserved');
 });
+
+it('accepts COM as a map name without a device number', () => {
+  expect(validateMapName('COM')).toBeNull();
+});
+
+it('accepts LPT as a map name without a device number', () => {
+  expect(validateMapName('LPT')).toBeNull();
+});
+
+it('classifies the final drive letter as an absolute map-name prefix in either case', () => {
+  expect(validateMapName('Z:harbor')).toBe('absolute');
+  expect(validateMapName('z:harbor')).toBe('absolute');
+});
