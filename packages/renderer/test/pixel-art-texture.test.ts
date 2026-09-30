@@ -95,6 +95,20 @@ describe('configurePixelArtTexture', () => {
 });
 
 describe('loadSheetTexture', () => {
+  it('loads a sheet with the crisp defaults when texture options are omitted', async () => {
+    const texture = new THREE.Texture();
+    texture.magFilter = THREE.LinearFilter;
+    vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
+      onLoad?.(texture);
+      return texture;
+    });
+
+    await expect(loadSheetTexture('/sheet.png')).resolves.toBe(texture);
+    expect(texture.magFilter).toBe(THREE.NearestFilter);
+    expect(texture.minFilter).toBe(THREE.NearestFilter);
+    expect(texture.generateMipmaps).toBe(false);
+  });
+
   it('preserves percent escapes in loader failure diagnostics', async () => {
     const diagnostic = 'Failed to load /tiles/%2Fsheet%20name.png';
     vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation(
