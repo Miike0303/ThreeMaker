@@ -95,6 +95,21 @@ describe('configurePixelArtTexture', () => {
 });
 
 describe('loadSheetTexture', () => {
+  it('preserves percent escapes in loader failure diagnostics', async () => {
+    const diagnostic = 'Failed to load /tiles/%2Fsheet%20name.png';
+    vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation(
+      (_url, _onLoad, _onProgress, onError) => {
+        onError?.(diagnostic);
+        return new THREE.Texture();
+      },
+    );
+
+    await expect(loadSheetTexture('/tiles/%2Fsheet%20name.png')).rejects.toHaveProperty(
+      'message',
+      diagnostic,
+    );
+  });
+
   it('preserves a null loader failure in the rejection diagnostic', async () => {
     vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation(
       (_url, _onLoad, _onProgress, onError) => {

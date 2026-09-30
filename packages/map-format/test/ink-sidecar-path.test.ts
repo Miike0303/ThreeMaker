@@ -352,3 +352,26 @@ it('rejects a Unicode line separator before deriving a sidecar path', () => {
   expect(isSafeStoryId(storyId)).toBe(false);
   expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
 });
+
+it('rejects ASCII control whitespace before deriving a sidecar path', () => {
+  for (const whitespace of ['\v', '\f']) {
+    const storyId = `chapter${whitespace}2`;
+
+    expect(isSafeStoryId(storyId)).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+  }
+});
+
+it('rejects a Unicode paragraph separator before deriving a sidecar path', () => {
+  const storyId = 'chapter\u20292';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects a backspace character before deriving a sidecar path', () => {
+  const storyId = 'chapter\b2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
