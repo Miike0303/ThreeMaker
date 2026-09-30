@@ -217,6 +217,48 @@ describe('buildPlaceholderTextures', () => {
 });
 
 describe('composePlaceholderMap', () => {
+  it('preserves authored tileset metadata when stamping starter object hashes', () => {
+    const doc = composePlaceholderMap({
+      id: 'starter-tileset-metadata',
+      name: 'Starter',
+      width: 2,
+      height: 3,
+    });
+    const authored = { ...doc, tileset: { ...doc.tileset, tilePixelSize: 96 } };
+    const stamped = stampPlaceholderSlotObjects(authored, {
+      A5: 'a'.repeat(64),
+      B: 'b'.repeat(64),
+    });
+
+    expect(stamped.tileset).toMatchObject({
+      tilePixelSize: authored.tileset.tilePixelSize,
+      flags: authored.tileset.flags,
+      semantics: authored.tileset.semantics,
+    });
+  });
+
+  it('preserves the authored map and floors when stamping starter object hashes', () => {
+    const doc = composePlaceholderMap({
+      id: 'starter-map-preservation',
+      name: 'Harbor',
+      width: 2,
+      height: 3,
+    });
+    const stamped = stampPlaceholderSlotObjects(doc, {
+      A5: 'a'.repeat(64),
+      B: 'b'.repeat(64),
+    });
+
+    expect(stamped).toMatchObject({
+      id: doc.id,
+      name: doc.name,
+      version: doc.version,
+      width: doc.width,
+      height: doc.height,
+      floors: doc.floors,
+    });
+  });
+
   it('preserves A5 provenance independently when stamping starter object hashes', () => {
     const doc = composePlaceholderMap({
       id: 'starter-a5-provenance',

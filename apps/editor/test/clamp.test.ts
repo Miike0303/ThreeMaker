@@ -23,6 +23,10 @@ describe('clampRange', () => {
 });
 
 describe('clampTileIndex', () => {
+  it('clamps a tile index within a finite fractional map extent', () => {
+    expect(clampTileIndex(8, 3.8)).toBe(2);
+  });
+
   it('returns tile zero for a negative index when the map size is negative', () => {
     expect(clampTileIndex(-3, -1)).toBe(0);
   });

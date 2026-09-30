@@ -60,3 +60,11 @@ it('substitutes a zero placeholder value', () => {
 it('leaves hyphenated placeholder names unchanged', () => {
   expect(formatTemplate('Tile {tile-id}', { 'tile-id': 42 })).toBe('Tile {tile-id}');
 });
+
+it('leaves a placeholder without its closing brace unchanged', () => {
+  expect(formatTemplate('Map {name', { name: 'Harbor' })).toBe('Map {name');
+});
+
+it('leaves a placeholder without its opening brace unchanged', () => {
+  expect(formatTemplate('Map name}', { name: 'Harbor' })).toBe('Map name}');
+});

@@ -232,6 +232,19 @@ describe('mergeStampStairLinks', () => {
   const authored = { ...a, id: 'hand-drawn' };
   const isStandable = (x: number, y: number) => x === 1 && y === 1;
 
+  it('keeps generated lower-floor stairs when stamping a different upper-floor pair', () => {
+    const next = mergeStampStairLinks(
+      [reverse],
+      'floor-1',
+      'floor-2',
+      other,
+      'floor-1',
+      () => false,
+    );
+
+    expect(next).toEqual([reverse, other]);
+  });
+
   it('drops an authored stair blocked on the second floor in the pair', () => {
     expect(
       mergeStampStairLinks([authored], 'floor-0', 'floor-1', a, 'floor-1', isStandable),

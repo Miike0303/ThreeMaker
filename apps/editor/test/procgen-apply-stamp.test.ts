@@ -85,6 +85,54 @@ function rectangularStairFixture(roomCount: number, width = 20, height = 12) {
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('keeps applied ground edits independent of the stamp preview', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+    const preview = stamp.layers[0].slice();
+    const next = applyDungeonStampToMapDocument(doc, stamp);
+    const applied = next.floors[0]?.layers.tiles[0];
+    if (!applied) throw new Error('fixture has no applied ground layer');
+
+    applied.fill(99);
+
+    expect(stamp.layers[0]).toEqual(preview);
+  });
+
+  it('keeps applied mid-layer edits independent of the stamp preview', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+    stamp.layers[1][0] = 9001;
+    const preview = stamp.layers[1].slice();
+    const next = applyDungeonStampToMapDocument(doc, stamp);
+    const applied = next.floors[0]?.layers.tiles[1];
+    if (!applied) throw new Error('fixture has no applied mid layer');
+
+    applied[0] = 0;
+
+    expect(stamp.layers[1]).toEqual(preview);
+  });
+
+  it('keeps applied wall edits independent of the stamp preview', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+    const preview = stamp.layers[2].slice();
+    const next = applyDungeonStampToMapDocument(doc, stamp);
+    const applied = next.floors[0]?.layers.tiles[2];
+    if (!applied) throw new Error('fixture has no applied wall layer');
+
+    applied.fill(99);
+
+    expect(stamp.layers[2]).toEqual(preview);
+  });
+
+  it('classifies a shared tile when its semantic entry is absent', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('none', 4352, 0);
+    const unclassified = { ...doc, tileset: { ...doc.tileset, semantics: {} } };
+
+    const next = applyDungeonStampToMapDocument(unclassified, stamp, { targetFloorIndex: 1 });
+
+    expect(next.tileset.semantics['4352']).toEqual({ class: 'wall' });
+    expect(next.floors[0]?.layers.tiles[0][0]).toBe(4352);
+    expect(unclassified.tileset.semantics).toEqual({});
+  });
+
   it('classifies a negative nonzero mid-layer tile as furniture', () => {
     const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
     stamp.layers[1][0] = -9;
