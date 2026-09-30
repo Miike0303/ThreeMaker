@@ -33,6 +33,12 @@ describe('pickAdjacentFloorIndex', () => {
 });
 
 describe('roomLandingTile', () => {
+  it('falls back to map center when the landing room has no rectangles', () => {
+    const rooms = [{ id: 'empty-room', floor: 'floor-1', rects: [] }];
+
+    expect(roomLandingTile(rooms, 'floor-1', 10, 8)).toEqual({ x: 5, y: 4 });
+  });
+
   it('centers the fallback stair landing on a map wider than twice its height', () => {
     expect(roomLandingTile([], 'floor-1', 32, 8)).toEqual({ x: 16, y: 4 });
   });
@@ -263,6 +269,39 @@ describe('mergeStampStairLinks', () => {
   const reverse = stampStairLinkBetween('floor-1', { x: 9, y: 9 }, 'floor-0', { x: 8, y: 8 });
   const authored = { ...a, id: 'hand-drawn' };
   const isStandable = (x: number, y: number) => x === 1 && y === 1;
+
+  it('keeps generated stairs from a third floor into the pair destination', () => {
+    const unrelated = stampStairLinkBetween('floor-2', { x: 2, y: 2 }, 'floor-1', {
+      x: 1,
+      y: 1,
+    });
+
+    expect(
+      mergeStampStairLinks([unrelated], 'floor-0', 'floor-1', a, 'floor-0', () => false),
+    ).toEqual([unrelated, a]);
+  });
+
+  it('keeps generated stairs from a third floor into the pair source', () => {
+    const unrelated = stampStairLinkBetween('floor-2', { x: 2, y: 2 }, 'floor-0', {
+      x: 1,
+      y: 1,
+    });
+
+    expect(
+      mergeStampStairLinks([unrelated], 'floor-0', 'floor-1', a, 'floor-0', () => false),
+    ).toEqual([unrelated, a]);
+  });
+
+  it('keeps generated stairs from the reverse pair source to a third floor', () => {
+    const unrelated = stampStairLinkBetween('floor-2', { x: 2, y: 2 }, 'floor-0', {
+      x: 1,
+      y: 1,
+    });
+
+    expect(
+      mergeStampStairLinks([unrelated], 'floor-1', 'floor-2', other, 'floor-1', () => false),
+    ).toEqual([unrelated, other]);
+  });
 
   it('keeps generated lower-floor stairs when stamping a different upper-floor pair', () => {
     const next = mergeStampStairLinks(

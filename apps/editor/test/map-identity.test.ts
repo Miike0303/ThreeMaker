@@ -475,3 +475,11 @@ it('accepts a map name that extends a reserved word with a hyphen', () => {
 it('accepts CO as an ordinary map name', () => {
   expect(validateMapName('CO')).toBeNull();
 });
+
+it('rejects a reserved device name with spaces inside its extension', () => {
+  expect(validateMapName('CON.saved map')).toBe('reserved');
+});
+
+it('reports an embedded drive prefix as an invalid filename character', () => {
+  expect(validateMapName('Harbor A:annex')).toBe('invalid-chars');
+});

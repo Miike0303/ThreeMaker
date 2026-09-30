@@ -887,6 +887,18 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('does not create door openings for a negative-width room', () => {
+    const walkable = new Uint8Array(25).fill(1);
+
+    expect(findDoorOpenings([{ x: 1, y: 1, w: -1, h: 3 }], walkable, 5, 5)).toEqual([]);
+  });
+
+  it('does not create door openings for a negative-height room', () => {
+    const walkable = new Uint8Array(25).fill(1);
+
+    expect(findDoorOpenings([{ x: 1, y: 1, w: 3, h: -1 }], walkable, 5, 5)).toEqual([]);
+  });
+
   it('finds a door whose east neighbor is beyond the height on a wide map', () => {
     const width = 7;
     const height = 3;
