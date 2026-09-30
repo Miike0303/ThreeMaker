@@ -1036,3 +1036,37 @@ it('keeps dotted edge endpoints distinct when their joined names collide', () =>
     { from: 'chapter', to: 'scene.ending' },
   ]);
 });
+
+it('rejects a knot header containing a pipe', () => {
+  expect(listInkKnots('=== side|room ===\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('rejects a stored layout knot name containing a pipe', () => {
+  expect(parseInkNodeLayouts('// @tm-node side|room x=17 y=29\n')).toEqual([]);
+});
+
+it('stops a divert target name at a pipe', () => {
+  expect(listInkEdges('=== start ===\n-> side|room\n')).toEqual([{ from: 'start', to: 'side' }]);
+});
+
+it('rejects a knot header containing a plus sign', () => {
+  expect(listInkKnots('=== side+room ===\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('rejects a stored layout knot name containing a plus sign', () => {
+  expect(parseInkNodeLayouts('// @tm-node side+room x=17 y=29\n')).toEqual([]);
+});
+
+it('stops a divert target name at a plus sign', () => {
+  expect(listInkEdges('=== start ===\n-> side+room\n')).toEqual([{ from: 'start', to: 'side' }]);
+});
+
+it('rejects a knot name that begins with a pipe', () => {
+  expect(listInkKnots('=== |draft ===\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('ignores a divert target that begins with a plus sign', () => {
+  expect(listInkEdges('=== start ===\n-> +draft\n-> visible\n')).toEqual([
+    { from: 'start', to: 'visible' },
+  ]);
+});

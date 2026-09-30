@@ -41,6 +41,10 @@ function buildMap(width: number, height: number, regions: readonly number[]): Rp
 }
 
 describe('heightForRegion', () => {
+  it('keeps a fractional region below one at ground level', () => {
+    expect(heightForRegion(0.5)).toBe(0);
+  });
+
   it('maps region ids 1-7 to the same height, per the MV3D convention', () => {
     for (let region = 1; region <= 7; region++) {
       expect(heightForRegion(region)).toBe(region);
