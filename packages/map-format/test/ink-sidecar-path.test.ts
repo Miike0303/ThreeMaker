@@ -283,3 +283,59 @@ it('rejects parentheses in story ids before deriving a sidecar path', () => {
   expect(isSafeStoryId(storyId)).toBe(false);
   expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
 });
+
+it('rejects an opening parenthesis alone before deriving a sidecar path', () => {
+  const storyId = 'chapter(2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects a closing parenthesis alone before deriving a sidecar path', () => {
+  const storyId = 'chapter)2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects closing square brackets before deriving a sidecar path', () => {
+  const storyId = 'chapter]2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects closing braces before deriving a sidecar path', () => {
+  const storyId = 'chapter}2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects carets before deriving a sidecar path', () => {
+  const storyId = 'chapter^2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects an embedded carriage return before deriving a sidecar path', () => {
+  const storyId = 'chapter\r2';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects non-ASCII decimal digits before deriving a sidecar path', () => {
+  const storyId = 'chapter\u0662';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});
+
+it('rejects a Unicode line separator before deriving a sidecar path', () => {
+  const storyId = 'chapter\u20282';
+
+  expect(isSafeStoryId(storyId)).toBe(false);
+  expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+});

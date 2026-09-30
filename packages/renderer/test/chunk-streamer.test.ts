@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ChunkStreamer, chunkKey } from '../src/streaming/chunk-streamer.js';
 
 /** 512x512-tile map, 16-tile chunks -> a 32x32 chunk grid. */
@@ -478,6 +478,22 @@ describe('ChunkStreamer', () => {
 
     expect(diff.toBuild).toHaveLength(0);
     expect(diff.toDispose).toHaveLength(0);
+  });
+
+  it('avoids rescanning live chunks while the focus stays inside the same chunk', () => {
+    const streamer = new ChunkStreamer({ ...GIANT, buildRadius: 2 });
+    streamer.update(256, 256);
+    const scan = vi.spyOn(streamer.liveKeys, Symbol.iterator);
+
+    try {
+      expect(streamer.update(257, 258)).toEqual({ toBuild: [], toDispose: [] });
+      expect(scan).not.toHaveBeenCalled();
+
+      streamer.update(272, 258);
+      expect(scan).toHaveBeenCalledOnce();
+    } finally {
+      scan.mockRestore();
+    }
   });
 
   it('defaults dispose radius to one chunk beyond the build radius', () => {
