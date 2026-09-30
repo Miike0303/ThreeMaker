@@ -95,6 +95,20 @@ describe('configurePixelArtTexture', () => {
 });
 
 describe('loadSheetTexture', () => {
+  it('preserves an undefined loader failure in the rejection diagnostic', async () => {
+    vi.spyOn(THREE.TextureLoader.prototype, 'load').mockImplementation(
+      (_url, _onLoad, _onProgress, onError) => {
+        onError?.(undefined);
+        return new THREE.Texture();
+      },
+    );
+
+    await expect(loadSheetTexture('/missing-sheet.png')).rejects.toHaveProperty(
+      'message',
+      'undefined',
+    );
+  });
+
   it('loads a sheet with the crisp defaults when texture options are omitted', async () => {
     const texture = new THREE.Texture();
     texture.magFilter = THREE.LinearFilter;
