@@ -82,6 +82,42 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect([...project.maps.keys()]).toEqual([1]);
   });
 
+  it('ignores filenames with Mop instead of the Map prefix', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Mop002.json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
+  it('ignores map filenames with an xson extension', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map002.xson']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
+  it('ignores map filenames with a jxon extension', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map002.jxon']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
+  it('ignores map filenames with a jsxn extension', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map002.jsxn']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
   it('ignores map filenames with a misspelled JSON extension', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json', 'Map002.jsom']);
@@ -215,6 +251,15 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     const project = await loadProject(workDir);
 
     expect(project.maps.get(10000)?.id).toBe(10000);
+  });
+
+  it('loads a map whose filename has a six-digit ID', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map100000.json']);
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.get(100000)?.id).toBe(100000);
   });
 
   it('ignores a map filename with a negative ID', async () => {

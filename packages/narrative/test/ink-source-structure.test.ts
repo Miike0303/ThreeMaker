@@ -871,3 +871,43 @@ it('reads a layout comment with a trailing non-breaking space', () => {
     { knot: 'entry', x: 17, y: 29 },
   ]);
 });
+
+it('rejects a knot name that begins with a hyphen', () => {
+  expect(listInkKnots('=== -draft ===\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('rejects a layout knot name that begins with a hyphen', () => {
+  expect(parseInkNodeLayouts('// @tm-node -draft x=17 y=29\n')).toEqual([]);
+});
+
+it('ignores a divert target that begins with a hyphen', () => {
+  expect(listInkEdges('=== start ===\n-> -draft\n-> visible\n')).toEqual([
+    { from: 'start', to: 'visible' },
+  ]);
+});
+
+it('lists a knot name containing a nine digit', () => {
+  expect(listInkKnots('=== room9 ===\n')).toEqual(['room9']);
+});
+
+it('reads a stored layout for a knot containing a nine digit', () => {
+  expect(parseInkNodeLayouts('// @tm-node room9 x=17 y=29\n')).toEqual([
+    { knot: 'room9', x: 17, y: 29 },
+  ]);
+});
+
+it('keeps a nine digit inside a divert target name', () => {
+  expect(listInkEdges('=== start ===\n-> room9\n')).toEqual([{ from: 'start', to: 'room9' }]);
+});
+
+it('reads a horizontal layout coordinate with four integer digits', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry x=1024 y=29\n')).toEqual([
+    { knot: 'entry', x: 1024, y: 29 },
+  ]);
+});
+
+it('reads a vertical layout coordinate with four integer digits', () => {
+  expect(parseInkNodeLayouts('// @tm-node entry x=17 y=1024\n')).toEqual([
+    { knot: 'entry', x: 17, y: 1024 },
+  ]);
+});

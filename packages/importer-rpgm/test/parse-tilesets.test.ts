@@ -211,6 +211,15 @@ describe('parseTilesets', () => {
     ).toThrow(/flags/);
   });
 
+  it('preserves integer flags above the safe integer limit', () => {
+    const flags = [Number.MAX_SAFE_INTEGER + 1];
+    const tilesets = parseTilesets([
+      { id: 1, name: 'Town', flags, tilesetNames: new Array(9).fill('') },
+    ]);
+
+    expect(tilesets[0]?.flags).toEqual(flags);
+  });
+
   it('throws when tileset ids are duplicated', () => {
     expect(() =>
       parseTilesets([
