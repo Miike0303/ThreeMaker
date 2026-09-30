@@ -455,6 +455,22 @@ describe('parseMapDocument', () => {
       expect(() => parseMapDocument(v2Input)).toThrow(/rooms/);
     });
 
+    it('explains that the v2 migration would discard prematurely authored rooms', () => {
+      const input = makeV2DocInput({
+        rooms: [
+          {
+            id: 'authored-room',
+            floor: 'floor-0',
+            rects: [{ x: 0, y: 0, width: 1, height: 1 }],
+          },
+        ],
+      });
+
+      expect(() => parseMapDocument(input)).toThrow(
+        'the v2 -> v3 migration would otherwise discard it.',
+      );
+    });
+
     it('classifies a v2 document carrying rooms as malformed', () => {
       try {
         parseMapDocument(makeV2DocInput({ rooms: [] }));
