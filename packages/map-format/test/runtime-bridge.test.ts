@@ -15,6 +15,13 @@ import type { SemanticOverrides } from '../src/schema.js';
 const EMPTY_LAYER = (size: number) => new Array(size).fill(0);
 
 describe('deriveRampCells', () => {
+  it('uses row-major ramp coordinates when the map width is not a power of two', () => {
+    const layers = [[0, 0, 0, 0, 0, 7], EMPTY_LAYER(6), EMPTY_LAYER(6), EMPTY_LAYER(6)] as const;
+    const semantics: SemanticOverrides = { '7': { class: 'ramp' } };
+
+    expect(deriveRampCells(layers, semantics, 3, 2)).toEqual([{ x: 2, y: 1 }]);
+  });
+
   it('ignores trailing ramp tiles beyond the requested map height', () => {
     const layers = [[7, 7], EMPTY_LAYER(2), EMPTY_LAYER(2), EMPTY_LAYER(2)] as const;
     const semantics: SemanticOverrides = { '7': { class: 'ramp' } };

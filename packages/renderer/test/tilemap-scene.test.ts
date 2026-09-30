@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChunkBuildData } from '../src/geometry/types.js';
+import * as chunkGroupBuilder from '../src/scene/build-chunk-group.js';
 import { TilemapScene } from '../src/scene/tilemap-scene.js';
 
 function makeChunk(chunkX: number, chunkY: number, sheet: 'B' | 'C'): ChunkBuildData {
@@ -21,6 +22,28 @@ function makeChunk(chunkX: number, chunkY: number, sheet: 'B' | 'C'): ChunkBuild
 }
 
 describe('TilemapScene', () => {
+  it('disposes tile geometry without treating non-mesh chunk helpers as GPU resources', () => {
+    const originalBuildChunkGroup = chunkGroupBuilder.buildChunkGroup;
+    const build = vi
+      .spyOn(chunkGroupBuilder, 'buildChunkGroup')
+      .mockImplementationOnce((...args) => {
+        const group = originalBuildChunkGroup(...args);
+        group.add(new THREE.Object3D());
+        return group;
+      });
+
+    try {
+      const scene = new TilemapScene([makeChunk(0, 0, 'B')], { B: new THREE.Texture() });
+      const mesh = scene.group.children[0]?.children[0] as THREE.Mesh;
+      const dispose = vi.spyOn(mesh.geometry, 'dispose');
+
+      expect(() => scene.dispose()).not.toThrow();
+      expect(dispose).toHaveBeenCalledOnce();
+    } finally {
+      build.mockRestore();
+    }
+  });
+
   it('keeps the default tilemap root discoverable by name in a parent scene', () => {
     const scene = new TilemapScene([makeChunk(0, 0, 'B')], { B: new THREE.Texture() });
     const parent = new THREE.Scene();
