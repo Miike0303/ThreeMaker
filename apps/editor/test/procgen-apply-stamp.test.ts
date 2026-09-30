@@ -85,6 +85,85 @@ function rectangularStairFixture(roomCount: number, width = 20, height = 12) {
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('keeps an authored stair on a negative nonzero ground tile', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+    const entry = pickMainRoomSpawn(stamp.rooms, doc.width, doc.height);
+    const index = entry.y * doc.width + entry.x;
+    stamp.layers[0][index] = -1;
+    expect(stamp.layers[2][index]).toBe(0);
+    const stair = {
+      id: 'authored-negative-ground',
+      fromFloor: 'floor-1',
+      toFloor: 'floor-0',
+      bidirectional: true,
+      waypoints: [
+        { ...entry, floor: 'floor-1' },
+        { x: 3, y: 3, floor: 'floor-0' },
+      ],
+    };
+
+    const next = applyDungeonStampToMapDocument({ ...doc, stairLinks: [stair] }, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks).toContainEqual(stair);
+  });
+
+  it('tags a negative nonzero stamped wall tile as a wall', () => {
+    const { doc } = twoFloorSemanticFixture('none', 0, 0);
+    const stamp = stampSimpleDungeon({
+      width: doc.width,
+      height: doc.height,
+      seed: 3,
+      groundTileId: 2816,
+      wallTileId: -2,
+    });
+    expect(stamp.layers[2]).toContain(-2);
+
+    const next = applyDungeonStampToMapDocument(doc, stamp);
+
+    expect(next.tileset.semantics['-2']).toEqual({ class: 'wall' });
+  });
+
+  it('rejects wall reclassification when the tile is used on an upper floor', () => {
+    const { doc, stamp } = twoFloorSemanticFixture('window', 0, 4352);
+
+    expect(() => applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 0 })).toThrow(
+      'Cannot reclass tile 4352 from window to wall: used on floor floor-1',
+    );
+  });
+
+  it('drops an authored stair on a negative nonzero wall tile', () => {
+    const { doc } = rectangularStairFixture(1);
+    const stamp = stampSimpleDungeon({
+      width: doc.width,
+      height: doc.height,
+      seed: 3,
+      groundTileId: 2816,
+      wallTileId: -2,
+    });
+    const index = stamp.layers[2].indexOf(-2);
+    if (index < 0) throw new Error('fixture has no negative wall tile');
+    const stair = {
+      id: 'authored-negative-wall',
+      fromFloor: 'floor-1',
+      toFloor: 'floor-0',
+      bidirectional: true,
+      waypoints: [
+        { x: index % doc.width, y: Math.floor(index / doc.width), floor: 'floor-1' },
+        { x: 3, y: 3, floor: 'floor-0' },
+      ],
+    };
+
+    const next = applyDungeonStampToMapDocument({ ...doc, stairLinks: [stair] }, stamp, {
+      targetFloorIndex: 1,
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks).not.toContainEqual(stair);
+  });
+
   it('copies over-layer tiles in stamp order without mutating the stamp', () => {
     const { doc, stamp } = twoFloorSemanticFixture('none', 0, 0);
     stamp.layers[3][0] = 9;

@@ -970,3 +970,13 @@ it('normalizes an array mixed license tag to user-owned', () => {
 
   expect(parseCommunityShareQueueJson(raw)).toEqual({ ok: true, jobs: [job] });
 });
+
+it('shows a single-digit calendar day without padding in a queue timestamp', () => {
+  const at = new Date(2026, 8, 7, 13, 5).toISOString();
+  expect(formatCommunityShareAt(at, 'en-US')).toMatch(/^Sep 7, 2026, /);
+});
+
+it('pads a single-digit hour in a localized queue timestamp', () => {
+  const at = new Date(2026, 8, 7, 3, 7).toISOString();
+  expect(formatCommunityShareAt(at, 'en-US')).toMatch(/, 03:07\s/);
+});

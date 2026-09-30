@@ -97,6 +97,54 @@ describe('stampSimpleDungeon oversized corridor boundaries', () => {
 });
 
 describe('stampSimpleDungeon', () => {
+  it('keeps the outer ring empty when no rooms are requested', () => {
+    const width = 12;
+    const height = 10;
+    const stamp = stampSimpleDungeon({
+      width,
+      height,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 0,
+    });
+    const outerRing = Array.from({ length: width * height }, (_, index) => index).filter(
+      (index) => {
+        const x = index % width;
+        const y = Math.floor(index / width);
+        return x === 0 || x === width - 1 || y === 0 || y === height - 1;
+      },
+    );
+
+    expect(outerRing.map((index) => [stamp.layers[0][index], stamp.layers[2][index]])).toEqual(
+      outerRing.map(() => [0, 0]),
+    );
+  });
+
+  it('accepts a negative nonzero ground tile ID', () => {
+    const stamp = stampSimpleDungeon({
+      width: 8,
+      height: 8,
+      seed: 1,
+      groundTileId: -1,
+      wallTileId: WALL,
+    });
+
+    expect(stamp.layers[0]).toContain(-1);
+  });
+
+  it('accepts a negative nonzero wall tile ID', () => {
+    const stamp = stampSimpleDungeon({
+      width: 8,
+      height: 8,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: -2,
+    });
+
+    expect(stamp.layers[2]).toContain(-2);
+  });
+
   it('places a second room with exactly one separating column west of the first', () => {
     const stamp = stampSimpleDungeon({
       width: 10,

@@ -33,6 +33,18 @@ describe('pickAdjacentFloorIndex', () => {
 });
 
 describe('roomLandingTile', () => {
+  it('falls back to map center when rooms exist only on a lower floor', () => {
+    const rooms = [
+      {
+        id: 'lower-room',
+        floor: 'floor-0',
+        rects: [{ x: 0, y: 0, width: 2, height: 2 }],
+      },
+    ];
+
+    expect(roomLandingTile(rooms, 'floor-1', 10, 8)).toEqual({ x: 5, y: 4 });
+  });
+
   it('selects the largest landing room without accumulating earlier areas', () => {
     const rooms = [
       {

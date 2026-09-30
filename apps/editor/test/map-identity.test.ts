@@ -415,3 +415,22 @@ it('classifies the final drive letter as an absolute map-name prefix in either c
   expect(validateMapName('Z:harbor')).toBe('absolute');
   expect(validateMapName('z:harbor')).toBe('absolute');
 });
+
+it('confirms overwriting a saved custom playtest target', () => {
+  expect(
+    shouldConfirmPlaytestDualWrite({
+      openMapName: 'harbor',
+      savedMapNames: ['preview'],
+      legacyMapName: 'preview',
+    }),
+  ).toBe(true);
+});
+
+it('classifies the first uppercase drive letter as an absolute map-name prefix', () => {
+  expect(validateMapName('A:harbor')).toBe('absolute');
+});
+
+it('identifies rejected map names in the displayed error diagnostic', () => {
+  const error = new InvalidMapNameError('invalid-chars', 'Harbor?');
+  expect(error.toString()).toBe('InvalidMapNameError: Invalid map name "Harbor?" (invalid-chars)');
+});
