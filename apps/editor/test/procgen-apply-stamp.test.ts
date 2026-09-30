@@ -85,6 +85,28 @@ function rectangularStairFixture(roomCount: number, width = 20, height = 12) {
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('reports a missing target floor entry before accessing its layers', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+    const floors = doc.floors.slice();
+    delete floors[1];
+
+    expect(() =>
+      applyDungeonStampToMapDocument({ ...doc, floors }, stamp, { targetFloorIndex: 1 }),
+    ).toThrow('map document has no floors to stamp');
+  });
+
+  it('does not create stairs when the adjacent floor entry is missing', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+    const floors = doc.floors.slice();
+    delete floors[1];
+
+    const next = applyDungeonStampToMapDocument({ ...doc, floors }, stamp, {
+      placeStairToAdjacentFloor: true,
+    });
+
+    expect(next.stairLinks).toEqual([]);
+  });
+
   it('preserves the stamped floor ID and elevation', () => {
     const { doc, stamp } = rectangularStairFixture(1);
 

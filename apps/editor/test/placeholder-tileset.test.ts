@@ -617,3 +617,18 @@ it('decodes every PNG scanline when the final stored block contains one byte', (
   expect(decoded).toHaveLength((width * 4 + 1) * height);
   expect(decoded.at(-1)).toBe(173);
 });
+
+it('repeats the starter checkerboard color after two tile columns', () => {
+  const tilePixelSize = 2;
+  const { rgba } = buildPlaceholderSheetRgba('A5', tilePixelSize);
+  const thirdCellStart = 2 * tilePixelSize * 4;
+
+  expect(rgba.subarray(thirdCellStart, thirdCellStart + 4)).toEqual(rgba.subarray(0, 4));
+});
+
+it('keeps a starter cell color unchanged across its pixel rows', () => {
+  const { width, rgba } = buildPlaceholderSheetRgba('A5', 2);
+  const secondRowStart = width * 4;
+
+  expect(rgba.subarray(secondRowStart, secondRowStart + 4)).toEqual(rgba.subarray(0, 4));
+});

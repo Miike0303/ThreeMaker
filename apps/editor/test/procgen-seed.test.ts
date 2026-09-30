@@ -64,6 +64,14 @@ describe('clampFurnitureDensity', () => {
 });
 
 describe('furniture density percent round-trip', () => {
+  it('caps an oversized density at 100 percent for the UI', () => {
+    expect(furnitureDensityToPercent(1.5)).toBe(100);
+  });
+
+  it('caps an oversized UI percentage at full furniture density', () => {
+    expect(furnitureDensityFromPercent(150)).toBe(1);
+  });
+
   it('rounds a density percentage down when it is below the half-percent boundary', () => {
     expect(furnitureDensityToPercent(0.124)).toBe(12);
   });

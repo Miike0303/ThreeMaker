@@ -7,6 +7,15 @@ import {
 } from '../src/procgen/tile-pick.js';
 
 describe('firstClassedTileId', () => {
+  it('selects the lowest semantic tile ID when large keys retain insertion order', () => {
+    expect(
+      firstClassedTileId(
+        { '4294967297': { class: 'wall' }, '4294967296': { class: 'wall' } },
+        'wall',
+      ),
+    ).toBe(4294967296);
+  });
+
   it('selects tile ID one when it is the lowest matching semantic tile', () => {
     expect(firstClassedTileId({ '1': { class: 'wall' }, '88': { class: 'wall' } }, 'wall')).toBe(1);
   });
