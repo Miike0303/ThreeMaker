@@ -73,6 +73,36 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     }
   }
 
+  it('loads a map whose filename has an eight-digit ID', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map10000000.json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([10000000]);
+    expect(project.maps.get(10000000)?.id).toBe(10000000);
+  });
+
+  it('loads a map whose decimal filename ID contains eight and nine', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map089.json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([89]);
+    expect(project.maps.get(89)?.id).toBe(89);
+  });
+
+  it('loads an all-zero map filename with numeric ID zero', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map000.json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([0]);
+    expect(project.maps.get(0)?.id).toBe(0);
+  });
+
   it('ignores map filenames with whitespace before the numeric ID', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json', 'Map 002.json']);

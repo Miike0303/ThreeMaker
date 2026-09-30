@@ -1027,3 +1027,12 @@ it('rewrites a leading layout block after a whitespace-only line', () => {
     '// @tm-node entry x=17 y=29\n\n=== entry ===\nWelcome.\n',
   );
 });
+
+it('keeps dotted edge endpoints distinct when their joined names collide', () => {
+  const source = '=== chapter.scene ===\n-> ending\n=== chapter ===\n-> scene.ending\n';
+
+  expect(listInkEdges(source)).toEqual([
+    { from: 'chapter.scene', to: 'ending' },
+    { from: 'chapter', to: 'scene.ending' },
+  ]);
+});

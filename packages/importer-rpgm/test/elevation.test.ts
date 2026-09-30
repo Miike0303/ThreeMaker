@@ -103,6 +103,19 @@ describe('computeHeightGrid', () => {
 });
 
 describe('computeRampGrid', () => {
+  it('explains why a multi-level ramp stays inert in its warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const heightGrid = new Uint8Array(9).fill(3);
+    heightGrid[1] = 1;
+
+    const rampGrid = computeRampGrid({ heightGrid, mapWidth: 3, mapHeight: 3 }, [{ x: 1, y: 1 }]);
+
+    expect(rampGrid[4]).toBe(0);
+    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
+      'computeRampGrid: ramp cell (1, 1) at height 3 has no neighbor exactly one height level below it (multi-level span); treating the cell as inert (non-ramp).',
+    );
+  });
+
   it('uses ground height for off-map neighbors of a one-level boundary ramp', () => {
     const ctx: HeightGridContext = {
       heightGrid: new Uint8Array([1]),
