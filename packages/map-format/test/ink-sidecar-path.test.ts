@@ -14,6 +14,13 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('rejects Unicode case-folding lookalikes before deriving a sidecar path', () => {
+    for (const storyId of ['chapter\u212A2', 'chapter\u017F2']) {
+      expect(isSafeStoryId(storyId)).toBe(false);
+      expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+    }
+  });
+
   it('explains the allowed characters when rejecting an unsafe story id', () => {
     expect(() => inkSidecarRelativePath('maps/town.tmmap.json', 'act/intro')).toThrow(
       'is not path-safe (letters, digits, "_" and "-" only).',

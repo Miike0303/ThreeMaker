@@ -11,6 +11,19 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('disposes a departed window in the order its chunks were built', () => {
+    const streamer = new ChunkStreamer({
+      chunkSize: 16,
+      mapWidth: 64,
+      mapHeight: 64,
+      buildRadius: 1,
+      disposeRadius: 1,
+    });
+    streamer.update(0, 0);
+
+    expect(streamer.update(48, 48).toDispose).toEqual(['0,0', '1,0', '0,1', '1,1']);
+  });
+
   it('clamps a high X focus to the last tile with half-tile chunks', () => {
     const streamer = new ChunkStreamer({
       chunkSize: 0.5,

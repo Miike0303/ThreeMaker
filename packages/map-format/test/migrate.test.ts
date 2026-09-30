@@ -90,6 +90,16 @@ function makeV1DocInput(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('parseMapDocument', () => {
+  it('does not dispatch a registered migration beyond the supported version', () => {
+    const futureVersion = CURRENT_MAP_FORMAT_VERSION + 1;
+    registerMigration(0, (raw) => ({ ...raw, version: futureVersion }));
+    registerMigration(futureVersion, (raw) => ({ ...raw, version: CURRENT_MAP_FORMAT_VERSION }));
+
+    expect(() => parseMapDocument(makeValidDocInput({ version: 0 }))).toThrowError(
+      expect.objectContaining({ code: 'malformed' }),
+    );
+  });
+
   it('classifies an undefined floor in a version-5 document as malformed', () => {
     const input = makeValidDocInput({ version: 5, floors: [undefined] });
     delete input.lights;
