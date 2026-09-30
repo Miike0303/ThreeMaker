@@ -348,3 +348,18 @@ it('keeps the landing row when it differs from the landing column', () => {
 
   expect(traversal.update(10)).toEqual({ x: 4, y: 2, worldY: 3, done: true });
 });
+
+it('skips incomplete segments in a sparse stair path', () => {
+  const waypoints = [{ x: 0, y: 0, floor: 0 }];
+  waypoints.length = 2;
+  waypoints.push({ x: 3, y: 1, floor: 0 }, { x: 4, y: 1, floor: 1 });
+  const traversal = new StairTraversal({
+    waypoints,
+    floors: FLOORS,
+    speed: SPEED,
+    heightUnit: HEIGHT_UNIT,
+  });
+
+  expect(traversal.update(0)).toEqual({ x: 3, y: 1, worldY: 0, done: false });
+  expect(traversal.update(1)).toEqual({ x: 4, y: 1, worldY: 3, done: true });
+});

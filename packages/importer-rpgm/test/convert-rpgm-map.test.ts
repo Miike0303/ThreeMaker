@@ -108,6 +108,110 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  it('skips an event with missing pages without throwing', () => {
+    const event: RpgmEvent = JSON.parse('{"id":1,"name":"Elder","x":2,"y":3}');
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [event] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips an event with a null reachable page without throwing', () => {
+    const page = showTextPage(0, ['Hello']);
+    const event: RpgmEvent = { ...placedEvent(page), pages: JSON.parse('[null]') };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [event] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips the whole event when a command entry is null without throwing', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [JSON.parse('null')]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips the whole event when text continuation parameters are not an array', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 401, indent: 0, parameters: JSON.parse('{"0":"After"}') },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('omits the speaker when Show Text header parameters are not an array', () => {
+    const page: RpgmEventPage = {
+      conditions: CLEAR_CONDITIONS,
+      trigger: 0,
+      list: [
+        { code: 101, indent: 0, parameters: JSON.parse('{"4":"Elder"}') },
+        { code: 401, indent: 0, parameters: ['Hello'] },
+        { code: 0, indent: 0, parameters: [] },
+      ],
+    };
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.events['rpgm-event-1']).toEqual([
+      { type: 'showDialogue', source: { kind: 'text', lines: ['Hello'] } },
+    ]);
+  });
+
+  it('skips a self-switch command with an array-wrapped letter', () => {
+    const page = showTextPage(0, ['Before'], undefined, CLEAR_CONDITIONS, [
+      { code: 123, indent: 0, parameters: [['A'], 0] },
+    ]);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips an event with a null self-switch page activation flag', () => {
+    const conditions = JSON.parse('{"selfSwitchValid":null}');
+    const page = showTextPage(0, ['Locked'], undefined, conditions);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
+  it('skips an event with a null item page activation flag', () => {
+    const conditions = JSON.parse('{"itemValid":null}');
+    const page = showTextPage(0, ['Locked'], undefined, conditions);
+    const doc = convertRpgmMap(
+      buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page)] }),
+      buildSyntheticTileset(),
+    );
+
+    expect(doc.triggers).toEqual([]);
+    expect(doc.events).toEqual({});
+  });
+
   it('imports exactly 500 commands on a conditional page without a fallback', () => {
     const page: RpgmEventPage = {
       conditions: { ...CLEAR_CONDITIONS, switch1Valid: true, switch1Id: 1 },

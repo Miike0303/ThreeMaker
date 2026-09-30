@@ -951,3 +951,15 @@ it('preserves a triple-slash author comment when rewriting layouts', () => {
     `// @tm-node start x=17 y=29\n\n${source}`,
   );
 });
+
+it('rejects a bracket inside a knot name', () => {
+  expect(listInkKnots('=== side[room ===\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('rejects a bracket inside a stored layout knot name', () => {
+  expect(parseInkNodeLayouts('// @tm-node side[room x=17 y=29\n')).toEqual([]);
+});
+
+it('stops a divert target name at a bracket', () => {
+  expect(listInkEdges('=== start ===\n-> side[room\n')).toEqual([{ from: 'start', to: 'side' }]);
+});
