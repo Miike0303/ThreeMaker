@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ElevationField } from '../src/elevation-field.js';
-import { StairTraversal } from '../src/stair-traversal.js';
+import { StairTraversal, type StairTraversalWaypoint } from '../src/stair-traversal.js';
 import { buildMap } from './fixtures.js';
 
 const HEIGHT_UNIT = 1;
@@ -362,4 +362,17 @@ it('skips incomplete segments in a sparse stair path', () => {
 
   expect(traversal.update(0)).toEqual({ x: 3, y: 1, worldY: 0, done: false });
   expect(traversal.update(1)).toEqual({ x: 4, y: 1, worldY: 3, done: true });
+});
+
+it('falls back to the origin when a stair path has no complete segments', () => {
+  const waypoints: StairTraversalWaypoint[] = [];
+  waypoints.length = 2;
+  const traversal = new StairTraversal({
+    waypoints,
+    floors: FLOORS,
+    speed: SPEED,
+    heightUnit: HEIGHT_UNIT,
+  });
+
+  expect(traversal.update(0)).toEqual({ x: 0, y: 0, worldY: 0, done: true });
 });

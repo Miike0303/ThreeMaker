@@ -346,3 +346,17 @@ it('finds the speaker tag after a colonless tag', () => {
 
   expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello.' });
 });
+
+it('preserves a content carriage return without a final newline', () => {
+  const story = {
+    canContinue: true,
+    Continue: () => 'Wait.\r',
+    currentTags: [],
+    currentChoices: [],
+  } as unknown as Story;
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', text: 'Wait.\r' });
+});
