@@ -1659,6 +1659,42 @@ describe('convertRpgmMap', () => {
       ]);
     });
 
+    it('preserves the fallback below a switch-2-only page with switch 1 disabled', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Fallback']),
+        showTextPage(0, ['Matched'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch2Valid: true,
+          switch2Id: 8,
+        }),
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'conditional',
+          if: { key: 'rpgm.switch.8', op: 'eq', value: true },
+          then: [dialogue('Matched')],
+          else: [dialogue('Fallback')],
+        },
+      ]);
+    });
+
+    it('preserves the fallback below a switch-2-only page with switch 1 omitted', () => {
+      const doc = convertPages([
+        showTextPage(0, ['Fallback']),
+        showTextPage(0, ['Matched'], undefined, { switch2Valid: true, switch2Id: 8 }),
+      ]);
+
+      expect(doc.events['rpgm-event-1']).toEqual([
+        {
+          type: 'conditional',
+          if: { key: 'rpgm.switch.8', op: 'eq', value: true },
+          then: [dialogue('Matched')],
+          else: [dialogue('Fallback')],
+        },
+      ]);
+    });
+
     it('skips the event when any page has an unsupported condition', () => {
       const doc = convertPages([
         showTextPage(0, ['Hello']),
@@ -1820,6 +1856,54 @@ describe('convertRpgmMap', () => {
 
       expect(doc.triggers).toEqual([]);
       expect(doc.events).toEqual({});
+    });
+
+    it('rejects 501 commands when a two-switch page repeats a 249-command fallback', () => {
+      const assignments = [
+        [1, 100],
+        [101, 200],
+        [201, 249],
+      ].map(([start, end]) => ({ code: 121, indent: 0, parameters: [start, end, 0] }));
+      const doc = convertPages([
+        { conditions: CLEAR_CONDITIONS, trigger: 0, list: assignments },
+        showTextPage(0, ['Matched'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: 1,
+          switch2Valid: true,
+          switch2Id: 2,
+        }),
+      ]);
+
+      expect(doc.triggers).toEqual([]);
+      expect(doc.events).toEqual({});
+    });
+
+    it('imports 499 commands when a two-switch page repeats a 248-command fallback', () => {
+      const assignments = [
+        [1, 100],
+        [101, 200],
+        [201, 248],
+      ].map(([start, end]) => ({ code: 121, indent: 0, parameters: [start, end, 0] }));
+      const doc = convertPages([
+        { conditions: CLEAR_CONDITIONS, trigger: 0, list: assignments },
+        showTextPage(0, ['Matched'], undefined, {
+          ...CLEAR_CONDITIONS,
+          switch1Valid: true,
+          switch1Id: 1,
+          switch2Valid: true,
+          switch2Id: 2,
+        }),
+      ]);
+      const outer = doc.events['rpgm-event-1']?.[0];
+      const inner = outer?.then?.[0];
+
+      expect(doc.triggers).toHaveLength(1);
+      expect(outer?.if).toEqual({ key: 'rpgm.switch.1', op: 'eq', value: true });
+      expect(inner?.if).toEqual({ key: 'rpgm.switch.2', op: 'eq', value: true });
+      expect(inner?.then).toEqual([dialogue('Matched')]);
+      expect(outer?.else).toHaveLength(248);
+      expect(inner?.else).toHaveLength(248);
     });
 
     it('keeps a small top page when it overrides an oversized lower page', () => {

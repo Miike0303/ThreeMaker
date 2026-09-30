@@ -337,3 +337,38 @@ it('keeps binding order when collecting aliases for persistence', () => {
 
   expect(collectBindingOverrides(createBindingTable(aliases), [])).toEqual(aliases);
 });
+
+it('rejects an undefined input bindings document without throwing', () => {
+  expect(parseInputBindingsDocument(undefined)).toEqual({
+    ok: false,
+    reason: 'document must be an object',
+  });
+});
+
+it('rejects a persisted binding with a missing source without throwing', () => {
+  expect(
+    parseInputBindingsDocument({
+      magic: INPUT_BINDINGS_MAGIC,
+      version: 1,
+      bindings: [{ action: Actions.Interact }],
+    }),
+  ).toEqual({ ok: false, reason: 'invalid binding entry' });
+});
+
+it('rejects an undefined persisted binding entry without throwing', () => {
+  expect(
+    parseInputBindingsDocument({
+      magic: INPUT_BINDINGS_MAGIC,
+      version: 1,
+      bindings: [undefined],
+    }),
+  ).toEqual({ ok: false, reason: 'invalid binding entry' });
+});
+
+it('reports an unsupported large integer bindings version as unknown', () => {
+  const version = Number.MAX_SAFE_INTEGER + 1;
+
+  expect(
+    parseInputBindingsDocument({ magic: INPUT_BINDINGS_MAGIC, version, bindings: [] }),
+  ).toEqual({ ok: false, reason: `unknown version ${version}` });
+});

@@ -337,3 +337,12 @@ it('preserves a content carriage return before the final CRLF', () => {
 
   expect(provider.next()).toEqual({ kind: 'line', text: 'Wait.\r' });
 });
+
+it('finds the speaker tag after a colonless tag', () => {
+  const story = compileInk('Hello. # urgent # speaker: Elder\n-> END\n');
+  const provider = new InkDialogueProvider(new Map([['inline', story]]));
+
+  provider.open({ kind: 'ink', storyId: 'inline' });
+
+  expect(provider.next()).toEqual({ kind: 'line', speaker: 'Elder', text: 'Hello.' });
+});
