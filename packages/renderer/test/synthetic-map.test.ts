@@ -7,6 +7,18 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('keeps the interior rows of the spawn clearing walkable', () => {
+    const map = generateSyntheticMap({
+      width: 7,
+      height: 7,
+      wallDensity: 1,
+      decorDensity: 0,
+      clearRadius: 2,
+    });
+
+    expect(map.layers.tileLayers[0][2 * 7 + 3]).toBe(ROSELIAM_DUNGEON_GROUND_TILE_ID);
+  });
+
   it('reports invalid widths with the general Error name', () => {
     expect(() => generateSyntheticMap({ width: 2.5, height: 4 })).toThrow(
       expect.objectContaining({ name: 'Error' }),

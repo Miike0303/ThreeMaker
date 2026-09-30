@@ -42,6 +42,15 @@ describe('invertTileDiff', () => {
 });
 
 describe('applyTileDiff / applyInverseTileDiff (property: apply then invert-apply is a no-op)', () => {
+  it('uses row-major coordinates when painting a non-power-of-two map width', () => {
+    const layers = makeLayers(3, 2);
+    const diff: TileDiff = { layer: 0, cells: [{ x: 2, y: 1, before: 0, after: 9 }] };
+
+    const painted = applyTileDiff(layers, 3, diff);
+
+    expect(painted[0]).toEqual([0, 0, 0, 0, 0, 9]);
+  });
+
   it('preserves unpainted holes when copying a sparse tile layer', () => {
     const ground = new Array<number>(4);
     ground[3] = 42;
