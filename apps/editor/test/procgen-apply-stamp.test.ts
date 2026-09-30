@@ -85,6 +85,32 @@ function rectangularStairFixture(roomCount: number, width = 20, height = 12) {
 }
 
 describe('applyDungeonStampToMapDocument', () => {
+  it('preserves the stamped floor ID and elevation', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+
+    const next = applyDungeonStampToMapDocument(doc, stamp, { targetFloorIndex: 1 });
+
+    expect(next.floors[1]).toMatchObject({ id: 'floor-1', baseElevation: 1 });
+  });
+
+  it('preserves authored shadows and regions on the stamped floor', () => {
+    const { doc, stamp } = rectangularStairFixture(1);
+    const shadows = new Array<number>(doc.width * doc.height).fill(0);
+    const regions = new Array<number>(doc.width * doc.height).fill(0);
+    shadows[3] = 5;
+    regions[7] = 12;
+    const authoredDoc = {
+      ...doc,
+      floors: doc.floors.map((floor, index) =>
+        index === 1 ? { ...floor, layers: { ...floor.layers, shadows, regions } } : floor,
+      ),
+    };
+
+    const next = applyDungeonStampToMapDocument(authoredDoc, stamp, { targetFloorIndex: 1 });
+
+    expect(next.floors[1]?.layers).toMatchObject({ shadows, regions });
+  });
+
   it('preserves every upper-floor tile layer when stamping the ground floor', () => {
     const { doc, stamp } = rectangularStairFixture(1);
     const upperFloor = doc.floors[1];

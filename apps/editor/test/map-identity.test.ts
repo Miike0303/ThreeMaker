@@ -483,3 +483,15 @@ it('rejects a reserved device name with spaces inside its extension', () => {
 it('reports an embedded drive prefix as an invalid filename character', () => {
   expect(validateMapName('Harbor A:annex')).toBe('invalid-chars');
 });
+
+it('accepts PR as an ordinary map name', () => {
+  expect(validateMapName('PR')).toBeNull();
+});
+
+it('accepts AU as an ordinary map name', () => {
+  expect(validateMapName('AU')).toBeNull();
+});
+
+it('accepts NU as an ordinary map name', () => {
+  expect(validateMapName('NU')).toBeNull();
+});

@@ -33,6 +33,14 @@ describe('pickAdjacentFloorIndex', () => {
 });
 
 describe('roomLandingTile', () => {
+  it('uses the center column for a two-column map without landing rooms', () => {
+    expect(roomLandingTile([], 'floor-1', 2, 8)).toEqual({ x: 1, y: 4 });
+  });
+
+  it('uses the center row for a two-row map without landing rooms', () => {
+    expect(roomLandingTile([], 'floor-1', 10, 2)).toEqual({ x: 5, y: 1 });
+  });
+
   it('falls back to map center when the landing room has no rectangles', () => {
     const rooms = [{ id: 'empty-room', floor: 'floor-1', rects: [] }];
 
@@ -387,6 +395,18 @@ describe('mergeStampStairLinks', () => {
 });
 
 describe('countStampStairLinks (WU-PROC-19)', () => {
+  it('does not count an authored staircase ID without the generated prefix delimiter', () => {
+    const authored = stampStairLinkBetween(
+      'floor-0',
+      { x: 1, y: 1 },
+      'floor-1',
+      { x: 2, y: 2 },
+      { id: 'stamp-staircase-main' },
+    );
+
+    expect(countStampStairLinks([authored])).toBe(0);
+  });
+
   it('does not count authored stair ids containing the generated prefix', () => {
     const authored = stampStairLinkBetween(
       'floor-0',

@@ -655,6 +655,15 @@ describe('stampSimpleDungeon', () => {
 });
 
 describe('scatterFurnitureInRooms', () => {
+  it('ignores furniture cells at map height even when the backing layer has another row', () => {
+    const mid = new Array<number>(20).fill(0);
+
+    const count = scatterFurnitureInRooms([{ x: 0, y: 3, w: 3, h: 3 }], mid, 4, 4, 9, 1, () => 0);
+
+    expect(count).toBe(0);
+    expect(mid).toEqual(new Array<number>(20).fill(0));
+  });
+
   it('furnishes valid rows beyond the map width on a tall map', () => {
     const mid = new Array<number>(21).fill(0);
 
@@ -887,6 +896,22 @@ describe('pickMainRoomSpawn', () => {
 });
 
 describe('stampSimpleDungeon door openings', () => {
+  it('ignores a room edge at map height even when the backing grid has another row', () => {
+    const walkable = new Uint8Array(16);
+    walkable[9] = 1;
+    walkable[13] = 1;
+
+    expect(findDoorOpenings([{ x: 1, y: 3, w: 1, h: 1 }], walkable, 4, 3)).toEqual([]);
+  });
+
+  it('ignores a south neighbor at map height even when the backing grid has another row', () => {
+    const walkable = new Uint8Array(16);
+    walkable[9] = 1;
+    walkable[13] = 1;
+
+    expect(findDoorOpenings([{ x: 1, y: 2, w: 1, h: 1 }], walkable, 4, 3)).toEqual([]);
+  });
+
   it('does not create door openings for a negative-width room', () => {
     const walkable = new Uint8Array(25).fill(1);
 
