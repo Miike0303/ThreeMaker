@@ -127,3 +127,23 @@ describe('createMostRecentHeldAction', () => {
     expect(held.current()).toBeUndefined();
   });
 });
+
+it('keeps the current held action when an unbound key is pressed', () => {
+  const held = createMostRecentHeldAction((key) => table.actionForKeyboardKey(key));
+  held.press('w');
+
+  held.press('q');
+
+  expect(held.current()).toBe(Actions.MoveUp);
+});
+
+it('restores the earlier held action after re-pressing and releasing a later action', () => {
+  const held = createMostRecentHeldAction((key) => table.actionForKeyboardKey(key));
+  held.press('w');
+  held.press('a');
+
+  held.press('a');
+  held.release('a');
+
+  expect(held.current()).toBe(Actions.MoveUp);
+});

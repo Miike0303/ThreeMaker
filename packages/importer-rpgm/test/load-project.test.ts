@@ -339,6 +339,15 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     expect(project.maps.size).toBe(0);
   });
 
+  it('ignores map filenames with an uppercase JSON extension', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map002.JSON']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
   it('ignores a map filename with a trailing extension', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json.bak']);
