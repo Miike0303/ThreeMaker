@@ -80,3 +80,7 @@ it('leaves a dotted placeholder identifier unchanged', () => {
 it('leaves spaces in a placeholder identifier unchanged', () => {
   expect(formatTemplate('Tile {tile id}', { 'tile id': 42 })).toBe('Tile {tile id}');
 });
+
+it('leaves dollar signs in a placeholder identifier unchanged', () => {
+  expect(formatTemplate('Tile {tile$id}', { tile$id: 42 })).toBe('Tile {tile$id}');
+});

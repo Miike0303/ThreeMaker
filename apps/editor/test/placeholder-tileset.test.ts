@@ -604,3 +604,16 @@ it('rejects an underscore in a starter object hash', () => {
     stampPlaceholderSlotObjects(doc, { A5: `${'a'.repeat(63)}_`, B: 'b'.repeat(64) }),
   ).toThrow('A5/B object shas must be 64 lowercase hex chars');
 });
+
+it('decodes every PNG scanline when the final stored block contains one byte', () => {
+  const width = 49;
+  const height = 998;
+  // RGBA plus one filter byte per row totals 3 * 65535 + 1 bytes.
+  const rgba = new Uint8Array(width * height * 4).fill(173);
+  const png = encodeRgbaPng(width, height, rgba);
+  const idatLength = new DataView(png.buffer, png.byteOffset).getUint32(33);
+  const decoded = inflateSync(png.subarray(41, 41 + idatLength));
+
+  expect(decoded).toHaveLength((width * 4 + 1) * height);
+  expect(decoded.at(-1)).toBe(173);
+});

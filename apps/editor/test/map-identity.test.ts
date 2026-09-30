@@ -495,3 +495,11 @@ it('accepts AU as an ordinary map name', () => {
 it('accepts NU as an ordinary map name', () => {
   expect(validateMapName('NU')).toBeNull();
 });
+
+it('accepts a COM map name with a letter instead of a device digit', () => {
+  expect(validateMapName('COMA')).toBeNull();
+});
+
+it('accepts an LPT map name with a letter instead of a device digit', () => {
+  expect(validateMapName('LPTA')).toBeNull();
+});
