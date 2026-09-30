@@ -7,6 +7,18 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('reports invalid widths with the general Error name', () => {
+    expect(() => generateSyntheticMap({ width: 2.5, height: 4 })).toThrow(
+      expect.objectContaining({ name: 'Error' }),
+    );
+  });
+
+  it('reports invalid heights with the general Error name', () => {
+    expect(() => generateSyntheticMap({ width: 4, height: 2.5 })).toThrow(
+      expect.objectContaining({ name: 'Error' }),
+    );
+  });
+
   it('paints southern wall shadows at the correct cell on a three-column map', () => {
     const map = generateSyntheticMap({
       width: 3,

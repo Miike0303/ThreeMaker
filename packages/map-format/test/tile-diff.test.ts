@@ -42,6 +42,17 @@ describe('invertTileDiff', () => {
 });
 
 describe('applyTileDiff / applyInverseTileDiff (property: apply then invert-apply is a no-op)', () => {
+  it('preserves unpainted holes when copying a sparse tile layer', () => {
+    const ground = new Array<number>(4);
+    ground[3] = 42;
+    const layers: TileLayerSet = [ground, [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+    const diff: TileDiff = { layer: 0, cells: [{ x: 0, y: 0, before: 0, after: 7 }] };
+
+    const painted = applyTileDiff(layers, 2, diff);
+
+    expect(Object.keys(painted[0])).toEqual(['0', '3']);
+  });
+
   it('keeps unpainted sparse cells at their original coordinates', () => {
     const ground = new Array<number>(4);
     ground[3] = 42;

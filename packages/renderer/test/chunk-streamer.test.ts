@@ -11,6 +11,24 @@ describe('chunkKey', () => {
 });
 
 describe('ChunkStreamer', () => {
+  it('reports invalid chunk sizes with the general Error name', () => {
+    expect(() => new ChunkStreamer({ ...GIANT, chunkSize: Number.NaN })).toThrow(
+      expect.objectContaining({ name: 'Error' }),
+    );
+  });
+
+  it('reports invalid build radii with the general Error name', () => {
+    expect(() => new ChunkStreamer({ ...GIANT, buildRadius: 0.5 })).toThrow(
+      expect.objectContaining({ name: 'Error' }),
+    );
+  });
+
+  it('reports invalid disposal radii with the general Error name', () => {
+    expect(() => new ChunkStreamer({ ...GIANT, buildRadius: 1, disposeRadius: 0 })).toThrow(
+      expect.objectContaining({ name: 'Error' }),
+    );
+  });
+
   it('disposes a departed window in the order its chunks were built', () => {
     const streamer = new ChunkStreamer({
       chunkSize: 16,
