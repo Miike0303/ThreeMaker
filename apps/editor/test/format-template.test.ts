@@ -68,3 +68,7 @@ it('leaves a placeholder without its closing brace unchanged', () => {
 it('leaves a placeholder without its opening brace unchanged', () => {
   expect(formatTemplate('Map name}', { name: 'Harbor' })).toBe('Map name}');
 });
+
+it('leaves a caret in a placeholder identifier untouched', () => {
+  expect(formatTemplate('Tile {tile^id}', { 'tile^id': 42 })).toBe('Tile {tile^id}');
+});

@@ -266,3 +266,12 @@ it('centers the look-at marker for a camera viewing from the side', () => {
   expect(projected?.xFrac).toBeCloseTo(0.5);
   expect(projected?.yFrac).toBeCloseTo(0.5);
 });
+
+it('uses a one-pixel height when panning a collapsed viewport', () => {
+  const origin = { x: 0, z: 0 };
+  const collapsed = panCameraTarget(origin, 12, 0, 10, 0, 90, 45);
+  const twoPixels = panCameraTarget(origin, 12, 0, 10, 2, 90, 45);
+
+  expect(collapsed.x).toBeCloseTo(twoPixels.x * 2);
+  expect(collapsed.z).toBe(0);
+});

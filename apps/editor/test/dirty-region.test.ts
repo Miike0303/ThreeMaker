@@ -546,3 +546,19 @@ it('expands north through a star whose tile id is negative', () => {
     yEnd: 2,
   });
 });
+
+it('dirties the northern chunk when a high-row star stack ends inside it', () => {
+  const width = 16;
+  const height = 48;
+  const layer = new Array<number>(width * height).fill(1);
+  for (let y = 20; y < 32; y++) layer[y * width + 8] = 2;
+
+  const keys = computeDirtyChunkKeys(
+    [{ x: 8, y: 33 }],
+    makeMap(width, height, layer),
+    makeTileset(),
+    16,
+  );
+
+  expect([...keys].sort()).toEqual(['0,1', '0,2']);
+});

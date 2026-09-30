@@ -151,6 +151,23 @@ describe('mergeStampRoomLights', () => {
 });
 
 describe('playerTorchLight / ensurePlayerTorch', () => {
+  it('replaces a non-player light with the requested custom torch ID', () => {
+    const existing: LightDocument[] = [
+      {
+        id: 'explorer-torch',
+        kind: 'point',
+        color: '#ffffff',
+        intensity: 1,
+        range: 2,
+        attach: 'npc-1',
+      },
+    ];
+
+    const next = ensurePlayerTorch(existing, { id: 'explorer-torch' });
+
+    expect(next).toEqual([playerTorchLight({ id: 'explorer-torch' })]);
+  });
+
   it('preserves a blank player-torch ID instead of substituting the default', () => {
     expect(playerTorchLight({ id: '' }).id).toBe('');
   });

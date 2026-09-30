@@ -12,6 +12,27 @@ const GROUND = 2816;
 const WALL = 4352;
 
 describe('procgen presets', () => {
+  it('keeps the outer ring unpainted when generating with the house preset', () => {
+    const width = 8;
+    const height = 8;
+    const stamp = stampSimpleDungeon({
+      ...getProcgenPreset('house'),
+      width,
+      height,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+    });
+    const outerRing = stamp.layers[0].filter((_, index) => {
+      const x = index % width;
+      const y = Math.floor(index / width);
+      return x === 0 || x === width - 1 || y === 0 || y === height - 1;
+    });
+
+    expect(stamp.rooms.length).toBeGreaterThan(0);
+    expect(outerRing).toEqual(new Array(width * 2 + (height - 2) * 2).fill(0));
+  });
+
   it('rejects an unknown preset ID with a diagnostic naming that ID', () => {
     expect(() => getProcgenPreset('missing' as ProcgenPresetId)).toThrow(
       'unknown procgen preset: missing',

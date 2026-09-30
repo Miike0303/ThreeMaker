@@ -438,3 +438,7 @@ it('identifies rejected map names in the displayed error diagnostic', () => {
 it('classifies a leading colon without a drive letter as an invalid filename character', () => {
   expect(validateMapName(':harbor')).toBe('invalid-chars');
 });
+
+it('classifies a pipe before a colon as an invalid filename character', () => {
+  expect(validateMapName('|:harbor')).toBe('invalid-chars');
+});
