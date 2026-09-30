@@ -40,6 +40,10 @@ describe('randomProcgenSeed', () => {
 });
 
 describe('clampFurnitureDensity', () => {
+  it('clamps a negative fallback to zero for a non-finite density', () => {
+    expect(clampFurnitureDensity(Number.NaN, -0.25)).toBe(0);
+  });
+
   it('caps an oversized fallback at full furniture density', () => {
     expect(clampFurnitureDensity(Number.NaN, 2)).toBe(1);
   });

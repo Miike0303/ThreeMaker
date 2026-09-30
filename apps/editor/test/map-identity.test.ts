@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertMapName,
   collidingSavedMapName,
+  existingMapDocumentFileName,
   foldMapFileName,
   INK_FILE_SUFFIX,
   InvalidMapNameError,
@@ -441,4 +442,24 @@ it('classifies a leading colon without a drive letter as an invalid filename cha
 
 it('classifies a pipe before a colon as an invalid filename character', () => {
   expect(validateMapName('|:harbor')).toBe('invalid-chars');
+});
+
+it('accepts a maximum-length map name pasted with surrounding whitespace', () => {
+  const name = 'm'.repeat(MAP_NAME_MAX_LENGTH);
+
+  expect(validateMapName(`  ${name}  `)).toBeNull();
+});
+
+it('uses the first matching document filename when entry spellings differ by case', () => {
+  const entries = ['notes.txt', 'Harbor.tmmap.json', 'HARBOR.tmmap.json'];
+
+  expect(existingMapDocumentFileName('HARBOR', entries)).toBe('Harbor.tmmap.json');
+});
+
+it('accepts square brackets in an authored map name', () => {
+  expect(validateMapName('Harbor [East]')).toBeNull();
+});
+
+it('classifies a digit before a colon as an invalid filename character', () => {
+  expect(validateMapName('1:harbor')).toBe('invalid-chars');
 });

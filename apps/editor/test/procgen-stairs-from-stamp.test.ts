@@ -33,6 +33,30 @@ describe('pickAdjacentFloorIndex', () => {
 });
 
 describe('roomLandingTile', () => {
+  it('clamps a room landing west of the map to column zero', () => {
+    const rooms = [
+      {
+        id: 'west-room',
+        floor: 'floor-0',
+        rects: [{ x: -4, y: 1, width: 4, height: 4 }],
+      },
+    ];
+
+    expect(roomLandingTile(rooms, 'floor-0', 10, 8)).toEqual({ x: 0, y: 3 });
+  });
+
+  it('clamps a room landing north of the map to row zero', () => {
+    const rooms = [
+      {
+        id: 'north-room',
+        floor: 'floor-0',
+        rects: [{ x: 1, y: -4, width: 4, height: 4 }],
+      },
+    ];
+
+    expect(roomLandingTile(rooms, 'floor-0', 10, 8)).toEqual({ x: 3, y: 0 });
+  });
+
   it('falls back to map center when rooms exist only on a lower floor', () => {
     const rooms = [
       {

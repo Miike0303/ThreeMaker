@@ -779,6 +779,20 @@ describe('scatterFurnitureInRooms', () => {
 });
 
 describe('pickMainRoomSpawn', () => {
+  it('keeps the largest main room when a later room only exceeds the first', () => {
+    const spawn = pickMainRoomSpawn(
+      [
+        { x: 0, y: 0, w: 2, h: 2 },
+        { x: 4, y: 2, w: 4, h: 4 },
+        { x: 10, y: 6, w: 3, h: 3 },
+      ],
+      16,
+      12,
+    );
+
+    expect(spawn).toEqual({ x: 6, y: 4 });
+  });
+
   it('selects a larger main room even below the sum of earlier room areas', () => {
     const spawn = pickMainRoomSpawn(
       [

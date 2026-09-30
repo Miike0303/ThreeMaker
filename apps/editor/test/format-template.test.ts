@@ -72,3 +72,7 @@ it('leaves a placeholder without its opening brace unchanged', () => {
 it('leaves a caret in a placeholder identifier untouched', () => {
   expect(formatTemplate('Tile {tile^id}', { 'tile^id': 42 })).toBe('Tile {tile^id}');
 });
+
+it('leaves a dotted placeholder identifier unchanged', () => {
+  expect(formatTemplate('Tile {tile.id}', { 'tile.id': 42 })).toBe('Tile {tile.id}');
+});
