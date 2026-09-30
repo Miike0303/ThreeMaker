@@ -14,6 +14,22 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('rejects decomposed Unicode combining marks before deriving a sidecar path', () => {
+    const storyId = 'cafe\u0301';
+
+    expect(isSafeStoryId(storyId)).toBe(false);
+    expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+  });
+
+  it('rejects invisible Unicode format controls before deriving a sidecar path', () => {
+    for (const control of ['\u200b', '\u202e', '\ufeff']) {
+      const storyId = `chapter${control}2`;
+
+      expect(isSafeStoryId(storyId)).toBe(false);
+      expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+    }
+  });
+
   it('rejects Unicode case-folding lookalikes before deriving a sidecar path', () => {
     for (const storyId of ['chapter\u212A2', 'chapter\u017F2']) {
       expect(isSafeStoryId(storyId)).toBe(false);

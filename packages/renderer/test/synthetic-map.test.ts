@@ -7,6 +7,18 @@ import {
 } from '../src/dev/synthetic-map.js';
 
 describe('generateSyntheticMap', () => {
+  it('reports allocation overflow for an integral width beyond the safe-integer range', () => {
+    expect(() => generateSyntheticMap({ width: Number.MAX_SAFE_INTEGER + 1, height: 1 })).toThrow(
+      RangeError,
+    );
+  });
+
+  it('reports allocation overflow for an integral height beyond the safe-integer range', () => {
+    expect(() => generateSyntheticMap({ width: 1, height: Number.MAX_SAFE_INTEGER + 1 })).toThrow(
+      RangeError,
+    );
+  });
+
   it('keeps the interior rows of the spawn clearing walkable', () => {
     const map = generateSyntheticMap({
       width: 7,
