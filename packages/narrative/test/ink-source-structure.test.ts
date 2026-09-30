@@ -911,3 +911,43 @@ it('reads a vertical layout coordinate with four integer digits', () => {
     { knot: 'entry', x: 17, y: 1024 },
   ]);
 });
+
+it('rejects a knot name that begins with a dollar sign', () => {
+  expect(listInkKnots('=== $draft ===\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('rejects a layout knot name that begins with a dollar sign', () => {
+  expect(parseInkNodeLayouts('// @tm-node $draft x=17 y=29\n')).toEqual([]);
+});
+
+it('ignores a divert target that begins with a dollar sign', () => {
+  expect(listInkEdges('=== start ===\n-> $draft\n-> visible\n')).toEqual([
+    { from: 'start', to: 'visible' },
+  ]);
+});
+
+it('rejects a knot name containing a dollar sign', () => {
+  expect(listInkKnots('=== side$room ===\n=== visible ===\n')).toEqual(['visible']);
+});
+
+it('rejects a layout knot name containing a dollar sign', () => {
+  expect(parseInkNodeLayouts('// @tm-node side$room x=17 y=29\n')).toEqual([]);
+});
+
+it('stops a divert target name at a dollar sign', () => {
+  expect(listInkEdges('=== start ===\n-> side$room\n')).toEqual([{ from: 'start', to: 'side' }]);
+});
+
+it('ignores a fat arrow in dialogue text', () => {
+  expect(listInkEdges('=== start ===\nThe sign reads => exit.\n-> visible\n')).toEqual([
+    { from: 'start', to: 'visible' },
+  ]);
+});
+
+it('preserves a triple-slash author comment when rewriting layouts', () => {
+  const source = '/// @tm-node draft x=1 y=2\n=== start ===\nWelcome.\n';
+
+  expect(applyInkNodeLayouts(source, [{ knot: 'start', x: 17, y: 29 }])).toBe(
+    `// @tm-node start x=17 y=29\n\n${source}`,
+  );
+});

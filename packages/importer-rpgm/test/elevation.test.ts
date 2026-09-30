@@ -103,6 +103,21 @@ describe('computeHeightGrid', () => {
 });
 
 describe('computeRampGrid', () => {
+  it('keeps a same-level explicit ramp override inert without warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ctx: HeightGridContext = {
+      heightGrid: new Uint8Array(9).fill(2),
+      mapWidth: 3,
+      mapHeight: 3,
+    };
+
+    const rampGrid = computeRampGrid(ctx, [{ x: 1, y: 1, rampDirection: 'north' }]);
+
+    expect(Array.from(rampGrid)).toEqual(new Array(9).fill(0));
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
   it('writes an explicit ramp override to its own column', () => {
     const ctx: HeightGridContext = {
       heightGrid: new Uint8Array([2, 2, 1, 2, 2, 2, 2, 2, 2]),

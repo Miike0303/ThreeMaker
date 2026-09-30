@@ -73,6 +73,42 @@ describe('loadProject — UTF-8 BOM tolerance', () => {
     }
   }
 
+  it('ignores a map filename with a truncated Map prefix', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Ma002.json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
+  it('ignores a map filename with no separator before json', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map002json']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
+  it('ignores a map filename with the initial j missing from json', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map001.json', 'Map002.son']);
+
+    const project = await loadProject(workDir);
+
+    expect([...project.maps.keys()]).toEqual([1]);
+  });
+
+  it('loads a map whose filename has a seven-digit ID', async () => {
+    const dataDir = join(workDir, 'data');
+    writeProjectFiles(dataDir, ['Map1000000.json']);
+
+    const project = await loadProject(workDir);
+
+    expect(project.maps.get(1000000)?.id).toBe(1000000);
+  });
+
   it('ignores filenames with Max instead of the Map prefix', async () => {
     const dataDir = join(workDir, 'data');
     writeProjectFiles(dataDir, ['Map001.json', 'Max002.json']);
