@@ -24,6 +24,10 @@ describe('nextProcgenSeed', () => {
 });
 
 describe('randomProcgenSeed', () => {
+  it('keeps the largest RNG sample below one within the documented seed range', () => {
+    expect(randomProcgenSeed(() => 1 - Number.EPSILON / 2)).toBe(999_999_999);
+  });
+
   it('maps rng output into 0..1e9 range', () => {
     expect(randomProcgenSeed(() => 0)).toBe(0);
     expect(randomProcgenSeed(() => 0.5)).toBe(500_000_000);

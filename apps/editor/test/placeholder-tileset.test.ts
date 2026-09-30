@@ -558,3 +558,36 @@ it('accepts the final hexadecimal letter in a starter object hash', () => {
     stampPlaceholderSlotObjects(doc, { A5: hash, B: 'a'.repeat(64) }).tileset.slots.A5?.object,
   ).toBe(hash);
 });
+
+it('rejects a hyphen in a starter object hash', () => {
+  const doc = composePlaceholderMap({
+    id: 'starter-hyphen-hash',
+    name: 'Starter',
+    width: 2,
+    height: 2,
+  });
+
+  expect(() =>
+    stampPlaceholderSlotObjects(doc, { A5: `${'a'.repeat(63)}-`, B: 'b'.repeat(64) }),
+  ).toThrow('A5/B object shas must be 64 lowercase hex chars');
+});
+
+it('preserves an unrelated catalog sheet slot when stamping starter object hashes', () => {
+  const doc = composePlaceholderMap({
+    id: 'starter-unrelated-slot',
+    name: 'Starter',
+    width: 2,
+    height: 2,
+  });
+  const catalogSlot = { object: 'c'.repeat(64), sourceGameId: 10, sourceTilesetId: 20 };
+  const authored = {
+    ...doc,
+    tileset: { ...doc.tileset, slots: { ...doc.tileset.slots, C: catalogSlot } },
+  };
+  const stamped = stampPlaceholderSlotObjects(authored, {
+    A5: 'a'.repeat(64),
+    B: 'b'.repeat(64),
+  });
+
+  expect(stamped.tileset.slots.C).toEqual(catalogSlot);
+});

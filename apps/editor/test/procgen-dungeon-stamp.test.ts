@@ -105,6 +105,23 @@ describe('stampSimpleDungeon oversized corridor boundaries', () => {
 });
 
 describe('stampSimpleDungeon', () => {
+  it('furnishes every empty interior cell at full furniture density', () => {
+    const stamp = stampSimpleDungeon({
+      width: 12,
+      height: 12,
+      seed: 1,
+      groundTileId: GROUND,
+      wallTileId: WALL,
+      roomCount: 1,
+      minRoomSize: 10,
+      maxRoomSize: 10,
+      furnitureTileId: 9001,
+      furnitureDensity: 1,
+    });
+
+    expect(stamp.furnitureCount).toBe(64);
+  });
+
   it('reports the rejected rectangular map dimensions in the minimum-size diagnostic', () => {
     expect(() =>
       stampSimpleDungeon({

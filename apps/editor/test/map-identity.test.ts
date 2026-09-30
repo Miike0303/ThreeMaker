@@ -434,3 +434,7 @@ it('identifies rejected map names in the displayed error diagnostic', () => {
   const error = new InvalidMapNameError('invalid-chars', 'Harbor?');
   expect(error.toString()).toBe('InvalidMapNameError: Invalid map name "Harbor?" (invalid-chars)');
 });
+
+it('classifies a leading colon without a drive letter as an invalid filename character', () => {
+  expect(validateMapName(':harbor')).toBe('invalid-chars');
+});
