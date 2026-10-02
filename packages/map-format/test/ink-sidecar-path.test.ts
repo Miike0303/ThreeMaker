@@ -14,6 +14,15 @@ it('rejects plus signs in story ids before deriving a sidecar path', () => {
 });
 
 describe('isSafeStoryId / inkSidecarRelativePath', () => {
+  it('rejects Unicode connector punctuation before deriving a sidecar path', () => {
+    for (const connector of ['\u203f', '\uff3f']) {
+      const storyId = `chapter${connector}2`;
+
+      expect(isSafeStoryId(storyId)).toBe(false);
+      expect(() => inkSidecarRelativePath('maps/town.tmmap.json', storyId)).toThrow(/story id/i);
+    }
+  });
+
   it('rejects emoji in story ids before deriving a sidecar path', () => {
     const storyId = 'chapter\u{1f4d6}2';
 

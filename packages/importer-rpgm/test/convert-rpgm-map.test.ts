@@ -108,6 +108,71 @@ function buildSyntheticTileset(overrides: Partial<RpgmTileset> = {}): RpgmTilese
 }
 
 describe('convertRpgmMap', () => {
+  describe('malformed event containers', () => {
+    function expectSkippedPageBeforeValidEvent(page: RpgmEventPage): void {
+      const following = { ...placedEvent(showTextPage(0, ['Still imported'])), id: 2 };
+      const doc = convertRpgmMap(
+        buildSyntheticMap({ width: 4, height: 4, events: [placedEvent(page), following] }),
+        buildSyntheticTileset(),
+      );
+
+      expect(doc.triggers).toEqual([
+        { id: 'rpgm-event-2', x: 2, y: 3, floor: 'floor-0', on: 'interact', event: 'rpgm-event-2' },
+      ]);
+      expect(doc.events).toEqual({
+        'rpgm-event-2': [
+          { type: 'showDialogue', source: { kind: 'text', lines: ['Still imported'] } },
+        ],
+      });
+    }
+
+    it('skips an event with null page conditions without aborting conversion', () => {
+      expectSkippedPageBeforeValidEvent({
+        ...showTextPage(0, ['Do not import']),
+        conditions: JSON.parse('null'),
+      });
+    });
+
+    it('skips an event with a non-array command list without aborting conversion', () => {
+      expectSkippedPageBeforeValidEvent({
+        ...showTextPage(0, ['Do not import']),
+        list: JSON.parse('{}'),
+      });
+    });
+
+    it('skips an event with non-array transfer parameters without aborting conversion', () => {
+      expectSkippedPageBeforeValidEvent(
+        showTextPage(0, ['Do not import'], undefined, CLEAR_CONDITIONS, [
+          { code: 201, indent: 0, parameters: JSON.parse('{"0":0,"1":2,"2":1,"3":2,"4":0}') },
+        ]),
+      );
+    });
+
+    it('skips an event with non-array switch parameters without aborting conversion', () => {
+      expectSkippedPageBeforeValidEvent(
+        showTextPage(0, ['Do not import'], undefined, CLEAR_CONDITIONS, [
+          { code: 121, indent: 0, parameters: JSON.parse('{"0":1,"1":1,"2":0}') },
+        ]),
+      );
+    });
+
+    it('skips an event with non-array variable parameters without aborting conversion', () => {
+      expectSkippedPageBeforeValidEvent(
+        showTextPage(0, ['Do not import'], undefined, CLEAR_CONDITIONS, [
+          { code: 122, indent: 0, parameters: JSON.parse('{"0":1,"1":1,"2":0,"3":0,"4":42}') },
+        ]),
+      );
+    });
+
+    it('skips an event with non-array inventory parameters without aborting conversion', () => {
+      expectSkippedPageBeforeValidEvent(
+        showTextPage(0, ['Do not import'], undefined, CLEAR_CONDITIONS, [
+          { code: 126, indent: 0, parameters: JSON.parse('{"0":7,"1":0,"2":0,"3":2}') },
+        ]),
+      );
+    });
+  });
+
   it('rejects a null switch-page activation flag', () => {
     const conditions = JSON.parse('{"switch1Valid":null}');
     const page = showTextPage(0, ['Locked'], undefined, conditions);
